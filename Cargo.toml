@@ -1,0 +1,19 @@
+[package]
+name = "vk-gfa"
+version = "0.1.0"
+authors = ["christian <christian@chfi.se>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+vulkano = "0.20"
+vulkano-shaders = "0.20"
+vulkano-win = "0.20"
+winit = "0.24"
+
+image = "0.23"
+
+rgb = "0.8.25"
+
+nalgebra = "0.23"
