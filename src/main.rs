@@ -89,6 +89,7 @@ fn main() {
     let _ = include_str!("../shaders/point.vert");
     let _ = include_str!("../shaders/point.frag");
     let _ = include_str!("../shaders/vertex.vert");
+    let _ = include_str!("../shaders/geometry.geom");
     // }
 
     mod point_vert {
@@ -105,15 +106,31 @@ fn main() {
         }
     }
 
-    mod frag {
+    mod simple_frag {
+        vulkano_shaders::shader! {
+            ty: "fragment",
+            path: "shaders/fragment.frag",
+        }
+    }
+
+    mod point_frag {
         vulkano_shaders::shader! {
             ty: "fragment",
             path: "shaders/point.frag",
         }
     }
 
+    mod rect_geom {
+        vulkano_shaders::shader! {
+            ty: "geometry",
+            path: "shaders/geometry.geom",
+        }
+    }
+
     let point_vert = point_vert::Shader::load(device.clone()).unwrap();
-    let point_frag = frag::Shader::load(device.clone()).unwrap();
+    let point_frag = point_frag::Shader::load(device.clone()).unwrap();
+    let simple_frag = simple_frag::Shader::load(device.clone()).unwrap();
+    let rect_geom = rect_geom::Shader::load(device.clone()).unwrap();
 
     let uniform_buffer =
         CpuBufferPool::<point_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
@@ -141,9 +158,12 @@ fn main() {
         GraphicsPipeline::start()
             .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(point_vert.main_entry_point(), ())
-            .point_list()
+            // .point_list()
+            .line_list()
+            .geometry_shader(rect_geom.main_entry_point(), ())
             .viewports_dynamic_scissors_irrelevant(1)
-            .fragment_shader(point_frag.main_entry_point(), ())
+            // .fragment_shader(point_frag.main_entry_point(), ())
+            .fragment_shader(simple_frag.main_entry_point(), ())
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .blend_alpha_blending()
             .build(device.clone())
@@ -289,6 +309,9 @@ fn main() {
                     },
                     Vertex {
                         position: [0.0, 0.0],
+                    },
+                    Vertex {
+                        position: [0.25, 0.1],
                     },
                     Vertex {
                         position: [-0.8, 0.3],
