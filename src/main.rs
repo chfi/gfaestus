@@ -1,5 +1,6 @@
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents};
+use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
 use vulkano::device::{Device, DeviceExtensions};
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{ImageUsage, SwapchainImage};
@@ -24,6 +25,9 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use vk_gfa::geometry::*;
+
+// pub struct ViewOffset {
+// }
 
 fn main() {
     let required_extensions = vulkano_win::required_extensions();
@@ -111,6 +115,11 @@ fn main() {
     let point_vert = point_vert::Shader::load(device.clone()).unwrap();
     let point_frag = frag::Shader::load(device.clone()).unwrap();
 
+    let uniform_buffer = CpuBufferPool::<point_vert::ty::ViewOffset>::new(
+        device.clone(),
+        BufferUsage::uniform_buffer(),
+    );
+
     let render_pass = Arc::new(
         vulkano::single_pass_renderpass!(
             device.clone(),
@@ -152,6 +161,8 @@ fn main() {
         reference: None,
     };
 
+    let mut view: (f32, f32) = (0.0, 0.0);
+
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
     let mut recreate_swapchain = false;
@@ -170,6 +181,19 @@ fn main() {
         last_time = now;
 
         match event {
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
+                    let pos_x = position.x as f32;
+                    let pos_y = position.y as f32;
+                    let norm_x = pos_x / viewport.dimensions[0];
+                    let norm_y = pos_y / viewport.dimensions[0];
+                    view.0 = 0.5 + (norm_x / -2.0);
+                    view.1 = 0.5 + (norm_y / -2.0);
+                }
+            }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -215,6 +239,25 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
+                let view_offset = {
+                    // let vo_data = point_vert::ty::ViewOffset { x: 0.8, y: 0.1 };
+                    let vo_data = point_vert::ty::ViewOffset {
+                        x: view.0,
+                        y: view.1,
+                    };
+
+                    uniform_buffer.next(vo_data).unwrap()
+                };
+
+                let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
+                let set = Arc::new(
+                    PersistentDescriptorSet::start(layout.clone())
+                        .add_buffer(view_offset)
+                        .unwrap()
+                        .build()
+                        .unwrap(),
+                );
+
                 let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
 
                 let vertices = vec![
@@ -244,7 +287,7 @@ fn main() {
                         clear_values,
                     )
                     .unwrap()
-                    .draw(pipeline.clone(), &dynamic_state, buffer, (), ())
+                    .draw(pipeline.clone(), &dynamic_state, buffer, set.clone(), ())
                     .unwrap()
                     .end_render_pass()
                     .unwrap();
