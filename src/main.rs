@@ -115,10 +115,8 @@ fn main() {
     let point_vert = point_vert::Shader::load(device.clone()).unwrap();
     let point_frag = frag::Shader::load(device.clone()).unwrap();
 
-    let uniform_buffer = CpuBufferPool::<point_vert::ty::ViewOffset>::new(
-        device.clone(),
-        BufferUsage::uniform_buffer(),
-    );
+    let uniform_buffer =
+        CpuBufferPool::<point_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
 
     let render_pass = Arc::new(
         vulkano::single_pass_renderpass!(
@@ -161,7 +159,11 @@ fn main() {
         reference: None,
     };
 
-    let mut view: (f32, f32) = (0.0, 0.0);
+    // let mut view: (f32, f32) = (0.0, 0.0);
+
+    use vk_gfa::view::View;
+
+    let mut view: View = View::default();
 
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
@@ -182,6 +184,26 @@ fn main() {
 
         match event {
             Event::WindowEvent {
+                event: WindowEvent::MouseWheel { delta, .. },
+                ..
+            } => {
+                use winit::event::MouseScrollDelta as ScrollDelta;
+                match delta {
+                    ScrollDelta::LineDelta(x, y) => {
+                        // println!("Scroll  LineDelta({}, {})", x, y);
+                        if y > 0.0 {
+                            view.scale += 0.05;
+                        } else if y < 0.0 {
+                            view.scale -= 0.05;
+                        }
+                        println!("view scale {}", view.scale);
+                    }
+                    ScrollDelta::PixelDelta(pos) => {
+                        println!("Scroll PixelDelta({}, {})", pos.x, pos.y);
+                    }
+                }
+            }
+            Event::WindowEvent {
                 event: WindowEvent::CursorMoved { position, .. },
                 ..
             } => {
@@ -190,8 +212,8 @@ fn main() {
                     let pos_y = position.y as f32;
                     let norm_x = pos_x / viewport.dimensions[0];
                     let norm_y = pos_y / viewport.dimensions[0];
-                    view.0 = 0.5 + (norm_x / -2.0);
-                    view.1 = 0.5 + (norm_y / -2.0);
+                    view.center.x = 0.5 + (norm_x / -2.0);
+                    view.center.y = 0.5 + (norm_y / -2.0);
                 }
             }
             Event::WindowEvent {
@@ -241,9 +263,10 @@ fn main() {
 
                 let view_offset = {
                     // let vo_data = point_vert::ty::ViewOffset { x: 0.8, y: 0.1 };
-                    let vo_data = point_vert::ty::ViewOffset {
-                        x: view.0,
-                        y: view.1,
+                    let vo_data = point_vert::ty::View {
+                        x: view.center.x,
+                        y: view.center.y,
+                        zoom: view.scale,
                     };
 
                     uniform_buffer.next(vo_data).unwrap()
