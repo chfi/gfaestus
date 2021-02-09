@@ -31,6 +31,11 @@ impl Point {
     }
 
     #[inline]
+    pub fn length(&self) -> f32 {
+        self.x.hypot(self.y)
+    }
+
+    #[inline]
     pub fn dist(&self, other: Point) -> f32 {
         let x_diff = (self.x - other.x).abs();
         let y_diff = (self.y - other.y).abs();
@@ -45,10 +50,15 @@ impl Point {
     }
 
     #[inline]
-    pub fn vertex(&self) -> Vertex {
+    pub fn vertex(&self, red: bool) -> Vertex {
+        let color = if red {
+            [255.0, 0.0, 0.0]
+        } else {
+            [0.0, 255.0, 0.0]
+        };
         Vertex {
             position: [self.x, self.y],
-            color: [255.0, 0.0, 0.0],
+            color, // color: [255.0, 0.0, 0.0],
         }
     }
 }
@@ -69,7 +79,7 @@ impl Node {
 
     #[inline]
     pub fn vertices(&self) -> [Vertex; 2] {
-        [self.p0.vertex(), self.p1.vertex()]
+        [self.p0.vertex(true), self.p1.vertex(true)]
     }
 }
 

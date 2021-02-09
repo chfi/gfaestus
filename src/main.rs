@@ -25,6 +25,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use vk_gfa::geometry::*;
+use vk_gfa::gfa::*;
 
 // pub struct ViewOffset {
 // }
@@ -131,6 +132,7 @@ fn main() {
 
     let point_vert = point_vert::Shader::load(device.clone()).unwrap();
     let point_frag = point_frag::Shader::load(device.clone()).unwrap();
+    let simple_vert = simple_vert::Shader::load(device.clone()).unwrap();
     let simple_frag = simple_frag::Shader::load(device.clone()).unwrap();
     let rect_geom = rect_geom::Shader::load(device.clone()).unwrap();
 
@@ -159,7 +161,10 @@ fn main() {
     let pipeline = Arc::new(
         GraphicsPipeline::start()
             .vertex_input_single_buffer::<Vertex>()
-            .vertex_shader(point_vert.main_entry_point(), ())
+            .vertex_shader(simple_vert.main_entry_point(), ())
+            // .vertex_shader(point_vert.main_entry_point(), ())
+            // .triangle_list()
+            // .triangle_strip()
             // .point_list()
             .line_list()
             .geometry_shader(rect_geom.main_entry_point(), ())
@@ -305,36 +310,31 @@ fn main() {
 
                 let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
 
-                let vertices = vec![
-                    Vertex {
-                        position: [0.5, -0.5],
-                        color: [255.0, 0.0, 0.0],
-                        // color: [0, 255, 0],
-                        // color: [255, 0, 0],
+                let segments = vec![
+                    Segment {
+                        p0: Point { x: 0.5, y: -0.5 },
+                        p1: Point { x: 0.0, y: 0.0 },
                     },
-                    Vertex {
-                        position: [0.0, 0.0],
-                        color: [255.0, 0.0, 0.0],
-                        // color: [0, 255, 0],
-                        // color: [255, 0, 0],
-                    },
-                    Vertex {
-                        position: [0.25, 0.1],
-                        color: [255.0, 0.0, 0.0],
-                        // color: [0, 255, 0],
-                    },
-                    Vertex {
-                        position: [-0.8, 0.3],
-                        color: [255.0, 0.0, 0.0],
-                        // color: [0, 255, 0],
+                    Segment {
+                        p0: Point { x: 0.25, y: 0.1 },
+                        p1: Point { x: -0.8, y: 0.3 },
                     },
                 ];
+
+                let mut vertices = Vec::with_capacity(segments.len() * 4);
+
+                // let width = 0.01_f32.max(0.1 + (1.0 - view.scale));
+
+                for s in segments {
+                    vertices.extend(s.vertices().iter());
+                    // vertices.extend(s.vertices(width).iter());
+                }
 
                 let colors = vec![
                     Color { color: 0xF0 },
                     Color { color: 0xF0 },
-                    Color { color: 0xF0 },
-                    Color { color: 0xF0 },
+                    Color { color: 0x0F },
+                    Color { color: 0x0F },
                 ];
 
                 let vertex_buffer = vertex_buffer_pool.chunk(vertices).unwrap();

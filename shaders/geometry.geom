@@ -1,19 +1,10 @@
 #version 450
 
 layout (lines) in;
-// layout (lines, location = 1) in vec3 vs_color[];
-// layout (location = 3) in vec3 vs_color_in[2];
-// layout (location = 0) in VS_COLOR {
-//   vec3 vs_color;
-// } vs_color_in[2];
-// layout (location = 1) in vec3 vs_color_in[];
-// layout (location = 3) in vec3 vs_color_in[];
-// layout (location = 3) out vec3 vs_color_out[];
+layout (location = 0) in vec3[] vs_color_in;
 
 layout (triangle_strip, max_vertices = 6) out;
-
-
-// layout (location = 3) out vec3 gs_color;
+layout (location = 0) out vec3 gs_color;
 
 layout (set = 0, binding = 0) uniform View {
   float x;
@@ -25,7 +16,7 @@ vec2 rotate(vec2 val, float angle) {
   return vec2(val.x * cos(angle) - val.y * sin(angle),
               val.x * sin(angle) + val.y * cos(angle));
 }
-void build_rectangle(vec4 pos0, vec4 pos1, float width) {
+void build_rectangle(vec3 color, vec4 pos0, vec4 pos1, float width) {
   float angle = atan(pos0.y - pos1.y, pos0.x - pos1.x);
 
   vec2 pos0_to_pos1 = pos1.xy - pos0.xy;
@@ -41,19 +32,16 @@ void build_rectangle(vec4 pos0, vec4 pos1, float width) {
   vec2 pos1_orthogonal_1 = rotate(pos1_to_pos0_norm, 3.0 * (3.14159265 / 2.0));
 
   gl_Position = pos0 + vec4(pos0_orthogonal, 0.0, 0.0) * width / 2.0;
-  // gs_color = vec3(1.0);
+  gs_color = color;
   EmitVertex();
 
   gl_Position = pos0 + vec4(pos0_orthogonal_1, 0.0, 0.0) * width / 2.0;
-  // gs_color = vec3(1.0);
   EmitVertex();
 
   gl_Position = pos1 + vec4(pos1_orthogonal_1, 0.0, 0.0) * width / 2.0;
-  // gs_color = vec3(1.0);
   EmitVertex();
 
   gl_Position = pos1 + vec4(pos1_orthogonal, 0.0, 0.0) * width / 2.0;
-  // gs_color = vec3(1.0);
   EmitVertex();
 
 
@@ -61,12 +49,9 @@ void build_rectangle(vec4 pos0, vec4 pos1, float width) {
 }
 
 void main() {
-  // float width = 1.0 - vo.zoom;
   float width = max(0.01, 0.1 + (1.0 - vo.zoom));
-  // vec3 color = vs_color[0];
-  // vec3 color = gl_in[2].vs_color;
-  // vec3 color = gl_in[1].color;
-  build_rectangle(gl_in[0].gl_Position, gl_in[1].gl_Position, width);
+  vec3 color = vs_color_in[0];
+  build_rectangle(color, gl_in[0].gl_Position, gl_in[1].gl_Position, width);
 }
 
 
