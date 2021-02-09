@@ -61,27 +61,16 @@ impl View {
                       0.0,     0.0,     1.0, 1.0,
                       0.0,     0.0,     0.0, 1.0);
 
-        // let x_ = self.center.x * w_2;
-        // let y_ = self.center.y * h_2;
-
-        // let x_ = self.center.x * self.scale;
-        // let y_ = self.center.y * self.scale;
-
-        let x_ = self.center.x * (w_2 / self.scale);
-        let y_ = self.center.y * (h_2 / self.scale);
+        let x_ = self.center.x / self.scale;
+        let y_ = self.center.y / self.scale;
 
         let translation =
             glm::mat4(1.0, 0.0, 0.0, x_,
                       0.0, 1.0, 0.0, y_,
-            // glm::mat4(1.0, 0.0, 0.0, 0.5 + 2.0 * self.center.x,
-            //           0.0, 1.0, 0.0, 0.5 + 2.0 * self.center.y,
-            // glm::mat4(1.0, 0.0, 0.0, 0.0,
-            //           0.0, 1.0, 0.0, 0.0,
                       0.0, 0.0, 1.0, 0.0,
                       0.0, 0.0, 0.0, 1.0);
 
         projection * translation
-        // translation * projection
     }
 }
 

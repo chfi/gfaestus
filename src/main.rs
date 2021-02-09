@@ -249,7 +249,7 @@ fn main() {
                     match key {
                         Key::Up => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: -0.01 };
+                                let delta = Point { x: 0.0, y: -10.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta });
                             } else {
                                 let delta = Point { x: 0.0, y: 0.0 };
@@ -259,7 +259,7 @@ fn main() {
                         }
                         Key::Right => {
                             if pressed {
-                                let delta = Point { x: 0.01, y: 0.0 };
+                                let delta = Point { x: 10.0, y: 0.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta });
                             } else {
                                 let delta = Point { x: 0.0, y: 0.0 };
@@ -269,7 +269,7 @@ fn main() {
                         }
                         Key::Down => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: 0.01 };
+                                let delta = Point { x: 0.0, y: 10.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta });
                             } else {
                                 let delta = Point { x: 0.0, y: 0.0 };
@@ -279,7 +279,7 @@ fn main() {
                         }
                         Key::Left => {
                             if pressed {
-                                let delta = Point { x: -0.01, y: 0.0 };
+                                let delta = Point { x: -10.0, y: 0.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta });
                             } else {
                                 let delta = Point { x: 0.0, y: 0.0 };
