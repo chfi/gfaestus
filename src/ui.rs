@@ -111,7 +111,7 @@ pub enum UICmd {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UIState {
     // anim: UICmd,
-    view: View,
+    pub view: View,
     // cmd_chan:
 }
 

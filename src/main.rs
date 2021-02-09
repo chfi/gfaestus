@@ -28,6 +28,8 @@ use vk_gfa::geometry::*;
 use vk_gfa::gfa::*;
 use vk_gfa::view;
 
+use vk_gfa::ui::{UICmd, UIState, UIThread};
+
 use nalgebra_glm as glm;
 
 // pub struct ViewOffset {
@@ -197,10 +199,18 @@ fn main() {
 
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
+    let mut width = 100.0;
+    let mut height = 100.0;
+
     if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
         view.width = viewport.dimensions[0];
         view.height = viewport.dimensions[1];
+
+        width = viewport.dimensions[0];
+        height = viewport.dimensions[1];
     }
+
+    let (ui_thread, ui_cmd_tx) = UIThread::new(width, height);
 
     let mut recreate_swapchain = false;
 
@@ -213,11 +223,74 @@ fn main() {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
 
+        if let Some(ui_state) = ui_thread.try_get_state() {
+            view = ui_state.view;
+            println!("x: {}, y: {}", view.center.x, view.center.y);
+        }
+
         t += delta.as_secs_f32();
 
         last_time = now;
 
         match event {
+            Event::WindowEvent {
+                // event: WindowEvent::MouseWheel { delta, .. },
+                event: WindowEvent::KeyboardInput { input, .. },
+                ..
+            } => {
+                use winit::event::VirtualKeyCode as Key;
+
+                let state = input.state;
+                let keycode = input.virtual_keycode;
+
+                let pressed = state == winit::event::ElementState::Pressed;
+
+                if let Some(key) = keycode {
+                    match key {
+                        Key::Up => {
+                            if pressed {
+                                let delta = Point { x: 0.0, y: -0.01 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            } else {
+                                let delta = Point { x: 0.0, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            }
+                            //
+                        }
+                        Key::Right => {
+                            if pressed {
+                                let delta = Point { x: 0.01, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            } else {
+                                let delta = Point { x: 0.0, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            }
+                            //
+                        }
+                        Key::Down => {
+                            if pressed {
+                                let delta = Point { x: 0.0, y: 0.01 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            } else {
+                                let delta = Point { x: 0.0, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            }
+                            //
+                        }
+                        Key::Left => {
+                            if pressed {
+                                let delta = Point { x: -0.01, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            } else {
+                                let delta = Point { x: 0.0, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta });
+                            }
+                            //
+                        }
+                        _ => {}
+                    }
+                }
+            }
             Event::WindowEvent {
                 event: WindowEvent::MouseWheel { delta, .. },
                 ..
@@ -227,9 +300,9 @@ fn main() {
                     ScrollDelta::LineDelta(x, y) => {
                         // println!("Scroll  LineDelta({}, {})", x, y);
                         if y > 0.0 {
-                            view.scale += 0.05;
+                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.05 });
                         } else if y < 0.0 {
-                            view.scale -= 0.05;
+                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.05 });
                         }
                         println!("view scale {}", view.scale);
                     }
@@ -251,6 +324,8 @@ fn main() {
                     // view.center.y = 0.5 + (norm_y / -2.0);
                     // view.center.x = (norm_x / -2.0);
                     // view.center.y = (norm_y / -2.0);
+
+                    // ui_cmd_tx.send(UICmd::Zoom { delta: 0.05 });
 
                     view.center.x = 0.0;
                     view.center.y = 0.0;
