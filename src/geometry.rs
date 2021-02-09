@@ -3,8 +3,18 @@ use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Vertex {
     pub position: [f32; 2],
+    pub color: [f32; 3],
 }
-vulkano::impl_vertex!(Vertex, position);
+
+vulkano::impl_vertex!(Vertex, position, color);
+// vulkano::impl_vertex!(Vertex, position);
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Color {
+    pub color: u8,
+}
+
+vulkano::impl_vertex!(Color, color);
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Point {
@@ -38,6 +48,7 @@ impl Point {
     pub fn vertex(&self) -> Vertex {
         Vertex {
             position: [self.x, self.y],
+            color: [255.0, 0.0, 0.0],
         }
     }
 }

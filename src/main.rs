@@ -83,11 +83,13 @@ fn main() {
         .unwrap()
     };
 
-    let buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
+    let vertex_buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
+    let color_buffer_pool: CpuBufferPool<Color> = CpuBufferPool::vertex_buffer(device.clone());
 
     // fn _dumb() {
     let _ = include_str!("../shaders/point.vert");
     let _ = include_str!("../shaders/point.frag");
+    let _ = include_str!("../shaders/fragment.frag");
     let _ = include_str!("../shaders/vertex.vert");
     let _ = include_str!("../shaders/geometry.geom");
     // }
@@ -306,19 +308,37 @@ fn main() {
                 let vertices = vec![
                     Vertex {
                         position: [0.5, -0.5],
+                        color: [255.0, 0.0, 0.0],
+                        // color: [0, 255, 0],
+                        // color: [255, 0, 0],
                     },
                     Vertex {
                         position: [0.0, 0.0],
+                        color: [255.0, 0.0, 0.0],
+                        // color: [0, 255, 0],
+                        // color: [255, 0, 0],
                     },
                     Vertex {
                         position: [0.25, 0.1],
+                        color: [255.0, 0.0, 0.0],
+                        // color: [0, 255, 0],
                     },
                     Vertex {
                         position: [-0.8, 0.3],
+                        color: [255.0, 0.0, 0.0],
+                        // color: [0, 255, 0],
                     },
                 ];
 
-                let buffer = buffer_pool.chunk(vertices).unwrap();
+                let colors = vec![
+                    Color { color: 0xF0 },
+                    Color { color: 0xF0 },
+                    Color { color: 0xF0 },
+                    Color { color: 0xF0 },
+                ];
+
+                let vertex_buffer = vertex_buffer_pool.chunk(vertices).unwrap();
+                let color_buffer = color_buffer_pool.chunk(colors).unwrap();
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
                     device.clone(),
@@ -333,7 +353,20 @@ fn main() {
                         clear_values,
                     )
                     .unwrap()
-                    .draw(pipeline.clone(), &dynamic_state, buffer, set.clone(), ())
+                    .draw(
+                        pipeline.clone(),
+                        &dynamic_state,
+                        vertex_buffer,
+                        set.clone(),
+                        (),
+                    )
+                    // .draw_indexed(
+                    //     pipeline.clone(),
+                    //     &dynamic_state,
+                    //     vec![vertex_buffer, color_buffer],
+                    //     set.clone(),
+                    //     (),
+                    // )
                     .unwrap()
                     .end_render_pass()
                     .unwrap();
