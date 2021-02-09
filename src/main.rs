@@ -26,6 +26,9 @@ use std::time::Instant;
 
 use vk_gfa::geometry::*;
 use vk_gfa::gfa::*;
+use vk_gfa::view;
+
+use nalgebra_glm as glm;
 
 // pub struct ViewOffset {
 // }
@@ -130,14 +133,14 @@ fn main() {
         }
     }
 
-    let point_vert = point_vert::Shader::load(device.clone()).unwrap();
-    let point_frag = point_frag::Shader::load(device.clone()).unwrap();
+    // let point_vert = point_vert::Shader::load(device.clone()).unwrap();
+    // let point_frag = point_frag::Shader::load(device.clone()).unwrap();
     let simple_vert = simple_vert::Shader::load(device.clone()).unwrap();
     let simple_frag = simple_frag::Shader::load(device.clone()).unwrap();
     let rect_geom = rect_geom::Shader::load(device.clone()).unwrap();
 
     let uniform_buffer =
-        CpuBufferPool::<point_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
+        CpuBufferPool::<simple_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
 
     let render_pass = Arc::new(
         vulkano::single_pass_renderpass!(
@@ -163,11 +166,11 @@ fn main() {
             .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(simple_vert.main_entry_point(), ())
             // .vertex_shader(point_vert.main_entry_point(), ())
-            // .triangle_list()
+            .triangle_list()
             // .triangle_strip()
             // .point_list()
-            .line_list()
-            .geometry_shader(rect_geom.main_entry_point(), ())
+            // .line_list()
+            // .geometry_shader(rect_geom.main_entry_point(), ())
             .viewports_dynamic_scissors_irrelevant(1)
             // .fragment_shader(point_frag.main_entry_point(), ())
             .fragment_shader(simple_frag.main_entry_point(), ())
@@ -193,6 +196,11 @@ fn main() {
     let mut view: View = View::default();
 
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
+
+    if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
+        view.width = viewport.dimensions[0];
+        view.height = viewport.dimensions[1];
+    }
 
     let mut recreate_swapchain = false;
 
@@ -238,9 +246,17 @@ fn main() {
                     let pos_x = position.x as f32;
                     let pos_y = position.y as f32;
                     let norm_x = pos_x / viewport.dimensions[0];
-                    let norm_y = pos_y / viewport.dimensions[0];
-                    view.center.x = 0.5 + (norm_x / -2.0);
-                    view.center.y = 0.5 + (norm_y / -2.0);
+                    let norm_y = pos_y / viewport.dimensions[1];
+                    // view.center.x = 0.5 + (norm_x / -2.0);
+                    // view.center.y = 0.5 + (norm_y / -2.0);
+                    // view.center.x = (norm_x / -2.0);
+                    // view.center.y = (norm_y / -2.0);
+
+                    view.center.x = 0.0;
+                    view.center.y = 0.0;
+
+                    view.width = viewport.dimensions[0];
+                    view.height = viewport.dimensions[1];
                 }
             }
             Event::WindowEvent {
@@ -290,13 +306,17 @@ fn main() {
 
                 let view_offset = {
                     // let vo_data = point_vert::ty::ViewOffset { x: 0.8, y: 0.1 };
-                    let vo_data = point_vert::ty::View {
-                        x: view.center.x,
-                        y: view.center.y,
-                        zoom: view.scale,
-                    };
+                    // let vo_data = point_vert::ty::View {
 
-                    uniform_buffer.next(vo_data).unwrap()
+                    // let view: () = ();
+
+                    // let mat = view.to_matrix();
+                    let mat = view.to_scaled_matrix();
+                    let view_data = view::mat4_to_array(&mat);
+
+                    let matrix = simple_vert::ty::View { view: view_data };
+
+                    uniform_buffer.next(matrix).unwrap()
                 };
 
                 let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
@@ -312,29 +332,30 @@ fn main() {
 
                 let segments = vec![
                     Segment {
-                        p0: Point { x: 0.5, y: -0.5 },
-                        p1: Point { x: 0.0, y: 0.0 },
+                        // p0: Point { x: 0.5, y: 0.0 },
+                        // p1: Point { x: 0.5, y: 0.5 },
+                        p0: Point { x: 0.0, y: 0.0 },
+                        p1: Point { x: 100.0, y: 100.0 },
+                        // p1: Point { x: 100.0, y: 100.0 },
+                        // p1: Point { x: 0.0, y: 50.0 },
                     },
                     Segment {
-                        p0: Point { x: 0.25, y: 0.1 },
-                        p1: Point { x: -0.8, y: 0.3 },
+                        p0: Point { x: 250.0, y: 250.0 },
+                        p1: Point { x: 275.0, y: 255.0 },
                     },
                 ];
 
                 let mut vertices = Vec::with_capacity(segments.len() * 4);
 
-                // let width = 0.01_f32.max(0.1 + (1.0 - view.scale));
-
                 for s in segments {
                     vertices.extend(s.vertices().iter());
-                    // vertices.extend(s.vertices(width).iter());
                 }
 
                 let colors = vec![
                     Color { color: 0xF0 },
                     Color { color: 0xF0 },
-                    Color { color: 0x0F },
-                    Color { color: 0x0F },
+                    // Color { color: 0x0F },
+                    // Color { color: 0x0F },
                 ];
 
                 let vertex_buffer = vertex_buffer_pool.chunk(vertices).unwrap();
