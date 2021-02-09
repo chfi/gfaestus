@@ -1,0 +1,12 @@
+- [ ] MVP matrix transform for scaling & translation
+- [ ] GFA segments w/ length based on seq length
+- [ ] extremely simple linear & greedy layout
+- [ ] render GFA segments
+- [ ] render links as lines between segments
+
+
+- [ ] more rigorous viewport logic & management
+- [ ] antialiasing
+
+
+- [ ] proper layouts
