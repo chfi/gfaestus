@@ -16,7 +16,8 @@ image = "0.23"
 
 rgb = "0.8.25"
 
-nalgebra = "0.23"
+nalgebra = "0.24"
+nalgebra-glm = "0.10"
 
 gfa = { version = "0.10", features = ["serde1"] }
 handlegraph = "0.7.0-alpha.2"

@@ -919,9 +919,9 @@ dependencies = [
 
 [[package]]
 name = "nalgebra"
-version = "0.23.2"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9bd52e9c9922d5702d5c2a105ceacc3c1206e781d3d130f4d2b7ad5f43c144b"
+checksum = "1a9002895a0de45e3cde58b36d0cf2f83249e7dba4a43ee64dafbf01bfd464ff"
 dependencies = [
  "approx",
  "generic-array",
@@ -933,6 +933,18 @@ dependencies = [
  "rand_distr",
  "simba",
  "typenum",
+]
+
+[[package]]
+name = "nalgebra-glm"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9b5f4543e9d67ef672028a9baf4c31dbb64a53f659facf17db2d89dab7e2c8f2"
+dependencies = [
+ "approx",
+ "nalgebra",
+ "num-traits",
+ "simba",
 ]
 
 [[package]]
@@ -1629,6 +1641,7 @@ dependencies = [
  "handlegraph",
  "image",
  "nalgebra",
+ "nalgebra-glm",
  "rgb",
  "vulkano",
  "vulkano-shaders",

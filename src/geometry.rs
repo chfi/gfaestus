@@ -190,8 +190,8 @@ impl Div<f32> for Point {
     #[inline]
     fn div(self, other: f32) -> Self {
         Self {
-            x: self.x * other,
-            y: self.y * other,
+            x: self.x / other,
+            y: self.y / other,
         }
     }
 }
