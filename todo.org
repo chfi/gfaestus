@@ -1,3 +1,25 @@
+* plan/next
+
+[2021-02-08 Mon 21:00]
+
+read a GFA, take the paths
+
+construct a linear sequence of rects/nodes to be rendered from each path;
+all nodes just 1 or 2 degree to start with
+
+
+once that's working, break the graph down into linear components, lay
+them out in that way, and then reconnect them & apply some kind of
+force to lay out the parallel parts
+
+
+after that i need to handle loops, and probably a whole lot more
+
+* stuff
+
+- [ ] proper rendering system that maps a laid out GFA (or subset
+  thereof) to vertices & colors ready to be rendered
+
 - [ ] MVP matrix transform for scaling & translation
 - [ ] GFA segments w/ length based on seq length
 - [ ] extremely simple linear & greedy layout

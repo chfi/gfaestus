@@ -31,8 +31,9 @@ void build_rectangle(vec3 color, vec4 pos0, vec4 pos1, float width) {
   vec2 pos0_orthogonal_1 = rotate(pos0_to_pos1_norm, 3.0 * (3.14159265 / 2.0));
   vec2 pos1_orthogonal_1 = rotate(pos1_to_pos0_norm, 3.0 * (3.14159265 / 2.0));
 
-  gl_Position = pos0 + vec4(pos0_orthogonal, 0.0, 0.0) * width / 2.0;
   gs_color = color;
+
+  gl_Position = pos0 + vec4(pos0_orthogonal, 0.0, 0.0) * width / 2.0;
   EmitVertex();
 
   gl_Position = pos0 + vec4(pos0_orthogonal_1, 0.0, 0.0) * width / 2.0;
@@ -44,7 +45,6 @@ void build_rectangle(vec3 color, vec4 pos0, vec4 pos1, float width) {
   gl_Position = pos1 + vec4(pos1_orthogonal, 0.0, 0.0) * width / 2.0;
   EmitVertex();
 
-
   EndPrimitive();
 }
 
@@ -52,31 +52,4 @@ void main() {
   float width = max(0.01, 0.1 + (1.0 - vo.zoom));
   vec3 color = vs_color_in[0];
   build_rectangle(color, gl_in[0].gl_Position, gl_in[1].gl_Position, width);
-}
-
-
-
-void build_polygon(vec4 position) {
-  for (int i=0; i<20; i++) {
-
-
-    float angle = (i * 3.141592 * 2.0) / 20;
-    float x = sin(angle) * 0.1;
-    float y = cos(angle) * 0.1;
-
-    gl_Position = position;
-    EmitVertex();
-
-    gl_Position = position + vec4(x, y, 0.0, 0.0);
-    EmitVertex();
-
-
-    angle = (((i % 20) + 1) * 3.141592 * 2.0) / 20;
-    x = sin(angle) * 0.1;
-    y = cos(angle) * 0.1;
-
-    gl_Position = position + vec4(x, y, 0.0, 0.0);
-    EmitVertex();
-  }
-  EndPrimitive();
 }
