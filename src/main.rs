@@ -27,16 +27,13 @@ use std::sync::Arc;
 
 use std::time::Instant;
 
-use vk_gfa::geometry::*;
-use vk_gfa::gfa::*;
-use vk_gfa::view;
-
-use vk_gfa::ui::{UICmd, UIState, UIThread};
+use gfaestus::geometry::*;
+use gfaestus::gfa::*;
+use gfaestus::ui::{UICmd, UIState, UIThread};
+use gfaestus::view;
+use gfaestus::view::View;
 
 use nalgebra_glm as glm;
-
-// pub struct ViewOffset {
-// }
 
 fn main() {
     let required_extensions = vulkano_win::required_extensions();
