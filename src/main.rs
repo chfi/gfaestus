@@ -1,10 +1,13 @@
-use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool};
 use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents};
 use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
 use vulkano::device::{Device, DeviceExtensions};
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::{
+    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool},
+    image::{AttachmentImage, Dimensions},
+};
 
 use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline};
 
@@ -148,6 +151,12 @@ fn main() {
         vulkano::single_pass_renderpass!(
             device.clone(),
             attachments: {
+                intermediary: {
+                    load: Clear,
+                    store: DontCare,
+                    format: swapchain.format(),
+                    samples: 8,
+                },
                 color: {
                     load: Clear,
                     store: Store,
@@ -156,8 +165,10 @@ fn main() {
                 }
             },
             pass: {
-                color: [color],
+                // color: [color],
+                color: [intermediary],
                 depth_stencil: {}
+                resolve: [color],
             }
         )
         .unwrap(),
@@ -355,6 +366,16 @@ fn main() {
                         };
 
                     swapchain = new_swapchain;
+
+                    if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
+                    {
+                        view.width = viewport.dimensions[0];
+                        view.height = viewport.dimensions[1];
+
+                        width = viewport.dimensions[0];
+                        height = viewport.dimensions[1];
+                    }
+
                     framebuffers =
                         window_size_update(&new_images, render_pass.clone(), &mut dynamic_state);
                     recreate_swapchain = false;
@@ -375,12 +396,6 @@ fn main() {
                 }
 
                 let view_offset = {
-                    // let vo_data = point_vert::ty::ViewOffset { x: 0.8, y: 0.1 };
-                    // let vo_data = point_vert::ty::View {
-
-                    // let view: () = ();
-
-                    // let mat = view.to_matrix();
                     let mat = view.to_scaled_matrix();
                     let view_data = view::mat4_to_array(&mat);
 
@@ -398,40 +413,10 @@ fn main() {
                         .unwrap(),
                 );
 
-                // let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
-                let clear_values = vec![[1.0, 1.0, 1.0, 1.0].into()];
+                let clear = [0.0, 0.0, 0.05, 1.0];
+                let clear_values = vec![clear.into(), clear.into()];
 
-                /*
-                let segments = vec![
-                    Segment {
-                        // p0: Point { x: 0.5, y: 0.0 },
-                        // p1: Point { x: 0.5, y: 0.5 },
-                        p0: Point { x: 0.0, y: 0.0 },
-                        p1: Point { x: 100.0, y: 100.0 },
-                        // p1: Point { x: 100.0, y: 100.0 },
-                        // p1: Point { x: 0.0, y: 50.0 },
-                    },
-                    Segment {
-                        p0: Point { x: 250.0, y: 250.0 },
-                        p1: Point { x: 275.0, y: 255.0 },
-                    },
-                ];
-
-
-
-                let mut vertices = Vec::with_capacity(segments.len() * 4);
-
-                for s in segments {
-                    vertices.extend(s.vertices().iter());
-                }
-                */
-
-                let colors = vec![
-                    Color { color: 0xF0 },
-                    Color { color: 0xF0 },
-                    // Color { color: 0x0F },
-                    // Color { color: 0x0F },
-                ];
+                let colors = vec![Color { color: 0xF0 }, Color { color: 0xF0 }];
 
                 // let vertices = path_vertices(&segments);
 
@@ -514,11 +499,23 @@ fn window_size_update(
     };
     dynamic_state.viewports = Some(vec![viewport]);
 
+    let device = render_pass.device();
+
     images
         .iter()
         .map(|image| {
+            let intermediary = AttachmentImage::transient_multisampled(
+                device.clone(),
+                dims,
+                8,
+                image.swapchain().format(),
+            )
+            .unwrap();
+
             Arc::new(
                 Framebuffer::start(render_pass.clone())
+                    .add(intermediary.clone())
+                    .unwrap()
                     .add(image.clone())
                     .unwrap()
                     .build()
