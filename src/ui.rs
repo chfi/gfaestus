@@ -155,7 +155,7 @@ impl UIState {
                 // d.x = d.x.max(-100.0).min(100.0);
                 // d.y = d.y.max(-100.0).min(100.0);
 
-                let max_speed = 200.0;
+                let max_speed = 500.0;
 
                 if d.x < -max_speed {
                     d.x = -max_speed;

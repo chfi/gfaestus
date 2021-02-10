@@ -193,6 +193,14 @@ fn main() {
 
     // let mut view: (f32, f32) = (0.0, 0.0);
 
+    let segments = Segment::from_path(
+        Point {
+            x: -200.0,
+            y: -15.0,
+        },
+        &[10, 12, 15, 50, 30, 10, 30],
+    );
+
     use vk_gfa::view::View;
 
     let mut view: View = View::default();
@@ -244,31 +252,31 @@ fn main() {
 
                 let pressed = state == winit::event::ElementState::Pressed;
 
-                let speed = 100.0;
+                let speed = 200.0;
 
                 if let Some(key) = keycode {
                     match key {
                         Key::Up => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: -speed };
+                                let delta = Point { x: 0.0, y: speed };
                                 ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
                         }
                         Key::Right => {
                             if pressed {
-                                let delta = Point { x: speed, y: 0.0 };
+                                let delta = Point { x: -speed, y: 0.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
                         }
                         Key::Down => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: speed };
+                                let delta = Point { x: 0.0, y: -speed };
                                 ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
                         }
                         Key::Left => {
                             if pressed {
-                                let delta = Point { x: -speed, y: 0.0 };
+                                let delta = Point { x: speed, y: 0.0 };
                                 ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
                         }
@@ -391,6 +399,7 @@ fn main() {
 
                 let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
 
+                /*
                 let segments = vec![
                     Segment {
                         // p0: Point { x: 0.5, y: 0.0 },
@@ -406,11 +415,14 @@ fn main() {
                     },
                 ];
 
+
+
                 let mut vertices = Vec::with_capacity(segments.len() * 4);
 
                 for s in segments {
                     vertices.extend(s.vertices().iter());
                 }
+                */
 
                 let colors = vec![
                     Color { color: 0xF0 },
@@ -418,6 +430,8 @@ fn main() {
                     // Color { color: 0x0F },
                     // Color { color: 0x0F },
                 ];
+
+                let vertices = path_vertices(&segments);
 
                 let vertex_buffer = vertex_buffer_pool.chunk(vertices).unwrap();
                 let color_buffer = color_buffer_pool.chunk(colors).unwrap();
