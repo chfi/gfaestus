@@ -59,3 +59,64 @@ after that i need to handle loops, and probably a whole lot more
 
 
 - [ ] proper layouts
+
+* user actions
+
+** menu
+- load GFA
+- save layout
+- export image/SVG
+
+- filter visible nodes/spines/edges/etc.
+  - hide filtered elements
+  - highlight filtered elements
+
+- remove nodes/spines/edges/etc. (would require selection first?)
+
+- configure visual parameters
+  - set node width & base length (does base length impact physics?)
+  - set edge width
+  - change node color scheme
+  - change spine color scheme
+  - change edge color scheme
+
+- configure physics parameters
+  - set anim/physics speed
+  - set edge min/max length
+  - set edge springiness and other parameters
+
+- view and modify spine Fourier coefficients
+
+** any, discrete
+- reset view
+- reset scale
+- pause layout (keyboard)
+- reset layout
+- select all?
+- goto selection?
+- menu navigation
+
+
+** any, continuous
+- menu navigation
+
+** mouse only
+- mousewheel zoom (centered on cursor)
+- click & drag pan
+- click & drag pan, but wrt distance from click until released
+- draw rectangle & zoom to it
+- click to select element
+- hover on element
+- click & drag elements
+
+** keyboard only
+- pan (arrow keys)
+- zoom?
+- modifiers
+
+*** keyboard modifiers
+- pan view with mouse
+- faster pan/zoom
+- slower pan/zoom
+- drag elements with mouse
+- select additional elements
