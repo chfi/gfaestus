@@ -40,9 +40,9 @@ after that i need to handle loops, and probably a whole lot more
 
 * stuff
 
+- [X] separate color buffer & individual segment colors
 - [ ] text rendering/GUI
 - [ ] load & render paths -- each with separate color, maybe?
-- [ ] indexed buffers for colors?
 
 - [ ] proper rendering system that maps a laid out GFA (or subset
   thereof) to vertices & colors ready to be rendered

@@ -1,4 +1,3 @@
-use vulkano::command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents};
 use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
 use vulkano::device::{Device, DeviceExtensions};
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
@@ -7,6 +6,10 @@ use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool},
     image::{AttachmentImage, Dimensions},
+};
+use vulkano::{
+    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
+    pipeline::vertex::TwoBuffersDefinition,
 };
 
 use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline};
@@ -170,7 +173,9 @@ fn main() {
 
     let pipeline = Arc::new(
         GraphicsPipeline::start()
-            .vertex_input_single_buffer::<Vertex>()
+            .vertex_input(TwoBuffersDefinition::<Vertex, Color>::new())
+            // .vertex_input::<(Vertex, Color)>()
+            // .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(simple_vert.main_entry_point(), ())
             .triangle_list()
             .viewports_dynamic_scissors_irrelevant(1)
@@ -200,6 +205,27 @@ fn main() {
 
     let vertices = path_vertices(&segments);
 
+    let color_period = [
+        [1.0, 0.0, 0.0],
+        [1.0, 0.65, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 0.5, 0.0],
+        [0.0, 0.0, 1.0],
+        [0.3, 0.0, 0.51],
+        [0.93, 0.51, 0.93],
+    ];
+
+    let colors: Vec<Color> = vertices
+        .iter()
+        .enumerate()
+        .map(|(ix, _)| {
+            let ix_ = (ix / 6) % color_period.len();
+            Color {
+                color: color_period[ix_],
+            }
+        })
+        .collect();
+
     let mut view: View = View::default();
 
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
@@ -227,10 +253,6 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
-
-        // if let Some(ui_state) = ui_thread.try_get_state() {
-        //     view = ui_state.view;
-        // }
 
         t += delta.as_secs_f32();
 
@@ -354,12 +376,10 @@ fn main() {
                 let clear = [0.0, 0.0, 0.05, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
-                let colors = vec![Color { color: 0xF0 }, Color { color: 0xF0 }];
-
                 // let vertices = path_vertices(&segments);
 
                 let vertex_buffer = vertex_buffer_pool.chunk(vertices.iter().copied()).unwrap();
-                let color_buffer = color_buffer_pool.chunk(colors).unwrap();
+                let color_buffer = color_buffer_pool.chunk(colors.iter().copied()).unwrap();
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
                     device.clone(),
@@ -377,17 +397,10 @@ fn main() {
                     .draw(
                         pipeline.clone(),
                         &dynamic_state,
-                        vertex_buffer,
+                        (vertex_buffer, color_buffer),
                         set.clone(),
                         (),
                     )
-                    // .draw_indexed(
-                    //     pipeline.clone(),
-                    //     &dynamic_state,
-                    //     vec![vertex_buffer, color_buffer],
-                    //     set.clone(),
-                    //     (),
-                    // )
                     .unwrap()
                     .end_render_pass()
                     .unwrap();
