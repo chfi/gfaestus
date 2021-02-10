@@ -1,5 +1,28 @@
 * plan/next
 
+[2021-02-09 Tue 20:30]
+
+making progress, but there's an annoying thing where motion looks kinda "snappy";
+like the length of segments isn't constant, changing by a pixel or two as a segment
+moves across pixel borders
+
+antialiasing only helped a little
+
+I think the problem may have to do with the translation and/or projection matrix
+
+replacing some dumb equations that always evaluate to zero with 0.0 may have helped
+a little bit
+
+reversing the order of the translation & scaling matrices in the projection matrix
+may have helped? but probably not
+
+scaling the x-translation by the ratio of width/height also may have helped
+
+either way, at this point it's really not that bad
+
+it also seems to depend on the update rate -- I definitely need to restructure the
+way animation updates are applied, so it doesn't depend on any locks
+
 [2021-02-08 Mon 21:00]
 
 read a GFA, take the paths
@@ -28,7 +51,7 @@ after that i need to handle loops, and probably a whole lot more
 
 
 - [ ] more rigorous viewport logic & management
-- [ ] antialiasing
+- [X] antialiasing
 
 
 - [ ] proper layouts

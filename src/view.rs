@@ -2,8 +2,6 @@ use crate::geometry::Point;
 
 use nalgebra_glm as glm;
 
-// use nalgebra::{Matrix3, Matrix4};
-
 /// the "default" scale is such that the node width is 10px
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {
@@ -25,38 +23,25 @@ impl Default for View {
 }
 
 impl View {
-    pub fn to_matrix(&self) -> glm::Mat4 {
-        unit_scale_matrix(self.width, self.height)
-    }
-
-#[rustfmt::skip]
+    #[rustfmt::skip]
     pub fn to_scaled_matrix(&self) -> glm::Mat4 {
-
-        let o_x = self.center.x;
-        let o_y = self.center.y;
 
         let w = self.width;
         let h = self.height;
 
-        let w_2 = w / 2.0;
-        let h_2 = h / 2.0;
+        let w_scale = 2.0 / (self.width * self.scale);
+        let h_scale = 2.0 / (self.height * self.scale);
 
-        let l = -w_2;
-        let r = w_2;
-
-        let t = -h_2;
-        let b = h_2;
-
-        let w_scale = (2.0 / self.width) / self.scale;
-        let h_scale = (2.0 / self.height) / self.scale;
-
-        let projection =
-            glm::mat4(w_scale, 0.0,     0.0, -((r + l) / (r - l)),
-                      0.0,     h_scale, 0.0, -((t + b) / (t - b)),
+        let scaling =
+            glm::mat4(w_scale, 0.0,     0.0, 0.0,
+                      0.0,     h_scale, 0.0, 0.0,
                       0.0,     0.0,     1.0, 1.0,
                       0.0,     0.0,     0.0, 1.0);
 
-        let x_ = self.center.x;
+
+        let ratio = w / h;
+
+        let x_ = self.center.x * ratio;
         let y_ = self.center.y;
 
         let translation =
@@ -65,7 +50,8 @@ impl View {
                       0.0, 0.0, 1.0, 0.0,
                       0.0, 0.0, 0.0, 1.0);
 
-        projection * translation
+        scaling * translation
+        // translation * scaling
     }
 }
 
@@ -86,86 +72,3 @@ pub fn mat4_to_array(matrix: &glm::Mat4) -> [[f32; 4]; 4] {
 
     [col0, col1, col2, col3]
 }
-
-#[rustfmt::skip]
-pub fn unit_scale_matrix(width: f32, height: f32) -> glm::Mat4 {
-    let w = width as f32;
-    let h = height as f32;
-
-    let scale = 10.0;
-
-    let w_scale = 2.0 / width;
-    let h_scale = 2.0 / height;
-
-    // glm::mat4(1.0, 0.0, 0.0, 0.0,
-    //           0.0, 1.0, 0.0, 0.0,
-    //           0.0, 0.0, 1.0, 0.0,
-    //           0.0, 0.0, 0.0, 1.0)
-
-    glm::mat4(w_scale, 0.0,     0.0, 0.0,
-              0.0,     h_scale, 0.0, 0.0,
-              0.0,     0.0,     1.0, 0.0,
-              0.0,     0.0,     0.0, 1.0)
-
-
-    // glm::mat4(2.0 / r_sub_l, 0.0,           0.0,            -(r_add_l / r_sub_l),
-    //           0.0,           2.0 / t_sub_b, 0.0,            -(t_add_b / t_sub_b),
-    //           // 0.0,           0.0,           -2.0 / f_sub_n, -(f_add_n / f_sub_n),
-    //           0.0,           0.0,           1.0, 1.0,
-    //           0.0,           0.0,           0.0,             1.0)
-
-    // glm::mat4(scale / w_2, 0.0,         0.0, 0.0,
-    //           0.0,         scale / h_2, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    // glm::mat4(scale / w_2, 0.0,         0.0, 0.0,
-    //           0.0,         scale / h_2, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    // glm::mat4(w_2 / scale, 0.0,         0.0, 0.0,
-    //           0.0,         h_2 / scale, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    // glm::mat4(w_2 * scale, 0.0,         0.0, 0.0,
-    //           0.0,         h_2 * scale, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-
-    // glm::mat4((w * scale) / 2.0, 0.0,              0.0, 0.0,
-    //           0.0,              (h * scale) / 2.0, 0.0, 0.0,
-    //           0.0,               0.0,              1.0, 0.0,
-    //           0.0,               0.0,              0.0, 1.0)
-}
-
-#[rustfmt::skip]
-pub fn projection_matrix(w: f32, h: f32) -> glm::Mat4 {
-    let scale = 10.0;
-
-    let w_2 = w / 2.0;
-    let h_2 = h / 2.0;
-
-
-    // glm::mat4(scale / w_2, 0.0,         0.0, 0.0,
-    //           0.0,         scale / h_2, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    // glm::mat4(w_2 / scale, 0.0,         0.0, 0.0,
-    //           0.0,         h_2 / scale, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    // glm::mat4(w_2 * scale, 0.0,         0.0, 0.0,
-    //           0.0,         h_2 * scale, 0.0, 0.0,
-    //           0.0,         0.0,         1.0, 0.0,
-    //           0.0,         0.0,         0.0, 1.0)
-
-    unimplemented!();
-}
-
-// pub fn scale_matrix(dist: f32, width: usize, height: usize) -> glm::Mat4 {
-// }

@@ -36,8 +36,8 @@ impl UIThread {
                 last_time = std::time::Instant::now();
                 since_last_update += delta;
 
-                if since_last_update > 1.0 / 75.0 {
-                    // if since_last_update > 0.0001 {
+                // if since_last_update > 1.0 / 75.0 {
+                if since_last_update > 0.0001 {
                     buf_ui_state.update_anim(since_last_update);
                     since_last_update = 0.0;
                 }
@@ -165,22 +165,10 @@ impl UIState {
 
                 let d = &mut self.anim.view_delta;
 
-                let max_speed = 100.0;
+                let max_speed = 400.0;
 
                 d.x = d.x.max(-max_speed).min(max_speed);
                 d.y = d.y.max(-max_speed).min(max_speed);
-
-                // if d.x < -max_speed {
-                //     d.x = -max_speed;
-                // } else if d.x > max_speed {
-                //     d.x = max_speed;
-                // }
-
-                // if d.y < -max_speed {
-                //     d.y = -max_speed;
-                // } else if d.y > max_speed {
-                //     d.y = max_speed;
-                // }
             }
             UICmd::Zoom { delta } => {
                 let delta_mult = self.view.scale.log2();
