@@ -301,9 +301,9 @@ fn main() {
                 match delta {
                     ScrollDelta::LineDelta(x, y) => {
                         if y > 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.15 }).unwrap();
+                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.45 }).unwrap();
                         } else if y < 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.15 }).unwrap();
+                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.45 }).unwrap();
                         }
                         println!("view scale {}", view.scale);
                     }
