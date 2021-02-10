@@ -52,9 +52,11 @@ impl Point {
     #[inline]
     pub fn vertex(&self, red: bool) -> Vertex {
         let color = if red {
-            [255.0, 0.0, 0.0]
+            // [255.0, 40.0, 40.0]
+            [0.9, 0.05, 0.05]
         } else {
-            [0.0, 255.0, 0.0]
+            [0.05, 0.9, 0.05]
+            // [40.0, 200.0, 40.0]
         };
         Vertex {
             position: [self.x, self.y],

@@ -56,8 +56,14 @@ impl View {
                       0.0,     0.0,     1.0, 1.0,
                       0.0,     0.0,     0.0, 1.0);
 
-        let x_ = self.center.x * self.scale;
-        let y_ = self.center.y * self.scale;
+        // let x_ = self.center.x * self.scale;
+        // let y_ = self.center.y * self.scale;
+
+        let x_ = self.center.x;
+        let y_ = self.center.y;
+
+        // let x_ = self.center.x / w_scale;
+        // let y_ = self.center.y / h_scale;
 
         let translation =
             glm::mat4(1.0, 0.0, 0.0, x_,

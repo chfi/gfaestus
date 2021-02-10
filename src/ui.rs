@@ -28,15 +28,23 @@ impl UIThread {
             let mut buf_ui_state = buf_ui_state.clone();
 
             let mut last_time = std::time::Instant::now();
+
+            let mut since_last_update = 0.0;
+
             loop {
                 let delta = last_time.elapsed().as_secs_f32();
                 last_time = std::time::Instant::now();
+                since_last_update += delta;
+
+                if since_last_update > 1.0 / 75.0 {
+                    // if since_last_update > 0.0001 {
+                    buf_ui_state.update_anim(since_last_update);
+                    since_last_update = 0.0;
+                }
 
                 if let Ok(cmd) = rx_chan.try_recv() {
                     buf_ui_state.apply_cmd(cmd);
                 }
-
-                buf_ui_state.update_anim(delta);
 
                 if let Some(mut ui_lock) = ui_state.try_lock() {
                     ui_lock.clone_from(&buf_ui_state);
@@ -116,20 +124,25 @@ impl UIState {
     }
 
     pub fn update_anim(&mut self, t: f32) {
+        // println!("delta {}", t);
+        // println!("fps {}", 1.0 / t);
         let zoom_friction = 0.999999;
 
         // let pan_friction = 1.0 - (1.0 + 0.5 * t).log2();
-        let pan_friction = 0.999999;
+        // let pan_friction = 0.999999;
+        let pan_friction = 1.0 - (0.5 * t);
+        // let pan_friction = 1.0 - (0.75 * t);
 
         let dx = self.anim.view_delta.x;
         let dy = self.anim.view_delta.y;
         let dz = self.anim.scale_delta;
 
-        self.view.center.x += t * dx;
-        self.view.center.y += t * dy;
         self.view.scale += t * dz;
         // self.view.scale = self.view.scale.max(1.0);
         self.view.scale = self.view.scale.max(0.5);
+
+        self.view.center.x += t * dx * self.view.scale;
+        self.view.center.y += t * dy * self.view.scale;
 
         self.anim.view_delta *= pan_friction;
         self.anim.scale_delta *= zoom_friction;
@@ -152,22 +165,22 @@ impl UIState {
 
                 let d = &mut self.anim.view_delta;
 
-                // d.x = d.x.max(-100.0).min(100.0);
-                // d.y = d.y.max(-100.0).min(100.0);
+                let max_speed = 100.0;
 
-                let max_speed = 500.0;
+                d.x = d.x.max(-max_speed).min(max_speed);
+                d.y = d.y.max(-max_speed).min(max_speed);
 
-                if d.x < -max_speed {
-                    d.x = -max_speed;
-                } else if d.x > max_speed {
-                    d.x = max_speed;
-                }
+                // if d.x < -max_speed {
+                //     d.x = -max_speed;
+                // } else if d.x > max_speed {
+                //     d.x = max_speed;
+                // }
 
-                if d.y < -max_speed {
-                    d.y = -max_speed;
-                } else if d.y > max_speed {
-                    d.y = max_speed;
-                }
+                // if d.y < -max_speed {
+                //     d.y = -max_speed;
+                // } else if d.y > max_speed {
+                //     d.y = max_speed;
+                // }
             }
             UICmd::Zoom { delta } => {
                 let delta_mult = self.view.scale.log2();

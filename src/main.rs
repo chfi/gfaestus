@@ -201,6 +201,8 @@ fn main() {
         &[10, 12, 15, 50, 30, 10, 30],
     );
 
+    let vertices = path_vertices(&segments);
+
     use vk_gfa::view::View;
 
     let mut view: View = View::default();
@@ -233,7 +235,6 @@ fn main() {
 
         if let Some(ui_state) = ui_thread.try_get_state() {
             view = ui_state.view;
-            // println!("x: {}, y: {}", view.center.x, view.center.y);
         }
 
         t += delta.as_secs_f32();
@@ -397,7 +398,8 @@ fn main() {
                         .unwrap(),
                 );
 
-                let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
+                // let clear_values = vec![[0.0, 0.0, 0.1, 1.0].into()];
+                let clear_values = vec![[1.0, 1.0, 1.0, 1.0].into()];
 
                 /*
                 let segments = vec![
@@ -431,9 +433,9 @@ fn main() {
                     // Color { color: 0x0F },
                 ];
 
-                let vertices = path_vertices(&segments);
+                // let vertices = path_vertices(&segments);
 
-                let vertex_buffer = vertex_buffer_pool.chunk(vertices).unwrap();
+                let vertex_buffer = vertex_buffer_pool.chunk(vertices.iter().copied()).unwrap();
                 let color_buffer = color_buffer_pool.chunk(colors).unwrap();
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
