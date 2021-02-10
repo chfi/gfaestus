@@ -225,7 +225,7 @@ fn main() {
 
         if let Some(ui_state) = ui_thread.try_get_state() {
             view = ui_state.view;
-            println!("x: {}, y: {}", view.center.x, view.center.y);
+            // println!("x: {}, y: {}", view.center.x, view.center.y);
         }
 
         t += delta.as_secs_f32();
@@ -234,7 +234,6 @@ fn main() {
 
         match event {
             Event::WindowEvent {
-                // event: WindowEvent::MouseWheel { delta, .. },
                 event: WindowEvent::KeyboardInput { input, .. },
                 ..
             } => {
@@ -245,47 +244,33 @@ fn main() {
 
                 let pressed = state == winit::event::ElementState::Pressed;
 
+                let speed = 100.0;
+
                 if let Some(key) = keycode {
                     match key {
                         Key::Up => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: -10.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
-                            } else {
-                                let delta = Point { x: 0.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
+                                let delta = Point { x: 0.0, y: -speed };
+                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
-                            //
                         }
                         Key::Right => {
                             if pressed {
-                                let delta = Point { x: 10.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
-                            } else {
-                                let delta = Point { x: 0.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
+                                let delta = Point { x: speed, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
-                            //
                         }
                         Key::Down => {
                             if pressed {
-                                let delta = Point { x: 0.0, y: 10.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
-                            } else {
-                                let delta = Point { x: 0.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
+                                let delta = Point { x: 0.0, y: speed };
+                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
-                            //
                         }
                         Key::Left => {
                             if pressed {
-                                let delta = Point { x: -10.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
-                            } else {
-                                let delta = Point { x: 0.0, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta });
+                                let delta = Point { x: -speed, y: 0.0 };
+                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
                             }
-                            //
                         }
                         _ => {}
                     }
@@ -298,11 +283,10 @@ fn main() {
                 use winit::event::MouseScrollDelta as ScrollDelta;
                 match delta {
                     ScrollDelta::LineDelta(x, y) => {
-                        // println!("Scroll  LineDelta({}, {})", x, y);
                         if y > 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.05 });
+                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.15 }).unwrap();
                         } else if y < 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.05 });
+                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.15 }).unwrap();
                         }
                         println!("view scale {}", view.scale);
                     }
@@ -311,6 +295,7 @@ fn main() {
                     }
                 }
             }
+            /*
             Event::WindowEvent {
                 event: WindowEvent::CursorMoved { position, .. },
                 ..
@@ -334,6 +319,7 @@ fn main() {
                     view.height = viewport.dimensions[1];
                 }
             }
+            */
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..

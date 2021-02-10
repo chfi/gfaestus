@@ -41,19 +41,14 @@ impl View {
         let w_2 = w / 2.0;
         let h_2 = h / 2.0;
 
-        // let l = o_x - w_2;
-        // let r = o_x + w_2;
         let l = -w_2;
         let r = w_2;
-
-        // let t = o_y - h_2;
-        // let b = o_y + h_2;
 
         let t = -h_2;
         let b = h_2;
 
-        let w_scale = (2.0 / self.width) * self.scale;
-        let h_scale = (2.0 / self.height) * self.scale;
+        let w_scale = (2.0 / self.width) / self.scale;
+        let h_scale = (2.0 / self.height) / self.scale;
 
         let projection =
             glm::mat4(w_scale, 0.0,     0.0, -((r + l) / (r - l)),
@@ -61,8 +56,8 @@ impl View {
                       0.0,     0.0,     1.0, 1.0,
                       0.0,     0.0,     0.0, 1.0);
 
-        let x_ = self.center.x / self.scale;
-        let y_ = self.center.y / self.scale;
+        let x_ = self.center.x * self.scale;
+        let y_ = self.center.y * self.scale;
 
         let translation =
             glm::mat4(1.0, 0.0, 0.0, x_,

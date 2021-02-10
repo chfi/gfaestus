@@ -1,9 +1,6 @@
-// pub mod view;
-
 use crate::geometry::*;
 use crate::view::*;
 
-use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
 use std::sync::Arc;
@@ -12,23 +9,9 @@ use parking_lot::Mutex;
 
 use std::thread;
 
-/*
-pub struct UIThread {
-    state: UIState,
-    recv_cmd: channel::Receiver<UIAnim>,
-}
-
-impl UIThread {
-    pub fn new(width: f32, height: f32, recv_cmd: channel::Receiver<UIAnim>) -> Self {
-        let state = UIState::new(width, height);
-        Self { state, recv_cmd }
-    }
-}
-*/
-
 pub struct UIThread {
     ui_state: Arc<Mutex<UIState>>,
-    ui_thread: thread::JoinHandle<()>,
+    _ui_thread: thread::JoinHandle<()>,
 }
 
 impl UIThread {
@@ -44,8 +27,16 @@ impl UIThread {
             let ui_state = ui_state_inner;
             let mut buf_ui_state = buf_ui_state.clone();
 
-            while let Ok(cmd) = rx_chan.recv() {
-                buf_ui_state.apply_cmd(cmd);
+            let mut last_time = std::time::Instant::now();
+            loop {
+                let delta = last_time.elapsed().as_secs_f32();
+                last_time = std::time::Instant::now();
+
+                if let Ok(cmd) = rx_chan.try_recv() {
+                    buf_ui_state.apply_cmd(cmd);
+                }
+
+                buf_ui_state.update_anim(delta);
 
                 if let Some(mut ui_lock) = ui_state.try_lock() {
                     ui_lock.clone_from(&buf_ui_state);
@@ -55,7 +46,7 @@ impl UIThread {
 
         let this = Self {
             ui_state,
-            ui_thread: handle,
+            _ui_thread: handle,
         };
 
         (this, tx_chan)
@@ -77,30 +68,14 @@ impl UIThread {
     }
 }
 
-/*
-pub fn ui_thread(width: f32, height: f32) -> (thread::JoinHandle<()>, channel::Sender<UICmd>) {
-    let (tx_chan, rx_chan) = channel::unbounded::<UICmd>();
-
-    let handle = thread::spawn(move || {
-        let mut ui_state = UIState::new(width, height);
-        while let Ok(cmd) = rx_chan.recv() {
-            ui_state.apply_cmd(cmd);
-        }
-    });
-
-    (handle, tx_chan)
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct UIAnimState {
+    view_delta: Point,
+    scale_delta: f32,
 }
-*/
-
-// #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-// pub enum UICmd {
-//     Anim(UIAnim),
-//     Resize
-// }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum UICmd {
-    // Idle,
     Pan { delta: Point },
     Zoom { delta: f32 },
     SetCenter { center: Point },
@@ -110,17 +85,18 @@ pub enum UICmd {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UIState {
-    // anim: UICmd,
+    anim: UIAnimState,
     pub view: View,
-    // cmd_chan:
 }
 
 impl Default for UIState {
     fn default() -> Self {
         let view = View::default();
-        // let anim = UICmd::Idle;
-        // Self { view, anim }
-        Self { view }
+
+        Self {
+            view,
+            anim: Default::default(),
+        }
     }
 }
 
@@ -133,26 +109,79 @@ impl UIState {
             height,
         };
 
-        // let anim = UICmd::Idle;
+        Self {
+            view,
+            anim: Default::default(),
+        }
+    }
 
-        // Self { view, anim }
-        Self { view }
+    pub fn update_anim(&mut self, t: f32) {
+        let zoom_friction = 0.999999;
+
+        // let pan_friction = 1.0 - (1.0 + 0.5 * t).log2();
+        let pan_friction = 0.999999;
+
+        let dx = self.anim.view_delta.x;
+        let dy = self.anim.view_delta.y;
+        let dz = self.anim.scale_delta;
+
+        self.view.center.x += t * dx;
+        self.view.center.y += t * dy;
+        self.view.scale += t * dz;
+        // self.view.scale = self.view.scale.max(1.0);
+        self.view.scale = self.view.scale.max(0.5);
+
+        self.anim.view_delta *= pan_friction;
+        self.anim.scale_delta *= zoom_friction;
+
+        // if self.anim.view_delta.x.abs() < 0.01 {
+        //     self.anim.view_delta.x = 0.0;
+        // }
+
+        // if self.anim.view_delta.y.abs() < 0.01 {
+        //     self.anim.view_delta.y = 0.0;
+        // }
     }
 
     pub fn apply_cmd(&mut self, cmd: UICmd) {
         match cmd {
             // UICmd::Idle => {}
             UICmd::Pan { delta } => {
-                self.view.center += delta;
+                // self.view.center += delta;
+                self.anim.view_delta += delta;
+
+                let d = &mut self.anim.view_delta;
+
+                // d.x = d.x.max(-100.0).min(100.0);
+                // d.y = d.y.max(-100.0).min(100.0);
+
+                let max_speed = 200.0;
+
+                if d.x < -max_speed {
+                    d.x = -max_speed;
+                } else if d.x > max_speed {
+                    d.x = max_speed;
+                }
+
+                if d.y < -max_speed {
+                    d.y = -max_speed;
+                } else if d.y > max_speed {
+                    d.y = max_speed;
+                }
             }
             UICmd::Zoom { delta } => {
-                self.view.scale += delta;
-                self.view.scale = self.view.scale.max(1.0);
+                let delta_mult = self.view.scale.log2();
+                let delta_mult = delta_mult.max(1.0);
+                self.view.scale += delta * delta_mult;
             }
             UICmd::SetCenter { center } => {
+                self.anim.view_delta = Point::default();
+                self.anim.scale_delta = 0.0;
                 self.view.center = center;
             }
             UICmd::SetScale { scale } => {
+                self.anim.view_delta = Point::default();
+                self.anim.scale_delta = 0.0;
                 self.view.scale = scale;
             }
             UICmd::Resize { width, height } => {
