@@ -37,6 +37,8 @@ use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
 
+use gfaestus::layout::*;
+
 use nalgebra_glm as glm;
 
 fn main() {
@@ -174,8 +176,6 @@ fn main() {
     let pipeline = Arc::new(
         GraphicsPipeline::start()
             .vertex_input(TwoBuffersDefinition::<Vertex, Color>::new())
-            // .vertex_input::<(Vertex, Color)>()
-            // .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(simple_vert.main_entry_point(), ())
             .triangle_list()
             .viewports_dynamic_scissors_irrelevant(1)
@@ -195,36 +195,9 @@ fn main() {
         reference: None,
     };
 
-    let segments = Segment::from_path(
-        Point {
-            x: -600.0,
-            y: -15.0,
-        },
-        &[10, 12, 15, 50, 30, 10, 30, 12, 13, 14, 15, 3, 3, 2, 3, 50],
-    );
+    let spines = test_spines();
 
-    let vertices = path_vertices(&segments);
-
-    let color_period = [
-        [1.0, 0.0, 0.0],
-        [1.0, 0.65, 0.0],
-        [1.0, 1.0, 0.0],
-        [0.0, 0.5, 0.0],
-        [0.0, 0.0, 1.0],
-        [0.3, 0.0, 0.51],
-        [0.93, 0.51, 0.93],
-    ];
-
-    let colors: Vec<Color> = vertices
-        .iter()
-        .enumerate()
-        .map(|(ix, _)| {
-            let ix_ = (ix / 6) % color_period.len();
-            Color {
-                color: color_period[ix_],
-            }
-        })
-        .collect();
+    let spine_vertices = spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
 
     let mut view: View = View::default();
 
@@ -355,31 +328,10 @@ fn main() {
                     view = latest_view;
                 }
 
-                let view_offset = {
-                    let mat = view.to_scaled_matrix();
-                    let view_data = view::mat4_to_array(&mat);
-
-                    let matrix = simple_vert::ty::View { view: view_data };
-
-                    uniform_buffer.next(matrix).unwrap()
-                };
-
                 let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
-                let set = Arc::new(
-                    PersistentDescriptorSet::start(layout.clone())
-                        .add_buffer(view_offset)
-                        .unwrap()
-                        .build()
-                        .unwrap(),
-                );
 
                 let clear = [0.0, 0.0, 0.05, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
-
-                // let vertices = path_vertices(&segments);
-
-                let vertex_buffer = vertex_buffer_pool.chunk(vertices.iter().copied()).unwrap();
-                let color_buffer = color_buffer_pool.chunk(colors.iter().copied()).unwrap();
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
                     device.clone(),
@@ -393,17 +345,45 @@ fn main() {
                         SubpassContents::Inline,
                         clear_values,
                     )
-                    .unwrap()
-                    .draw(
-                        pipeline.clone(),
-                        &dynamic_state,
-                        (vertex_buffer, color_buffer),
-                        set.clone(),
-                        (),
-                    )
-                    .unwrap()
-                    .end_render_pass()
                     .unwrap();
+
+                let spine_matrices = spines.iter().map(|s| s.model_matrix()).collect::<Vec<_>>();
+
+                for ((vxs, cols), model) in spine_vertices.iter().zip(spine_matrices.iter()) {
+                    let vertex_buffer = vertex_buffer_pool.chunk(vxs.iter().copied()).unwrap();
+                    let color_buffer = color_buffer_pool.chunk(cols.iter().copied()).unwrap();
+
+                    let transformation = {
+                        let mat = view.to_scaled_matrix();
+
+                        let mat = mat * model;
+
+                        let view_data = view::mat4_to_array(&mat);
+
+                        let matrix = simple_vert::ty::View { view: view_data };
+                        uniform_buffer.next(matrix).unwrap()
+                    };
+
+                    let set = Arc::new(
+                        PersistentDescriptorSet::start(layout.clone())
+                            .add_buffer(transformation)
+                            .unwrap()
+                            .build()
+                            .unwrap(),
+                    );
+
+                    builder
+                        .draw(
+                            pipeline.clone(),
+                            &dynamic_state,
+                            (vertex_buffer, color_buffer),
+                            set.clone(),
+                            (),
+                        )
+                        .unwrap();
+                }
+
+                builder.end_render_pass().unwrap();
 
                 let command_buffer = builder.build().unwrap();
 

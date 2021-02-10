@@ -48,13 +48,14 @@ impl Point {
     }
 
     #[inline]
-    pub fn vertex(&self, red: bool) -> Vertex {
+    pub fn vertex(&self) -> Vertex {
         Vertex {
             position: [self.x, self.y],
         }
     }
 }
 
+/*
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Node {
     pub p0: Point,
@@ -71,9 +72,10 @@ impl Node {
 
     #[inline]
     pub fn vertices(&self) -> [Vertex; 2] {
-        [self.p0.vertex(true), self.p1.vertex(true)]
+        [self.p0.vertex(), self.p1.vertex()]
     }
 }
+*/
 
 impl From<(f32, f32)> for Point {
     #[inline]

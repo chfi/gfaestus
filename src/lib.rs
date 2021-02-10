@@ -1,5 +1,6 @@
+pub mod display;
 pub mod geometry;
 pub mod gfa;
-pub mod render;
+pub mod layout;
 pub mod ui;
 pub mod view;

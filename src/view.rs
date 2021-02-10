@@ -53,6 +53,46 @@ impl View {
         scaling * translation
         // translation * scaling
     }
+
+    #[rustfmt::skip]
+    pub fn to_rotated_scaled_matrix(&self, angle: f32) -> glm::Mat4 {
+
+        let w = self.width;
+        let h = self.height;
+
+        let w_scale = 2.0 / (self.width * self.scale);
+        let h_scale = 2.0 / (self.height * self.scale);
+
+        let scaling =
+            glm::mat4(w_scale, 0.0,     0.0, 0.0,
+                      0.0,     h_scale, 0.0, 0.0,
+                      0.0,     0.0,     1.0, 1.0,
+                      0.0,     0.0,     0.0, 1.0);
+
+
+        let ratio = w / h;
+
+        let x_ = self.center.x * ratio;
+        let y_ = self.center.y;
+
+        let translation =
+            glm::mat4(1.0, 0.0, 0.0, x_,
+                      0.0, 1.0, 0.0, y_,
+                      0.0, 0.0, 1.0, 0.0,
+                      0.0, 0.0, 0.0, 1.0);
+
+        let cos_t = angle.cos();
+        let sin_t = angle.sin();
+
+        let rotation = glm::mat4(cos_t, -sin_t, 0.0, 0.0,
+                                 sin_t,  cos_t, 0.0, 0.0,
+                                 0.0,    0.0,   1.0, 0.0,
+                                 0.0,    0.0,   0.0, 1.0);
+
+
+        scaling * translation
+        // translation * scaling
+    }
 }
 
 pub fn mat4_to_array(matrix: &glm::Mat4) -> [[f32; 4]; 4] {
