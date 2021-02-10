@@ -29,6 +29,7 @@ use std::time::Instant;
 
 use gfaestus::geometry::*;
 use gfaestus::gfa::*;
+use gfaestus::ui::events::{keyboard_input, mouse_wheel_input};
 use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
@@ -92,20 +93,11 @@ fn main() {
     let vertex_buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
     let color_buffer_pool: CpuBufferPool<Color> = CpuBufferPool::vertex_buffer(device.clone());
 
-    // fn _dumb() {
-    let _ = include_str!("../shaders/point.vert");
-    let _ = include_str!("../shaders/point.frag");
     let _ = include_str!("../shaders/fragment.frag");
     let _ = include_str!("../shaders/vertex.vert");
-    let _ = include_str!("../shaders/geometry.geom");
-    // }
-
-    mod point_vert {
-        vulkano_shaders::shader! {
-            ty: "vertex",
-            path: "shaders/point.vert",
-        }
-    }
+    // let _ = include_str!("../shaders/point.vert");
+    // let _ = include_str!("../shaders/point.frag");
+    // let _ = include_str!("../shaders/geometry.geom");
 
     mod simple_vert {
         vulkano_shaders::shader! {
@@ -118,6 +110,14 @@ fn main() {
         vulkano_shaders::shader! {
             ty: "fragment",
             path: "shaders/fragment.frag",
+        }
+    }
+
+    /*
+    mod point_vert {
+        vulkano_shaders::shader! {
+            ty: "vertex",
+            path: "shaders/point.vert",
         }
     }
 
@@ -134,12 +134,10 @@ fn main() {
             path: "shaders/geometry.geom",
         }
     }
+    */
 
-    // let point_vert = point_vert::Shader::load(device.clone()).unwrap();
-    // let point_frag = point_frag::Shader::load(device.clone()).unwrap();
     let simple_vert = simple_vert::Shader::load(device.clone()).unwrap();
     let simple_frag = simple_frag::Shader::load(device.clone()).unwrap();
-    let rect_geom = rect_geom::Shader::load(device.clone()).unwrap();
 
     let uniform_buffer =
         CpuBufferPool::<simple_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
@@ -162,7 +160,6 @@ fn main() {
                 }
             },
             pass: {
-                // color: [color],
                 color: [intermediary],
                 depth_stencil: {}
                 resolve: [color],
@@ -175,14 +172,8 @@ fn main() {
         GraphicsPipeline::start()
             .vertex_input_single_buffer::<Vertex>()
             .vertex_shader(simple_vert.main_entry_point(), ())
-            // .vertex_shader(point_vert.main_entry_point(), ())
             .triangle_list()
-            // .triangle_strip()
-            // .point_list()
-            // .line_list()
-            // .geometry_shader(rect_geom.main_entry_point(), ())
             .viewports_dynamic_scissors_irrelevant(1)
-            // .fragment_shader(point_frag.main_entry_point(), ())
             .fragment_shader(simple_frag.main_entry_point(), ())
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .blend_alpha_blending()
@@ -199,19 +190,15 @@ fn main() {
         reference: None,
     };
 
-    // let mut view: (f32, f32) = (0.0, 0.0);
-
     let segments = Segment::from_path(
         Point {
-            x: -200.0,
+            x: -600.0,
             y: -15.0,
         },
-        &[10, 12, 15, 50, 30, 10, 30],
+        &[10, 12, 15, 50, 30, 10, 30, 12, 13, 14, 15, 3, 3, 2, 3, 50],
     );
 
     let vertices = path_vertices(&segments);
-
-    use vk_gfa::view::View;
 
     let mut view: View = View::default();
 
@@ -228,7 +215,7 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
-    let (ui_thread, ui_cmd_tx) = UIThread::new(width, height);
+    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(width, height);
 
     let mut recreate_swapchain = false;
 
@@ -241,9 +228,9 @@ fn main() {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
 
-        if let Some(ui_state) = ui_thread.try_get_state() {
-            view = ui_state.view;
-        }
+        // if let Some(ui_state) = ui_thread.try_get_state() {
+        //     view = ui_state.view;
+        // }
 
         t += delta.as_secs_f32();
 
@@ -254,63 +241,13 @@ fn main() {
                 event: WindowEvent::KeyboardInput { input, .. },
                 ..
             } => {
-                use winit::event::VirtualKeyCode as Key;
-
-                let state = input.state;
-                let keycode = input.virtual_keycode;
-
-                let pressed = state == winit::event::ElementState::Pressed;
-
-                let speed = 200.0;
-
-                if let Some(key) = keycode {
-                    match key {
-                        Key::Up => {
-                            if pressed {
-                                let delta = Point { x: 0.0, y: speed };
-                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
-                            }
-                        }
-                        Key::Right => {
-                            if pressed {
-                                let delta = Point { x: -speed, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
-                            }
-                        }
-                        Key::Down => {
-                            if pressed {
-                                let delta = Point { x: 0.0, y: -speed };
-                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
-                            }
-                        }
-                        Key::Left => {
-                            if pressed {
-                                let delta = Point { x: speed, y: 0.0 };
-                                ui_cmd_tx.send(UICmd::Pan { delta }).unwrap();
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                keyboard_input(&ui_cmd_tx, input);
             }
             Event::WindowEvent {
                 event: WindowEvent::MouseWheel { delta, .. },
                 ..
             } => {
-                use winit::event::MouseScrollDelta as ScrollDelta;
-                match delta {
-                    ScrollDelta::LineDelta(x, y) => {
-                        if y > 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: -0.45 }).unwrap();
-                        } else if y < 0.0 {
-                            ui_cmd_tx.send(UICmd::Zoom { delta: 0.45 }).unwrap();
-                        }
-                        println!("view scale {}", view.scale);
-                    }
-                    ScrollDelta::PixelDelta(pos) => {
-                        println!("Scroll PixelDelta({}, {})", pos.x, pos.y);
-                    }
-                }
+                mouse_wheel_input(&ui_cmd_tx, delta);
             }
             /*
             Event::WindowEvent {
@@ -390,6 +327,10 @@ fn main() {
 
                 if suboptimal {
                     recreate_swapchain = true;
+                }
+
+                if let Ok(latest_view) = view_rx.recv() {
+                    view = latest_view;
                 }
 
                 let view_offset = {

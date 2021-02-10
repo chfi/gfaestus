@@ -11,14 +11,19 @@ use std::thread;
 
 pub mod animation;
 
+pub mod events;
+
 pub struct UIThread {
     ui_state: Arc<Mutex<UIState>>,
     _ui_thread: thread::JoinHandle<()>,
 }
 
 impl UIThread {
-    pub fn new(width: f32, height: f32) -> (Self, channel::Sender<UICmd>) {
+    // pub fn new(width: f32, height: f32) -> (Self, channel::Sender<UICmd>) {
+    pub fn new(width: f32, height: f32) -> (Self, channel::Sender<UICmd>, channel::Receiver<View>) {
         let (tx_chan, rx_chan) = channel::unbounded::<UICmd>();
+
+        let (view_tx, view_rx) = channel::bounded::<View>(1);
 
         let buf_ui_state = UIState::new(width, height);
         let ui_state = Arc::new(Mutex::new(buf_ui_state.clone()));
@@ -35,21 +40,21 @@ impl UIThread {
 
             loop {
                 let delta = last_time.elapsed().as_secs_f32();
-                last_time = std::time::Instant::now();
                 since_last_update += delta;
 
-                if since_last_update > 1.0 / 75.0 {
-                    // if since_last_update > 0.0001 {
+                if since_last_update > 1.0 / 144.0 {
                     buf_ui_state.update_anim(since_last_update);
                     since_last_update = 0.0;
                 }
+
+                last_time = std::time::Instant::now();
 
                 if let Ok(cmd) = rx_chan.try_recv() {
                     buf_ui_state.apply_cmd(cmd);
                 }
 
-                if let Some(mut ui_lock) = ui_state.try_lock() {
-                    ui_lock.clone_from(&buf_ui_state);
+                if view_tx.is_empty() {
+                    view_tx.send(buf_ui_state.view).unwrap();
                 }
             }
         });
@@ -59,7 +64,7 @@ impl UIThread {
             _ui_thread: handle,
         };
 
-        (this, tx_chan)
+        (this, tx_chan, view_rx)
     }
 
     pub fn try_get_state(&self) -> Option<UIState> {
@@ -91,6 +96,15 @@ pub enum UICmd {
     SetCenter { center: Point },
     SetScale { scale: f32 },
     Resize { width: f32, height: f32 },
+}
+
+pub enum UIInputState {
+    Mouse1Down,
+    Mouse2Down,
+    KeyUpDown,
+    KeyRightDown,
+    KeyDownDown,
+    KeyLeftDown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -128,6 +142,7 @@ impl UIState {
     pub fn update_anim(&mut self, t: f32) {
         let zoom_friction = 1.0 - (10.0_f32.powf(t - 1.0));
         let pan_friction = 1.0 - (10.0_f32.powf(t - 1.0));
+        // let pan_friction = 1.0 - (0.999999 * t);
 
         let dx = self.anim.view_delta.x;
         let dy = self.anim.view_delta.y;
@@ -156,7 +171,7 @@ impl UIState {
 
                 let d = &mut self.anim.view_delta;
 
-                let max_speed = 400.0;
+                let max_speed = 600.0;
 
                 d.x = d.x.max(-max_speed).min(max_speed);
                 d.y = d.y.max(-max_speed).min(max_speed);
