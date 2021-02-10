@@ -1,6 +1,8 @@
 use crate::geometry::*;
 use crate::view::*;
 
+pub mod physics;
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -29,6 +31,11 @@ fn rotate(p: Point, angle: f32) -> Point {
 }
 
 impl Node {
+    pub fn center(&self) -> Point {
+        let diff = self.p0 - self.p1;
+        self.p0 + (diff / 2.0)
+    }
+
     pub fn vertices(&self) -> [Vertex; 6] {
         let diff = self.p0 - self.p1;
 
@@ -36,7 +43,7 @@ impl Node {
 
         let pos0_orthogonal = rotate(pos0_to_pos1_norm, 3.14159265 / 2.0);
 
-        let width = 25.0;
+        let width = 20.0;
 
         let p0 = self.p0 + pos0_orthogonal * (width / 2.0);
         let p1 = self.p0 + pos0_orthogonal * (-width / 2.0);
@@ -81,16 +88,16 @@ pub fn test_spines() -> Vec<Spine> {
     let path3 = graph.get_path_id(b"path3").unwrap();
 
     let mut spine0 = Spine::from_path(&graph, path0).unwrap();
-    spine0.offset.y -= 150.0;
+    spine0.offset.y -= 40.0;
 
     let mut spine1 = Spine::from_path(&graph, path1).unwrap();
-    spine1.offset.y -= 50.0;
+    spine1.offset.y -= 15.0;
 
     let mut spine2 = Spine::from_path(&graph, path2).unwrap();
-    spine2.offset.y += 50.0;
+    spine2.offset.y += 15.0;
 
     let mut spine3 = Spine::from_path(&graph, path3).unwrap();
-    spine3.offset.y += 150.0;
+    spine3.offset.y += 40.0;
 
     spines.push(spine0);
     spines.push(spine1);

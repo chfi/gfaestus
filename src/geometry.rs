@@ -33,6 +33,11 @@ impl Point {
         self.x.hypot(self.y)
     }
 
+    pub fn toward(&self, other: Point) -> Point {
+        let diff = *self - other;
+        diff / diff.length()
+    }
+
     #[inline]
     pub fn dist(&self, other: Point) -> f32 {
         let x_diff = (self.x - other.x).abs();

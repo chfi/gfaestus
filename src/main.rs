@@ -37,6 +37,7 @@ use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
 
+use gfaestus::layout::physics;
 use gfaestus::layout::*;
 
 use nalgebra_glm as glm;
@@ -195,9 +196,7 @@ fn main() {
         reference: None,
     };
 
-    let spines = test_spines();
-
-    let spine_vertices = spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
+    let mut spines = test_spines();
 
     let mut view: View = View::default();
 
@@ -223,11 +222,25 @@ fn main() {
     let mut last_time = Instant::now();
     let mut t = 0.0;
 
+    let mut since_last_update = 0.0;
+
+    let mut paused = false;
+
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
 
         t += delta.as_secs_f32();
+
+        if !paused {
+            since_last_update += delta.as_secs_f32();
+
+            if since_last_update > 0.01 {
+                physics::repulsion_spines(since_last_update, &mut spines);
+
+                since_last_update = 0.0;
+            }
+        }
 
         last_time = now;
 
@@ -237,6 +250,19 @@ fn main() {
                 ..
             } => {
                 keyboard_input(&ui_cmd_tx, input);
+
+                use winit::event::VirtualKeyCode as Key;
+
+                let pressed = input.state == winit::event::ElementState::Pressed;
+
+                if pressed {
+                    if let Some(Key::Space) = input.virtual_keycode {
+                        paused = !paused;
+                    }
+                    if let Some(Key::Return) = input.virtual_keycode {
+                        spines = test_spines();
+                    }
+                }
             }
             Event::WindowEvent {
                 event: WindowEvent::MouseWheel { delta, .. },
@@ -346,6 +372,8 @@ fn main() {
                         clear_values,
                     )
                     .unwrap();
+
+                let spine_vertices = spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
 
                 let spine_matrices = spines.iter().map(|s| s.model_matrix()).collect::<Vec<_>>();
 
