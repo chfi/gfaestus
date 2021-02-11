@@ -14,7 +14,6 @@ pub mod animation;
 pub mod events;
 
 pub struct UIThread {
-    ui_state: Arc<Mutex<UIState>>,
     _ui_thread: thread::JoinHandle<()>,
 }
 
@@ -24,15 +23,9 @@ impl UIThread {
 
         let (view_tx, view_rx) = channel::bounded::<View>(1);
 
-        let buf_ui_state = UIState::new(width, height);
-        let ui_state = Arc::new(Mutex::new(buf_ui_state.clone()));
-
-        let ui_state_inner = Arc::clone(&ui_state);
+        let mut ui_state = UIState::new(width, height);
 
         let handle = thread::spawn(move || {
-            let ui_state = ui_state_inner;
-            let mut buf_ui_state = buf_ui_state.clone();
-
             let mut last_time = std::time::Instant::now();
 
             let mut since_last_update = 0.0;
@@ -42,54 +35,38 @@ impl UIThread {
                 since_last_update += delta;
 
                 if since_last_update > 1.0 / 144.0 {
-                    buf_ui_state.update_anim(since_last_update);
+                    ui_state.update_anim(since_last_update);
                     since_last_update = 0.0;
                 }
 
                 last_time = std::time::Instant::now();
 
                 if let Ok(cmd) = rx_chan.try_recv() {
-                    buf_ui_state.apply_cmd(cmd);
+                    ui_state.apply_cmd(cmd);
                 }
 
                 if view_tx.is_empty() {
-                    view_tx.send(buf_ui_state.view).unwrap();
+                    view_tx.send(ui_state.view).unwrap();
                 }
             }
         });
 
-        let this = Self {
-            ui_state,
-            _ui_thread: handle,
-        };
+        let this = Self { _ui_thread: handle };
 
         (this, tx_chan, view_rx)
-    }
-
-    pub fn try_get_state(&self) -> Option<UIState> {
-        if let Some(ui_lock) = self.ui_state.try_lock() {
-            let ui_state: UIState = ui_lock.clone();
-            Some(ui_state)
-        } else {
-            None
-        }
-    }
-
-    pub fn lock_get_state(&self) -> UIState {
-        let ui_lock = self.ui_state.lock();
-        let ui_state: UIState = ui_lock.clone();
-        ui_state
     }
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UIAnimState {
+    view_const_delta: Point,
     view_delta: Point,
     scale_delta: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum UICmd {
+    PanConstant { delta: Point },
     Pan { delta: Point },
     Zoom { delta: f32 },
     SetCenter { center: Point },
@@ -141,10 +118,10 @@ impl UIState {
     pub fn update_anim(&mut self, t: f32) {
         let zoom_friction = 1.0 - (10.0_f32.powf(t - 1.0));
         let pan_friction = 1.0 - (10.0_f32.powf(t - 1.0));
-        // let pan_friction = 1.0 - (0.999999 * t);
 
-        let dx = self.anim.view_delta.x;
-        let dy = self.anim.view_delta.y;
+        let dx = self.anim.view_delta.x + self.anim.view_const_delta.x;
+        let dy = self.anim.view_delta.y + self.anim.view_const_delta.y;
+
         let dz = self.anim.scale_delta;
 
         self.view.scale += t * dz;
@@ -164,6 +141,15 @@ impl UIState {
     pub fn apply_cmd(&mut self, cmd: UICmd) {
         match cmd {
             // UICmd::Idle => {}
+            UICmd::PanConstant { delta } => {
+                if delta.x == 0.0 {
+                    self.anim.view_delta.x = self.anim.view_const_delta.x;
+                }
+                if delta.y == 0.0 {
+                    self.anim.view_delta.y = self.anim.view_const_delta.y;
+                }
+                self.anim.view_const_delta = delta;
+            }
             UICmd::Pan { delta } => {
                 // self.view.center += delta;
                 self.anim.view_delta += delta;
