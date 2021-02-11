@@ -59,6 +59,8 @@ impl UIThread {
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct UIAnimState {
+    mouse_pan_origin: Option<Point>,
+    view_target: Option<Point>,
     view_const_delta: Point,
     view_delta: Point,
     scale_delta: f32,
@@ -66,6 +68,9 @@ pub struct UIAnimState {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum UICmd {
+    StartMousePan { origin: Point },
+    MousePan { screen_tgt: Point },
+    EndMousePan,
     PanConstant { delta: Point },
     Pan { delta: Point },
     Zoom { delta: f32 },
@@ -119,16 +124,52 @@ impl UIState {
         let zoom_friction = 1.0 - (10.0_f32.powf(t - 1.0));
         let pan_friction = 1.0 - (10.0_f32.powf(t - 1.0));
 
-        let dx = self.anim.view_delta.x + self.anim.view_const_delta.x;
-        let dy = self.anim.view_delta.y + self.anim.view_const_delta.y;
+        let mut dx = t * self.anim.view_delta.x + self.anim.view_const_delta.x;
+        let mut dy = t * self.anim.view_delta.y + self.anim.view_const_delta.y;
 
         let dz = self.anim.scale_delta;
 
         self.view.scale += t * dz;
         self.view.scale = self.view.scale.max(0.5);
 
-        self.view.center.x += t * dx * self.view.scale;
-        self.view.center.y += t * dy * self.view.scale;
+        if let Some(origin) = self.anim.mouse_pan_origin {
+            if let Some(tgt) = self.anim.view_target {
+                // use this one for continuous panning in the dragged direction
+                // dx = (tgt.x - origin.x) / 100.0;
+                // dy = (tgt.y - origin.y) / 100.0;
+
+                // dx = (origin.x - tgt.x) / 100.0;
+                // dy = (origin.y - tgt.y) / 100.0;
+
+                // dx = (origin.x - tgt.x) / 10.0;
+                // dy = (origin.y - tgt.y) / 10.0;
+
+                dx = (origin.x - tgt.x) / 1.0;
+                dy = (origin.y - tgt.y) / 1.0;
+
+                // self.view.center.x = self.view.center.x + dx;
+                // self.view.center.y = self.view.center.y + dy;
+
+                let mut new_tgt = tgt;
+                new_tgt.x += dx * self.view.scale;
+                new_tgt.y += dy * self.view.scale;
+
+                let mut new_origin = origin;
+                new_origin.x -= dx * self.view.scale;
+                new_origin.y -= dy * self.view.scale;
+
+                let new_dist = new_origin.dist(new_tgt);
+
+                self.anim.mouse_pan_origin = Some(new_origin);
+            }
+        }
+
+        self.view.center.x += dx * self.view.scale;
+        self.view.center.y += dy * self.view.scale;
+
+        // if let Some(tgt) = self.anim.view_target {
+
+        // }
 
         self.anim.view_delta *= pan_friction;
         self.anim.scale_delta *= zoom_friction;
@@ -141,6 +182,29 @@ impl UIState {
     pub fn apply_cmd(&mut self, cmd: UICmd) {
         match cmd {
             // UICmd::Idle => {}
+            UICmd::StartMousePan { origin } => {
+                self.anim.mouse_pan_origin = Some(origin);
+                self.anim.view_target = Some(origin);
+                //
+            }
+            UICmd::MousePan { screen_tgt } => {
+                if let Some(origin) = self.anim.mouse_pan_origin {
+                    // self.anim.view_target = Some(origin + screen_tgt);
+                    self.anim.view_target = Some(screen_tgt);
+                    // if let Some(tgt) = self.anim.view_target {
+                    //     self.anim.view_target = Some(tgt
+                    // }
+                    // let prev_tgt = self.anim.view_target.unwrap_or(origin);
+                    // self.anim.view_target = Some(prev_tgt + delta);
+                }
+                // self.anim.mouse_pan_origin = Some(origin);
+                //
+            }
+            UICmd::EndMousePan => {
+                self.anim.mouse_pan_origin = None;
+                self.anim.view_target = None;
+                //
+            }
             UICmd::PanConstant { delta } => {
                 if delta.x == 0.0 {
                     self.anim.view_delta.x = self.anim.view_const_delta.x;

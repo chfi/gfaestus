@@ -293,7 +293,32 @@ fn main() {
                 Action::ResetLayout => {
                     spines = test_spines();
                 }
-                Action::MousePan(_) => {
+                Action::MousePan(focus) => {
+                    if let Some(focus) = focus {
+                        // let point = focus
+                        //     + Point {
+                        //         x: -view.center.x,
+                        //         y: -view.center.y,
+                        //     };
+
+                        // let origin = Point {
+                        //     x: width / 2.0,
+                        //     y: height / 2.0,
+                        // } - point;
+
+                        let mut origin = focus;
+                        origin.x -= width / 2.0;
+                        origin.y -= height / 2.0;
+
+                        println!(
+                            "focus: {:.8}, {:.8}\ttranslated: {:.8}, {:.8}",
+                            focus.x, focus.y, origin.x, origin.y
+                        );
+
+                        ui_cmd_tx.send(UICmd::StartMousePan { origin }).unwrap();
+                    } else {
+                        ui_cmd_tx.send(UICmd::EndMousePan).unwrap();
+                    }
                     //
                 }
                 Action::MouseZoom { focus, delta } => {
@@ -301,43 +326,16 @@ fn main() {
                     ui_cmd_tx.send(UICmd::Zoom { delta }).unwrap();
                 }
                 Action::MouseAt { point } => {
-                    //
+                    let mut screen_tgt = point;
+                    screen_tgt.x -= width / 2.0;
+                    screen_tgt.y -= height / 2.0;
+
+                    ui_cmd_tx.send(UICmd::MousePan { screen_tgt }).unwrap();
                 }
             }
         }
 
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::MouseWheel { delta, .. },
-                ..
-            } => {
-                mouse_wheel_input(&ui_cmd_tx, delta);
-            }
-            /*
-            Event::WindowEvent {
-                event: WindowEvent::CursorMoved { position, .. },
-                ..
-            } => {
-                if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
-                    let pos_x = position.x as f32;
-                    let pos_y = position.y as f32;
-                    let norm_x = pos_x / viewport.dimensions[0];
-                    let norm_y = pos_y / viewport.dimensions[1];
-                    // view.center.x = 0.5 + (norm_x / -2.0);
-                    // view.center.y = 0.5 + (norm_y / -2.0);
-                    // view.center.x = (norm_x / -2.0);
-                    // view.center.y = (norm_y / -2.0);
-
-                    // ui_cmd_tx.send(UICmd::Zoom { delta: 0.05 });
-
-                    view.center.x = 0.0;
-                    view.center.y = 0.0;
-
-                    view.width = viewport.dimensions[0];
-                    view.height = viewport.dimensions[1];
-                }
-            }
-            */
             // Event::WindowEvent {
             //     event: WindowEvent::MouseWheel { delta, .. },
             //     ..
