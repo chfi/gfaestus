@@ -22,6 +22,8 @@ use vulkano::sync::{self, FlushError, GpuFuture};
 
 use vulkano_win::VkSurfaceBuild;
 
+use crossbeam::channel;
+
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
@@ -36,6 +38,11 @@ use gfaestus::ui::events::{keyboard_input, mouse_wheel_input};
 use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
+
+use gfaestus::input::{
+    input_event_handler, InputChange, InputEvent, SemanticInput, SemanticInputHandler,
+    SemanticInputWorker,
+};
 
 use gfaestus::layout::physics;
 use gfaestus::layout::*;
@@ -215,6 +222,10 @@ fn main() {
 
     let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(width, height);
 
+    let input_handler = input_event_handler();
+
+    let semantic_input_rx = input_handler.clone_semantic_rx();
+
     let mut recreate_swapchain = false;
 
     let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
@@ -243,6 +254,14 @@ fn main() {
         }
 
         last_time = now;
+
+        if let Event::WindowEvent { event, .. } = &event {
+            input_handler.send_window_event(&event);
+        }
+
+        while let Ok(sem_input) = semantic_input_rx.try_recv() {
+            println!("received input: {:?}", sem_input);
+        }
 
         match event {
             Event::WindowEvent {
