@@ -15,7 +15,8 @@ impl Default for View {
     fn default() -> Self {
         Self {
             center: Point::new(0.0, 0.0),
-            scale: 1.0,
+            // scale: 1.0,
+            scale: 10.0,
             width: 100.0,
             height: 100.0,
         }

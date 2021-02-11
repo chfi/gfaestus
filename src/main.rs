@@ -72,14 +72,18 @@ fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
     let total_height = (graph.path_count() as f32) * (20.0 + 15.0);
     let mut y = -total_height / 2.0;
 
+    let mut node_count = 0;
     for path_id in graph.path_ids() {
         let mut spine = Spine::from_path(&graph, path_id).unwrap();
+        node_count += graph.path_len(path_id).unwrap();
         spine.offset.y = y;
 
         spines.push(spine);
 
         y += 35.0;
     }
+
+    println!("total nodes: {}", node_count);
 
     Ok(spines)
 }
@@ -252,14 +256,6 @@ fn main() {
 
         let col_buf = color_buffer_pool.chunk(col_data.into_iter()).unwrap();
         color_buffers.push(Arc::new(col_buf));
-        // let buf: ImmutableBuffer<[Color]> = ImmutableBuffer::from_data(col_data, BufferUsage::vertex_buffer(), queue.clone()).unwrap();
-        // let (buf, fut) =
-        //     ImmutableBuffer::from_data(col_data, BufferUsage::vertex_buffer(), queue.clone())
-        //         .unwrap();
-        // fut.then_signal_fence_and_flush().unwrap();
-        // let x: () = buf;
-        // color_buffers.push(buf);
-        // color_buffers.
     }
 
     let init_spines = spines.clone();
@@ -315,17 +311,15 @@ fn main() {
 
         t += delta.as_secs_f32();
 
-        /*
         if !paused {
             since_last_update += delta.as_secs_f32();
 
-            if since_last_update > 0.01 {
+            if since_last_update > 0.1 {
                 physics::repulsion_spines(since_last_update, &mut spines);
 
                 since_last_update = 0.0;
             }
         }
-        */
 
         last_time = now;
 

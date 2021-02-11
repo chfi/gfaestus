@@ -5,7 +5,8 @@ use super::{Node, Spine};
 
 // pub fn repulsion_spines(t: f32, spines: &mut Vec<Spine>) {
 pub fn repulsion_spines(t: f32, spines: &mut [Spine]) {
-    let force_mult = 1025.0;
+    // let force_mult = 25.0;
+    let force_mult = 1000.0;
 
     let mut forces: Vec<(usize, Vec<Point>)> = Vec::new();
 

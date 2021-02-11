@@ -32,7 +32,7 @@ fn rotate(p: Point, angle: f32) -> Point {
 
 impl Node {
     pub fn center(&self) -> Point {
-        let diff = self.p0 - self.p1;
+        let diff = self.p1 - self.p0;
         self.p0 + (diff / 2.0)
     }
 
