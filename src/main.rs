@@ -39,10 +39,7 @@ use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
 
-use gfaestus::input::{
-    input_event_handler, InputChange, InputEvent, SemanticInput, SemanticInputHandler,
-    SemanticInputWorker,
-};
+use gfaestus::input::*;
 
 use gfaestus::layout::physics;
 use gfaestus::layout::*;
@@ -222,9 +219,11 @@ fn main() {
 
     let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(width, height);
 
-    let input_handler = input_event_handler();
+    let input_action_handler = InputActionWorker::new();
+    // let input_handler = input_event_handler();
 
-    let semantic_input_rx = input_handler.clone_semantic_rx();
+    let semantic_input_rx = input_action_handler.clone_semantic_rx();
+    let input_action_rx = input_action_handler.clone_action_rx();
 
     let mut recreate_swapchain = false;
 
@@ -256,11 +255,11 @@ fn main() {
         last_time = now;
 
         if let Event::WindowEvent { event, .. } = &event {
-            input_handler.send_window_event(&event);
+            input_action_handler.send_window_event(&event);
         }
 
-        while let Ok(sem_input) = semantic_input_rx.try_recv() {
-            println!("received input: {:?}", sem_input);
+        while let Ok(action) = input_action_rx.try_recv() {
+            println!("received action: {:?}", action);
         }
 
         match event {
