@@ -124,12 +124,12 @@ impl UIState {
         let zoom_friction = 1.0 - (10.0_f32.powf(t - 1.0));
         let pan_friction = 1.0 - (10.0_f32.powf(t - 1.0));
 
-        let mut dx = t * self.anim.view_delta.x + self.anim.view_const_delta.x;
-        let mut dy = t * self.anim.view_delta.y + self.anim.view_const_delta.y;
+        let mut dx = t * (self.anim.view_delta.x + self.anim.view_const_delta.x);
+        let mut dy = t * (self.anim.view_delta.y + self.anim.view_const_delta.y);
 
         let dz = self.anim.scale_delta;
 
-        self.view.scale += t * dz;
+        self.view.scale += self.view.scale * t * dz;
         self.view.scale = self.view.scale.max(0.5);
 
         if let Some(origin) = self.anim.mouse_pan_origin {

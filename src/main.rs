@@ -242,8 +242,8 @@ fn main() {
     // let mut spines = test_spines();
     println!("loading GFA");
     let t = std::time::Instant::now();
-    let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
-    // let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
+    // let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
+    let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
     println!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
     let mut color_buffers: Vec<_> = Vec::new();
@@ -496,18 +496,6 @@ fn main() {
                         clear_values,
                     )
                     .unwrap();
-
-                // let spine_vertices = spines
-                //     .iter()
-                //     .filter_map(|s| s.vertices())
-                //     .collect::<Vec<_>>();
-
-                // for (vxs, cols
-
-                // let spine_vertices: Vec<(Vec<Vertex>, Vec<Color>)> =
-                //     spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
-
-                // let spine_matrices = spines.iter().map(|s| s.model_matrix()).collect::<Vec<_>>();
 
                 for (ix, spine) in spines.iter().enumerate() {
                     let model = spine.model_matrix();
