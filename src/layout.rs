@@ -62,6 +62,7 @@ impl Node {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Edge {
     pub from: usize,
     pub from_end: Direction,
@@ -69,6 +70,7 @@ pub struct Edge {
     pub to_end: Direction,
 }
 
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub struct Spine {
     pub offset: Point,
     pub angle: f32,

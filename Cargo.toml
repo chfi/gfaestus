@@ -24,3 +24,7 @@ nalgebra-glm = "0.10"
 
 gfa = { version = "0.10" }
 handlegraph = "0.7.0-alpha.2"
+
+anyhow = "1.0"
+
+fxhash = "0.2"

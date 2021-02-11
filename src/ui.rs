@@ -135,8 +135,8 @@ impl UIState {
         if let Some(origin) = self.anim.mouse_pan_origin {
             if let Some(tgt) = self.anim.view_target {
                 // use this one for continuous panning in the dragged direction
-                // dx = (tgt.x - origin.x) / 100.0;
-                // dy = (tgt.y - origin.y) / 100.0;
+                dx = (tgt.x - origin.x) / 100.0;
+                dy = (tgt.y - origin.y) / 100.0;
 
                 // dx = (origin.x - tgt.x) / 100.0;
                 // dy = (origin.y - tgt.y) / 100.0;
@@ -144,8 +144,8 @@ impl UIState {
                 // dx = (origin.x - tgt.x) / 10.0;
                 // dy = (origin.y - tgt.y) / 10.0;
 
-                dx = (origin.x - tgt.x) / 1.0;
-                dy = (origin.y - tgt.y) / 1.0;
+                // dx = (origin.x - tgt.x) / 1.0;
+                // dy = (origin.y - tgt.y) / 1.0;
 
                 // self.view.center.x = self.view.center.x + dx;
                 // self.view.center.y = self.view.center.y + dy;
@@ -160,7 +160,7 @@ impl UIState {
 
                 let new_dist = new_origin.dist(new_tgt);
 
-                self.anim.mouse_pan_origin = Some(new_origin);
+                // self.anim.mouse_pan_origin = Some(new_origin);
             }
         }
 

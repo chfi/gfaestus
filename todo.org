@@ -1,5 +1,18 @@
 * plan/next
 
+[2021-02-10 Wed 21:30]
+
+GUI crates:
+
+imgui seems to be okay, but maybe a bit clunky to use, and there's only a 3rd-party,
+unstable, vulkano renderer
+
+egui looks more flexible, and is 100% rust and backend-agnostic
+https://crates.io/crates/egui
+
+another option is conrod and conrod-vulkano
+https://crates.io/crates/conrod_vulkano
+
 [2021-02-09 Tue 20:30]
 
 making progress, but there's an annoying thing where motion looks kinda "snappy";
@@ -40,17 +53,19 @@ after that i need to handle loops, and probably a whole lot more
 
 * stuff
 
+- [ ] improve mapping from mouse (screen) to world coordinates
+
 - [X] separate color buffer & individual segment colors
 - [ ] text rendering/GUI
-- [ ] load & render paths -- each with separate color, maybe?
+- [X] load & render paths -- each with separate color, maybe?
 
 - [ ] proper rendering system that maps a laid out GFA (or subset
   thereof) to vertices & colors ready to be rendered
 
-- [ ] MVP matrix transform for scaling & translation
-- [ ] GFA segments w/ length based on seq length
+- [X] MVP matrix transform for scaling & translation
+- [X] GFA segments w/ length based on seq length
 - [ ] extremely simple linear & greedy layout
-- [ ] render GFA segments
+- [X] render GFA segments
 - [ ] render links as lines between segments
 
 

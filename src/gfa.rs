@@ -1,5 +1,6 @@
 use crate::geometry::*;
 
+pub mod load;
 pub mod render;
 
 pub use render::{path_vertices, Link, Path};
