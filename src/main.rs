@@ -4,7 +4,7 @@ use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract,
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool},
+    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
     image::{AttachmentImage, Dimensions},
 };
 use vulkano::{
@@ -45,6 +45,44 @@ use gfaestus::layout::physics;
 use gfaestus::layout::*;
 
 use nalgebra_glm as glm;
+
+use anyhow::{Context, Result};
+
+use gfa::mmap::{LineIndices, LineType, MmapGFA};
+
+#[allow(unused_imports)]
+use handlegraph::{
+    handle::{Direction, Handle, NodeId},
+    handlegraph::*,
+    mutablehandlegraph::*,
+    packed::*,
+    pathhandlegraph::*,
+};
+
+#[allow(unused_imports)]
+use handlegraph::packedgraph::PackedGraph;
+
+fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
+    let mut mmap = MmapGFA::new(gfa_path)?;
+
+    let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
+
+    let mut spines = Vec::with_capacity(graph.path_count());
+
+    let total_height = (graph.path_count() as f32) * (20.0 + 15.0);
+    let mut y = -total_height / 2.0;
+
+    for path_id in graph.path_ids() {
+        let mut spine = Spine::from_path(&graph, path_id).unwrap();
+        spine.offset.y = y;
+
+        spines.push(spine);
+
+        y += 35.0;
+    }
+
+    Ok(spines)
+}
 
 fn main() {
     let required_extensions = vulkano_win::required_extensions();
@@ -101,6 +139,7 @@ fn main() {
     };
 
     let vertex_buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
+
     let color_buffer_pool: CpuBufferPool<Color> = CpuBufferPool::vertex_buffer(device.clone());
 
     let _ = include_str!("../shaders/fragment.frag");
@@ -200,7 +239,30 @@ fn main() {
         reference: None,
     };
 
-    let mut spines = test_spines();
+    // let mut spines = test_spines();
+    println!("loading GFA");
+    let t = std::time::Instant::now();
+    let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
+    // let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
+    println!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    let mut color_buffers: Vec<_> = Vec::new();
+    for (ix, spine) in spines.iter().enumerate() {
+        let (_, col_data) = spine.vertices();
+
+        let col_buf = color_buffer_pool.chunk(col_data.into_iter()).unwrap();
+        color_buffers.push(Arc::new(col_buf));
+        // let buf: ImmutableBuffer<[Color]> = ImmutableBuffer::from_data(col_data, BufferUsage::vertex_buffer(), queue.clone()).unwrap();
+        // let (buf, fut) =
+        //     ImmutableBuffer::from_data(col_data, BufferUsage::vertex_buffer(), queue.clone())
+        //         .unwrap();
+        // fut.then_signal_fence_and_flush().unwrap();
+        // let x: () = buf;
+        // color_buffers.push(buf);
+        // color_buffers.
+    }
+
+    let init_spines = spines.clone();
 
     let mut view: View = View::default();
 
@@ -224,6 +286,16 @@ fn main() {
     let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
 
+    // let mut spine_vertices:
+    // let spine_vertices: Vec<(Vec<Vertex>, Vec<Color>)> = Vec::with_capacity(spines.len());
+
+    let mut vec_vertices: Vec<Vertex> = Vec::new();
+    let mut vec_colors: Vec<Color> = Vec::new();
+
+    let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
+
+    // spines.vertices_into(&mut vec_vertices, &mut vec_colors);
+
     let mut recreate_swapchain = false;
 
     let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
@@ -232,15 +304,18 @@ fn main() {
     let mut t = 0.0;
 
     let mut since_last_update = 0.0;
+    let mut since_last_redraw = 0.0;
 
     let mut paused = false;
 
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
+        // println!("since last update {}", last_time.elapsed().as_secs_f32());
 
         t += delta.as_secs_f32();
 
+        /*
         if !paused {
             since_last_update += delta.as_secs_f32();
 
@@ -250,6 +325,7 @@ fn main() {
                 since_last_update = 0.0;
             }
         }
+        */
 
         last_time = now;
 
@@ -291,7 +367,7 @@ fn main() {
                     paused = !paused;
                 }
                 Action::ResetLayout => {
-                    spines = test_spines();
+                    spines = init_spines.clone();
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
@@ -355,6 +431,7 @@ fn main() {
                 recreate_swapchain = true;
             }
             Event::RedrawEventsCleared => {
+                // let frame_t = std::time::Instant::now();
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 if recreate_swapchain {
@@ -420,10 +497,64 @@ fn main() {
                     )
                     .unwrap();
 
-                let spine_vertices = spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
+                // let spine_vertices = spines
+                //     .iter()
+                //     .filter_map(|s| s.vertices())
+                //     .collect::<Vec<_>>();
 
-                let spine_matrices = spines.iter().map(|s| s.model_matrix()).collect::<Vec<_>>();
+                // for (vxs, cols
 
+                // let spine_vertices: Vec<(Vec<Vertex>, Vec<Color>)> =
+                //     spines.iter().map(|s| s.vertices()).collect::<Vec<_>>();
+
+                // let spine_matrices = spines.iter().map(|s| s.model_matrix()).collect::<Vec<_>>();
+
+                for (ix, spine) in spines.iter().enumerate() {
+                    let model = spine.model_matrix();
+
+                    // spine.vertices_into(&mut vec_vertices, &mut vec_colors);
+                    spine.vertices_(&mut vec_vertices);
+
+                    // let vertex_buffer =
+                    let vertex_buffer = vertex_buffer_pool
+                        .chunk(vec_vertices.iter().copied())
+                        .unwrap();
+                    // let vertex_buffer = vertex_buffer_pool
+                    //     .chunk(vec_vertices.iter().copied())
+                    //     .unwrap();
+                    let color_buffer = color_buffers[ix].clone();
+
+                    let transformation = {
+                        let mat = view.to_scaled_matrix();
+
+                        let mat = mat * model;
+
+                        let view_data = view::mat4_to_array(&mat);
+
+                        let matrix = simple_vert::ty::View { view: view_data };
+                        uniform_buffer.next(matrix).unwrap()
+                    };
+
+                    let set = Arc::new(
+                        PersistentDescriptorSet::start(layout.clone())
+                            .add_buffer(transformation)
+                            .unwrap()
+                            .build()
+                            .unwrap(),
+                    );
+
+                    builder
+                        .draw(
+                            pipeline.clone(),
+                            &dynamic_state,
+                            (vertex_buffer, color_buffer),
+                            set.clone(),
+                            (),
+                        )
+                        .unwrap();
+                }
+
+                /*
                 for ((vxs, cols), model) in spine_vertices.iter().zip(spine_matrices.iter()) {
                     let vertex_buffer = vertex_buffer_pool.chunk(vxs.iter().copied()).unwrap();
                     let color_buffer = color_buffer_pool.chunk(cols.iter().copied()).unwrap();
@@ -457,6 +588,7 @@ fn main() {
                         )
                         .unwrap();
                 }
+                */
 
                 builder.end_render_pass().unwrap();
 

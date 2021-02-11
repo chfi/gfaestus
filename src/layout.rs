@@ -143,6 +143,58 @@ impl Spine {
         translation * rotation
     }
 
+    pub fn vertices_(&self, vxs: &mut Vec<Vertex>) {
+        vxs.clear();
+        for seg in self.nodes.iter() {
+            vxs.extend(seg.vertices().iter());
+        }
+    }
+
+    // pub fn vertices_iter(&self) -> impl Iterator<Item = &Vertex> + '_ {
+    //     self.nodes.iter().flat_map(|n| n.vertices().iter())
+    // }
+
+    // pub fn colors_iter(&self) -> impl Iterator<Item = Vertex> {
+    //     self.nodes.iter().flat_map(|n| n.vertices())
+    // }
+
+    pub fn vertices_into(&self, vxs: &mut Vec<Vertex>, cols: &mut Vec<Color>) {
+        vxs.clear();
+        cols.clear();
+
+        for seg in self.nodes.iter() {
+            vxs.extend(seg.vertices().iter());
+        }
+
+        let color_period = [
+            [1.0, 0.0, 0.0],
+            [1.0, 0.65, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.3, 0.0, 0.51],
+            [0.93, 0.51, 0.93],
+        ];
+
+        cols.extend(vxs.iter().enumerate().map(|(ix, _)| {
+            let ix_ = (ix / 6) % color_period.len();
+            Color {
+                color: color_period[ix_],
+            }
+        }));
+
+        // let colors: Vec<Color> = vxs
+        //     .iter()
+        //     .enumerate()
+        //     .map(|(ix, _)| {
+        //         let ix_ = (ix / 6) % color_period.len();
+        //         Color {
+        //             color: color_period[ix_],
+        //         }
+        //     })
+        //     .collect();
+    }
+
     pub fn vertices(&self) -> (Vec<Vertex>, Vec<Color>) {
         let color_period = [
             [1.0, 0.0, 0.0],
@@ -183,7 +235,9 @@ impl Spine {
         let base_len = 15.0;
         let pad = 15.0;
 
+        eprintln!("adding path of length {}", path_len);
         for step in path_steps {
+            // for step in path_steps.take(2000) {
             node_ids.push(step.handle().id());
 
             let seq_len = graph.node_len(step.handle());
