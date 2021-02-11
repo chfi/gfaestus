@@ -101,6 +101,8 @@ impl SemanticInput {
                         Key::Right => Some(SemIn::KeyPanRight(input_change)),
                         Key::Down => Some(SemIn::KeyPanDown(input_change)),
                         Key::Left => Some(SemIn::KeyPanLeft(input_change)),
+                        Key::Space => Some(SemIn::KeyPause(input_change)),
+                        Key::Return => Some(SemIn::KeyReset(input_change)),
                         _ => None,
                     };
 
@@ -199,7 +201,7 @@ pub enum InputAction {
     PausePhysics,
     ResetLayout,
     MousePan(Option<Point>),
-    MouzeZoom {
+    MouseZoom {
         focus: Point,
         delta: f32,
     },
@@ -267,7 +269,7 @@ impl SemanticInputState {
                     }
                 }
             }
-            SemIn::MouseZoomDelta(delta) => Some(InputAction::MouzeZoom {
+            SemIn::MouseZoomDelta(delta) => Some(InputAction::MouseZoom {
                 focus: self.mouse_pos,
                 delta,
             }),

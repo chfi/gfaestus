@@ -220,7 +220,6 @@ fn main() {
     let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(width, height);
 
     let input_action_handler = InputActionWorker::new();
-    // let input_handler = input_event_handler();
 
     let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
@@ -259,29 +258,55 @@ fn main() {
         }
 
         while let Ok(action) = input_action_rx.try_recv() {
-            println!("received action: {:?}", action);
+            use InputAction as Action;
+            match action {
+                Action::KeyPan {
+                    up,
+                    right,
+                    down,
+                    left,
+                } => {
+                    let dx = match (left, right) {
+                        (false, false) => 0.0,
+                        (true, false) => -1.0,
+                        (false, true) => 1.0,
+                        (true, true) => 0.0,
+                    };
+                    let dy = match (up, down) {
+                        (false, false) => 0.0,
+                        (true, false) => -1.0,
+                        (false, true) => 1.0,
+                        (true, true) => 0.0,
+                    };
+
+                    let speed = 400.0;
+                    let delta = Point {
+                        x: dx * speed,
+                        y: dy * speed,
+                    };
+
+                    ui_cmd_tx.send(UICmd::PanConstant { delta }).unwrap();
+                }
+                Action::PausePhysics => {
+                    paused = !paused;
+                }
+                Action::ResetLayout => {
+                    spines = test_spines();
+                }
+                Action::MousePan(_) => {
+                    //
+                }
+                Action::MouseZoom { focus, delta } => {
+                    let _focus = focus;
+                    ui_cmd_tx.send(UICmd::Zoom { delta }).unwrap();
+                }
+                Action::MouseAt { point } => {
+                    //
+                }
+            }
         }
 
         match event {
-            Event::WindowEvent {
-                event: WindowEvent::KeyboardInput { input, .. },
-                ..
-            } => {
-                keyboard_input(&ui_cmd_tx, input);
-
-                use winit::event::VirtualKeyCode as Key;
-
-                let pressed = input.state == winit::event::ElementState::Pressed;
-
-                if pressed {
-                    if let Some(Key::Space) = input.virtual_keycode {
-                        paused = !paused;
-                    }
-                    if let Some(Key::Return) = input.virtual_keycode {
-                        spines = test_spines();
-                    }
-                }
-            }
             Event::WindowEvent {
                 event: WindowEvent::MouseWheel { delta, .. },
                 ..
@@ -313,6 +338,12 @@ fn main() {
                 }
             }
             */
+            // Event::WindowEvent {
+            //     event: WindowEvent::MouseWheel { delta, .. },
+            //     ..
+            // } => {
+            //     mouse_wheel_input(&ui_cmd_tx, delta);
+            // }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
