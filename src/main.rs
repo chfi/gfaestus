@@ -1,5 +1,6 @@
 use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
 use vulkano::device::{Device, DeviceExtensions};
+use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{ImageUsage, SwapchainImage};
 use vulkano::instance::{Instance, PhysicalDevice};
@@ -123,6 +124,9 @@ fn main() {
         let format = caps.supported_formats[0].0;
         let dimensions: [u32; 2] = surface.window().inner_size().into();
 
+        let mut img_usage = ImageUsage::color_attachment();
+        img_usage.transfer_destination = true;
+
         Swapchain::new(
             device.clone(),
             surface.clone(),
@@ -130,7 +134,7 @@ fn main() {
             format,
             dimensions,
             1,
-            ImageUsage::color_attachment(),
+            img_usage,
             &queue,
             SurfaceTransform::Identity,
             alpha,
@@ -535,42 +539,6 @@ fn main() {
                         )
                         .unwrap();
                 }
-
-                /*
-                for ((vxs, cols), model) in spine_vertices.iter().zip(spine_matrices.iter()) {
-                    let vertex_buffer = vertex_buffer_pool.chunk(vxs.iter().copied()).unwrap();
-                    let color_buffer = color_buffer_pool.chunk(cols.iter().copied()).unwrap();
-
-                    let transformation = {
-                        let mat = view.to_scaled_matrix();
-
-                        let mat = mat * model;
-
-                        let view_data = view::mat4_to_array(&mat);
-
-                        let matrix = simple_vert::ty::View { view: view_data };
-                        uniform_buffer.next(matrix).unwrap()
-                    };
-
-                    let set = Arc::new(
-                        PersistentDescriptorSet::start(layout.clone())
-                            .add_buffer(transformation)
-                            .unwrap()
-                            .build()
-                            .unwrap(),
-                    );
-
-                    builder
-                        .draw(
-                            pipeline.clone(),
-                            &dynamic_state,
-                            (vertex_buffer, color_buffer),
-                            set.clone(),
-                            (),
-                        )
-                        .unwrap();
-                }
-                */
 
                 builder.end_render_pass().unwrap();
 
