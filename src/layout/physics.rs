@@ -43,6 +43,13 @@ pub fn repulsion_spines(t: f32, spines: &mut [Spine]) {
 
                     let this_force = toward * mag;
                     force += this_force;
+                    if force.x.is_nan() || force.y.is_nan() {
+                        println!(" node.p0: {}, {}", node.p0.x, node.p0.y);
+                        println!(" node.p1: {}, {}", node.p1.x, node.p1.y);
+                        println!("other.p0: {}, {}", other.p0.x, other.p0.y);
+                        println!("other.p1: {}, {}", other.p1.x, other.p1.y);
+                        std::process::exit(1);
+                    }
                 }
             }
             spine_forces.push(force);

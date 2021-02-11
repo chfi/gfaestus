@@ -232,8 +232,8 @@ impl Spine {
 
         let mut x_offset = 0.0;
 
-        let base_len = 15.0;
-        let pad = 15.0;
+        let base_len = 30.0;
+        let pad = 10.0;
 
         eprintln!("adding path of length {}", path_len);
         for step in path_steps {

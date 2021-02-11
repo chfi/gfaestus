@@ -84,7 +84,8 @@ fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
         y += 35.0;
     }
 
-    println!("total nodes: {}", node_count);
+    println!("number of spines: {}", spines.len());
+    println!("total nodes:      {}", node_count);
 
     Ok(spines)
 }
@@ -250,8 +251,12 @@ fn main() {
     // let mut spines = test_spines();
     println!("loading GFA");
     let t = std::time::Instant::now();
+    let mut spines = gfa_spines("yeast.seqwish.gfa").unwrap();
+    // let mut spines = gfa_spines("yeast.links.gfa").unwrap();
+    // let mut spines = gfa_spines("yeast.cons.gfa").unwrap();
+    // let mut spines = gfa_spines("yeast.cons.10.gfa").unwrap();
     // let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
-    let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
+    // let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
     println!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
     let mut color_buffers: Vec<_> = Vec::new();

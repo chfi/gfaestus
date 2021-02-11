@@ -1,5 +1,32 @@
 * plan/next
 
+[2021-02-11 Thu 17:00]
+
+It looks like drawing tons of fairly small triangles is something GPUs
+hate doing, and instancing doesn't help with that
+
+it may be worth thinking about rendering each spine as a single consecutive
+rectangle (or at least much fewer rectangles, each containing many nodes),
+and letting the fragment shader handle not rendering the space between nodes
+
+[2021-02-11 Thu 16:30]
+
+loading GFAs from file (into packedgraphs) and rendering them, one
+spine per path, and it seems to be working pretty well, with a yeast
+pangenome (500k nodes, 112 paths, total path length 2.1M) running at
+what looks to be around 30-45FPS.
+
+A smaller graph with more paths can be ridiculously slow, as each path
+gets its own `draw` command and vertex & uniform buffers, so I'll need
+to fix that somehow.
+
+More generally, I need to design a better, a more robust and flexible,
+rendering system/loop -- ideally one that can take advantage of
+multiple threads. To do that, though, I definitely need to read up on
+how Vulkan works.
+
+I also need to move the physics simulation to another thread.
+
 [2021-02-10 Wed 21:30]
 
 GUI crates:
@@ -52,6 +79,11 @@ force to lay out the parallel parts
 after that i need to handle loops, and probably a whole lot more
 
 * stuff
+
+
+- [ ] export PNG
+  - [ ] start with exporting a screenshot of the current view
+  - [ ] then export a larger view of the graph, using a separate framebuffer
 
 - [ ] improve mapping from mouse (screen) to world coordinates
 
