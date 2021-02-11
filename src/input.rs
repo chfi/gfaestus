@@ -198,10 +198,7 @@ pub enum InputAction {
     },
     PausePhysics,
     ResetLayout,
-    MousePan {
-        focus: Point,
-        active: bool,
-    },
+    MousePan(Option<Point>),
     MouzeZoom {
         focus: Point,
         delta: f32,
@@ -234,6 +231,7 @@ impl SemanticInputState {
 
     fn apply_sem_input(&mut self, input: SemanticInput) -> Option<InputAction> {
         use SemanticInput as SemIn;
+
         match input {
             SemIn::KeyPanUp(state) => {
                 self.key_pan_up = state.pressed();
@@ -246,47 +244,26 @@ impl SemanticInputState {
             SemIn::KeyPanDown(state) => {
                 self.key_pan_down = state.pressed();
                 Some(self.key_pan_action())
-                //
             }
             SemIn::KeyPanLeft(state) => {
                 self.key_pan_left = state.pressed();
                 Some(self.key_pan_action())
-                //
             }
-            SemIn::KeyPause(state) => {
-                if state.pressed() {
-                    Some(InputAction::PausePhysics)
-                } else {
-                    None
-                }
-            }
-            SemIn::KeyReset(state) => {
-                if state.pressed() {
-                    Some(InputAction::ResetLayout)
-                } else {
-                    None
-                }
-            }
+            SemIn::KeyPause(InputChange::Pressed) => Some(InputAction::PausePhysics),
+            SemIn::KeyReset(InputChange::Pressed) => Some(InputAction::ResetLayout),
             SemIn::MouseButtonPan(state) => {
                 use InputChange::{Pressed, Released};
                 match (state, self.mouse_pan) {
                     (Pressed, None) => {
                         let focus = self.mouse_pos;
                         self.mouse_pan = Some(focus);
-                        Some(InputAction::MousePan {
-                            focus,
-                            active: true,
-                        })
+                        Some(InputAction::MousePan(Some(focus)))
                     }
                     (Released, None) => None,
                     (Pressed, Some(_)) => None,
                     (Released, Some(_pos)) => {
                         self.mouse_pan = None;
-                        let focus = self.mouse_pos;
-                        Some(InputAction::MousePan {
-                            focus,
-                            active: false,
-                        })
+                        Some(InputAction::MousePan(None))
                     }
                 }
             }
@@ -298,6 +275,7 @@ impl SemanticInputState {
                 self.mouse_pos = pos;
                 Some(InputAction::MouseAt { point: pos })
             }
+            _ => None,
         }
     }
 }
@@ -307,7 +285,6 @@ pub struct InputActionWorker {
     raw_event_tx: channel::Sender<InputEvent>,
     semantic_input_rx: channel::Receiver<SemanticInput>,
     input_action_rx: channel::Receiver<InputAction>,
-    // input_state: SemanticInputState,
 }
 
 impl InputActionWorker {
@@ -345,7 +322,6 @@ impl InputActionWorker {
             raw_event_tx,
             semantic_input_rx,
             input_action_rx,
-            // input_state,
         }
     }
 
