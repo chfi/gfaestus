@@ -52,7 +52,6 @@ impl View {
                       0.0, 0.0, 0.0, 1.0);
 
         scaling * translation
-        // translation * scaling
     }
 
     #[rustfmt::skip]

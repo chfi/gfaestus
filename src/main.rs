@@ -91,8 +91,51 @@ fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
     Ok(spines)
 }
 
+fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
+    let mut mmap = MmapGFA::new(gfa_path)?;
+
+    let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
+    Spine::from_laid_out_graph(&graph, layout_path)
+
+    /*
+
+    // let mut spines = Vec::with_capacity(graph.path_count());
+    let mut spine = Spine {
+        offset: Point { x: 0.0, y: 0.0 },
+        angle: 0.0,
+        node_ids: Vec::new(),
+        nodes: Vec::new(),
+    };
+
+    let total_height = (graph.path_count() as f32) * (20.0 + 15.0);
+    let mut y = -total_height / 2.0;
+
+    let mut node_count = 0;
+    for path_id in graph.path_ids() {
+        let mut sub_spine = Spine::from_path(&graph, path_id).unwrap();
+        node_count += graph.path_len(path_id).unwrap();
+        sub_spine.offset.y = y;
+
+        spine.node_ids.extend(&sub_spine.node_ids);
+        spine.nodes.extend(sub_spine.nodes.iter().map(|&n| Node {
+            p0: n.p0 + sub_spine.offset,
+            p1: n.p1 + sub_spine.offset,
+        }));
+
+        y += 35.0;
+    }
+
+    // println!("number of spines: {}", spines.len());
+    println!("total nodes:      {}", node_count);
+
+    Ok(spine)
+        */
+}
+
 fn main() {
     let mut extensions = vulkano_win::required_extensions();
+
+    let instance = Instance::new(None, &extensions, None).unwrap();
 
     /*
     let shader_non_semantic_info_ext = {
@@ -142,8 +185,6 @@ fn main() {
     let layers = vec!["VK_LAYER_KHRONOS_validation"];
     let instance = Instance::new(None, &extensions, layers).unwrap();
     */
-
-    let instance = Instance::new(None, &extensions, None).unwrap();
 
     /*
     let severity = MessageSeverity {
@@ -268,14 +309,14 @@ fn main() {
     // let _ = include_str!("../shaders/point.frag");
     // let _ = include_str!("../shaders/geometry.geom");
 
-    mod simple_vert {
+    mod node_vert {
         vulkano_shaders::shader! {
             ty: "vertex",
             path: "shaders/vertex.vert",
         }
     }
 
-    mod simple_frag {
+    mod node_frag {
         vulkano_shaders::shader! {
             ty: "fragment",
             path: "shaders/fragment.frag",
@@ -305,11 +346,11 @@ fn main() {
     }
     */
 
-    let simple_vert = simple_vert::Shader::load(device.clone()).unwrap();
-    let simple_frag = simple_frag::Shader::load(device.clone()).unwrap();
+    let node_vert = node_vert::Shader::load(device.clone()).unwrap();
+    let node_frag = node_frag::Shader::load(device.clone()).unwrap();
 
     let uniform_buffer =
-        CpuBufferPool::<simple_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
+        CpuBufferPool::<node_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
 
     let render_pass = Arc::new(
         vulkano::single_pass_renderpass!(
@@ -340,10 +381,10 @@ fn main() {
     let pipeline = Arc::new(
         GraphicsPipeline::start()
             .vertex_input(TwoBuffersDefinition::<Vertex, Color>::new())
-            .vertex_shader(simple_vert.main_entry_point(), ())
+            .vertex_shader(node_vert.main_entry_point(), ())
             .triangle_list()
             .viewports_dynamic_scissors_irrelevant(1)
-            .fragment_shader(simple_frag.main_entry_point(), ())
+            .fragment_shader(node_frag.main_entry_point(), ())
             .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
             .blend_alpha_blending()
             .build(device.clone())
@@ -362,13 +403,30 @@ fn main() {
     // let mut spines = test_spines();
     println!("loading GFA");
     let t = std::time::Instant::now();
-    let mut spines = gfa_spines("yeast.seqwish.gfa").unwrap();
+    // let mut spines = gfa_spines("yeast.seqwish.gfa").unwrap();
     // let mut spines = gfa_spines("yeast.links.gfa").unwrap();
     // let mut spines = gfa_spines("yeast.cons.gfa").unwrap();
     // let mut spines = gfa_spines("yeast.cons.10.gfa").unwrap();
     // let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
     // let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
+
+    let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
+    // let spine = gfa_with_layout("A-3105.smooth.gfa", "A-3105.smooth.layout.tsv").unwrap();
+
+    println!();
+    println!("NodeId\t{:^7}, {:^7}\t{:^7}, {:^7}", "x0", "y0", "x1", "y1");
+    for (node_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
+        let Node { p0, p1 } = *node;
+        println!(
+            "{:^6}\t{:^7}, {:^7}\t{:^7}, {:^7}",
+            node_id.0, p0.x, p0.y, p1.x, p1.y
+        );
+    }
+    println!();
+
     println!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    let mut spines = vec![spine];
 
     let mut color_buffers: Vec<_> = Vec::new();
     for (ix, spine) in spines.iter().enumerate() {
@@ -426,15 +484,15 @@ fn main() {
 
         t += delta.as_secs_f32();
 
-        if !paused {
-            since_last_update += delta.as_secs_f32();
+        // if !paused {
+        //     since_last_update += delta.as_secs_f32();
 
-            if since_last_update > 0.1 {
-                physics::repulsion_spines(since_last_update, &mut spines);
+        //     if since_last_update > 0.1 {
+        //         physics::repulsion_spines(since_last_update, &mut spines);
 
-                since_last_update = 0.0;
-            }
-        }
+        //         since_last_update = 0.0;
+        //     }
+        // }
 
         last_time = now;
 
@@ -495,10 +553,33 @@ fn main() {
                         origin.x -= width / 2.0;
                         origin.y -= height / 2.0;
 
+                        let view_mat = view.to_scaled_matrix();
+
+                        let view_mat_inv = view_mat.try_inverse().unwrap();
+
+                        let x_ = view.center.x;
+                        let y_ = view.center.y;
+
+                        #[rustfmt::skip]
+                        let translation =
+                            glm::mat4(1.0, 0.0, 0.0, -x_,
+                                      0.0, 1.0, 0.0, -y_,
+                                      0.0, 0.0, 1.0, 0.0,
+                                      0.0, 0.0, 0.0, 1.0);
+                        let translation_inv = translation.try_inverse().unwrap();
+
+                        let projected = glm::vec4(origin.x, origin.y, 0.0, 0.0);
+                        let projected = view_mat_inv * projected;
+
                         println!(
-                            "focus: {:.8}, {:.8}\ttranslated: {:.8}, {:.8}",
-                            focus.x, focus.y, origin.x, origin.y
+                            "focus: {:.8}, {:.8}\tprojected: {:.8}, {:.8}",
+                            focus.x, focus.y, projected[0], projected[1]
                         );
+
+                        // println!(
+                        //     "focus: {:.8}, {:.8}\ttranslated: {:.8}, {:.8}",
+                        //     focus.x, focus.y, origin.x, origin.y
+                        // );
 
                         ui_cmd_tx.send(UICmd::StartMousePan { origin }).unwrap();
                     } else {
@@ -628,7 +709,7 @@ fn main() {
 
                         let view_data = view::mat4_to_array(&mat);
 
-                        let matrix = simple_vert::ty::View { view: view_data };
+                        let matrix = node_vert::ty::View { view: view_data };
                         uniform_buffer.next(matrix).unwrap()
                     };
 
