@@ -1,8 +1,9 @@
 use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
-use vulkano::device::{Device, DeviceExtensions};
+use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{ImageUsage, SwapchainImage};
+use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
@@ -91,8 +92,100 @@ fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
 }
 
 fn main() {
-    let required_extensions = vulkano_win::required_extensions();
-    let instance = Instance::new(None, &required_extensions, None).unwrap();
+    let mut extensions = vulkano_win::required_extensions();
+
+    /*
+    let shader_non_semantic_info_ext = {
+        // let ext_str = std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+        // let ext_bstr = b"VK_KHR_shader_non_semantic_info";
+        // let ext_bstr_vec: Vec<u8> = ext_bstr[..].into();
+        let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+        let ext_str_2 = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+        // let ext_str =
+        //     std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+        let raw_ext = vulkano::instance::RawInstanceExtensions::new(vec![ext_str]);
+
+        // vulkano::instance::InstanceExtensions::from(&raw_ext)
+        raw_ext
+    };
+
+    let raw_exts_core = vulkano::instance::RawInstanceExtensions::supported_by_core().unwrap();
+    // let raw_extensions = raw_extensions.union(&shader_non_semantic_info_ext);
+
+    println!("raw_exts_core: {:?}", raw_exts_core);
+
+    let raw_exts = vulkano::instance::RawInstanceExtensions::from(&extensions);
+
+    let extensions = raw_exts;
+    // let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+    // let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+    // enable vulkan debugging
+    // extensions.
+
+    // println!();
+    // println!("raw_exts_2: {:?}", raw_exts_2);
+    // let extensions = extensions.union(&shader_non_semantic_info_ext);
+    // println!();
+
+    // extensions.ext_debug_utils = true;
+
+    println!("extensions: {:?}", extensions);
+    println!();
+    */
+
+    /*
+    println!("List of Vulkan debugging layers available to use:");
+    let mut layers = vulkano::instance::layers_list().unwrap();
+    while let Some(l) = layers.next() {
+        println!("\t{}", l.name());
+    }
+    let layers = vec!["VK_LAYER_KHRONOS_validation"];
+    let instance = Instance::new(None, &extensions, layers).unwrap();
+    */
+
+    let instance = Instance::new(None, &extensions, None).unwrap();
+
+    /*
+    let severity = MessageSeverity {
+        error: true,
+        warning: true,
+        information: true,
+        verbose: true,
+    };
+
+    let ty = MessageType::all();
+
+    let _debug_callback = DebugCallback::new(&instance, severity, ty, |msg| {
+        let severity = if msg.severity.error {
+            "error"
+        } else if msg.severity.warning {
+            "warning"
+        } else if msg.severity.information {
+            "information"
+        } else if msg.severity.verbose {
+            "verbose"
+        } else {
+            panic!("no-impl");
+        };
+
+        let ty = if msg.ty.general {
+            "general"
+        } else if msg.ty.validation {
+            "validation"
+        } else if msg.ty.performance {
+            "performance"
+        } else {
+            panic!("no-impl");
+        };
+
+        println!(
+            "{} {} {}: {}",
+            msg.layer_prefix, ty, severity, msg.description
+        );
+    })
+    .ok();
+    */
+
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
     let event_loop = EventLoop::new();
@@ -107,8 +200,26 @@ fn main() {
 
     let device_ext = DeviceExtensions {
         khr_swapchain: true,
+        // ext_debug_utils: true,
         ..DeviceExtensions::none()
     };
+
+    /*
+    let raw_dev_ext = RawDeviceExtensions::from(&device_ext);
+    let debug_dev_ext = {
+        let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+        let raw_ext = RawDeviceExtensions::new(vec![ext_str]);
+
+        raw_ext
+    };
+
+    let device_ext = raw_dev_ext.union(&debug_dev_ext);
+
+    println!("device extensions: {:?}", device_ext);
+
+    println!("features: {:?}", physical.supported_features());
+    */
+
     let (device, mut queues) = Device::new(
         physical,
         physical.supported_features(),
@@ -291,15 +402,10 @@ fn main() {
     let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
 
-    // let mut spine_vertices:
-    // let spine_vertices: Vec<(Vec<Vertex>, Vec<Color>)> = Vec::with_capacity(spines.len());
-
     let mut vec_vertices: Vec<Vertex> = Vec::new();
     let mut vec_colors: Vec<Color> = Vec::new();
 
     let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
-
-    // spines.vertices_into(&mut vec_vertices, &mut vec_colors);
 
     let mut recreate_swapchain = false;
 
