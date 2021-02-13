@@ -85,8 +85,8 @@ fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
         y += 35.0;
     }
 
-    println!("number of spines: {}", spines.len());
-    println!("total nodes:      {}", node_count);
+    eprintln!("number of spines: {}", spines.len());
+    eprintln!("total nodes:      {}", node_count);
 
     Ok(spines)
 }
@@ -401,7 +401,7 @@ fn main() {
     };
 
     // let mut spines = test_spines();
-    println!("loading GFA");
+    eprintln!("loading GFA");
     let t = std::time::Instant::now();
     // let mut spines = gfa_spines("yeast.seqwish.gfa").unwrap();
     // let mut spines = gfa_spines("yeast.links.gfa").unwrap();
@@ -413,18 +413,18 @@ fn main() {
     let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
     // let spine = gfa_with_layout("A-3105.smooth.gfa", "A-3105.smooth.layout.tsv").unwrap();
 
-    println!();
-    println!("NodeId\t{:^7}, {:^7}\t{:^7}, {:^7}", "x0", "y0", "x1", "y1");
-    for (node_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
-        let Node { p0, p1 } = *node;
-        println!(
-            "{:^6}\t{:^7}, {:^7}\t{:^7}, {:^7}",
-            node_id.0, p0.x, p0.y, p1.x, p1.y
-        );
-    }
-    println!();
+    // println!();
+    // println!("NodeId\t{:^7}, {:^7}\t{:^7}, {:^7}", "x0", "y0", "x1", "y1");
+    // for (node_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
+    //     let Node { p0, p1 } = *node;
+    //     println!(
+    //         "{:^6}\t{:^7}, {:^7}\t{:^7}, {:^7}",
+    //         node_id.0, p0.x, p0.y, p1.x, p1.y
+    //     );
+    // }
+    // println!();
 
-    println!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
     let mut spines = vec![spine];
 
@@ -571,7 +571,7 @@ fn main() {
                         let projected = glm::vec4(origin.x, origin.y, 0.0, 0.0);
                         let projected = view_mat_inv * projected;
 
-                        println!(
+                        eprintln!(
                             "focus: {:.8}, {:.8}\tprojected: {:.8}, {:.8}",
                             focus.x, focus.y, projected[0], projected[1]
                         );
@@ -643,6 +643,8 @@ fn main() {
 
                         width = viewport.dimensions[0];
                         height = viewport.dimensions[1];
+
+                        ui_cmd_tx.send(UICmd::Resize { width, height }).unwrap();
                     }
 
                     framebuffers =
@@ -665,12 +667,18 @@ fn main() {
                 }
 
                 if let Ok(latest_view) = view_rx.recv() {
-                    view = latest_view;
+                    // view = latest_view;
+                    view.center = latest_view.center;
+                    view.scale = latest_view.scale;
                 }
 
                 let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
 
-                let clear = [0.0, 0.0, 0.05, 1.0];
+                let clear = if paused {
+                    [0.05, 0.0, 0.0, 1.0]
+                } else {
+                    [0.0, 0.0, 0.05, 1.0]
+                };
                 let clear_values = vec![clear.into(), clear.into()];
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
@@ -697,9 +705,11 @@ fn main() {
                     let vertex_buffer = vertex_buffer_pool
                         .chunk(vec_vertices.iter().copied())
                         .unwrap();
+
                     // let vertex_buffer = vertex_buffer_pool
                     //     .chunk(vec_vertices.iter().copied())
                     //     .unwrap();
+
                     let color_buffer = color_buffers[ix].clone();
 
                     let transformation = {
@@ -754,7 +764,7 @@ fn main() {
                         previous_frame_end = Some(sync::now(device.clone()).boxed());
                     }
                     Err(e) => {
-                        println!("Failed to flush future: {:?}", e);
+                        eprintln!("Failed to flush future: {:?}", e);
                         previous_frame_end = Some(sync::now(device.clone()).boxed());
                     }
                 }

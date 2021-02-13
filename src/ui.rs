@@ -108,8 +108,10 @@ impl Default for UIState {
 impl UIState {
     pub fn new(width: f32, height: f32) -> Self {
         let view = View {
-            center: Point::new(0.0, 0.0),
-            scale: 1.0,
+            // center: Point::new(0.0, 0.0),
+            // scale: 1.0,
+            center: Point::new(10000.0, 0.0),
+            scale: 5.0,
             width,
             height,
         };

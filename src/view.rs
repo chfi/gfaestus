@@ -26,10 +26,6 @@ impl Default for View {
 impl View {
     #[rustfmt::skip]
     pub fn to_scaled_matrix(&self) -> glm::Mat4 {
-
-        let w = self.width;
-        let h = self.height;
-
         let w_scale = 2.0 / (self.width * self.scale);
         let h_scale = 2.0 / (self.height * self.scale);
 
@@ -39,10 +35,7 @@ impl View {
                       0.0,     0.0,     1.0, 1.0,
                       0.0,     0.0,     0.0, 1.0);
 
-
-        let ratio = w / h;
-
-        let x_ = self.center.x * ratio;
+        let x_ = self.center.x;
         let y_ = self.center.y;
 
         let translation =
@@ -51,7 +44,7 @@ impl View {
                       0.0, 0.0, 1.0, 0.0,
                       0.0, 0.0, 0.0, 1.0);
 
-        scaling * translation
+        scaling  * translation
     }
 
     #[rustfmt::skip]
