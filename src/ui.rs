@@ -18,12 +18,12 @@ pub struct UIThread {
 }
 
 impl UIThread {
-    pub fn new(width: f32, height: f32) -> (Self, channel::Sender<UICmd>, channel::Receiver<View>) {
+    pub fn new() -> (Self, channel::Sender<UICmd>, channel::Receiver<View>) {
         let (tx_chan, rx_chan) = channel::unbounded::<UICmd>();
 
         let (view_tx, view_rx) = channel::bounded::<View>(1);
 
-        let mut ui_state = UIState::new(width, height);
+        let mut ui_state = UIState::new();
 
         let handle = thread::spawn(move || {
             let mut last_time = std::time::Instant::now();
@@ -76,7 +76,6 @@ pub enum UICmd {
     Zoom { delta: f32 },
     SetCenter { center: Point },
     SetScale { scale: f32 },
-    Resize { width: f32, height: f32 },
 }
 
 pub enum UIInputState {
@@ -106,14 +105,12 @@ impl Default for UIState {
 }
 
 impl UIState {
-    pub fn new(width: f32, height: f32) -> Self {
+    pub fn new() -> Self {
         let view = View {
-            // center: Point::new(0.0, 0.0),
+            // center: Point::new(600.0, 0.0),
             // scale: 1.0,
             center: Point::new(10000.0, 0.0),
             scale: 5.0,
-            width,
-            height,
         };
 
         Self {
@@ -151,27 +148,11 @@ impl UIState {
 
                 // self.view.center.x = self.view.center.x + dx;
                 // self.view.center.y = self.view.center.y + dy;
-
-                let mut new_tgt = tgt;
-                new_tgt.x += dx * self.view.scale;
-                new_tgt.y += dy * self.view.scale;
-
-                let mut new_origin = origin;
-                new_origin.x -= dx * self.view.scale;
-                new_origin.y -= dy * self.view.scale;
-
-                let new_dist = new_origin.dist(new_tgt);
-
-                // self.anim.mouse_pan_origin = Some(new_origin);
             }
         }
 
         self.view.center.x += dx * self.view.scale;
         self.view.center.y += dy * self.view.scale;
-
-        // if let Some(tgt) = self.anim.view_target {
-
-        // }
 
         self.anim.view_delta *= pan_friction;
         self.anim.scale_delta *= zoom_friction;
@@ -183,24 +164,14 @@ impl UIState {
 
     pub fn apply_cmd(&mut self, cmd: UICmd) {
         match cmd {
-            // UICmd::Idle => {}
             UICmd::StartMousePan { origin } => {
                 self.anim.mouse_pan_origin = Some(origin);
                 self.anim.view_target = Some(origin);
-                //
             }
             UICmd::MousePan { screen_tgt } => {
                 if let Some(origin) = self.anim.mouse_pan_origin {
-                    // self.anim.view_target = Some(origin + screen_tgt);
                     self.anim.view_target = Some(screen_tgt);
-                    // if let Some(tgt) = self.anim.view_target {
-                    //     self.anim.view_target = Some(tgt
-                    // }
-                    // let prev_tgt = self.anim.view_target.unwrap_or(origin);
-                    // self.anim.view_target = Some(prev_tgt + delta);
                 }
-                // self.anim.mouse_pan_origin = Some(origin);
-                //
             }
             UICmd::EndMousePan => {
                 self.anim.mouse_pan_origin = None;
@@ -217,7 +188,6 @@ impl UIState {
                 self.anim.view_const_delta = delta;
             }
             UICmd::Pan { delta } => {
-                // self.view.center += delta;
                 self.anim.view_delta += delta;
 
                 let d = &mut self.anim.view_delta;
@@ -231,7 +201,6 @@ impl UIState {
                 let delta_mult = self.view.scale.log2();
                 let delta_mult = delta_mult.max(1.0);
                 self.anim.scale_delta += delta * delta_mult;
-                // self.view.scale += delta * delta_mult;
             }
             UICmd::SetCenter { center } => {
                 self.anim.view_delta = Point::default();
@@ -242,10 +211,6 @@ impl UIState {
                 self.anim.view_delta = Point::default();
                 self.anim.scale_delta = 0.0;
                 self.view.scale = scale;
-            }
-            UICmd::Resize { width, height } => {
-                self.view.width = width;
-                self.view.height = height;
             }
         }
     }

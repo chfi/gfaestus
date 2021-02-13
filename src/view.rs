@@ -2,13 +2,23 @@ use crate::geometry::Point;
 
 use nalgebra_glm as glm;
 
+#[rustfmt::skip]
+pub fn viewport_scale(width: f32, height: f32) -> glm::Mat4 {
+    let w = width;
+    let h = height;
+    glm::mat4(2.0 / w, 0.0,     0.0, 0.0,
+              0.0,     2.0 / h, 0.0, 0.0,
+              0.0,     0.0,     1.0, 0.0,
+              0.0,     0.0,     0.0, 1.0)
+}
+
 /// the "default" scale is such that the node width is 10px
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {
     pub center: Point,
     pub scale: f32,
-    pub width: f32,
-    pub height: f32,
+    // pub width: f32,
+    // pub height: f32,
 }
 
 impl Default for View {
@@ -17,8 +27,8 @@ impl Default for View {
             center: Point::new(0.0, 0.0),
             // scale: 1.0,
             scale: 10.0,
-            width: 100.0,
-            height: 100.0,
+            // width: 100.0,
+            // height: 100.0,
         }
     }
 }
@@ -26,14 +36,14 @@ impl Default for View {
 impl View {
     #[rustfmt::skip]
     pub fn to_scaled_matrix(&self) -> glm::Mat4 {
-        let w_scale = 2.0 / (self.width * self.scale);
-        let h_scale = 2.0 / (self.height * self.scale);
+
+        let scale = 1.0 / self.scale;
 
         let scaling =
-            glm::mat4(w_scale, 0.0,     0.0, 0.0,
-                      0.0,     h_scale, 0.0, 0.0,
-                      0.0,     0.0,     1.0, 1.0,
-                      0.0,     0.0,     0.0, 1.0);
+            glm::mat4(scale, 0.0,   0.0, 0.0,
+                      0.0,   scale, 0.0, 0.0,
+                      0.0,   0.0,   1.0, 1.0,
+                      0.0,   0.0,   0.0, 1.0);
 
         let x_ = self.center.x;
         let y_ = self.center.y;
@@ -47,6 +57,7 @@ impl View {
         scaling  * translation
     }
 
+    /*
     #[rustfmt::skip]
     pub fn to_rotated_scaled_matrix(&self, angle: f32) -> glm::Mat4 {
 
@@ -59,7 +70,7 @@ impl View {
         let scaling =
             glm::mat4(w_scale, 0.0,     0.0, 0.0,
                       0.0,     h_scale, 0.0, 0.0,
-                      0.0,     0.0,     1.0, 1.0,
+                      0.0,     0.0,     1.0, 0.0,
                       0.0,     0.0,     0.0, 1.0);
 
 
@@ -86,6 +97,7 @@ impl View {
         scaling * translation
         // translation * scaling
     }
+    */
 }
 
 pub fn mat4_to_array(matrix: &glm::Mat4) -> [[f32; 4]; 4] {

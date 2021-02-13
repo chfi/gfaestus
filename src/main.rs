@@ -437,14 +437,11 @@ fn main() {
     let mut height = 100.0;
 
     if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
-        view.width = viewport.dimensions[0];
-        view.height = viewport.dimensions[1];
-
         width = viewport.dimensions[0];
         height = viewport.dimensions[1];
     }
 
-    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(width, height);
+    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new();
 
     let input_action_handler = InputActionWorker::new();
 
@@ -630,13 +627,8 @@ fn main() {
 
                     if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
                     {
-                        view.width = viewport.dimensions[0];
-                        view.height = viewport.dimensions[1];
-
                         width = viewport.dimensions[0];
                         height = viewport.dimensions[1];
-
-                        ui_cmd_tx.send(UICmd::Resize { width, height }).unwrap();
                     }
 
                     recreate_swapchain = false;
@@ -705,7 +697,9 @@ fn main() {
                     let transformation = {
                         let mat = view.to_scaled_matrix();
 
-                        let mat = mat * model;
+                        let viewport_mat = view::viewport_scale(width, height);
+
+                        let mat = viewport_mat * mat * model;
 
                         let view_data = view::mat4_to_array(&mat);
 
