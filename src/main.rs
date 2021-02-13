@@ -529,34 +529,46 @@ fn main() {
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
-                        let mut origin = focus;
-                        origin.x -= width / 2.0;
-                        origin.y -= height / 2.0;
+                        #[rustfmt::skip]
+                        let to_world_map = {
+                            let w = width;
+                            let h = height;
 
-                        let mut proj = Point {
-                            x: focus.x,
-                            y: focus.y,
+                            let s = view.scale;
+
+                            let vcx = view.center.x;
+                            let vcy = view.center.y;
+
+                            // transform from screen coords (top left (0, 0), bottom right (w, h))
+                            // to screen center = (0, 0), bottom right (w/2, h/2);
+                            //
+                            // then scale so bottom right = (s*w/2, s*h/2);
+                            //
+                            // finally translate by view center to world coordinates
+                            //
+                            // i.e. view_offset * scale * screen_center
+                            let view_scale_screen =
+                                glm::mat4(s,   0.0, 0.0, vcx - (w * s * 0.5),
+                                          0.0, s,   0.0, vcy - (h * s * 0.5),
+                                          0.0, 0.0, 1.0, 0.0,
+                                          0.0, 0.0, 0.0, 1.0);
+
+                            view_scale_screen
+                        };
+                        let projected = to_world_map * glm::vec4(focus.x, focus.y, 0.0, 1.0);
+
+                        let proj = Point {
+                            x: projected[0],
+                            y: projected[1],
                         };
 
                         eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
 
-                        proj.x -= width / 2.0;
-                        proj.y -= height / 2.0;
-
-                        proj.x *= view.scale;
-                        proj.y *= view.scale;
-
-                        proj.x += view.center.x;
-                        proj.y += view.center.y;
-
                         eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
 
-                        let projected = glm::vec4(proj.x, proj.y, 0.0, 0.0);
-
-                        // eprintln!(
-                        //     "focus: {:.8}, {:.8}\tprojected: {:.8}, {:.8}",
-                        //     focus.x, focus.y, projected[0], projected[1]
-                        // );
+                        let mut origin = focus;
+                        origin.x -= width / 2.0;
+                        origin.y -= height / 2.0;
 
                         ui_cmd_tx.send(UICmd::StartMousePan { origin }).unwrap();
                     } else {
