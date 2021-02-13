@@ -529,47 +529,33 @@ fn main() {
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
-                        // let point = focus
-                        //     + Point {
-                        //         x: -view.center.x,
-                        //         y: -view.center.y,
-                        //     };
-
-                        // let origin = Point {
-                        //     x: width / 2.0,
-                        //     y: height / 2.0,
-                        // } - point;
-
                         let mut origin = focus;
                         origin.x -= width / 2.0;
                         origin.y -= height / 2.0;
 
-                        let view_mat = view.to_scaled_matrix();
+                        let mut proj = Point {
+                            x: focus.x,
+                            y: focus.y,
+                        };
 
-                        let view_mat_inv = view_mat.try_inverse().unwrap();
+                        eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
 
-                        let x_ = view.center.x;
-                        let y_ = view.center.y;
+                        proj.x -= width / 2.0;
+                        proj.y -= height / 2.0;
 
-                        #[rustfmt::skip]
-                        let translation =
-                            glm::mat4(1.0, 0.0, 0.0, -x_,
-                                      0.0, 1.0, 0.0, -y_,
-                                      0.0, 0.0, 1.0, 0.0,
-                                      0.0, 0.0, 0.0, 1.0);
-                        let translation_inv = translation.try_inverse().unwrap();
+                        proj.x *= view.scale;
+                        proj.y *= view.scale;
 
-                        let projected = glm::vec4(origin.x, origin.y, 0.0, 0.0);
-                        let projected = view_mat_inv * projected;
+                        proj.x += view.center.x;
+                        proj.y += view.center.y;
 
-                        eprintln!(
-                            "focus: {:.8}, {:.8}\tprojected: {:.8}, {:.8}",
-                            focus.x, focus.y, projected[0], projected[1]
-                        );
+                        eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
 
-                        // println!(
-                        //     "focus: {:.8}, {:.8}\ttranslated: {:.8}, {:.8}",
-                        //     focus.x, focus.y, origin.x, origin.y
+                        let projected = glm::vec4(proj.x, proj.y, 0.0, 0.0);
+
+                        // eprintln!(
+                        //     "focus: {:.8}, {:.8}\tprojected: {:.8}, {:.8}",
+                        //     focus.x, focus.y, projected[0], projected[1]
                         // );
 
                         ui_cmd_tx.send(UICmd::StartMousePan { origin }).unwrap();
@@ -627,6 +613,9 @@ fn main() {
 
                     swapchain = new_swapchain;
 
+                    framebuffers =
+                        window_size_update(&new_images, render_pass.clone(), &mut dynamic_state);
+
                     if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
                     {
                         view.width = viewport.dimensions[0];
@@ -638,8 +627,6 @@ fn main() {
                         ui_cmd_tx.send(UICmd::Resize { width, height }).unwrap();
                     }
 
-                    framebuffers =
-                        window_size_update(&new_images, render_pass.clone(), &mut dynamic_state);
                     recreate_swapchain = false;
                 }
 
