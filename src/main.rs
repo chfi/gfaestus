@@ -95,41 +95,32 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
     let mut mmap = MmapGFA::new(gfa_path)?;
 
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
-    Spine::from_laid_out_graph(&graph, layout_path)
+    let spine = Spine::from_laid_out_graph(&graph, layout_path)?;
 
-    /*
+    // let mut node_lengths: Vec<(NodeId, f32)> = Vec::with_capacity(spine.nodes.len());
 
-    // let mut spines = Vec::with_capacity(graph.path_count());
-    let mut spine = Spine {
-        offset: Point { x: 0.0, y: 0.0 },
-        angle: 0.0,
-        node_ids: Vec::new(),
-        nodes: Vec::new(),
-    };
-
-    let total_height = (graph.path_count() as f32) * (20.0 + 15.0);
-    let mut y = -total_height / 2.0;
-
-    let mut node_count = 0;
-    for path_id in graph.path_ids() {
-        let mut sub_spine = Spine::from_path(&graph, path_id).unwrap();
-        node_count += graph.path_len(path_id).unwrap();
-        sub_spine.offset.y = y;
-
-        spine.node_ids.extend(&sub_spine.node_ids);
-        spine.nodes.extend(sub_spine.nodes.iter().map(|&n| Node {
-            p0: n.p0 + sub_spine.offset,
-            p1: n.p1 + sub_spine.offset,
-        }));
-
-        y += 35.0;
+    println!("NodeId\tp0x\tp0y\tp1x\tp1y");
+    for (n_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
+        // let n_len = node.p0.dist(node.p1);
+        // node_lengths.push((*n_id, n_len));
+        let p0 = node.p0;
+        let p1 = node.p1;
+        println!("{}\t{}\t{}\t{}\t{}", n_id.0, p0.x, p0.y, p1.x, p1.y);
     }
 
-    // println!("number of spines: {}", spines.len());
-    println!("total nodes:      {}", node_count);
+    // node_lengths.sort_by(|(_, l0), (_, l1)| l0.partial_cmp(&l1).unwrap());
+
+    // println!();
+    // println!("{:^6}\t{:^6}", "NodeId", "Length");
+    // println!("{}\t{}", "NodeId", "Length");
+    // for (n_id, len) in node_lengths {
+    // println!("{}\t{}", n_id.0, len);
+    // println!("{:^6} - {:^6}", n_id.0, len);
+    // }
+
+    // println!();
 
     Ok(spine)
-        */
 }
 
 fn main() {
