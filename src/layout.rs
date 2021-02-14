@@ -1,6 +1,7 @@
 use crate::geometry::*;
 use crate::view::*;
 
+pub mod grid;
 pub mod physics;
 
 #[allow(unused_imports)]

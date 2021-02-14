@@ -1,5 +1,38 @@
 * plan/next
 
+[2021-02-12 Fri 22:00]
+
+added support for loading graph layouts from TSV files produced by odgi's layout
+command;
+
+fixed an issue that distorted the view & didn't change the viewable area
+when the ratio of the window dimensions changed;
+
+implemented mapping from screen (click) coordinates to world coordinates,
+working for all view offsets and scales;
+
+factored out the window dimensions from the View struct, as it didn't really
+make sense for them to be known to the UI/animation logic -- and that had already
+led to some problems (e.g. the distorted view above)
+
+spent a bit of time trying to get egui working with vulkano, but there's
+a bit left
+
+basalt is another UI framework, build around vulkano as the backend:
+https://crates.io/crates/basalt
+
+however, it may be a bit too opinionated
+
+for now I might just use vulkano_text to get some text rendering started:
+https://crates.io/crates/vulkano_text
+
+vulkano_text provides a trait for drawing text, and implements it on
+vulkano's AutoCommandBufferBuilder
+
+... vulkano_text is actually extremely simple, the entire library is
+less than 300 lines long. I should probably just stick to egui --
+it's probably easier to get working than I expect.
+
 [2021-02-11 Thu 17:00]
 
 It looks like drawing tons of fairly small triangles is something GPUs
