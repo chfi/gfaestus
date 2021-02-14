@@ -85,12 +85,12 @@ impl<T: EntryVal> Cell<T> {
     }
 
     #[inline]
-    pub fn find_in_x_radius(&self, x: f32, radius: f32) -> Option<&[Entry<T>]> {
+    pub fn find_in_x_radius(&self, x: f32, radius: f32) -> &[Entry<T>] {
         let min_x = x - radius;
         let max_x = x + radius;
 
         if max_x < self.top_left.x || max_x > self.top_left.x + self.dims.width {
-            return None;
+            return &self.entries[0..0];
         }
 
         let greater = if min_x > self.top_left.x {
@@ -112,11 +112,20 @@ impl<T: EntryVal> Cell<T> {
             &self.entries[..]
         };
 
-        if range.is_empty() {
-            None
-        } else {
-            Some(range)
-        }
+        range
+    }
+
+    #[inline]
+    pub fn find_in_radius(&self, point: Point, radius: f32) -> impl Iterator<Item = Entry<T>> + '_ {
+        let x_range = self.find_in_x_radius(point.x, radius);
+
+        x_range.iter().filter_map(move |&e| {
+            if e.point.dist(point) <= radius {
+                Some(e)
+            } else {
+                None
+            }
+        })
     }
 }
 
