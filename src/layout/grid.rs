@@ -8,14 +8,14 @@ use anyhow::{Context, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CellDims {
-    width: f32,
-    height: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GridDims {
-    columns: usize,
-    rows: usize,
+    pub columns: usize,
+    pub rows: usize,
 }
 
 impl GridDims {
@@ -285,35 +285,32 @@ impl<T: EntryVal> Grid<T> {
     /// the rect are returned
     #[inline]
     pub fn cell_indices_in_world_rect(&self, p0: Point, p1: Point) -> Vec<usize> {
+        let dims = self.world_unit_dims();
+
         let min_x = p0.x.min(p1.x);
         let max_x = p0.x.max(p1.x);
 
         let min_y = p0.y.min(p1.y);
         let max_y = p0.y.max(p1.y);
 
-        let (grid_top_left, grid_bottom_right) = self.world_rect();
+        let left = (min_x >= 0.0)
+            .then(|| (min_x / dims.x) as usize)
+            .unwrap_or(0);
+        let top = (min_y >= 0.0)
+            .then(|| (min_y / dims.y) as usize)
+            .unwrap_or(0);
 
-        let left = min_x.max(grid_top_left.x);
-        let top = min_y.max(grid_top_left.y);
+        let right = (max_x < dims.x)
+            .then(|| (max_x / dims.x) as usize)
+            .unwrap_or(self.grid_dims.columns - 1);
+        let bottom = (max_y < dims.y)
+            .then(|| (max_y / dims.y) as usize)
+            .unwrap_or(self.grid_dims.rows - 1);
 
-        let right = max_x.min(grid_bottom_right.x);
-        let bottom = max_y.min(grid_bottom_right.y);
+        let mut indices = Vec::with_capacity((right - left) * (bottom - top));
 
-        let (col_0, row_0) = self
-            .cell_col_row_at_point(Point { x: left, y: top })
-            .unwrap();
-
-        let (col_1, row_1) = self
-            .cell_col_row_at_point(Point {
-                x: right,
-                y: bottom,
-            })
-            .unwrap();
-
-        let mut indices = Vec::with_capacity((row_1 - row_0) * (col_1 - col_0));
-
-        for col in col_0..=col_1 {
-            for row in row_0..=row_1 {
+        for col in left..=right {
+            for row in top..=bottom {
                 let ix = (row / self.grid_dims.columns) + (col % self.grid_dims.columns);
                 indices.push(ix);
             }
@@ -323,4 +320,23 @@ impl<T: EntryVal> Grid<T> {
     }
 }
 
+impl<T: EntryVal> Grid<T> {
+    #[inline]
+    pub fn collect_in_rect(&self, p0: Point, p1: Point) -> Vec<Entry<T>> {
+        let cell_indices = self.cell_indices_in_world_rect(p0, p1);
+
+        let mut res = Vec::new();
+
+        for cell_ix in cell_indices {
+            let cell = &self.cells[cell_ix];
+            res.extend(cell.find_in_rect(p0, p1));
+        }
+
+        res
+    }
+
+    // #[inline]
+    // pub fn collect_in_radius(&self, point: Point, radius: f32) -> Vec<Entry<T>> {
+    //     let mut res = Vec::new();
+    // }
 }
