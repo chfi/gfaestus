@@ -83,6 +83,41 @@ impl<T: EntryVal> Cell<T> {
 
         self.entries.insert(index, Entry::new(point, value))
     }
+
+    #[inline]
+    pub fn find_in_x_radius(&self, x: f32, radius: f32) -> Option<&[Entry<T>]> {
+        let min_x = x - radius;
+        let max_x = x + radius;
+
+        if max_x < self.top_left.x || max_x > self.top_left.x + self.dims.width {
+            return None;
+        }
+
+        let greater = if min_x > self.top_left.x {
+            let start_ix = self
+                .entries
+                .binary_search_by(|e| e.point.x.partial_cmp(&min_x).unwrap())
+                .map_or_else(|x| x, |x| x);
+            &self.entries[start_ix..]
+        } else {
+            &self.entries[..]
+        };
+
+        let range = if max_x < self.top_left.x + self.dims.width {
+            let end_ix = greater
+                .binary_search_by(|e| e.point.x.partial_cmp(&max_x).unwrap())
+                .map_or_else(|x| x, |x| x);
+            &self.entries[..end_ix]
+        } else {
+            &self.entries[..]
+        };
+
+        if range.is_empty() {
+            None
+        } else {
+            Some(range)
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
