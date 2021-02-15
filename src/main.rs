@@ -46,7 +46,10 @@ use gfaestus::input::*;
 use gfaestus::layout::physics;
 use gfaestus::layout::*;
 
+use gfaestus::render::shapes::Shape;
 use gfaestus::render::*;
+
+use rgb::*;
 
 use nalgebra_glm as glm;
 
@@ -475,11 +478,45 @@ fn main() {
                 let circle = Point { x: 125.5, y: 0.0 };
                 let radius = 100.25;
 
-                unsafe {
-                    let shapes_buf = shape_draw_system
-                        .draw(&dynamic_state, viewport_dims, circle, radius, false)
-                        .unwrap();
-                    builder.execute_commands(shapes_buf).unwrap();
+                let p0 = Point { x: 0.0, y: 0.0 };
+                let p1 = Point { x: 100.0, y: 100.0 };
+
+                let mut shapes: Vec<Shape> = Vec::new();
+
+                for col in 0..10 {
+                    for row in 0..10 {
+                        let cell_width = width / 10.0;
+                        let cell_height = height / 10.0;
+
+                        let x_offset = width / 2.0;
+                        let y_offset = height / 2.0;
+
+                        let x = ((col as f32) * cell_width) - x_offset;
+                        let y = ((row as f32) * cell_height) - y_offset;
+
+                        let p0 = Point { x, y };
+                        let p1 = p0
+                            + Point {
+                                x: cell_width,
+                                y: cell_height,
+                            };
+
+                        shapes.push(Shape::rect(p0, p1));
+                    }
+                }
+
+                for shape in shapes {
+                    unsafe {
+                        // let shapes_buf = shape_draw_system
+                        //     .draw_circle(&dynamic_state, circle, radius, false)
+                        //     .unwrap();
+                        // let shapes_buf = shape_draw_system
+                        //     .draw_rect(&dynamic_state, p0, p1, false)
+                        //     .unwrap();
+                        let shapes_buf =
+                            shape_draw_system.draw_shape(&dynamic_state, shape).unwrap();
+                        builder.execute_commands(shapes_buf).unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();

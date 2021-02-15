@@ -53,4 +53,23 @@ void main() {
     f_color = vec4(1.0, 1.0, 1.0, color);
   }
 
+  if ((pc.draw_flags & (1 << 1)) != 0) {
+    vec2 top_left = pc.rect.yx / pc.screen_dims;
+    vec2 bottom_right = pc.rect.wz / pc.screen_dims;
+
+    vec2 diff = bottom_right - top_left;
+
+    vec2 local = vec2(x, y) - top_left;
+
+    vec2 d = abs(local) - diff;
+
+    float dist = length(max(d, 0.0)) + min(max(d.x, d.y), 0.0);
+
+    float border_dist = dist;
+
+    float color = 1.0 - smoothstep(0.0, pc.border, abs(border_dist));
+
+    f_color = vec4(1.0, 1.0, 1.0, color);
+  }
+
 }
