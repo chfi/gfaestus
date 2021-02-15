@@ -533,7 +533,7 @@ fn main() {
 
                 unsafe {
                     let cmd_buf = line_draw_system
-                        .draw(&dynamic_state, &lines, 50.0, RGB::new(1.0, 1.0, 1.0), view)
+                        .draw(&dynamic_state, &lines, RGB::new(1.0, 1.0, 1.0), view)
                         .unwrap();
                     builder.execute_commands(cmd_buf).unwrap();
                 }
