@@ -198,10 +198,43 @@ fn main() {
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
-    let line_draw_system = LineDrawSystem::new(
+    let mut line_draw_system = LineDrawSystem::new(
         queue.clone(),
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
+
+    let (line_buf_ix, line_future) = {
+        let mut lines: Vec<(Point, Point)> = Vec::new();
+
+        let hor = 61;
+        let ver = 21;
+
+        let grid_w = 60_000.0;
+        let grid_h = 20_000.0;
+
+        let tl = Point {
+            x: 0.0,
+            y: -10000.0,
+        };
+
+        for row in 0..ver {
+            let y = tl.y + (row as f32) * 1000.0;
+            let x0 = tl.x;
+            let x1 = tl.x + grid_w;
+            lines.push((Point { x: x0, y }, Point { x: x1, y }));
+        }
+
+        for col in 0..hor {
+            let x = tl.x + (col as f32) * 1000.0;
+            let y0 = tl.y;
+            let y1 = tl.y + grid_h;
+            lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
+        }
+
+        line_draw_system
+            .add_lines(&lines, RGB::new(1.0, 1.0, 1.0))
+            .unwrap()
+    };
 
     let shape_draw_system = ShapeDrawSystem::new(
         queue.clone(),
@@ -263,7 +296,10 @@ fn main() {
 
     let mut recreate_swapchain = false;
 
-    let mut previous_frame_end = Some(sync::now(device.clone()).boxed());
+    let mut previous_frame_end = {
+        let fut = sync::now(device.clone()).join(line_future);
+        Some(fut.boxed())
+    };
 
     let mut last_time = Instant::now();
     let mut t = 0.0;
@@ -500,41 +536,8 @@ fn main() {
                     }
                 }
 
-                let mut lines: Vec<(Point, Point)> = Vec::new();
-
-                let hor = 61;
-                let ver = 21;
-
-                let grid_w = 60_000.0;
-                let grid_h = 20_000.0;
-
-                let tl = Point {
-                    x: 0.0,
-                    y: -10000.0,
-                };
-
-                for row in 0..ver {
-                    let y = tl.y + (row as f32) * 1000.0;
-
-                    let x0 = tl.x;
-                    let x1 = tl.x + grid_w;
-
-                    lines.push((Point { x: x0, y }, Point { x: x1, y }));
-                }
-
-                for col in 0..hor {
-                    let x = tl.x + (col as f32) * 1000.0;
-
-                    let y0 = tl.y;
-                    let y1 = tl.y + grid_h;
-
-                    lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
-                }
-
                 unsafe {
-                    let cmd_buf = line_draw_system
-                        .draw(&dynamic_state, &lines, RGB::new(1.0, 1.0, 1.0), view)
-                        .unwrap();
+                    let cmd_buf = line_draw_system.draw_stored(&dynamic_state, view).unwrap();
                     builder.execute_commands(cmd_buf).unwrap();
                 }
 
