@@ -55,13 +55,15 @@ impl Node {
     }
 
     pub fn vertices(&self) -> [Vertex; 6] {
+        self.vertices_width(100.0)
+    }
+
+    pub fn vertices_width(&self, width: f32) -> [Vertex; 6] {
         let diff = self.p0 - self.p1;
 
         let pos0_to_pos1_norm = diff / diff.length();
 
         let pos0_orthogonal = rotate(pos0_to_pos1_norm, 3.14159265 / 2.0);
-
-        let width = 100.0;
 
         let p0 = self.p0 + pos0_orthogonal * (width / 2.0);
         let p1 = self.p0 + pos0_orthogonal * (-width / 2.0);
@@ -297,6 +299,37 @@ impl Spine {
     //     self.nodes.iter().flat_map(|n| n.vertices())
     // }
 
+    pub fn vertices_into_with_width(
+        &self,
+        width: f32,
+        vxs: &mut Vec<Vertex>,
+        cols: &mut Vec<Color>,
+    ) {
+        vxs.clear();
+        cols.clear();
+
+        for seg in self.nodes.iter() {
+            vxs.extend(seg.vertices_width(width).iter());
+        }
+
+        let color_period = [
+            [1.0, 0.0, 0.0],
+            [1.0, 0.65, 0.0],
+            [1.0, 1.0, 0.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.0, 1.0],
+            [0.3, 0.0, 0.51],
+            [0.93, 0.51, 0.93],
+        ];
+
+        cols.extend(vxs.iter().enumerate().map(|(ix, _)| {
+            let ix_ = (ix / 6) % color_period.len();
+            Color {
+                color: color_period[ix_],
+            }
+        }));
+    }
+
     pub fn vertices_into(&self, vxs: &mut Vec<Vertex>, cols: &mut Vec<Color>) {
         vxs.clear();
         cols.clear();
@@ -321,17 +354,6 @@ impl Spine {
                 color: color_period[ix_],
             }
         }));
-
-        // let colors: Vec<Color> = vxs
-        //     .iter()
-        //     .enumerate()
-        //     .map(|(ix, _)| {
-        //         let ix_ = (ix / 6) % color_period.len();
-        //         Color {
-        //             color: color_period[ix_],
-        //         }
-        //     })
-        //     .collect();
     }
 
     pub fn vertices(&self) -> (Vec<Vertex>, Vec<Color>) {

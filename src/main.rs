@@ -206,39 +206,6 @@ fn main() {
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
-    let (line_buf_ix, line_future) = {
-        let mut lines: Vec<(Point, Point)> = Vec::new();
-
-        let hor = 61;
-        let ver = 21;
-
-        let grid_w = 60_000.0;
-        let grid_h = 20_000.0;
-
-        let tl = Point {
-            x: 0.0,
-            y: -10000.0,
-        };
-
-        for row in 0..ver {
-            let y = tl.y + (row as f32) * 1000.0;
-            let x0 = tl.x;
-            let x1 = tl.x + grid_w;
-            lines.push((Point { x: x0, y }, Point { x: x1, y }));
-        }
-
-        for col in 0..hor {
-            let x = tl.x + (col as f32) * 1000.0;
-            let y0 = tl.y;
-            let y1 = tl.y + grid_h;
-            lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
-        }
-
-        line_draw_system
-            .add_lines(&lines, RGB::new(1.0, 1.0, 1.0))
-            .unwrap()
-    };
-
     let shape_draw_system = ShapeDrawSystem::new(
         queue.clone(),
         Subpass::from(render_pass.clone(), 0).unwrap(),
@@ -288,6 +255,42 @@ fn main() {
 
     let initial_view = view;
 
+    let (line_buf_ix, line_future) = {
+        let mut lines: Vec<(Point, Point)> = Vec::new();
+
+        let cell_size = 8192.0;
+
+        let cols = (layout_dims.x / cell_size).ceil() as usize;
+        let rows = (layout_dims.y / cell_size).ceil() as usize;
+
+        let grid_w = (cols * 8192) as f32;
+        let grid_h = (rows * 8192) as f32;
+
+        let tl = top_left;
+        // let tl = Point {
+        //     x: 0.0,
+        //     y: -10000.0,
+        // };
+
+        for row in 0..rows {
+            let y = tl.y + (row as f32) * cell_size;
+            let x0 = tl.x;
+            let x1 = tl.x + grid_w;
+            lines.push((Point { x: x0, y }, Point { x: x1, y }));
+        }
+
+        for col in 0..cols {
+            let x = tl.x + (col as f32) * cell_size;
+            let y0 = tl.y;
+            let y1 = tl.y + grid_h;
+            lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
+        }
+
+        line_draw_system
+            .add_lines(&lines, RGB::new(1.0, 1.0, 1.0))
+            .unwrap()
+    };
+
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
     let mut width = 100.0;
@@ -334,6 +337,10 @@ fn main() {
 
     let mut vertex_count = 0;
     let mut color_count = 0;
+
+    let mut last_width = 0.0;
+
+    let mut draw_grid = true;
 
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
@@ -400,7 +407,8 @@ fn main() {
                     // paused = !paused;
                 }
                 Action::ResetLayout => {
-                    spines = init_spines.clone();
+                    draw_grid = !draw_grid;
+                    // spines = init_spines.clone();
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
@@ -552,7 +560,18 @@ fn main() {
                 for (ix, spine) in spines.iter().enumerate() {
                     let model_offset = spine.offset;
 
-                    spine.vertices_into(&mut vec_vertices, &mut vec_colors);
+                    let width = {
+                        let mut width = 100.0;
+                        if view.scale > 100.0 {
+                            width *= (view.scale / 100.0);
+                        }
+                        width
+                    };
+
+                    last_width = width;
+
+                    spine.vertices_into_with_width(width, &mut vec_vertices, &mut vec_colors);
+                    // spine.vertices_into(&mut vec_vertices, &mut vec_colors);
 
                     vertex_count = vec_vertices.len();
                     color_count = vec_colors.len();
@@ -576,9 +595,11 @@ fn main() {
                     }
                 }
 
-                unsafe {
-                    let cmd_buf = line_draw_system.draw_stored(&dynamic_state, view).unwrap();
-                    builder.execute_commands(cmd_buf).unwrap();
+                if draw_grid {
+                    unsafe {
+                        let cmd_buf = line_draw_system.draw_stored(&dynamic_state, view).unwrap();
+                        builder.execute_commands(cmd_buf).unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();
@@ -616,8 +637,8 @@ fn main() {
                     let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
                     let fps = 1.0 / avg;
                     println!("avg update time: {:.6}\t{} FPS", avg, fps);
-                    println!("node vertex count: {}", vertex_count);
-                    println!("node color  count: {}", color_count);
+                    println!("node vertex & color count: {}", vertex_count);
+                    println!("view scale {}\tlast width: {}", view.scale, last_width);
                 }
 
                 frame += 1;
