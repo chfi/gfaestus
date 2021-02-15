@@ -1,0 +1,332 @@
+use vulkano::format::Format;
+use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
+use vulkano::image::{ImageUsage, SwapchainImage};
+use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+use vulkano::instance::{Instance, PhysicalDevice};
+use vulkano::{
+    buffer::cpu_pool::CpuBufferPoolChunk,
+    device::{Device, DeviceExtensions, RawDeviceExtensions},
+    memory::pool::StdMemoryPool,
+};
+use vulkano::{
+    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
+    image::{AttachmentImage, Dimensions},
+};
+use vulkano::{
+    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState, SubpassContents},
+    pipeline::vertex::TwoBuffersDefinition,
+};
+use vulkano::{
+    descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract},
+    device::Queue,
+};
+
+use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline, GraphicsPipelineAbstract};
+
+use vulkano::swapchain::{
+    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
+    SwapchainCreationError,
+};
+use vulkano::sync::{self, FlushError, GpuFuture};
+
+use vulkano_win::VkSurfaceBuild;
+
+use std::sync::Arc;
+
+use crossbeam::channel;
+
+use anyhow::{Context, Result};
+
+use nalgebra_glm as glm;
+
+use crate::geometry::*;
+use crate::gfa::*;
+use crate::ui::events::{keyboard_input, mouse_wheel_input};
+use crate::ui::{UICmd, UIState, UIThread};
+use crate::view;
+use crate::view::View;
+
+use crate::input::*;
+
+use crate::layout::physics;
+use crate::layout::*;
+
+use super::{PoolChunk, SubPoolChunk};
+
+use rgb::*;
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct ShapeVertex {
+    pub position: [f32; 2],
+}
+
+vulkano::impl_vertex!(ShapeVertex, position);
+
+mod vs {
+    vulkano_shaders::shader! {
+        ty: "vertex",
+        path: "shaders/shapes/vertex.vert",
+    }
+}
+
+mod fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "shaders/shapes/fragment.frag",
+    }
+}
+
+const DRAW_CIRCLE: u32 = 1;
+const DRAW_RECT: u32 = 2;
+
+fn circle_push_constant(
+    color: RGBA<f32>,
+    viewport_dims: [f32; 2],
+    center: Point,
+    radius: f32,
+    // top_left: Point,
+    // bottom_right: Point,
+) -> fs::ty::PushConstantData {
+    fs::ty::PushConstantData {
+        color: [color.r, color.g, color.b, color.a],
+        draw_flags: DRAW_CIRCLE,
+        rect: [0.0; 4],
+        circle: [center.x, center.y],
+        radius,
+        border: 1.0,
+        screen_dims: viewport_dims,
+        _dummy0: [0; 12],
+        _dummy1: [0; 4],
+        _dummy2: [0; 4],
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Primitive {
+    Line {
+        p0: Point,
+        p1: Point,
+    },
+    Rect {
+        top_left: Point,
+        bottom_right: Point,
+    },
+    Circle {
+        center: Point,
+        radius: f32,
+    },
+    // Polygon {
+    //     start: Point,
+    //     rest: Vec<Point>,
+    // },
+}
+
+impl Primitive {
+    pub fn line(p0: Point, p1: Point) -> Self {
+        Self::Line { p0, p1 }
+    }
+
+    pub fn rect(top_left: Point, bottom_right: Point) -> Self {
+        Self::Rect {
+            top_left,
+            bottom_right,
+        }
+    }
+
+    pub fn circle(center: Point, radius: f32) -> Self {
+        Self::Circle { center, radius }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DrawStyle {
+    Filled {
+        color: RGBA<f32>,
+    },
+    Border {
+        color: RGBA<f32>,
+        width: f32,
+    },
+    BorderFilled {
+        border_color: RGBA<f32>,
+        border_width: f32,
+        fill_color: RGBA<f32>,
+    },
+}
+
+impl DrawStyle {
+    pub fn filled(color: RGBA<f32>) -> Self {
+        Self::Filled { color }
+    }
+
+    pub fn border(color: RGBA<f32>, width: f32) -> Self {
+        Self::Border { color, width }
+    }
+
+    pub fn border_filled(
+        fill_color: RGBA<f32>,
+        border_color: RGBA<f32>,
+        border_width: f32,
+    ) -> Self {
+        Self::BorderFilled {
+            border_color,
+            border_width,
+            fill_color,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Shape {
+    offset: Point,
+    primitive: Primitive,
+    style: DrawStyle,
+}
+
+impl Shape {
+    pub fn from_primitive(primitive: Primitive) -> Self {
+        let style = DrawStyle::filled(RGBA::new(1.0, 1.0, 1.0, 1.0));
+        let offset = Point { x: 0.0, y: 0.0 };
+        Self {
+            primitive,
+            style,
+            offset,
+        }
+    }
+
+    pub fn shift(mut self, offset: Point) -> Self {
+        self.offset += offset;
+        self
+    }
+
+    pub fn border(mut self, color: RGBA<f32>, width: f32) -> Self {
+        self.style = DrawStyle::border(color, width);
+        self
+    }
+
+    pub fn filled(mut self, color: RGBA<f32>) -> Self {
+        self.style = DrawStyle::filled(color);
+        self
+    }
+
+    pub fn border_filled(mut self, fill: RGBA<f32>, border: RGBA<f32>, width: f32) -> Self {
+        self.style = DrawStyle::border_filled(fill, border, width);
+        self
+    }
+
+    pub fn set_primitive(&mut self, primitive: Primitive) {
+        self.primitive = primitive;
+    }
+
+    pub fn style_mut(&mut self) -> &mut DrawStyle {
+        &mut self.style
+    }
+
+    pub fn rect(top_left: Point, bottom_right: Point) -> Self {
+        let primitive = Primitive::rect(top_left, bottom_right);
+        let style = DrawStyle::filled(RGBA::new(1.0, 1.0, 1.0, 1.0));
+        let offset = Point { x: 0.0, y: 0.0 };
+        Self {
+            primitive,
+            style,
+            offset,
+        }
+    }
+}
+
+pub struct ShapeDrawSystem {
+    gfx_queue: Arc<Queue>,
+    vertex_buffer: Arc<CpuAccessibleBuffer<[ShapeVertex]>>,
+    // vertex_buffer_pool: CpuBufferPool<ShapeVertex>,
+    // color_buffer_pool: CpuBufferPool<Color>,
+    pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+}
+
+impl ShapeDrawSystem {
+    pub fn new<R>(gfx_queue: Arc<Queue>, subpass: Subpass<R>) -> ShapeDrawSystem
+    where
+        R: RenderPassAbstract + Send + Sync + 'static,
+    {
+        let _ = include_str!("../../shaders/shapes/fragment.frag");
+        let _ = include_str!("../../shaders/shapes/vertex.vert");
+
+        let vs = vs::Shader::load(gfx_queue.device().clone()).unwrap();
+        let fs = fs::Shader::load(gfx_queue.device().clone()).unwrap();
+
+        let vertex_buffer = {
+            CpuAccessibleBuffer::from_iter(
+                gfx_queue.device().clone(),
+                BufferUsage::all(),
+                false,
+                [
+                    ShapeVertex {
+                        position: [-1.0, -1.0],
+                    },
+                    ShapeVertex {
+                        position: [-1.0, 3.0],
+                    },
+                    ShapeVertex {
+                        position: [3.0, -1.0],
+                    },
+                ]
+                .iter()
+                .cloned(),
+            )
+            .expect("ShapeDrawSystem failed to create vertex buffer")
+        };
+
+        let pipeline = {
+            Arc::new(
+                GraphicsPipeline::start()
+                    .vertex_input_single_buffer::<ShapeVertex>()
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .triangle_list()
+                    .viewports_dynamic_scissors_irrelevant(1)
+                    .fragment_shader(fs.main_entry_point(), ())
+                    .render_pass(subpass)
+                    .blend_alpha_blending()
+                    .build(gfx_queue.device().clone())
+                    .unwrap(),
+            ) as Arc<_>
+        };
+
+        ShapeDrawSystem {
+            gfx_queue,
+            pipeline,
+            vertex_buffer,
+        }
+    }
+
+    pub fn draw(
+        &self,
+        dynamic_state: &DynamicState,
+        viewport_dims: [f32; 2],
+        circle_at: Point,
+        circle_rad: f32,
+    ) -> Result<AutoCommandBuffer> {
+        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
+            self.gfx_queue.device().clone(),
+            self.gfx_queue.family(),
+            self.pipeline.clone().subpass(),
+        )?;
+
+        let push_constants = circle_push_constant(
+            RGBA::new(1.0, 1.0, 1.0, 1.0),
+            viewport_dims,
+            circle_at,
+            circle_rad,
+        );
+
+        builder.draw(
+            self.pipeline.clone(),
+            dynamic_state,
+            vec![self.vertex_buffer.clone()],
+            (),
+            push_constants,
+        )?;
+
+        let builder = builder.build()?;
+
+        Ok(builder)
+    }
+}

@@ -175,6 +175,11 @@ fn main() {
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
+    let shape_draw_system = ShapeDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pass.clone(), 0).unwrap(),
+    );
+
     let mut dynamic_state = DynamicState {
         line_width: None,
         viewports: None,
@@ -441,9 +446,11 @@ fn main() {
                     )
                     .unwrap();
 
+                let viewport_dims = [width, height];
+
+                /*
                 for (ix, spine) in spines.iter().enumerate() {
                     let model_offset = spine.offset;
-                    let viewport_dims = [width, height];
 
                     spine.vertices_into(&mut vec_vertices, &mut vec_colors);
 
@@ -464,6 +471,17 @@ fn main() {
                     unsafe {
                         builder.execute_commands(secondary_buf).unwrap();
                     }
+                }
+                */
+
+                let circle = Point { x: 0.0, y: 0.0 };
+                let radius = 0.5;
+
+                unsafe {
+                    let shapes_buf = shape_draw_system
+                        .draw(&dynamic_state, viewport_dims, circle, radius)
+                        .unwrap();
+                    builder.execute_commands(shapes_buf).unwrap();
                 }
 
                 builder.end_render_pass().unwrap();
