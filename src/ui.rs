@@ -18,12 +18,12 @@ pub struct UIThread {
 }
 
 impl UIThread {
-    pub fn new() -> (Self, channel::Sender<UICmd>, channel::Receiver<View>) {
+    pub fn new(init_view: View) -> (Self, channel::Sender<UICmd>, channel::Receiver<View>) {
         let (tx_chan, rx_chan) = channel::unbounded::<UICmd>();
 
         let (view_tx, view_rx) = channel::bounded::<View>(1);
 
-        let mut ui_state = UIState::new();
+        let mut ui_state = UIState::new(init_view);
 
         let handle = thread::spawn(move || {
             let mut last_time = std::time::Instant::now();
@@ -105,14 +105,7 @@ impl Default for UIState {
 }
 
 impl UIState {
-    pub fn new() -> Self {
-        let view = View {
-            // center: Point::new(600.0, 0.0),
-            // scale: 1.0,
-            center: Point::new(10000.0, 0.0),
-            scale: 5.0,
-        };
-
+    pub fn new(view: View) -> Self {
         Self {
             view,
             anim: Default::default(),

@@ -69,7 +69,7 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
+fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, Point)> {
     let mut mmap = MmapGFA::new(gfa_path)?;
 
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
@@ -104,7 +104,10 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
     }
     */
 
-    Ok(spine)
+    let top_left = Point::new(min_x, min_y);
+    let bottom_right = Point::new(max_x, max_y);
+
+    Ok((spine, top_left, bottom_right))
 }
 
 fn main() {
@@ -254,9 +257,17 @@ fn main() {
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
+    // let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
+    let (spine, top_left, bottom_right) =
+        gfa_with_layout("yeast.seqwish.gfa", "yeast.seqwish.layout.tsv").unwrap();
 
     eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    eprintln!(
+        "Loaded {} nodes\t{} points",
+        spine.nodes.len(),
+        spine.nodes.len() * 2
+    );
 
     let mut spines = vec![spine];
 
@@ -271,6 +282,11 @@ fn main() {
     let init_spines = spines.clone();
 
     let mut view: View = View::default();
+    let layout_dims = bottom_right - top_left;
+
+    view.center = top_left + (layout_dims / 2.0);
+
+    let initial_view = view;
 
     let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
@@ -282,7 +298,7 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
-    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new();
+    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(view);
 
     let input_action_handler = InputActionWorker::new();
 
@@ -308,6 +324,16 @@ fn main() {
     let mut since_last_redraw = 0.0;
 
     let mut paused = false;
+
+    // let mut frame_time_history: Vec<f32> = Vec::new();
+    // let frame_history_len = 30;
+    const FRAME_HISTORY_LEN: usize = 30;
+    let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
+
+    let mut frame = 0;
+
+    let mut vertex_count = 0;
+    let mut color_count = 0;
 
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
@@ -361,7 +387,17 @@ fn main() {
                     ui_cmd_tx.send(UICmd::PanConstant { delta }).unwrap();
                 }
                 Action::PausePhysics => {
-                    paused = !paused;
+                    ui_cmd_tx
+                        .send(UICmd::SetCenter {
+                            center: initial_view.center,
+                        })
+                        .unwrap();
+                    ui_cmd_tx
+                        .send(UICmd::SetScale {
+                            scale: initial_view.scale,
+                        })
+                        .unwrap();
+                    // paused = !paused;
                 }
                 Action::ResetLayout => {
                     spines = init_spines.clone();
@@ -443,7 +479,8 @@ fn main() {
                 recreate_swapchain = true;
             }
             Event::RedrawEventsCleared => {
-                // let frame_t = std::time::Instant::now();
+                let frame_t = std::time::Instant::now();
+
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 if recreate_swapchain {
@@ -517,6 +554,9 @@ fn main() {
 
                     spine.vertices_into(&mut vec_vertices, &mut vec_colors);
 
+                    vertex_count = vec_vertices.len();
+                    color_count = vec_colors.len();
+
                     let vec_vertices_buf = vec_vertices.clone();
                     let vec_colors_buf = vec_colors.clone();
 
@@ -567,6 +607,20 @@ fn main() {
                         previous_frame_end = Some(sync::now(device.clone()).boxed());
                     }
                 }
+
+                let frame_time = frame_t.elapsed().as_secs_f32();
+                frame_time_history[frame % frame_time_history.len()] = frame_time;
+
+                if frame > FRAME_HISTORY_LEN && frame % 30 == 0 {
+                    let ft_sum: f32 = frame_time_history.iter().sum();
+                    let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
+                    let fps = 1.0 / avg;
+                    println!("avg update time: {:.6}\t{} FPS", avg, fps);
+                    println!("node vertex count: {}", vertex_count);
+                    println!("node color  count: {}", color_count);
+                }
+
+                frame += 1;
             }
             _ => (),
         }
