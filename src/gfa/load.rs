@@ -12,7 +12,7 @@ use gfa::gfa::Line;
 
 use anyhow::Result;
 
-use fxhash::FxHashMap;
+use rustc_hash::FxHashMap;
 
 pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     let indices = mmap_gfa.build_index()?;

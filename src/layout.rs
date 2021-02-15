@@ -103,7 +103,7 @@ impl Spine {
         use std::io::prelude::*;
         use std::io::BufReader;
 
-        use fxhash::FxHashMap;
+        use rustc_hash::FxHashMap;
 
         let layout_file = File::open(layout_path)?;
         let reader = BufReader::new(layout_file);

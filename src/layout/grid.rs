@@ -97,8 +97,21 @@ impl<T: EntryVal> Cell<T> {
         }
     }
 
+    /// Inserts a new entry with the provided value at the given
+    /// point, and returns the vector index of the new entry. If
+    /// `point` is outside the bounds of this cell, returns `None`.
     #[inline]
-    pub fn new_entry(&mut self, point: Point, value: T) {
+    pub fn new_entry(&mut self, point: Point, value: T) -> Option<usize> {
+        let Point { x, y } = point;
+
+        if x < self.top_left.x
+            || x > self.top_left.x + self.dims.width
+            || y < self.top_left.y
+            || y > self.top_left.y + self.dims.height
+        {
+            return None;
+        }
+
         let find_index = self
             .entries
             .binary_search_by(|e| e.point.partial_cmp(&point).unwrap());
@@ -108,7 +121,11 @@ impl<T: EntryVal> Cell<T> {
             Err(x) => x,
         };
 
-        self.entries.insert(index, Entry::new(point, value))
+        self.entries.insert(index, Entry::new(point, value));
+
+        Some(index)
+    }
+
     }
 
     #[inline]
@@ -116,8 +133,8 @@ impl<T: EntryVal> Cell<T> {
         &self,
         top_left: Point,
         bottom_right: Point,
-    ) -> impl Iterator<Item = Entry<T>> + '_ {
-        let x_range = {
+    ) -> impl Iterator<Item = (usize, Entry<T>)> + '_ {
+        let (offset, x_range) = {
             let start_ix = self
                 .entries
                 .binary_search_by(|e| e.point.x.partial_cmp(&top_left.x).unwrap())
@@ -128,12 +145,12 @@ impl<T: EntryVal> Cell<T> {
             let end_ix = greater
                 .binary_search_by(|e| e.point.x.partial_cmp(&bottom_right.x).unwrap())
                 .map_or_else(|x| x, |x| x);
-            &self.entries[..end_ix]
+            (start_ix, &self.entries[..end_ix])
         };
 
-        x_range.iter().filter_map(move |&e| {
+        x_range.iter().enumerate().filter_map(move |(ix, &e)| {
             if e.point.y >= top_left.y && e.point.y <= bottom_right.y {
-                Some(e)
+                Some((offset + ix, e))
             } else {
                 None
             }
@@ -141,47 +158,91 @@ impl<T: EntryVal> Cell<T> {
     }
 
     #[inline]
-    pub fn find_in_x_radius(&self, x: f32, radius: f32) -> &[Entry<T>] {
+    pub fn indices_in_x_radius(&self, x: f32, radius: f32) -> Option<(usize, usize)> {
         let min_x = x - radius;
         let max_x = x + radius;
 
         if max_x < self.top_left.x || max_x > self.top_left.x + self.dims.width {
-            return &self.entries[0..0];
+            return None;
         }
 
-        let greater = if min_x > self.top_left.x {
-            let start_ix = self
-                .entries
+        let start_ix = if min_x > self.top_left.x {
+            self.entries
                 .binary_search_by(|e| e.point.x.partial_cmp(&min_x).unwrap())
-                .map_or_else(|x| x, |x| x);
-            &self.entries[start_ix..]
+                .map_or_else(|x| x, |x| x)
         } else {
-            &self.entries[..]
+            0
         };
 
-        let range = if max_x < self.top_left.x + self.dims.width {
-            let end_ix = greater
+        let greater = &self.entries[start_ix..];
+
+        let end_ix = if max_x < self.top_left.x + self.dims.width {
+            greater
                 .binary_search_by(|e| e.point.x.partial_cmp(&max_x).unwrap())
-                .map_or_else(|x| x, |x| x);
-            &self.entries[..end_ix]
+                .map_or_else(|x| x, |x| x)
         } else {
-            &self.entries[..]
+            self.entries.len() - 1
         };
 
-        range
+        Some((start_ix, end_ix))
     }
 
     #[inline]
-    pub fn find_in_radius(&self, point: Point, radius: f32) -> impl Iterator<Item = Entry<T>> + '_ {
-        let x_range = self.find_in_x_radius(point.x, radius);
+    pub fn find_in_x_radius(&self, x: f32, radius: f32) -> &[Entry<T>] {
+        if let Some((start, end)) = self.indices_in_x_radius(x, radius) {
+            &self.entries[start..=end]
+        } else {
+            &self.entries[0..0]
+        }
+    }
 
-        x_range.iter().filter_map(move |&e| {
+    #[inline]
+    pub fn find_in_radius(
+        &self,
+        point: Point,
+        radius: f32,
+    ) -> impl Iterator<Item = (usize, Entry<T>)> + '_ {
+        let (x_start, x_end) = self.indices_in_x_radius(point.x, radius).unwrap_or((0, 0));
+
+        let x_range = &self.entries[x_start..x_end];
+
+        x_range.iter().enumerate().filter_map(move |(ix, &e)| {
             if e.point.dist(point) <= radius {
-                Some(e)
+                Some((ix + x_start, e))
             } else {
                 None
             }
         })
+    }
+
+    #[inline]
+    pub fn remove_in_radius_by<F>(&mut self, point: Point, radius: f32, mut pred: F) -> Vec<T>
+    where
+        F: FnMut(Entry<T>) -> bool,
+    {
+        use rustc_hash::FxHashSet;
+
+        let in_radius = self.find_in_radius(point, radius);
+
+        let mut to_remove_ixs: FxHashSet<usize> = FxHashSet::default();
+        let mut removed_ids: Vec<T> = Vec::new();
+
+        for (ix, entry) in in_radius {
+            if pred(entry) {
+                to_remove_ixs.insert(ix);
+                removed_ids.push(entry.value);
+            }
+        }
+
+        let mut ix = 0;
+
+        self.entries.retain(|_| {
+            let cur_ix = ix;
+            ix += 1;
+            !to_remove_ixs.contains(&cur_ix)
+        });
+
+        removed_ids
     }
 }
 
