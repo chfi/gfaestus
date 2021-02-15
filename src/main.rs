@@ -75,6 +75,26 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
     let spine = Spine::from_laid_out_graph(&graph, layout_path)?;
 
+    let mut min_x = std::f32::MAX;
+    let mut max_x = std::f32::MIN;
+
+    let mut min_y = std::f32::MAX;
+    let mut max_y = std::f32::MIN;
+
+    for node in spine.nodes.iter() {
+        min_x = min_x.min(node.p0.x).min(node.p0.x);
+        max_x = max_x.max(node.p0.x).max(node.p0.x);
+
+        min_y = min_y.min(node.p0.y).min(node.p0.y);
+        max_y = max_y.max(node.p0.y).max(node.p0.y);
+    }
+
+    println!("min_x: {}", min_x);
+    println!("max_x: {}", max_x);
+
+    println!("min_y: {}", min_y);
+    println!("max_y: {}", max_y);
+
     /*
     println!("NodeId\tp0x\tp0y\tp1x\tp1y");
     for (n_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
@@ -174,6 +194,11 @@ fn main() {
     );
 
     let node_draw_system = NodeDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pass.clone(), 0).unwrap(),
+    );
+
+    let line_draw_system = LineDrawSystem::new(
         queue.clone(),
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
@@ -475,48 +500,42 @@ fn main() {
                     }
                 }
 
-                let circle = Point { x: 125.5, y: 0.0 };
-                let radius = 100.25;
+                let mut lines: Vec<(Point, Point)> = Vec::new();
 
-                let p0 = Point { x: 0.0, y: 0.0 };
-                let p1 = Point { x: 100.0, y: 100.0 };
+                let hor = 61;
+                let ver = 21;
 
-                let mut shapes: Vec<Shape> = Vec::new();
+                let grid_w = 60_000.0;
+                let grid_h = 20_000.0;
 
-                for col in 0..10 {
-                    for row in 0..10 {
-                        let cell_width = width / 10.0;
-                        let cell_height = height / 10.0;
+                let tl = Point {
+                    x: 0.0,
+                    y: -10000.0,
+                };
 
-                        let x_offset = width / 2.0;
-                        let y_offset = height / 2.0;
+                for row in 0..ver {
+                    let y = tl.y + (row as f32) * 1000.0;
 
-                        let x = ((col as f32) * cell_width) - x_offset;
-                        let y = ((row as f32) * cell_height) - y_offset;
+                    let x0 = tl.x;
+                    let x1 = tl.x + grid_w;
 
-                        let p0 = Point { x, y };
-                        let p1 = p0
-                            + Point {
-                                x: cell_width,
-                                y: cell_height,
-                            };
-
-                        shapes.push(Shape::rect(p0, p1));
-                    }
+                    lines.push((Point { x: x0, y }, Point { x: x1, y }));
                 }
 
-                for shape in shapes {
-                    unsafe {
-                        // let shapes_buf = shape_draw_system
-                        //     .draw_circle(&dynamic_state, circle, radius, false)
-                        //     .unwrap();
-                        // let shapes_buf = shape_draw_system
-                        //     .draw_rect(&dynamic_state, p0, p1, false)
-                        //     .unwrap();
-                        let shapes_buf =
-                            shape_draw_system.draw_shape(&dynamic_state, shape).unwrap();
-                        builder.execute_commands(shapes_buf).unwrap();
-                    }
+                for col in 0..hor {
+                    let x = tl.x + (col as f32) * 1000.0;
+
+                    let y0 = tl.y;
+                    let y1 = tl.y + grid_h;
+
+                    lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
+                }
+
+                unsafe {
+                    let cmd_buf = line_draw_system
+                        .draw(&dynamic_state, &lines, 50.0, RGB::new(1.0, 1.0, 1.0), view)
+                        .unwrap();
+                    builder.execute_commands(cmd_buf).unwrap();
                 }
 
                 builder.end_render_pass().unwrap();

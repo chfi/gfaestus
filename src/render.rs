@@ -53,9 +53,11 @@ use crate::layout::physics;
 use crate::layout::*;
 */
 
+pub mod lines;
 pub mod nodes;
 pub mod shapes;
 
+pub use lines::LineDrawSystem;
 pub use nodes::NodeDrawSystem;
 pub use shapes::ShapeDrawSystem;
 
