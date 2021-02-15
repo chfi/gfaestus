@@ -46,6 +46,8 @@ use gfaestus::input::*;
 use gfaestus::layout::physics;
 use gfaestus::layout::*;
 
+use gfaestus::render::*;
+
 use nalgebra_glm as glm;
 
 use anyhow::{Context, Result};
@@ -142,32 +144,6 @@ fn main() {
         .unwrap()
     };
 
-    let vertex_buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
-    let color_buffer_pool: CpuBufferPool<Color> = CpuBufferPool::vertex_buffer(device.clone());
-
-    let _ = include_str!("../shaders/fragment.frag");
-    let _ = include_str!("../shaders/vertex.vert");
-
-    mod node_vert {
-        vulkano_shaders::shader! {
-            ty: "vertex",
-            path: "shaders/vertex.vert",
-        }
-    }
-
-    mod node_frag {
-        vulkano_shaders::shader! {
-            ty: "fragment",
-            path: "shaders/fragment.frag",
-        }
-    }
-
-    let node_vert = node_vert::Shader::load(device.clone()).unwrap();
-    let node_frag = node_frag::Shader::load(device.clone()).unwrap();
-
-    let uniform_buffer =
-        CpuBufferPool::<node_vert::ty::View>::new(device.clone(), BufferUsage::uniform_buffer());
-
     let render_pass = Arc::new(
         vulkano::single_pass_renderpass!(
             device.clone(),
@@ -194,17 +170,9 @@ fn main() {
         .unwrap(),
     );
 
-    let pipeline = Arc::new(
-        GraphicsPipeline::start()
-            .vertex_input(TwoBuffersDefinition::<Vertex, Color>::new())
-            .vertex_shader(node_vert.main_entry_point(), ())
-            .triangle_list()
-            .viewports_dynamic_scissors_irrelevant(1)
-            .fragment_shader(node_frag.main_entry_point(), ())
-            .render_pass(Subpass::from(render_pass.clone(), 0).unwrap())
-            .blend_alpha_blending()
-            .build(device.clone())
-            .unwrap(),
+    let node_draw_system = NodeDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
     let mut dynamic_state = DynamicState {
@@ -226,13 +194,13 @@ fn main() {
 
     let mut spines = vec![spine];
 
-    let mut color_buffers: Vec<_> = Vec::new();
-    for (ix, spine) in spines.iter().enumerate() {
-        let (_, col_data) = spine.vertices();
+    // let mut color_buffers: Vec<_> = Vec::new();
+    // for (ix, spine) in spines.iter().enumerate() {
+    //     let (_, col_data) = spine.vertices();
 
-        let col_buf = color_buffer_pool.chunk(col_data.into_iter()).unwrap();
-        color_buffers.push(Arc::new(col_buf));
-    }
+    //     let col_buf = color_buffer_pool.chunk(col_data.into_iter()).unwrap();
+    //     color_buffers.push(Arc::new(col_buf));
+    // }
 
     let init_spines = spines.clone();
 
@@ -277,6 +245,7 @@ fn main() {
         let delta = now.duration_since(last_time);
 
         t += delta.as_secs_f32();
+        last_time = now;
 
         // if !paused {
         //     since_last_update += delta.as_secs_f32();
@@ -287,8 +256,6 @@ fn main() {
         //         since_last_update = 0.0;
         //     }
         // }
-
-        last_time = now;
 
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
@@ -394,12 +361,6 @@ fn main() {
         }
 
         match event {
-            // Event::WindowEvent {
-            //     event: WindowEvent::MouseWheel { delta, .. },
-            //     ..
-            // } => {
-            //     mouse_wheel_input(&ui_cmd_tx, delta);
-            // }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
                 ..
@@ -455,12 +416,9 @@ fn main() {
                 }
 
                 if let Ok(latest_view) = view_rx.recv() {
-                    // view = latest_view;
                     view.center = latest_view.center;
                     view.scale = latest_view.scale;
                 }
-
-                let layout = pipeline.layout().descriptor_set_layout(0).unwrap();
 
                 let clear = if paused {
                     [0.05, 0.0, 0.0, 1.0]
@@ -478,61 +436,34 @@ fn main() {
                 builder
                     .begin_render_pass(
                         framebuffers[image_num].clone(),
-                        SubpassContents::Inline,
+                        SubpassContents::SecondaryCommandBuffers,
                         clear_values,
                     )
                     .unwrap();
 
                 for (ix, spine) in spines.iter().enumerate() {
-                    let model = spine.model_matrix();
+                    let model_offset = spine.offset;
+                    let viewport_dims = [width, height];
 
-                    // spine.vertices_into(&mut vec_vertices, &mut vec_colors);
-                    spine.vertices_(&mut vec_vertices);
+                    spine.vertices_into(&mut vec_vertices, &mut vec_colors);
 
-                    // let vertex_buffer =
-                    let vertex_buffer: CpuBufferPoolChunk<
-                        gfaestus::geometry::Vertex,
-                        Arc<StdMemoryPool>,
-                    > = vertex_buffer_pool
-                        .chunk(vec_vertices.iter().copied())
-                        .unwrap();
+                    let vec_vertices_buf = vec_vertices.clone();
+                    let vec_colors_buf = vec_colors.clone();
 
-                    // let vertex_buffer = vertex_buffer_pool
-                    //     .chunk(vec_vertices.iter().copied())
-                    //     .unwrap();
-
-                    let color_buffer = color_buffers[ix].clone();
-
-                    let transformation = {
-                        let mat = view.to_scaled_matrix();
-
-                        let viewport_mat = view::viewport_scale(width, height);
-
-                        let mat = viewport_mat * mat * model;
-
-                        let view_data = view::mat4_to_array(&mat);
-
-                        let matrix = node_vert::ty::View { view: view_data };
-                        uniform_buffer.next(matrix).unwrap()
-                    };
-
-                    let set = Arc::new(
-                        PersistentDescriptorSet::start(layout.clone())
-                            .add_buffer(transformation)
-                            .unwrap()
-                            .build()
-                            .unwrap(),
-                    );
-
-                    builder
+                    let secondary_buf = node_draw_system
                         .draw(
-                            pipeline.clone(),
                             &dynamic_state,
-                            (vertex_buffer, color_buffer),
-                            set.clone(),
-                            (),
+                            viewport_dims,
+                            vec_vertices_buf,
+                            vec_colors_buf,
+                            view,
+                            model_offset,
                         )
                         .unwrap();
+
+                    unsafe {
+                        builder.execute_commands(secondary_buf).unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();
