@@ -111,7 +111,41 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, P
 }
 
 fn main() {
-    let mut extensions = vulkano_win::required_extensions();
+    let args = std::env::args().collect::<Vec<_>>();
+
+    let gfa_file = if let Some(name) = args.get(1) {
+        name
+    } else {
+        eprintln!("must provide path to a GFA file");
+        std::process::exit(1);
+    };
+
+    let layout_file = if let Some(name) = args.get(2) {
+        name
+    } else {
+        eprintln!("must provide path to a layout file");
+        std::process::exit(1);
+    };
+
+    // let layout_file = args.get(2);
+
+    // let mut spines = test_spines();
+    eprintln!("loading GFA");
+    let t = std::time::Instant::now();
+
+    let (spine, top_left, bottom_right) = gfa_with_layout(gfa_file, layout_file).unwrap();
+
+    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    eprintln!(
+        "Loaded {} nodes\t{} points",
+        spine.nodes.len(),
+        spine.nodes.len() * 2
+    );
+
+    let spines = vec![spine];
+
+    let extensions = vulkano_win::required_extensions();
 
     let instance = Instance::new(None, &extensions, None).unwrap();
 
@@ -220,24 +254,6 @@ fn main() {
         reference: None,
     };
 
-    // let mut spines = test_spines();
-    eprintln!("loading GFA");
-    let t = std::time::Instant::now();
-
-    // let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
-    let (spine, top_left, bottom_right) =
-        gfa_with_layout("yeast.seqwish.gfa", "yeast.seqwish.layout.tsv").unwrap();
-
-    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
-
-    eprintln!(
-        "Loaded {} nodes\t{} points",
-        spine.nodes.len(),
-        spine.nodes.len() * 2
-    );
-
-    let mut spines = vec![spine];
-
     // let mut color_buffers: Vec<_> = Vec::new();
     // for (ix, spine) in spines.iter().enumerate() {
     //     let (_, col_data) = spine.vertices();
@@ -263,14 +279,12 @@ fn main() {
         let cols = (layout_dims.x / cell_size).ceil() as usize;
         let rows = (layout_dims.y / cell_size).ceil() as usize;
 
+        println!("grid dimensions: {} rows\t{} columns", rows, cols);
+
         let grid_w = (cols * 8192) as f32;
         let grid_h = (rows * 8192) as f32;
 
         let tl = top_left;
-        // let tl = Point {
-        //     x: 0.0,
-        //     y: -10000.0,
-        // };
 
         for row in 0..rows {
             let y = tl.y + (row as f32) * cell_size;
@@ -311,7 +325,7 @@ fn main() {
     let mut vec_vertices: Vec<Vertex> = Vec::new();
     let mut vec_colors: Vec<Color> = Vec::new();
 
-    let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
+    // let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
 
     let mut recreate_swapchain = false;
 
@@ -323,8 +337,8 @@ fn main() {
     let mut last_time = Instant::now();
     let mut t = 0.0;
 
-    let mut since_last_update = 0.0;
-    let mut since_last_redraw = 0.0;
+    // let mut since_last_update = 0.0;
+    // let mut since_last_redraw = 0.0;
 
     let mut paused = false;
 
@@ -336,7 +350,6 @@ fn main() {
     let mut frame = 0;
 
     let mut vertex_count = 0;
-    let mut color_count = 0;
 
     let mut last_width = 0.0;
 
@@ -563,7 +576,7 @@ fn main() {
                     let width = {
                         let mut width = 100.0;
                         if view.scale > 100.0 {
-                            width *= (view.scale / 100.0);
+                            width *= view.scale / 100.0;
                         }
                         width
                     };
@@ -571,10 +584,8 @@ fn main() {
                     last_width = width;
 
                     spine.vertices_into_with_width(width, &mut vec_vertices, &mut vec_colors);
-                    // spine.vertices_into(&mut vec_vertices, &mut vec_colors);
 
                     vertex_count = vec_vertices.len();
-                    color_count = vec_colors.len();
 
                     let vec_vertices_buf = vec_vertices.clone();
                     let vec_colors_buf = vec_colors.clone();
