@@ -448,7 +448,6 @@ fn main() {
 
                 let viewport_dims = [width, height];
 
-                /*
                 for (ix, spine) in spines.iter().enumerate() {
                     let model_offset = spine.offset;
 
@@ -472,14 +471,13 @@ fn main() {
                         builder.execute_commands(secondary_buf).unwrap();
                     }
                 }
-                */
 
-                let circle = Point { x: 0.0, y: 0.0 };
-                let radius = 0.5;
+                let circle = Point { x: 125.5, y: 0.0 };
+                let radius = 100.25;
 
                 unsafe {
                     let shapes_buf = shape_draw_system
-                        .draw(&dynamic_state, viewport_dims, circle, radius)
+                        .draw(&dynamic_state, viewport_dims, circle, radius, false)
                         .unwrap();
                     builder.execute_commands(shapes_buf).unwrap();
                 }

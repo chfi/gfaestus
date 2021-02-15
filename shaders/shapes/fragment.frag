@@ -12,6 +12,13 @@ layout (push_constant) uniform PushConstantData {
   vec2 screen_dims;
 } pc;
 
+float circle(float dist, float radius, float border) {
+  return 1.0 - smoothstep(radius - (radius * border),
+                          radius + (radius * border),
+                          dist);
+}
+
+
 float circ_dist(vec2 pos, float border) {
   float dist = length(pos);
   float radius = dist - border;
@@ -22,13 +29,28 @@ void main() {
   float x = (gl_FragCoord.x / pc.screen_dims.x) - 0.5;
   float y = (gl_FragCoord.y / pc.screen_dims.y) - 0.5;
 
-  float dist = length(vec2(x, y));
+  f_color = vec4(1.0, 1.0, 1.0, 0.0);
 
-  float alpha = 1.0;
+  if ((pc.draw_flags & 1) == 1) {
+    // TODO take viewport ratio into account
+    float radius = pc.radius / pc.screen_dims.x;
 
-  if (dist > pc.radius) {
-    alpha = 0.0;
+    vec2 circle_center = (pc.circle / pc.screen_dims);
+
+    float dist = distance(circle_center, vec2(x, y));
+
+    float border_dist = dist - radius;
+
+    // float alpha = smoothstep(0.02, 0.0, abs(dist - pc.border));
+    // vec3 color = vec3(circle(dist, pc.radius, pc.border));
+    // vec3 border_dist = vec3(circle(dist, pc.radius, pc.border));
+
+    float color = 1.0 - smoothstep(0.0, pc.border, abs(border_dist));
+
+    // if ((pc.draw_flags & (1 << 2)) != 0) {
+    //   color = 1.0 - color;
+    // }
+    f_color = vec4(1.0, 1.0, 1.0, color);
   }
 
-  f_color = vec4(x, 1.0, 1.0, alpha);
 }

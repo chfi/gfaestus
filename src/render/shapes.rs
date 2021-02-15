@@ -78,22 +78,31 @@ mod fs {
 
 const DRAW_CIRCLE: u32 = 1;
 const DRAW_RECT: u32 = 2;
+// const DRAW_INSIDE: u32 = 4;
+// const DRAW_OUTSIDE: u32 = 8;
+// const DRAW_INVERTED: u32 = 4;
 
 fn circle_push_constant(
     color: RGBA<f32>,
     viewport_dims: [f32; 2],
     center: Point,
     radius: f32,
+    invert: bool,
     // top_left: Point,
     // bottom_right: Point,
 ) -> fs::ty::PushConstantData {
+    let mut draw_flags = DRAW_CIRCLE;
+    // if invert {
+    //     draw_flags |= DRAW_INVERTED;
+    // }
+
     fs::ty::PushConstantData {
         color: [color.r, color.g, color.b, color.a],
-        draw_flags: DRAW_CIRCLE,
+        draw_flags,
         rect: [0.0; 4],
         circle: [center.x, center.y],
         radius,
-        border: 1.0,
+        border: 0.0025,
         screen_dims: viewport_dims,
         _dummy0: [0; 12],
         _dummy1: [0; 4],
@@ -303,6 +312,7 @@ impl ShapeDrawSystem {
         viewport_dims: [f32; 2],
         circle_at: Point,
         circle_rad: f32,
+        invert: bool,
     ) -> Result<AutoCommandBuffer> {
         let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
             self.gfx_queue.device().clone(),
@@ -315,6 +325,7 @@ impl ShapeDrawSystem {
             viewport_dims,
             circle_at,
             circle_rad,
+            invert,
         );
 
         builder.draw(
