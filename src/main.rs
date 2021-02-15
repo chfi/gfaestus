@@ -64,61 +64,20 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-fn gfa_spines(gfa_path: &str) -> Result<Vec<Spine>> {
-    let mut mmap = MmapGFA::new(gfa_path)?;
-
-    let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
-
-    let mut spines = Vec::with_capacity(graph.path_count());
-
-    let total_height = (graph.path_count() as f32) * (20.0 + 15.0);
-    let mut y = -total_height / 2.0;
-
-    let mut node_count = 0;
-    for path_id in graph.path_ids() {
-        let mut spine = Spine::from_path(&graph, path_id).unwrap();
-        node_count += graph.path_len(path_id).unwrap();
-        spine.offset.y = y;
-
-        spines.push(spine);
-
-        y += 35.0;
-    }
-
-    eprintln!("number of spines: {}", spines.len());
-    eprintln!("total nodes:      {}", node_count);
-
-    Ok(spines)
-}
-
 fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<Spine> {
     let mut mmap = MmapGFA::new(gfa_path)?;
 
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
     let spine = Spine::from_laid_out_graph(&graph, layout_path)?;
 
-    // let mut node_lengths: Vec<(NodeId, f32)> = Vec::with_capacity(spine.nodes.len());
-
+    /*
     println!("NodeId\tp0x\tp0y\tp1x\tp1y");
     for (n_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
-        // let n_len = node.p0.dist(node.p1);
-        // node_lengths.push((*n_id, n_len));
         let p0 = node.p0;
         let p1 = node.p1;
         println!("{}\t{}\t{}\t{}\t{}", n_id.0, p0.x, p0.y, p1.x, p1.y);
     }
-
-    // node_lengths.sort_by(|(_, l0), (_, l1)| l0.partial_cmp(&l1).unwrap());
-
-    // println!();
-    // println!("{:^6}\t{:^6}", "NodeId", "Length");
-    // println!("{}\t{}", "NodeId", "Length");
-    // for (n_id, len) in node_lengths {
-    // println!("{}\t{}", n_id.0, len);
-    // println!("{:^6} - {:^6}", n_id.0, len);
-    // }
-
-    // println!();
+    */
 
     Ok(spine)
 }
@@ -127,96 +86,6 @@ fn main() {
     let mut extensions = vulkano_win::required_extensions();
 
     let instance = Instance::new(None, &extensions, None).unwrap();
-
-    /*
-    let shader_non_semantic_info_ext = {
-        // let ext_str = std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
-        // let ext_bstr = b"VK_KHR_shader_non_semantic_info";
-        // let ext_bstr_vec: Vec<u8> = ext_bstr[..].into();
-        let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-        let ext_str_2 = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-        // let ext_str =
-        //     std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
-        let raw_ext = vulkano::instance::RawInstanceExtensions::new(vec![ext_str]);
-
-        // vulkano::instance::InstanceExtensions::from(&raw_ext)
-        raw_ext
-    };
-
-    let raw_exts_core = vulkano::instance::RawInstanceExtensions::supported_by_core().unwrap();
-    // let raw_extensions = raw_extensions.union(&shader_non_semantic_info_ext);
-
-    println!("raw_exts_core: {:?}", raw_exts_core);
-
-    let raw_exts = vulkano::instance::RawInstanceExtensions::from(&extensions);
-
-    let extensions = raw_exts;
-    // let extensions = raw_exts.union(&shader_non_semantic_info_ext);
-    // let extensions = raw_exts.union(&shader_non_semantic_info_ext);
-    // enable vulkan debugging
-    // extensions.
-
-    // println!();
-    // println!("raw_exts_2: {:?}", raw_exts_2);
-    // let extensions = extensions.union(&shader_non_semantic_info_ext);
-    // println!();
-
-    // extensions.ext_debug_utils = true;
-
-    println!("extensions: {:?}", extensions);
-    println!();
-    */
-
-    /*
-    println!("List of Vulkan debugging layers available to use:");
-    let mut layers = vulkano::instance::layers_list().unwrap();
-    while let Some(l) = layers.next() {
-        println!("\t{}", l.name());
-    }
-    let layers = vec!["VK_LAYER_KHRONOS_validation"];
-    let instance = Instance::new(None, &extensions, layers).unwrap();
-    */
-
-    /*
-    let severity = MessageSeverity {
-        error: true,
-        warning: true,
-        information: true,
-        verbose: true,
-    };
-
-    let ty = MessageType::all();
-
-    let _debug_callback = DebugCallback::new(&instance, severity, ty, |msg| {
-        let severity = if msg.severity.error {
-            "error"
-        } else if msg.severity.warning {
-            "warning"
-        } else if msg.severity.information {
-            "information"
-        } else if msg.severity.verbose {
-            "verbose"
-        } else {
-            panic!("no-impl");
-        };
-
-        let ty = if msg.ty.general {
-            "general"
-        } else if msg.ty.validation {
-            "validation"
-        } else if msg.ty.performance {
-            "performance"
-        } else {
-            panic!("no-impl");
-        };
-
-        println!(
-            "{} {} {}: {}",
-            msg.layer_prefix, ty, severity, msg.description
-        );
-    })
-    .ok();
-    */
 
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
@@ -232,25 +101,8 @@ fn main() {
 
     let device_ext = DeviceExtensions {
         khr_swapchain: true,
-        // ext_debug_utils: true,
         ..DeviceExtensions::none()
     };
-
-    /*
-    let raw_dev_ext = RawDeviceExtensions::from(&device_ext);
-    let debug_dev_ext = {
-        let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-        let raw_ext = RawDeviceExtensions::new(vec![ext_str]);
-
-        raw_ext
-    };
-
-    let device_ext = raw_dev_ext.union(&debug_dev_ext);
-
-    println!("device extensions: {:?}", device_ext);
-
-    println!("features: {:?}", physical.supported_features());
-    */
 
     let (device, mut queues) = Device::new(
         physical,
@@ -291,14 +143,10 @@ fn main() {
     };
 
     let vertex_buffer_pool: CpuBufferPool<Vertex> = CpuBufferPool::vertex_buffer(device.clone());
-
     let color_buffer_pool: CpuBufferPool<Color> = CpuBufferPool::vertex_buffer(device.clone());
 
     let _ = include_str!("../shaders/fragment.frag");
     let _ = include_str!("../shaders/vertex.vert");
-    // let _ = include_str!("../shaders/point.vert");
-    // let _ = include_str!("../shaders/point.frag");
-    // let _ = include_str!("../shaders/geometry.geom");
 
     mod node_vert {
         vulkano_shaders::shader! {
@@ -313,29 +161,6 @@ fn main() {
             path: "shaders/fragment.frag",
         }
     }
-
-    /*
-    mod point_vert {
-        vulkano_shaders::shader! {
-            ty: "vertex",
-            path: "shaders/point.vert",
-        }
-    }
-
-    mod point_frag {
-        vulkano_shaders::shader! {
-            ty: "fragment",
-            path: "shaders/point.frag",
-        }
-    }
-
-    mod rect_geom {
-        vulkano_shaders::shader! {
-            ty: "geometry",
-            path: "shaders/geometry.geom",
-        }
-    }
-    */
 
     let node_vert = node_vert::Shader::load(device.clone()).unwrap();
     let node_frag = node_frag::Shader::load(device.clone()).unwrap();
@@ -394,26 +219,8 @@ fn main() {
     // let mut spines = test_spines();
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
-    // let mut spines = gfa_spines("yeast.seqwish.gfa").unwrap();
-    // let mut spines = gfa_spines("yeast.links.gfa").unwrap();
-    // let mut spines = gfa_spines("yeast.cons.gfa").unwrap();
-    // let mut spines = gfa_spines("yeast.cons.10.gfa").unwrap();
-    // let mut spines = gfa_spines("A-3105.smooth.gfa").unwrap();
-    // let mut spines = gfa_spines("A-3105.seqwish.gfa").unwrap();
 
     let spine = gfa_with_layout("A-3105.seqwish.gfa", "A-3105.seqwish.layout.tsv").unwrap();
-    // let spine = gfa_with_layout("A-3105.smooth.gfa", "A-3105.smooth.layout.tsv").unwrap();
-
-    // println!();
-    // println!("NodeId\t{:^7}, {:^7}\t{:^7}, {:^7}", "x0", "y0", "x1", "y1");
-    // for (node_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
-    //     let Node { p0, p1 } = *node;
-    //     println!(
-    //         "{:^6}\t{:^7}, {:^7}\t{:^7}, {:^7}",
-    //         node_id.0, p0.x, p0.y, p1.x, p1.y
-    //     );
-    // }
-    // println!();
 
     eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
@@ -468,7 +275,6 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
-        // println!("since last update {}", last_time.elapsed().as_secs_f32());
 
         t += delta.as_secs_f32();
 
@@ -684,7 +490,10 @@ fn main() {
                     spine.vertices_(&mut vec_vertices);
 
                     // let vertex_buffer =
-                    let vertex_buffer = vertex_buffer_pool
+                    let vertex_buffer: CpuBufferPoolChunk<
+                        gfaestus::geometry::Vertex,
+                        Arc<StdMemoryPool>,
+                    > = vertex_buffer_pool
                         .chunk(vec_vertices.iter().copied())
                         .unwrap();
 
@@ -798,3 +607,110 @@ fn window_size_update(
         })
         .collect::<Vec<_>>()
 }
+
+/* vulkano debug stuff (for future reference)
+
+let shader_non_semantic_info_ext = {
+    // let ext_str = std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+    // let ext_bstr = b"VK_KHR_shader_non_semantic_info";
+    // let ext_bstr_vec: Vec<u8> = ext_bstr[..].into();
+    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    let ext_str_2 = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    // let ext_str =
+    //     std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+    let raw_ext = vulkano::instance::RawInstanceExtensions::new(vec![ext_str]);
+
+    // vulkano::instance::InstanceExtensions::from(&raw_ext)
+    raw_ext
+};
+
+let raw_exts_core = vulkano::instance::RawInstanceExtensions::supported_by_core().unwrap();
+// let raw_extensions = raw_extensions.union(&shader_non_semantic_info_ext);
+
+println!("raw_exts_core: {:?}", raw_exts_core);
+
+let raw_exts = vulkano::instance::RawInstanceExtensions::from(&extensions);
+
+let extensions = raw_exts;
+// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+// enable vulkan debugging
+// extensions.
+
+// println!();
+// println!("raw_exts_2: {:?}", raw_exts_2);
+// let extensions = extensions.union(&shader_non_semantic_info_ext);
+// println!();
+
+// extensions.ext_debug_utils = true;
+
+println!("extensions: {:?}", extensions);
+println!();
+
+println!("List of Vulkan debugging layers available to use:");
+let mut layers = vulkano::instance::layers_list().unwrap();
+while let Some(l) = layers.next() {
+    println!("\t{}", l.name());
+}
+let layers = vec!["VK_LAYER_KHRONOS_validation"];
+let instance = Instance::new(None, &extensions, layers).unwrap();
+
+
+
+let raw_dev_ext = RawDeviceExtensions::from(&device_ext);
+let debug_dev_ext = {
+    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    let raw_ext = RawDeviceExtensions::new(vec![ext_str]);
+
+    raw_ext
+};
+
+let device_ext = raw_dev_ext.union(&debug_dev_ext);
+
+println!("device extensions: {:?}", device_ext);
+
+println!("features: {:?}", physical.supported_features());
+
+
+
+let severity = MessageSeverity {
+    error: true,
+    warning: true,
+    information: true,
+    verbose: true,
+};
+
+let ty = MessageType::all();
+
+let _debug_callback = DebugCallback::new(&instance, severity, ty, |msg| {
+    let severity = if msg.severity.error {
+        "error"
+    } else if msg.severity.warning {
+        "warning"
+    } else if msg.severity.information {
+        "information"
+    } else if msg.severity.verbose {
+        "verbose"
+    } else {
+        panic!("no-impl");
+    };
+
+    let ty = if msg.ty.general {
+        "general"
+    } else if msg.ty.validation {
+        "validation"
+    } else if msg.ty.performance {
+        "performance"
+    } else {
+        panic!("no-impl");
+    };
+
+    println!(
+        "{} {} {}: {}",
+        msg.layer_prefix, ty, severity, msg.description
+    );
+})
+.ok();
+
+
+*/
