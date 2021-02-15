@@ -71,9 +71,7 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     color_buffer_pool: CpuBufferPool<Color>,
-    uniform_buffer_pool: CpuBufferPool<vs::ty::View>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    // command_buffer_builder: AutoCommandBuffer,
 }
 
 impl NodeDrawSystem {
@@ -91,11 +89,6 @@ impl NodeDrawSystem {
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
         let color_buffer_pool: CpuBufferPool<Color> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
-
-        let uniform_buffer_pool = CpuBufferPool::<vs::ty::View>::new(
-            gfx_queue.device().clone(),
-            BufferUsage::uniform_buffer(),
-        );
 
         let pipeline = {
             Arc::new(
@@ -117,7 +110,6 @@ impl NodeDrawSystem {
             pipeline,
             vertex_buffer_pool,
             color_buffer_pool,
-            uniform_buffer_pool,
         }
     }
 
@@ -143,7 +135,7 @@ impl NodeDrawSystem {
         )?;
 
         #[rustfmt::skip]
-        let transformation = {
+        let view_pc = {
             let model_mat = glm::mat4(
                 1.0, 0.0, 0.0, offset.x,
                 0.0, 1.0, 0.0, offset.y,
@@ -162,19 +154,10 @@ impl NodeDrawSystem {
 
             let view_data = view::mat4_to_array(&matrix);
 
-            let uniform_view = vs::ty::View { view: view_data };
-            self.uniform_buffer_pool.next(uniform_view)
-        }?;
-
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-
-        let set = Arc::new(
-            PersistentDescriptorSet::start(layout.clone())
-                .add_buffer(transformation)
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
+            vs::ty::View {
+                view: view_data
+            }
+        };
 
         let vertex_buffer = self.vertex_buffer_pool.chunk(vertices)?;
         let color_buffer = self.color_buffer_pool.chunk(colors)?;
@@ -183,8 +166,8 @@ impl NodeDrawSystem {
             self.pipeline.clone(),
             dynamic_state,
             vec![Arc::new(vertex_buffer), Arc::new(color_buffer)],
-            set.clone(),
-            (),
+            (), // set.clone()
+            view_pc,
         )?;
 
         let builder = builder.build()?;
