@@ -53,6 +53,7 @@ use crate::layout::physics;
 use crate::layout::*;
 */
 
+pub mod gui;
 pub mod lines;
 pub mod nodes;
 pub mod shapes;
