@@ -323,7 +323,6 @@ fn main() {
     let input_action_rx = input_action_handler.clone_action_rx();
 
     let mut vec_vertices: Vec<Vertex> = Vec::new();
-    let mut vec_colors: Vec<Color> = Vec::new();
 
     // let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
 
@@ -583,19 +582,17 @@ fn main() {
 
                     last_width = width;
 
-                    spine.vertices_into_with_width(width, &mut vec_vertices, &mut vec_colors);
+                    spine.vertices_into_with_width(width, &mut vec_vertices);
 
                     vertex_count = vec_vertices.len();
 
                     let vec_vertices_buf = vec_vertices.clone();
-                    let vec_colors_buf = vec_colors.clone();
 
                     let secondary_buf = node_draw_system
                         .draw(
                             &dynamic_state,
                             viewport_dims,
                             vec_vertices_buf,
-                            vec_colors_buf,
                             view,
                             model_offset,
                         )

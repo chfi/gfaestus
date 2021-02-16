@@ -291,46 +291,15 @@ impl Spine {
         }
     }
 
-    // pub fn vertices_iter(&self) -> impl Iterator<Item = &Vertex> + '_ {
-    //     self.nodes.iter().flat_map(|n| n.vertices().iter())
-    // }
-
-    // pub fn colors_iter(&self) -> impl Iterator<Item = Vertex> {
-    //     self.nodes.iter().flat_map(|n| n.vertices())
-    // }
-
-    pub fn vertices_into_with_width(
-        &self,
-        width: f32,
-        vxs: &mut Vec<Vertex>,
-        cols: &mut Vec<Color>,
-    ) {
+    pub fn vertices_into_with_width(&self, width: f32, vxs: &mut Vec<Vertex>) {
         vxs.clear();
-        cols.clear();
 
         for seg in self.nodes.iter() {
             vxs.extend(seg.vertices_width(width).iter());
         }
-
-        let color_period = [
-            [1.0, 0.0, 0.0],
-            [1.0, 0.65, 0.0],
-            [1.0, 1.0, 0.0],
-            [0.0, 0.5, 0.0],
-            [0.0, 0.0, 1.0],
-            [0.3, 0.0, 0.51],
-            [0.93, 0.51, 0.93],
-        ];
-
-        cols.extend(vxs.iter().enumerate().map(|(ix, _)| {
-            let ix_ = (ix / 6) % color_period.len();
-            Color {
-                color: color_period[ix_],
-            }
-        }));
     }
 
-    pub fn vertices_into(&self, vxs: &mut Vec<Vertex>, cols: &mut Vec<Color>) {
+    pub fn vertices_into_color(&self, vxs: &mut Vec<Vertex>, cols: &mut Vec<Color>) {
         vxs.clear();
         cols.clear();
 

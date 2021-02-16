@@ -23,35 +23,19 @@ use vulkano::{
 
 use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline, GraphicsPipelineAbstract};
 
-use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
-    SwapchainCreationError,
-};
-use vulkano::sync::{self, FlushError, GpuFuture};
-
-use vulkano_win::VkSurfaceBuild;
+use vulkano::sync::GpuFuture;
 
 use std::sync::Arc;
 
 use crossbeam::channel;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use nalgebra_glm as glm;
 
 use crate::geometry::*;
-use crate::gfa::*;
-use crate::ui::events::{keyboard_input, mouse_wheel_input};
-use crate::ui::{UICmd, UIState, UIThread};
 use crate::view;
 use crate::view::View;
-
-use crate::input::*;
-
-use crate::layout::physics;
-use crate::layout::*;
-
-use super::{PoolChunk, SubPoolChunk};
 
 mod vs {
     vulkano_shaders::shader! {
@@ -70,7 +54,6 @@ mod fs {
 pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
-    color_buffer_pool: CpuBufferPool<Color>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
 }
 
@@ -87,13 +70,11 @@ impl NodeDrawSystem {
 
         let vertex_buffer_pool: CpuBufferPool<Vertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
-        let color_buffer_pool: CpuBufferPool<Color> =
-            CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
 
         let pipeline = {
             Arc::new(
                 GraphicsPipeline::start()
-                    .vertex_input(TwoBuffersDefinition::<Vertex, Color>::new())
+                    .vertex_input_single_buffer::<Vertex>()
                     .vertex_shader(vs.main_entry_point(), ())
                     .triangle_list()
                     .viewports_dynamic_scissors_irrelevant(1)
@@ -109,24 +90,20 @@ impl NodeDrawSystem {
             gfx_queue,
             pipeline,
             vertex_buffer_pool,
-            color_buffer_pool,
         }
     }
 
-    pub fn draw<VI, CI>(
+    pub fn draw<VI>(
         &self,
         dynamic_state: &DynamicState,
         viewport_dims: [f32; 2],
         vertices: VI,
-        colors: CI,
         view: View,
         offset: Point,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
-        CI: IntoIterator<Item = Color>,
-        CI::IntoIter: ExactSizeIterator,
     {
         let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
             self.gfx_queue.device().clone(),
@@ -160,12 +137,11 @@ impl NodeDrawSystem {
         };
 
         let vertex_buffer = self.vertex_buffer_pool.chunk(vertices)?;
-        let color_buffer = self.color_buffer_pool.chunk(colors)?;
 
         builder.draw(
             self.pipeline.clone(),
             dynamic_state,
-            vec![Arc::new(vertex_buffer), Arc::new(color_buffer)],
+            vec![Arc::new(vertex_buffer)],
             (), // set.clone()
             view_pc,
         )?;
