@@ -363,12 +363,18 @@ fn main() {
 
         egui_ctx.begin_frame(raw_input);
 
-        egui::CentralPanel::default().show(&egui_ctx, |ui| {
-            ui.label("hello world");
-            if ui.button("Click me").clicked() {
-                println!("clicked!");
-            }
-        });
+        let pos = egui::pos2(
+            (mouse_pos.x - 32.0).max(0.0).min(width),
+            (mouse_pos.y - 24.0).max(0.0).min(height),
+        );
+
+        if paused {
+            egui::Area::new("my_area")
+                .fixed_pos(pos)
+                .show(&egui_ctx, |ui| {
+                    ui.label("hello world");
+                });
+        }
 
         // if !paused {
         //     since_last_update += delta.as_secs_f32();
@@ -582,7 +588,6 @@ fn main() {
                         height = viewport.dimensions[1];
                     }
 
-                    // egui_ctx.request_repaint();
                     recreate_swapchain = false;
                 }
 
@@ -613,12 +618,6 @@ fn main() {
                 let clear = [0.0, 0.0, 0.05, 1.0];
                 // let clear = [0.7, 0.7, 0.7, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
-
-                let (output, shapes) = egui_ctx.end_frame();
-                let clipped_meshes = egui_ctx.tessellate(shapes);
-
-                let egui_tex = egui_ctx.texture();
-                let texture_upload_future = gui_draw_system.upload_texture(&egui_tex);
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
                     device.clone(),
@@ -667,11 +666,19 @@ fn main() {
                     }
                 }
 
-                unsafe {
-                    let gui_buf = gui_draw_system
-                        .draw_egui_ctx(&dynamic_state, &clipped_meshes)
-                        .unwrap();
-                    builder.execute_commands(gui_buf).unwrap();
+                let (output, shapes) = egui_ctx.end_frame();
+                let clipped_meshes = egui_ctx.tessellate(shapes);
+
+                let egui_tex = egui_ctx.texture();
+                let texture_upload_future = gui_draw_system.upload_texture(&egui_tex);
+
+                if !clipped_meshes.is_empty() {
+                    unsafe {
+                        let gui_buf = gui_draw_system
+                            .draw_egui_ctx(&dynamic_state, &clipped_meshes)
+                            .unwrap();
+                        builder.execute_commands(gui_buf).unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();
