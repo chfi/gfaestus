@@ -113,6 +113,7 @@ impl NodeDrawSystem {
 
         #[rustfmt::skip]
         let view_pc = {
+            // is this correct?
             let model_mat = glm::mat4(
                 1.0, 0.0, 0.0, offset.x,
                 0.0, 1.0, 0.0, offset.y,
@@ -131,10 +132,15 @@ impl NodeDrawSystem {
 
             let view_data = view::mat4_to_array(&matrix);
 
+            // let aspect_aware_node_width = (width / height) * node_width;
+            let aspect_aware_node_width = (height / width) * node_width;
+
             vs::ty::View {
                 node_width,
+                // node_width: aspect_aware_node_width,
+                viewport_dims,
                 view: view_data,
-                _dummy0: [0; 12],
+                scale: view.scale,
 
             }
         };
