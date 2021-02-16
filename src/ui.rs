@@ -3,15 +3,15 @@ use crate::view::*;
 
 use crossbeam::channel;
 
+/*
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+*/
 
 use std::thread;
 
 pub mod animation;
-
-pub mod events;
 
 pub struct UIThread {
     _ui_thread: thread::JoinHandle<()>,
@@ -162,7 +162,7 @@ impl UIState {
                 self.anim.view_target = Some(origin);
             }
             UICmd::MousePan { screen_tgt } => {
-                if let Some(origin) = self.anim.mouse_pan_origin {
+                if let Some(_origin) = self.anim.mouse_pan_origin {
                     self.anim.view_target = Some(screen_tgt);
                 }
             }

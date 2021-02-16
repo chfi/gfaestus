@@ -4,7 +4,7 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use gfa::mmap::{LineIndices, LineType, MmapGFA};
+use gfa::mmap::MmapGFA;
 
 use handlegraph::packedgraph::PackedGraph;
 

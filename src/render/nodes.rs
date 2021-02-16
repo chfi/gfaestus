@@ -1,33 +1,12 @@
-use vulkano::format::Format;
-use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{ImageUsage, SwapchainImage};
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::{
-    buffer::cpu_pool::CpuBufferPoolChunk,
-    device::{Device, DeviceExtensions, RawDeviceExtensions},
-    memory::pool::StdMemoryPool,
-};
-use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
-    image::{AttachmentImage, Dimensions},
-};
-use vulkano::{
-    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::vertex::TwoBuffersDefinition,
-};
-use vulkano::{
-    descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract},
-    device::Queue,
-};
+#[allow(unused_imports)]
+use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer};
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::device::Queue;
+use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 
-use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline, GraphicsPipelineAbstract};
-
-use vulkano::sync::GpuFuture;
+use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
 use std::sync::Arc;
-
-use crossbeam::channel;
 
 use anyhow::Result;
 
@@ -36,6 +15,8 @@ use nalgebra_glm as glm;
 use crate::geometry::*;
 use crate::view;
 use crate::view::View;
+
+use super::Vertex;
 
 mod vs {
     vulkano_shaders::shader! {
@@ -96,7 +77,6 @@ impl NodeDrawSystem {
     pub fn draw<VI>(
         &self,
         dynamic_state: &DynamicState,
-        viewport_dims: [f32; 2],
         vertices: VI,
         view: View,
         offset: Point,
@@ -110,6 +90,15 @@ impl NodeDrawSystem {
             self.gfx_queue.family(),
             self.pipeline.clone().subpass(),
         )?;
+
+        let viewport_dims = {
+            let viewport = dynamic_state
+                .viewports
+                .as_ref()
+                .and_then(|v| v.get(0))
+                .unwrap();
+            viewport.dimensions
+        };
 
         #[rustfmt::skip]
         let view_pc = {

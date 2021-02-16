@@ -1,5 +1,5 @@
 use crate::geometry::*;
-use crate::view::*;
+// use crate::view::*;
 
 use super::grid;
 use super::Universe;
@@ -16,9 +16,9 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-use nalgebra_glm as glm;
+// use nalgebra_glm as glm;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 #[derive(Debug, Clone, Copy)]
 pub struct UniverseBuilder {

@@ -69,3 +69,17 @@ pub type SubPoolChunk<T> = vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<
     T,
     std::sync::Arc<vulkano::memory::pool::StdMemoryPool>,
 >;
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Vertex {
+    pub position: [f32; 2],
+}
+
+vulkano::impl_vertex!(Vertex, position);
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct Color {
+    pub color: [f32; 3],
+}
+
+vulkano::impl_vertex!(Color, color);

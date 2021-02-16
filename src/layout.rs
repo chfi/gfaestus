@@ -1,5 +1,5 @@
 use crate::geometry::*;
-use crate::view::*;
+use crate::render::{Color, Vertex};
 
 pub mod config;
 pub mod grid;
@@ -21,7 +21,7 @@ use handlegraph::packedgraph::PackedGraph;
 
 use nalgebra_glm as glm;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 #[derive(Debug, Clone)]
 pub struct Universe {

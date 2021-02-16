@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
 use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
 use vulkano::format::Format;
@@ -36,7 +38,6 @@ use std::time::Instant;
 
 use gfaestus::geometry::*;
 use gfaestus::gfa::*;
-use gfaestus::ui::events::{keyboard_input, mouse_wheel_input};
 use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
@@ -46,7 +47,6 @@ use gfaestus::input::*;
 use gfaestus::layout::physics;
 use gfaestus::layout::*;
 
-use gfaestus::render::shapes::Shape;
 use gfaestus::render::*;
 
 use rgb::*;
@@ -55,7 +55,7 @@ use nalgebra_glm as glm;
 
 use anyhow::{Context, Result};
 
-use gfa::mmap::{LineIndices, LineType, MmapGFA};
+use gfa::mmap::MmapGFA;
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -129,21 +129,20 @@ fn main() {
 
     // let layout_file = args.get(2);
 
-    // let mut spines = test_spines();
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let (spine, top_left, bottom_right) = gfa_with_layout(gfa_file, layout_file).unwrap();
+    let (layout, top_left, bottom_right) = gfa_with_layout(gfa_file, layout_file).unwrap();
+
+    // let init_layout = layout.clone();
 
     eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
     eprintln!(
         "Loaded {} nodes\t{} points",
-        spine.nodes.len(),
-        spine.nodes.len() * 2
+        layout.nodes.len(),
+        layout.nodes.len() * 2
     );
-
-    let spines = vec![spine];
 
     let extensions = vulkano_win::required_extensions();
 
@@ -240,10 +239,10 @@ fn main() {
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
-    let shape_draw_system = ShapeDrawSystem::new(
-        queue.clone(),
-        Subpass::from(render_pass.clone(), 0).unwrap(),
-    );
+    // let shape_draw_system = ShapeDrawSystem::new(
+    //     queue.clone(),
+    //     Subpass::from(render_pass.clone(), 0).unwrap(),
+    // );
 
     let mut dynamic_state = DynamicState {
         line_width: None,
@@ -254,16 +253,6 @@ fn main() {
         reference: None,
     };
 
-    // let mut color_buffers: Vec<_> = Vec::new();
-    // for (ix, spine) in spines.iter().enumerate() {
-    //     let (_, col_data) = spine.vertices();
-
-    //     let col_buf = color_buffer_pool.chunk(col_data.into_iter()).unwrap();
-    //     color_buffers.push(Arc::new(col_buf));
-    // }
-
-    let init_spines = spines.clone();
-
     let mut view: View = View::default();
     let layout_dims = bottom_right - top_left;
 
@@ -271,7 +260,7 @@ fn main() {
 
     let initial_view = view;
 
-    let (line_buf_ix, line_future) = {
+    let (_line_buf_ix, line_future) = {
         let mut lines: Vec<(Point, Point)> = Vec::new();
 
         let cell_size = 8192.0;
@@ -315,16 +304,14 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
-    let (ui_thread, ui_cmd_tx, view_rx) = UIThread::new(view);
+    let (_ui_thread, ui_cmd_tx, view_rx) = UIThread::new(view);
 
     let input_action_handler = InputActionWorker::new();
 
-    let semantic_input_rx = input_action_handler.clone_semantic_rx();
+    let _semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
 
     let mut vec_vertices: Vec<Vertex> = Vec::new();
-
-    // let colors: Vec<Vec<Color>> = spines.iter().map(|spine| spine.vertices().1).collect();
 
     let mut recreate_swapchain = false;
 
@@ -338,19 +325,11 @@ fn main() {
 
     // let mut since_last_update = 0.0;
     // let mut since_last_redraw = 0.0;
-
     let mut paused = false;
 
-    // let mut frame_time_history: Vec<f32> = Vec::new();
-    // let frame_history_len = 30;
     const FRAME_HISTORY_LEN: usize = 30;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
-
     let mut frame = 0;
-
-    let mut vertex_count = 0;
-
-    let mut last_width = 0.0;
 
     let mut draw_grid = true;
 
@@ -416,11 +395,11 @@ fn main() {
                             scale: initial_view.scale,
                         })
                         .unwrap();
-                    // paused = !paused;
+                    paused = !paused;
                 }
                 Action::ResetLayout => {
                     draw_grid = !draw_grid;
-                    // spines = init_spines.clone();
+                    // layout = init_layout.clone();
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
@@ -567,40 +546,30 @@ fn main() {
                     )
                     .unwrap();
 
-                let viewport_dims = [width, height];
+                let model_offset = layout.offset;
 
-                for (ix, spine) in spines.iter().enumerate() {
-                    let model_offset = spine.offset;
-
-                    let width = {
-                        let mut width = 100.0;
-                        if view.scale > 100.0 {
-                            width *= view.scale / 100.0;
-                        }
-                        width
-                    };
-
-                    last_width = width;
-
-                    spine.vertices_into_with_width(width, &mut vec_vertices);
-
-                    vertex_count = vec_vertices.len();
-
-                    let vec_vertices_buf = vec_vertices.clone();
-
-                    let secondary_buf = node_draw_system
-                        .draw(
-                            &dynamic_state,
-                            viewport_dims,
-                            vec_vertices_buf,
-                            view,
-                            model_offset,
-                        )
-                        .unwrap();
-
-                    unsafe {
-                        builder.execute_commands(secondary_buf).unwrap();
+                let width = {
+                    let mut width = 100.0;
+                    if view.scale > 100.0 {
+                        width *= view.scale / 100.0;
                     }
+                    width
+                };
+
+                let last_width = width;
+
+                layout.vertices_into_with_width(width, &mut vec_vertices);
+
+                let vertex_count = vec_vertices.len();
+
+                let vec_vertices_buf = vec_vertices.clone();
+
+                let secondary_buf = node_draw_system
+                    .draw(&dynamic_state, vec_vertices_buf, view, model_offset)
+                    .unwrap();
+
+                unsafe {
+                    builder.execute_commands(secondary_buf).unwrap();
                 }
 
                 if draw_grid {
@@ -644,6 +613,7 @@ fn main() {
                     let ft_sum: f32 = frame_time_history.iter().sum();
                     let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
                     let fps = 1.0 / avg;
+                    println!("time: {:.2}\tframe: {}", t, frame);
                     println!("avg update time: {:.6}\t{} FPS", avg, fps);
                     println!("node vertex & color count: {}", vertex_count);
                     println!("view scale {}\tlast width: {}", view.scale, last_width);

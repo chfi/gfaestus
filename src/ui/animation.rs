@@ -1,13 +1,15 @@
 #![allow(dead_code)]
 
 use crate::geometry::*;
+/*
 use crate::view::*;
-
-use crossbeam::channel;
 
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+*/
+
+use crossbeam::channel;
 
 use std::thread;
 
@@ -44,6 +46,7 @@ pub struct AnimationWorker {
     view_tx: channel::Sender<(Point, f32)>,
 }
 
+/*
 impl AnimationWorker {
     pub fn new() -> Self {
         let (update_tx, update_rx) = channel::unbounded::<AnimUpdate>();
@@ -61,3 +64,5 @@ impl AnimationWorker {
         unimplemented!();
     }
 }
+
+*/

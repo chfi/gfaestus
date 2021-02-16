@@ -1,59 +1,17 @@
-use vulkano::format::Format;
-use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{ImageUsage, SwapchainImage};
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::{
-    buffer::cpu_pool::CpuBufferPoolChunk,
-    device::{Device, DeviceExtensions, RawDeviceExtensions},
-    memory::pool::StdMemoryPool,
-};
-use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
-    image::{AttachmentImage, Dimensions},
-};
-use vulkano::{
-    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::vertex::TwoBuffersDefinition,
-};
-use vulkano::{
-    descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract},
-    device::Queue,
-};
+use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::device::Queue;
+use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 
-use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline, GraphicsPipelineAbstract};
-
-use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
-    SwapchainCreationError,
-};
-use vulkano::sync::{self, FlushError, GpuFuture};
-
-use vulkano_win::VkSurfaceBuild;
+use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
 use std::sync::Arc;
 
-use crossbeam::channel;
-
-use anyhow::{Context, Result};
-
-use nalgebra_glm as glm;
-
-use crate::geometry::*;
-use crate::gfa::*;
-use crate::ui::events::{keyboard_input, mouse_wheel_input};
-use crate::ui::{UICmd, UIState, UIThread};
-use crate::view;
-use crate::view::View;
-
-use crate::input::*;
-
-use crate::layout::physics;
-use crate::layout::*;
-
-use super::{PoolChunk, SubPoolChunk};
+use anyhow::Result;
 
 use rgb::*;
+
+use crate::geometry::*;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct ShapeVertex {
@@ -78,9 +36,9 @@ mod fs {
 
 const DRAW_CIRCLE: u32 = 1;
 const DRAW_RECT: u32 = 2;
-// const DRAW_INSIDE: u32 = 4;
-// const DRAW_OUTSIDE: u32 = 8;
-// const DRAW_INVERTED: u32 = 4;
+const DRAW_INVERTED: u32 = 4;
+// const DRAW_INSIDE: u32 = 8;
+// const DRAW_OUTSIDE: u32 = 16;
 
 fn rect_push_constant(
     color: RGBA<f32>,
@@ -88,13 +46,11 @@ fn rect_push_constant(
     p0: Point,
     p1: Point,
     invert: bool,
-    // top_left: Point,
-    // bottom_right: Point,
 ) -> fs::ty::PushConstantData {
     let mut draw_flags = DRAW_RECT;
-    // if invert {
-    //     draw_flags |= DRAW_INVERTED;
-    // }
+    if invert {
+        draw_flags |= DRAW_INVERTED;
+    }
 
     let top = p0.y.min(p1.y);
     let left = p0.x.min(p1.x);
@@ -122,13 +78,11 @@ fn circle_push_constant(
     center: Point,
     radius: f32,
     invert: bool,
-    // top_left: Point,
-    // bottom_right: Point,
 ) -> fs::ty::PushConstantData {
     let mut draw_flags = DRAW_CIRCLE;
-    // if invert {
-    //     draw_flags |= DRAW_INVERTED;
-    // }
+    if invert {
+        draw_flags |= DRAW_INVERTED;
+    }
 
     fs::ty::PushConstantData {
         color: [color.r, color.g, color.b, color.a],
@@ -221,7 +175,7 @@ impl DrawStyle {
     pub fn color(&self) -> RGBA<f32> {
         match self {
             DrawStyle::Filled { color } => *color,
-            DrawStyle::Border { color, width } => *color,
+            DrawStyle::Border { color, .. } => *color,
             DrawStyle::BorderFilled { border_color, .. } => *border_color,
             // DrawStyle::BorderFilled { border_color, border_width, fill_color } => { border_color }
         }

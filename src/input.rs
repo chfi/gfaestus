@@ -1,23 +1,23 @@
-use winit::event::{Event, KeyboardInput, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
-use winit::window::{Window, WindowBuilder};
+#[allow(unused_imports)]
+use winit::{
+    event::{self, Event, KeyboardInput, WindowEvent},
+    event_loop::ControlFlow,
+};
 
-use winit::event;
-
+/*
 use parking_lot::Mutex;
 use std::sync::Arc;
+use std::time::Instant;
+*/
 
 use std::thread;
-use std::time::Instant;
 
 use crossbeam::channel;
 
 use crate::geometry::*;
-use crate::gfa::*;
-use crate::view;
-use crate::view::View;
+// use crate::view::View;
 
-use crate::ui::UICmd;
+// use crate::ui::UICmd;
 
 pub enum InputEvent {
     KeyboardInput(event::KeyboardInput),

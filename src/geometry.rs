@@ -1,18 +1,6 @@
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
 
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Vertex {
-    pub position: [f32; 2],
-}
-
-vulkano::impl_vertex!(Vertex, position);
-
-#[derive(Default, Debug, Clone, Copy)]
-pub struct Color {
-    pub color: [f32; 3],
-}
-
-vulkano::impl_vertex!(Color, color);
+use crate::render::Vertex;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct Point {
@@ -59,28 +47,6 @@ impl Point {
         }
     }
 }
-
-/*
-#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub struct Node {
-    pub p0: Point,
-    pub p1: Point,
-}
-
-impl Node {
-    #[inline]
-    pub fn new(x0: f32, y0: f32, x1: f32, y1: f32) -> Self {
-        let p0 = Point::new(x0, y0);
-        let p1 = Point::new(x1, y1);
-        Self { p0, p1 }
-    }
-
-    #[inline]
-    pub fn vertices(&self) -> [Vertex; 2] {
-        [self.p0.vertex(), self.p1.vertex()]
-    }
-}
-*/
 
 impl From<(f32, f32)> for Point {
     #[inline]
