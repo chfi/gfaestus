@@ -99,7 +99,6 @@ impl GuiDrawSystem {
         let index_buffer_pool: CpuBufferPool<u32> =
             CpuBufferPool::new(gfx_queue.device().clone(), BufferUsage::index_buffer());
 
-        /*
         use vulkano::pipeline::blend::{AttachmentBlend, BlendFactor, BlendOp};
 
         let mut at_blend = AttachmentBlend::pass_through();
@@ -112,7 +111,6 @@ impl GuiDrawSystem {
         at_blend.alpha_op = BlendOp::Add;
         at_blend.alpha_source = BlendFactor::OneMinusDstAlpha;
         at_blend.alpha_destination = BlendFactor::One;
-        */
 
         let sampler = Sampler::new(
             gfx_queue.device().clone(),
@@ -139,13 +137,13 @@ impl GuiDrawSystem {
                 GraphicsPipeline::start()
                     .vertex_input_single_buffer::<GuiVertex>()
                     .vertex_shader(vs.main_entry_point(), ())
-                    .line_list()
+                    .triangle_list()
                     .viewports_dynamic_scissors_irrelevant(1)
                     .fragment_shader(fs.main_entry_point(), ())
                     .render_pass(subpass)
-                    .blend_alpha_blending()
-                    // .blend_collective(at_blend)
                     .cull_mode_disabled()
+                    // .blend_alpha_blending()
+                    .blend_collective(at_blend)
                     .build(gfx_queue.device().clone())
                     .unwrap(),
             ) as Arc<_>
@@ -189,14 +187,11 @@ impl GuiDrawSystem {
         &mut self,
         texture: &egui::Texture,
     ) -> Option<Result<Box<dyn GpuFuture>>> {
-        // println!("checking if texture upload needed");
         let cached_version = self.texture_version();
         if Some(texture.version) == cached_version {
-            // println!("cached texture up to date");
             return None;
         }
 
-        // println!("uploading texture");
         let future = self.force_upload_texture(texture);
 
         Some(future)

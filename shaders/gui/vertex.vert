@@ -55,7 +55,7 @@ void main() {
   // vs_color = linear_from_
 
   // vs_color = color;
-  vs_color = color;
-  // vs_color = linear_from_srgba(color);
+  // vs_color = color;
+  vs_color = linear_from_srgba(color);
   vs_uv = uv;
 }

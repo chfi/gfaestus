@@ -340,6 +340,8 @@ fn main() {
 
     let mut egui_ctx = egui::CtxRef::default();
 
+    // egui_ctx.set_visuals(egui::Visuals::light());
+
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
@@ -532,11 +534,13 @@ fn main() {
                     view.scale = latest_view.scale;
                 }
 
-                let clear = if paused {
-                    [0.05, 0.0, 0.0, 1.0]
-                } else {
-                    [0.0, 0.0, 0.05, 1.0]
-                };
+                // let clear = if paused {
+                //     [0.05, 0.0, 0.0, 1.0]
+                // } else {
+                //     [0.0, 0.0, 0.05, 1.0]
+                // };
+                let clear = [0.0, 0.0, 0.05, 1.0];
+                // let clear = [0.7, 0.7, 0.7, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
                 let mut raw_input = egui::RawInput::default();
@@ -559,9 +563,8 @@ fn main() {
                 //     }
                 // });
                 egui::CentralPanel::default().show(&egui_ctx, |ui| {
-                    // ui.label("Hello world");
-                    ui.label("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-                    if ui.button("Click me -- what the FUCK").clicked() {
+                    ui.label("hello world");
+                    if ui.button("Click me").clicked() {
                         println!("clicked!");
                     }
                 });
@@ -630,7 +633,6 @@ fn main() {
                 builder.end_render_pass().unwrap();
 
                 let command_buffer = builder.build().unwrap();
-
 
                 let tex_future = if let Some(tex_fut) = texture_upload_future {
                     tex_fut.unwrap()
