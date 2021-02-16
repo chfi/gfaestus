@@ -48,7 +48,7 @@ void main() {
 
   gl_Position = vec4(
                      2.0 * pos.x / screen_size.width - 1.0,
-                     2.0 * pos.y / screen_size.height,
+                     2.0 * pos.y / screen_size.height - 1.0,
                      0.0,
                      1.0);
 

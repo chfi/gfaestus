@@ -313,7 +313,7 @@ fn main() {
 
     let input_action_handler = InputActionWorker::new();
 
-    let _semantic_input_rx = input_action_handler.clone_semantic_rx();
+    let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
 
     let mut vec_vertices: Vec<Vertex> = Vec::new();
@@ -340,7 +340,9 @@ fn main() {
 
     let mut egui_ctx = egui::CtxRef::default();
 
-    // egui_ctx.set_visuals(egui::Visuals::light());
+    let mut egui_evs: Vec<egui::Event> = Vec::new();
+
+    let mut mouse_pos = Point { x: 0.0, y: 0.0 };
 
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
@@ -348,6 +350,25 @@ fn main() {
 
         t += delta.as_secs_f32();
         last_time = now;
+
+        let mut raw_input = egui::RawInput::default();
+        raw_input.screen_rect = Some(egui::Rect {
+            min: egui::Pos2 { x: 0.0, y: 0.0 },
+            max: egui::Pos2 {
+                x: width,
+                y: height,
+            },
+        });
+        raw_input.events = std::mem::take(&mut egui_evs);
+
+        egui_ctx.begin_frame(raw_input);
+
+        egui::CentralPanel::default().show(&egui_ctx, |ui| {
+            ui.label("hello world");
+            if ui.button("Click me").clicked() {
+                println!("clicked!");
+            }
+        });
 
         // if !paused {
         //     since_last_update += delta.as_secs_f32();
@@ -361,6 +382,20 @@ fn main() {
 
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
+        }
+
+        let mut mouse_released = false;
+        let mut mouse_pressed = false;
+        while let Ok(semin) = semantic_input_rx.try_recv() {
+            if let SemanticInput::MouseButtonPan(input_change) = semin {
+                if input_change.released() {
+                    mouse_released = true;
+                    mouse_pressed = false;
+                } else if input_change.pressed() {
+                    mouse_released = false;
+                    mouse_pressed = true;
+                }
+            }
         }
 
         while let Ok(action) = input_action_rx.try_recv() {
@@ -412,6 +447,18 @@ fn main() {
                 }
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
+                        let egui_event = egui::Event::PointerButton {
+                            pos: egui::Pos2 {
+                                x: focus.x,
+                                y: focus.y,
+                            },
+                            button: egui::PointerButton::Primary,
+                            pressed: true,
+                            modifiers: Default::default(),
+                        };
+
+                        egui_evs.push(egui_event);
+
                         #[rustfmt::skip]
                         let to_world_map = {
                             let w = width;
@@ -445,9 +492,9 @@ fn main() {
                             y: projected[1],
                         };
 
-                        eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
+                        // eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
 
-                        eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
+                        // eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
 
                         let mut origin = focus;
                         origin.x -= width / 2.0;
@@ -469,8 +516,31 @@ fn main() {
                     screen_tgt.y -= height / 2.0;
 
                     ui_cmd_tx.send(UICmd::MousePan { screen_tgt }).unwrap();
+
+                    mouse_pos = point;
+
+                    let egui_event = egui::Event::PointerMoved(egui::Pos2 {
+                        x: point.x,
+                        y: point.y,
+                    });
+
+                    egui_evs.push(egui_event);
                 }
             }
+        }
+
+        if mouse_released || mouse_pressed {
+            let egui_event = egui::Event::PointerButton {
+                pos: egui::Pos2 {
+                    x: mouse_pos.x,
+                    y: mouse_pos.y,
+                },
+                button: egui::PointerButton::Primary,
+                pressed: mouse_pressed,
+                modifiers: Default::default(),
+            };
+
+            egui_evs.push(egui_event);
         }
 
         match event {
@@ -512,6 +582,7 @@ fn main() {
                         height = viewport.dimensions[1];
                     }
 
+                    // egui_ctx.request_repaint();
                     recreate_swapchain = false;
                 }
 
@@ -543,37 +614,10 @@ fn main() {
                 // let clear = [0.7, 0.7, 0.7, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
-                let mut raw_input = egui::RawInput::default();
-                raw_input.screen_rect = Some(egui::Rect {
-                    min: egui::Pos2 { x: 0.0, y: 0.0 },
-                    max: egui::Pos2 {
-                        x: width,
-                        y: height,
-                        // x: width / 10.0,
-                        // y: height / 10.0,
-                    },
-                });
-
-                egui_ctx.begin_frame(raw_input);
-
-                // egui::Window::new("main").show(&egui_ctx, |ui| {
-                //     ui.label("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
-                //     if ui.button("click me!").clicked() {
-                //         println!("clicked!");
-                //     }
-                // });
-                egui::CentralPanel::default().show(&egui_ctx, |ui| {
-                    ui.label("hello world");
-                    if ui.button("Click me").clicked() {
-                        println!("clicked!");
-                    }
-                });
-
                 let (output, shapes) = egui_ctx.end_frame();
                 let clipped_meshes = egui_ctx.tessellate(shapes);
 
                 let egui_tex = egui_ctx.texture();
-
                 let texture_upload_future = gui_draw_system.upload_texture(&egui_tex);
 
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
@@ -667,6 +711,7 @@ fn main() {
                 let frame_time = frame_t.elapsed().as_secs_f32();
                 frame_time_history[frame % frame_time_history.len()] = frame_time;
 
+                /*
                 if frame > FRAME_HISTORY_LEN && frame % 30 == 0 {
                     let ft_sum: f32 = frame_time_history.iter().sum();
                     let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
@@ -676,6 +721,7 @@ fn main() {
                     println!("node vertex & color count: {}", vertex_count);
                     println!("view scale {}\tlast width: {}", view.scale, last_width);
                 }
+                */
 
                 frame += 1;
             }

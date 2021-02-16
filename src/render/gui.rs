@@ -142,8 +142,8 @@ impl GuiDrawSystem {
                     .fragment_shader(fs.main_entry_point(), ())
                     .render_pass(subpass)
                     .cull_mode_disabled()
-                    // .blend_alpha_blending()
-                    .blend_collective(at_blend)
+                    .blend_alpha_blending()
+                    // .blend_collective(at_blend)
                     .build(gfx_queue.device().clone())
                     .unwrap(),
             ) as Arc<_>
