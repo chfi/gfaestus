@@ -344,6 +344,34 @@ fn main() {
 
     let mut mouse_pos = Point { x: 0.0, y: 0.0 };
 
+    let mut font_defs = egui::FontDefinitions::default();
+
+    {
+        let fam_size = &mut font_defs.family_and_size;
+
+        fam_size.insert(
+            egui::TextStyle::Small,
+            (egui::FontFamily::Proportional, 12.0),
+        );
+
+        fam_size.insert(
+            egui::TextStyle::Body,
+            (egui::FontFamily::Proportional, 16.0),
+        );
+
+        fam_size.insert(
+            egui::TextStyle::Button,
+            (egui::FontFamily::Proportional, 18.0),
+        );
+
+        fam_size.insert(
+            egui::TextStyle::Heading,
+            (egui::FontFamily::Proportional, 22.0),
+        );
+    }
+
+    egui_ctx.set_fonts(font_defs);
+
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
         let delta = now.duration_since(last_time);
