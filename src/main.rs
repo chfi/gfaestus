@@ -239,6 +239,11 @@ fn main() {
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
 
+    let mut gui_draw_system = GuiDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pass.clone(), 0).unwrap(),
+    );
+
     // let shape_draw_system = ShapeDrawSystem::new(
     //     queue.clone(),
     //     Subpass::from(render_pass.clone(), 0).unwrap(),
@@ -332,6 +337,8 @@ fn main() {
     let mut frame = 0;
 
     let mut draw_grid = true;
+
+    let mut egui_ctx = egui::CtxRef::default();
 
     event_loop.run(move |event, _, control_flow| {
         let now = Instant::now();
@@ -532,6 +539,40 @@ fn main() {
                 };
                 let clear_values = vec![clear.into(), clear.into()];
 
+                let mut raw_input = egui::RawInput::default();
+                raw_input.screen_rect = Some(egui::Rect {
+                    min: egui::Pos2 { x: 0.0, y: 0.0 },
+                    max: egui::Pos2 {
+                        x: width,
+                        y: height,
+                        // x: width / 10.0,
+                        // y: height / 10.0,
+                    },
+                });
+
+                egui_ctx.begin_frame(raw_input);
+
+                // egui::Window::new("main").show(&egui_ctx, |ui| {
+                //     ui.label("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+                //     if ui.button("click me!").clicked() {
+                //         println!("clicked!");
+                //     }
+                // });
+                egui::CentralPanel::default().show(&egui_ctx, |ui| {
+                    // ui.label("Hello world");
+                    ui.label("ABCDEFGHIJKLMNOPQRSTUVWXYZ");
+                    if ui.button("Click me -- what the FUCK").clicked() {
+                        println!("clicked!");
+                    }
+                });
+
+                let (output, shapes) = egui_ctx.end_frame();
+                let clipped_meshes = egui_ctx.tessellate(shapes);
+
+                let egui_tex = egui_ctx.texture();
+
+                let texture_upload_future = gui_draw_system.upload_texture(&egui_tex);
+
                 let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
                     device.clone(),
                     queue.family(),
@@ -579,14 +620,29 @@ fn main() {
                     }
                 }
 
+                unsafe {
+                    let gui_buf = gui_draw_system
+                        .draw_egui_ctx(&dynamic_state, &clipped_meshes)
+                        .unwrap();
+                    builder.execute_commands(gui_buf).unwrap();
+                }
+
                 builder.end_render_pass().unwrap();
 
                 let command_buffer = builder.build().unwrap();
+
+
+                let tex_future = if let Some(tex_fut) = texture_upload_future {
+                    tex_fut.unwrap()
+                } else {
+                    sync::now(device.clone()).boxed()
+                };
 
                 let future = previous_frame_end
                     .take()
                     .unwrap()
                     .join(acquire_future)
+                    .join(tex_future)
                     .then_execute(queue.clone(), command_buffer)
                     .unwrap()
                     .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)
