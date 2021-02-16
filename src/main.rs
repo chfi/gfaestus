@@ -558,14 +558,14 @@ fn main() {
 
                 let last_width = width;
 
-                layout.vertices_into_with_width(width, &mut vec_vertices);
+                layout.vertices_into_lines(&mut vec_vertices);
 
                 let vertex_count = vec_vertices.len();
 
                 let vec_vertices_buf = vec_vertices.clone();
 
                 let secondary_buf = node_draw_system
-                    .draw(&dynamic_state, vec_vertices_buf, view, model_offset)
+                    .draw(&dynamic_state, vec_vertices_buf, view, model_offset, width)
                     .unwrap();
 
                 unsafe {

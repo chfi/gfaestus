@@ -25,6 +25,13 @@ mod vs {
     }
 }
 
+mod gs {
+    vulkano_shaders::shader! {
+        ty: "geometry",
+        path: "shaders/nodes/geometry.geom",
+    }
+}
+
 mod fs {
     vulkano_shaders::shader! {
         ty: "fragment",
@@ -43,11 +50,13 @@ impl NodeDrawSystem {
     where
         R: RenderPassAbstract + Send + Sync + 'static,
     {
-        let _ = include_str!("../../shaders/nodes/fragment.frag");
         let _ = include_str!("../../shaders/nodes/vertex.vert");
+        let _ = include_str!("../../shaders/nodes/geometry.geom");
+        let _ = include_str!("../../shaders/nodes/fragment.frag");
 
         let vs = vs::Shader::load(gfx_queue.device().clone()).unwrap();
         let fs = fs::Shader::load(gfx_queue.device().clone()).unwrap();
+        let gs = gs::Shader::load(gfx_queue.device().clone()).unwrap();
 
         let vertex_buffer_pool: CpuBufferPool<Vertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
@@ -57,7 +66,8 @@ impl NodeDrawSystem {
                 GraphicsPipeline::start()
                     .vertex_input_single_buffer::<Vertex>()
                     .vertex_shader(vs.main_entry_point(), ())
-                    .triangle_list()
+                    .line_list()
+                    .geometry_shader(gs.main_entry_point(), ())
                     .viewports_dynamic_scissors_irrelevant(1)
                     .fragment_shader(fs.main_entry_point(), ())
                     .render_pass(subpass)
@@ -80,6 +90,7 @@ impl NodeDrawSystem {
         vertices: VI,
         view: View,
         offset: Point,
+        node_width: f32,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
@@ -121,7 +132,10 @@ impl NodeDrawSystem {
             let view_data = view::mat4_to_array(&matrix);
 
             vs::ty::View {
-                view: view_data
+                node_width,
+                view: view_data,
+                _dummy0: [0; 12],
+
             }
         };
 

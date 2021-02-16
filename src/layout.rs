@@ -291,6 +291,21 @@ impl Spine {
         }
     }
 
+    pub fn vertices_into_lines(&self, vxs: &mut Vec<Vertex>) {
+        vxs.clear();
+
+        for node in self.nodes.iter() {
+            let v0 = Vertex {
+                position: [node.p0.x, node.p0.y],
+            };
+            let v1 = Vertex {
+                position: [node.p1.x, node.p1.y],
+            };
+            vxs.push(v0);
+            vxs.push(v1);
+        }
+    }
+
     pub fn vertices_into_with_width(&self, width: f32, vxs: &mut Vec<Vertex>) {
         vxs.clear();
 
