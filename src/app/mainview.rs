@@ -52,7 +52,7 @@ use crate::view::View;
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
     line_draw_system: LineDrawSystem,
-    view: View,
+    pub view: View,
     vertices: Vec<Vertex>,
     draw_grid: bool,
     pub anim_handler: AnimHandler,
@@ -62,7 +62,6 @@ pub struct MainView {
 }
 
 impl MainView {
-    // pub fn new(gfx_queue: Arc<Queue>, subpass: Subpass<R>) -> NodeDr
     pub fn new<R>(gfx_queue: Arc<Queue>, render_pass: &Arc<R>) -> Result<MainView>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
@@ -102,6 +101,10 @@ impl MainView {
         })
     }
 
+    pub fn view(&self) -> View {
+        self.view
+    }
+
     pub fn tick_animation(&mut self, mouse_pos: Option<Point>, dt: f32) {
         let new_view = self.anim_handler.update(self.view, mouse_pos, dt);
         self.view = new_view;
@@ -110,13 +113,6 @@ impl MainView {
     pub fn reset_view(&mut self) {
         self.view = self.anim_handler.initial_view;
     }
-
-    // pub fn upload_vertices<VI>(&mut self, vertices: VI) -> Result<Box<dyn GpuFuture>>
-    // where VI: IntoIterator<Item = Vertex>,
-    //       VI::IntoIter: ExactSizeIterator,
-    // {
-
-    // }
 
     pub fn set_vertices<VI>(&mut self, vertices: VI)
     where
@@ -152,6 +148,27 @@ impl MainView {
         )
     }
 
+    pub fn draw_nodes_dynamic<VI>(
+        &self,
+        dynamic_state: &DynamicState,
+        vertices: VI,
+        offset: Point,
+    ) -> Result<AutoCommandBuffer>
+    where
+        VI: IntoIterator<Item = Vertex>,
+        VI::IntoIter: ExactSizeIterator,
+    {
+        let node_width = {
+            let mut width = self.base_node_width;
+            if self.view.scale > 100.0 {
+                width *= self.view.scale / 100.0;
+            }
+            width
+        };
+        self.node_draw_system
+            .draw(dynamic_state, vertices, self.view, offset, node_width)
+    }
+
     pub fn add_lines(
         &mut self,
         lines: &[(Point, Point)],
@@ -160,12 +177,35 @@ impl MainView {
         self.line_draw_system.add_lines(lines, color)
     }
 
-    // pub fn has_lines(&self) -> bool {
-    //     self.line_draw_system.
-    // }
-
     pub fn draw_lines(&self, dynamic_state: &DynamicState) -> Result<AutoCommandBuffer> {
         self.line_draw_system.draw_stored(dynamic_state, self.view)
+    }
+
+    pub fn set_view_center(&mut self, center: Point) {
+        self.view.center = center;
+    }
+
+    pub fn set_view_scale(&mut self, scale: f32) {
+        self.view.scale = scale;
+    }
+
+    pub fn set_mouse_pan(&mut self, origin: Option<Point>) {
+        match origin {
+            Some(origin) => self.anim_handler.start_mouse_pan(origin),
+            None => self.anim_handler.end_mouse_pan(),
+        }
+    }
+
+    pub fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
+        self.anim_handler.pan_const(dx, dy);
+    }
+
+    pub fn pan_delta(&mut self, dxy: Point) {
+        self.anim_handler.pan_delta(dxy);
+    }
+
+    pub fn zoom_delta(&mut self, dz: f32) {
+        self.anim_handler.zoom_delta(self.view.scale, dz)
     }
 }
 
@@ -246,7 +286,7 @@ impl AnimHandler {
         }
 
         let dxy = match (self.mouse_pan_screen_origin, mouse_pos) {
-            (Some(origin), Some(mouse_pos)) => (mouse_pos - origin) / 100.0,
+            (Some(origin), Some(mouse_pos)) => (mouse_pos - origin) / self.settings.mouse_pan_div,
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
@@ -265,16 +305,16 @@ impl AnimHandler {
         view
     }
 
-    pub fn start_mouse_pan(&mut self, origin: Point) {
+    fn start_mouse_pan(&mut self, origin: Point) {
         self.mouse_pan_screen_origin = Some(origin);
     }
 
-    pub fn end_mouse_pan(&mut self) {
+    fn end_mouse_pan(&mut self) {
         self.mouse_pan_screen_origin = None;
     }
 
     /// If a direction is `None`, don't update the corresponding view delta const
-    pub fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
+    fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
         // if a direction is set to zero, set the regular pan delta to
         // the old constant speed, and let the pan_friction in
         // update() smoothly bring it down
@@ -293,7 +333,7 @@ impl AnimHandler {
         self.view_pan_const = dxy;
     }
 
-    pub fn pan_delta(&mut self, dxy: Point) {
+    fn pan_delta(&mut self, dxy: Point) {
         self.view_pan_delta += dxy;
 
         if let Some(max_speed) = self.settings.max_speed {
@@ -301,6 +341,18 @@ impl AnimHandler {
             d.x = d.x.clamp(-max_speed, max_speed);
             d.y = d.y.clamp(-max_speed, max_speed);
         }
+    }
+
+    fn zoom_delta(&mut self, current_scale: f32, dz: f32) {
+        let delta_mult = current_scale.log2();
+        let delta_mult = delta_mult.max(1.0);
+        self.view_scale_delta += dz * delta_mult;
+        println!(
+            "zoom_delta: {:6} * {:6} -> {}",
+            delta_mult,
+            dz,
+            dz * delta_mult
+        );
     }
 }
 
@@ -311,6 +363,7 @@ struct AnimSettings {
     min_view_scale: Option<f32>,
     max_view_scale: Option<f32>,
     max_speed: Option<f32>,
+    mouse_pan_div: f32,
 }
 
 impl std::default::Default for AnimSettings {
@@ -319,6 +372,7 @@ impl std::default::Default for AnimSettings {
             min_view_scale: Some(0.5),
             max_view_scale: None,
             max_speed: Some(600.0),
+            mouse_pan_div: 50.0,
         }
     }
 }

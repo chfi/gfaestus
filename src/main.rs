@@ -49,6 +49,8 @@ use gfaestus::layout::*;
 
 use gfaestus::render::*;
 
+use gfaestus::app::mainview::*;
+
 use rgb::*;
 
 use nalgebra_glm as glm;
@@ -229,25 +231,17 @@ fn main() {
         .unwrap(),
     );
 
-    let node_draw_system = NodeDrawSystem::new(
-        queue.clone(),
-        Subpass::from(render_pass.clone(), 0).unwrap(),
-    );
+    let mut main_view = MainView::new(queue.clone(), &render_pass).unwrap();
 
-    let mut line_draw_system = LineDrawSystem::new(
-        queue.clone(),
-        Subpass::from(render_pass.clone(), 0).unwrap(),
-    );
+    let mut vec_vertices: Vec<Vertex> = Vec::new();
+    layout.vertices_into_lines(&mut vec_vertices);
+
+    main_view.set_vertices(vec_vertices.iter().copied());
 
     let mut gui_draw_system = GuiDrawSystem::new(
         queue.clone(),
         Subpass::from(render_pass.clone(), 0).unwrap(),
     );
-
-    // let shape_draw_system = ShapeDrawSystem::new(
-    //     queue.clone(),
-    //     Subpass::from(render_pass.clone(), 0).unwrap(),
-    // );
 
     let mut dynamic_state = DynamicState {
         line_width: None,
@@ -258,12 +252,8 @@ fn main() {
         reference: None,
     };
 
-    let mut view: View = View::default();
     let layout_dims = bottom_right - top_left;
-
-    view.center = top_left + (layout_dims / 2.0);
-
-    let initial_view = view;
+    main_view.set_view_center(top_left + (layout_dims / 2.0));
 
     let (_line_buf_ix, line_future) = {
         let mut lines: Vec<(Point, Point)> = Vec::new();
@@ -294,7 +284,7 @@ fn main() {
             lines.push((Point { x, y: y0 }, Point { x, y: y1 }));
         }
 
-        line_draw_system
+        main_view
             .add_lines(&lines, RGB::new(1.0, 1.0, 1.0))
             .unwrap()
     };
@@ -309,14 +299,10 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
-    let (_ui_thread, ui_cmd_tx, view_rx) = UIThread::new(view);
-
     let input_action_handler = InputActionWorker::new();
 
     let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
-
-    let mut vec_vertices: Vec<Vertex> = Vec::new();
 
     let mut recreate_swapchain = false;
 
@@ -328,8 +314,6 @@ fn main() {
     let mut last_time = Instant::now();
     let mut t = 0.0;
 
-    // let mut since_last_update = 0.0;
-    // let mut since_last_redraw = 0.0;
     let mut paused = false;
 
     const FRAME_HISTORY_LEN: usize = 30;
@@ -372,7 +356,14 @@ fn main() {
 
     egui_ctx.set_fonts(font_defs);
 
+    let mut last_frame_t = std::time::Instant::now();
+
+    println!("MainView.view: {:?}", main_view.view);
+    // println!("main.rs .view: {:?}", view);
+
     event_loop.run(move |event, _, control_flow| {
+        let dt = last_frame_t.elapsed().as_secs_f32();
+        last_frame_t = std::time::Instant::now();
         let now = Instant::now();
         let delta = now.duration_since(last_time);
 
@@ -459,20 +450,10 @@ fn main() {
                         x: dx * speed,
                         y: dy * speed,
                     };
-
-                    ui_cmd_tx.send(UICmd::PanConstant { delta }).unwrap();
+                    main_view.pan_const(Some(delta.x), Some(delta.y));
                 }
                 Action::PausePhysics => {
-                    ui_cmd_tx
-                        .send(UICmd::SetCenter {
-                            center: initial_view.center,
-                        })
-                        .unwrap();
-                    ui_cmd_tx
-                        .send(UICmd::SetScale {
-                            scale: initial_view.scale,
-                        })
-                        .unwrap();
+                    main_view.reset_view();
                     paused = !paused;
                 }
                 Action::ResetLayout => {
@@ -498,10 +479,10 @@ fn main() {
                             let w = width;
                             let h = height;
 
-                            let s = view.scale;
+                            let s = main_view.view.scale;
 
-                            let vcx = view.center.x;
-                            let vcy = view.center.y;
+                            let vcx = main_view.view.center.x;
+                            let vcy = main_view.view.center.y;
 
                             // transform from screen coords (top left (0, 0), bottom right (w, h))
                             // to screen center = (0, 0), bottom right (w/2, h/2);
@@ -521,10 +502,10 @@ fn main() {
                         };
                         let projected = to_world_map * glm::vec4(focus.x, focus.y, 0.0, 1.0);
 
-                        let proj = Point {
-                            x: projected[0],
-                            y: projected[1],
-                        };
+                        // let proj = Point {
+                        //     x: projected[0],
+                        //     y: projected[1],
+                        // };
 
                         // eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
 
@@ -534,22 +515,20 @@ fn main() {
                         origin.x -= width / 2.0;
                         origin.y -= height / 2.0;
 
-                        ui_cmd_tx.send(UICmd::StartMousePan { origin }).unwrap();
+                        main_view.set_mouse_pan(Some(focus));
                     } else {
-                        ui_cmd_tx.send(UICmd::EndMousePan).unwrap();
+                        main_view.set_mouse_pan(None);
                     }
                     //
                 }
                 Action::MouseZoom { focus, delta } => {
                     let _focus = focus;
-                    ui_cmd_tx.send(UICmd::Zoom { delta }).unwrap();
+                    main_view.zoom_delta(delta);
                 }
                 Action::MouseAt { point } => {
                     let mut screen_tgt = point;
                     screen_tgt.x -= width / 2.0;
                     screen_tgt.y -= height / 2.0;
-
-                    ui_cmd_tx.send(UICmd::MousePan { screen_tgt }).unwrap();
 
                     mouse_pos = point;
 
@@ -576,6 +555,8 @@ fn main() {
 
             egui_evs.push(egui_event);
         }
+
+        main_view.tick_animation(Some(mouse_pos), dt);
 
         match event {
             Event::WindowEvent {
@@ -633,11 +614,6 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
-                if let Ok(latest_view) = view_rx.recv() {
-                    view.center = latest_view.center;
-                    view.scale = latest_view.scale;
-                }
-
                 // let clear = if paused {
                 //     [0.05, 0.0, 0.0, 1.0]
                 // } else {
@@ -661,35 +637,15 @@ fn main() {
                     )
                     .unwrap();
 
-                let model_offset = layout.offset;
-
-                let width = {
-                    let mut width = 100.0;
-                    if view.scale > 100.0 {
-                        width *= view.scale / 100.0;
-                    }
-                    width
-                };
-
-                let last_width = width;
-
-                layout.vertices_into_lines(&mut vec_vertices);
-
-                let vertex_count = vec_vertices.len();
-
-                let vec_vertices_buf = vec_vertices.clone();
-
-                let secondary_buf = node_draw_system
-                    .draw(&dynamic_state, vec_vertices_buf, view, model_offset, width)
-                    .unwrap();
-
                 unsafe {
+                    let secondary_buf =
+                        main_view.draw_nodes(&dynamic_state, layout.offset).unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }
 
                 if draw_grid {
                     unsafe {
-                        let cmd_buf = line_draw_system.draw_stored(&dynamic_state, view).unwrap();
+                        let cmd_buf = main_view.draw_lines(&dynamic_state).unwrap();
                         builder.execute_commands(cmd_buf).unwrap();
                     }
                 }
