@@ -285,7 +285,9 @@ impl AnimHandler {
         }
 
         let dxy = match (self.mouse_pan_screen_origin, mouse_pos) {
-            (Some(origin), Some(mouse_pos)) => (mouse_pos - origin) / self.settings.mouse_pan_div,
+            (Some(origin), Some(mouse_pos)) => {
+                (mouse_pos - origin) * self.settings.mouse_pan_mult * dt
+            }
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
@@ -362,7 +364,7 @@ struct AnimSettings {
     min_view_scale: Option<f32>,
     max_view_scale: Option<f32>,
     max_speed: Option<f32>,
-    mouse_pan_div: f32,
+    mouse_pan_mult: f32,
 }
 
 impl std::default::Default for AnimSettings {
@@ -371,7 +373,7 @@ impl std::default::Default for AnimSettings {
             min_view_scale: Some(0.5),
             max_view_scale: None,
             max_speed: Some(600.0),
-            mouse_pan_div: 50.0,
+            mouse_pan_mult: 1.0,
         }
     }
 }
