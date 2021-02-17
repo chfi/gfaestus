@@ -38,7 +38,6 @@ use std::time::Instant;
 
 use gfaestus::geometry::*;
 use gfaestus::gfa::*;
-use gfaestus::ui::{UICmd, UIState, UIThread};
 use gfaestus::view;
 use gfaestus::view::View;
 
@@ -359,7 +358,6 @@ fn main() {
     let mut last_frame_t = std::time::Instant::now();
 
     println!("MainView.view: {:?}", main_view.view);
-    // println!("main.rs .view: {:?}", view);
 
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();

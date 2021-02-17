@@ -42,8 +42,6 @@ use nalgebra_glm as glm;
 
 use crate::geometry::*;
 use crate::gfa::*;
-use crate::ui::events::{keyboard_input, mouse_wheel_input};
-use crate::ui::{UICmd, UIState, UIThread};
 use crate::view;
 use crate::view::View;
 
