@@ -1,5 +1,4 @@
 use handlegraph::handle::NodeId;
-use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
 use vulkano::image::{ImageUsage, SwapchainImage};
@@ -8,6 +7,10 @@ use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::{
     buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
     image::{AttachmentImage, Dimensions},
+};
+use vulkano::{
+    command_buffer::AutoCommandBuffer,
+    device::{Device, DeviceExtensions, RawDeviceExtensions},
 };
 use vulkano::{
     command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
@@ -49,11 +52,11 @@ use crate::view::View;
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
     line_draw_system: LineDrawSystem,
-    initial_view: View,
     view: View,
     vertices: Vec<Vertex>,
     draw_grid: bool,
-    anim_handler: AnimHandler,
+    pub anim_handler: AnimHandler,
+    base_node_width: f32,
     // anim_thread: UIThread,
     // anim_cmd_tx: channel::Sender<UICmd>,
 }
@@ -83,11 +86,86 @@ impl MainView {
         let draw_grid = false;
 
         let view = View::default();
-        let initial_view = view;
 
-        let anim_handler = AnimHandler::default();
+        let anim_handler = AnimHandler::new(view);
 
-        unimplemented!();
+        let base_node_width = 100.0;
+
+        Ok(Self {
+            node_draw_system,
+            line_draw_system,
+            vertices,
+            draw_grid,
+            view,
+            anim_handler,
+            base_node_width,
+        })
+    }
+
+    pub fn tick_animation(&mut self, mouse_pos: Option<Point>, dt: f32) {
+        let new_view = self.anim_handler.update(self.view, mouse_pos, dt);
+        self.view = new_view;
+    }
+
+    pub fn reset_view(&mut self) {
+        self.view = self.anim_handler.initial_view;
+    }
+
+    // pub fn upload_vertices<VI>(&mut self, vertices: VI) -> Result<Box<dyn GpuFuture>>
+    // where VI: IntoIterator<Item = Vertex>,
+    //       VI::IntoIter: ExactSizeIterator,
+    // {
+
+    // }
+
+    pub fn set_vertices<VI>(&mut self, vertices: VI)
+    where
+        VI: IntoIterator<Item = Vertex>,
+        VI::IntoIter: ExactSizeIterator,
+    {
+        self.vertices.clear();
+        self.vertices.extend(vertices.into_iter());
+    }
+
+    pub fn has_vertices(&self) -> bool {
+        !self.vertices.is_empty()
+    }
+
+    pub fn draw_nodes(
+        &self,
+        dynamic_state: &DynamicState,
+        offset: Point,
+    ) -> Result<AutoCommandBuffer> {
+        let node_width = {
+            let mut width = self.base_node_width;
+            if self.view.scale > 100.0 {
+                width *= self.view.scale / 100.0;
+            }
+            width
+        };
+        self.node_draw_system.draw(
+            dynamic_state,
+            self.vertices.iter().copied(),
+            self.view,
+            offset,
+            node_width,
+        )
+    }
+
+    pub fn add_lines(
+        &mut self,
+        lines: &[(Point, Point)],
+        color: RGB<f32>,
+    ) -> Result<(usize, Box<dyn GpuFuture>)> {
+        self.line_draw_system.add_lines(lines, color)
+    }
+
+    // pub fn has_lines(&self) -> bool {
+    //     self.line_draw_system.
+    // }
+
+    pub fn draw_lines(&self, dynamic_state: &DynamicState) -> Result<AutoCommandBuffer> {
+        self.line_draw_system.draw_stored(dynamic_state, self.view)
     }
 }
 
@@ -136,18 +214,26 @@ pub enum MainViewSendMsg {
 }
 
 #[derive(Debug, Default)]
-struct AnimHandler {
+pub struct AnimHandler {
     mouse_pan_screen_origin: Option<Point>,
     view_anim_target: Option<View>,
     view_pan_const: Point,
     view_pan_delta: Point,
     view_scale_delta: f32,
     settings: AnimSettings,
+    initial_view: View,
     // view_pan_accel: Point,
     // view_scale_accel: f32,
 }
 
 impl AnimHandler {
+    fn new(initial_view: View) -> Self {
+        Self {
+            initial_view,
+            ..AnimHandler::default()
+        }
+    }
+
     fn update(&mut self, mut view: View, mouse_pos: Option<Point>, dt: f32) -> View {
         view.scale += view.scale * dt * self.view_scale_delta;
 
@@ -179,16 +265,16 @@ impl AnimHandler {
         view
     }
 
-    fn start_mouse_pan(&mut self, origin: Point) {
+    pub fn start_mouse_pan(&mut self, origin: Point) {
         self.mouse_pan_screen_origin = Some(origin);
     }
 
-    fn end_mouse_pan(&mut self) {
+    pub fn end_mouse_pan(&mut self) {
         self.mouse_pan_screen_origin = None;
     }
 
     /// If a direction is `None`, don't update the corresponding view delta const
-    fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
+    pub fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
         // if a direction is set to zero, set the regular pan delta to
         // the old constant speed, and let the pan_friction in
         // update() smoothly bring it down
@@ -207,7 +293,7 @@ impl AnimHandler {
         self.view_pan_const = dxy;
     }
 
-    fn pan_delta(&mut self, dxy: Point) {
+    pub fn pan_delta(&mut self, dxy: Point) {
         self.view_pan_delta += dxy;
 
         if let Some(max_speed) = self.settings.max_speed {

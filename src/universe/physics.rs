@@ -1,6 +1,7 @@
 use crate::geometry::*;
 // use crate::view::*;
 
+/*
 use super::Spine;
 
 pub fn repulsion_spines(t: f32, spines: &mut [Spine]) {
@@ -63,3 +64,5 @@ pub fn repulsion_spines(t: f32, spines: &mut [Spine]) {
         }
     }
 }
+
+*/
