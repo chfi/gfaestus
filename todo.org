@@ -1,5 +1,64 @@
 * plan/next
 
+[2021-02-16 Tue 16:00]
+
+redesigning the application structure:
+
+main & the event_loop will hold the viewport dimensions, vulkan
+instance & queue, and swapchain -- and maybe framebuffers for now,
+but they will probably also get moved to a more modular system
+
+main initializes five other systems (names subject to change):
+- Universe
+- MainView
+- GUI
+- GraphQuery
+- InputHandler
+
+Universe holds the 2D graph layout, and manages the force-directed
+layout (and/or whatever other layout approaches we'll end up adding),
+and it owns all layout-specific configuration
+
+the Universe is filled either from a GFA + layout TSV, or from a
+PackedGraph (via GraphQuery)
+
+
+MainView handles the view offset & scale, and all rendering that has to do
+with the 2D graph. it has a NodeDrawSystem, and is responsible for getting
+the latest 2D graph layout from the Universe, and converting it into vertices.
+it should also cache the vertices, and only upload new vertices to the GPU when
+necessary.
+
+it also renders the view to a buffer where nodes are colored with their IDs,
+and other systems can query that buffer. not sure if node selection should be
+handled here or in GUI.
+
+
+GUI manages the egui-based graphical UI widgets. it takes care of
+updating the egui state with events, beginning and ending each frame,
+and uses the GuiDrawSystem to render the GUI to the screen.
+
+the GUI will include things like node info tooltips on hover, more
+informative info boxes on node selection, options/config for the other
+systems (including changing keybinds), modals to load a GFA, export to
+image/SVG, etc.
+
+
+GraphQuery owns the PackedGraph that's currently loaded. other systems
+can query the PackedGraph via this system -- GraphQuery should provide
+an async layer for queries that take longer to run, and have a cache
+
+
+InputHandler takes the raw winit events produced by the main
+event_loop, maps them to commands/other inputs using the keybind map,
+and sends them to the other systems.
+
+
+communication between all the systems will primarily be done using
+crossbeam's mpmc channels. i may end up using tokio or another async
+runtime.
+
+
 [2021-02-12 Fri 22:00]
 
 added support for loading graph layouts from TSV files produced by odgi's layout
