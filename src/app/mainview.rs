@@ -1,3 +1,4 @@
+use handlegraph::handle::NodeId;
 use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
 use vulkano::format::Format;
 use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
@@ -90,6 +91,50 @@ impl MainView {
     }
 }
 
+pub enum DisplayLayer {
+    Grid,
+    Graph,
+}
+
+pub enum MainViewInput {
+    MousePos(Point),
+    MousePrimaryButton { pressed: bool, point: Point },
+    MouseSecondaryButton { pressed: bool, point: Point },
+    MouseWheel { delta: f32 },
+    // ArrowKeys { up: bool, right: bool, down: bool, left: bool },
+    KeyUp { pressed: bool },
+    KeyRight { pressed: bool },
+    KeyDown { pressed: bool },
+    KeyLeft { pressed: bool },
+}
+
+pub enum MainViewRecvMsg {
+    ResetView,
+    SetView {
+        center: Option<Point>,
+        scale: Option<f32>,
+    },
+    SetLayer {
+        layer: DisplayLayer,
+        on: bool,
+    },
+    ToggleLayer {
+        layer: DisplayLayer,
+    },
+}
+
+pub enum MainViewSendMsg {
+    NodeAtScreenPoint {
+        point: Point,
+        node: NodeId,
+    },
+    // world coordinates
+    ViewExtent {
+        top_left: Point,
+        bottom_right: Point,
+    },
+}
+
 #[derive(Debug, Default)]
 struct AnimHandler {
     mouse_pan_screen_origin: Option<Point>,
@@ -133,6 +178,44 @@ impl AnimHandler {
 
         view
     }
+
+    fn start_mouse_pan(&mut self, origin: Point) {
+        self.mouse_pan_screen_origin = Some(origin);
+    }
+
+    fn end_mouse_pan(&mut self) {
+        self.mouse_pan_screen_origin = None;
+    }
+
+    /// If a direction is `None`, don't update the corresponding view delta const
+    fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
+        // if a direction is set to zero, set the regular pan delta to
+        // the old constant speed, and let the pan_friction in
+        // update() smoothly bring it down
+        if Some(0.0) == dx {
+            self.view_pan_delta.x = self.view_pan_const.x;
+        }
+
+        if Some(0.0) == dy {
+            self.view_pan_delta.y = self.view_pan_const.y;
+        }
+
+        let dxy = Point {
+            x: dx.unwrap_or(self.view_pan_const.x),
+            y: dy.unwrap_or(self.view_pan_const.y),
+        };
+        self.view_pan_const = dxy;
+    }
+
+    fn pan_delta(&mut self, dxy: Point) {
+        self.view_pan_delta += dxy;
+
+        if let Some(max_speed) = self.settings.max_speed {
+            let d = &mut self.view_pan_delta;
+            d.x = d.x.clamp(-max_speed, max_speed);
+            d.y = d.y.clamp(-max_speed, max_speed);
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -141,6 +224,7 @@ struct AnimSettings {
     // pan_friction:
     min_view_scale: Option<f32>,
     max_view_scale: Option<f32>,
+    max_speed: Option<f32>,
 }
 
 impl std::default::Default for AnimSettings {
@@ -148,6 +232,7 @@ impl std::default::Default for AnimSettings {
         Self {
             min_view_scale: Some(0.5),
             max_view_scale: None,
+            max_speed: Some(600.0),
         }
     }
 }
