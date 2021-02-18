@@ -33,6 +33,23 @@ pub struct GfaestusGui {
     hover_node_id: Option<NodeId>,
     selected_node_id: Option<NodeId>,
     gui_draw_system: GuiDrawSystem,
+    graph_stats: GraphStatsUi,
+}
+
+
+#[derive(Debug, Default, Clone, Copy)]
+struct GraphStatsUi {
+    position: Point,
+    enabled: bool,
+    stats: GraphStats,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct GraphStats {
+    pub node_count: usize,
+    pub edge_count: usize,
+    pub path_count: usize,
+    pub total_len: usize,
 }
 
 impl GfaestusGui {
@@ -73,17 +90,60 @@ impl GfaestusGui {
         let hover_node_id = None;
         let selected_node_id = None;
 
+        let graph_stats = GraphStatsUi {
+            position: Point { x: 12.0, y: 20.0 },
+            enabled: true,
+            ..GraphStatsUi::default()
+        };
+
         Ok(Self {
             ctx,
             events,
             hover_node_id,
             selected_node_id,
             gui_draw_system,
+            graph_stats,
         })
+    }
+
+    pub fn set_graph_stats(&mut self, stats: GraphStats) {
+        self.graph_stats.stats = stats;
     }
 
     pub fn set_hover_node(&mut self, node: Option<NodeId>) {
         self.hover_node_id = node;
+    }
+
+    fn node_hover_tooltip(&self, at: Point, node_id: NodeId) {
+        let x_offset = -32.0;
+        let y_offset = -24.0;
+
+        let pos = egui::pos2(
+            at.x + x_offset,
+            at.y + y_offset,
+            // (.x - 32.0).max(0.0).min(width),
+            // (.y - 24.0).max(0.0).min(height),
+        );
+
+        egui::Area::new("node_hover_tooltip")
+            .fixed_pos(pos)
+            .show(&self.ctx, |ui| {
+                ui.label(node_id.0.to_string());
+            });
+    }
+
+    fn graph_stats(&self, at: Point) {
+        let pos = egui::pos2(at.x, at.y);
+        let stats = self.graph_stats.stats;
+
+        egui::Area::new("graph_summary_stats")
+            .fixed_pos(pos)
+            .show(&self.ctx, |ui| {
+                ui.label(format!("nodes: {}", stats.node_count));
+                ui.label(format!("edges: {}", stats.edge_count));
+                ui.label(format!("paths: {}", stats.path_count));
+                ui.label(format!("total length: {}", stats.total_len));
+            });
     }
 
     pub fn begin_frame(&mut self, screen_rect: Option<Point>, mouse_pos: Point) {
@@ -98,21 +158,13 @@ impl GfaestusGui {
         self.ctx.begin_frame(raw_input);
 
         if let Some(node_id) = self.hover_node_id {
-            let x_offset = -32.0;
-            let y_offset = -24.0;
+            self.node_hover_tooltip(mouse_pos, node_id);
+        }
 
-            let pos = egui::pos2(
-                mouse_pos.x + x_offset,
-                mouse_pos.y + y_offset,
-                // (mouse_pos.x - 32.0).max(0.0).min(width),
-                // (mouse_pos.y - 24.0).max(0.0).min(height),
-            );
+        if self.graph_stats.enabled {
+            self.graph_stats(self.graph_stats.position);
+        }
 
-            egui::Area::new("node_hover_tooltip")
-                .fixed_pos(pos)
-                .show(&self.ctx, |ui| {
-                    ui.label(node_id.0.to_string());
-                });
         }
 
         /*
@@ -147,7 +199,6 @@ impl GfaestusGui {
     pub fn end_frame_and_draw(
         &mut self,
         dynamic_state: &DynamicState,
-        // ) -> Option<Result<AutoCommandBuffer>> {
     ) -> Option<Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)>> {
         let (output, shapes) = self.ctx.end_frame();
         let clipped_meshes = self.ctx.tessellate(shapes);

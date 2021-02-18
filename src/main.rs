@@ -71,11 +71,18 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, Point)> {
+fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, Point, GraphStats)> {
     let mut mmap = MmapGFA::new(gfa_path)?;
 
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
     let spine = Spine::from_laid_out_graph(&graph, layout_path)?;
+
+    let stats = GraphStats {
+        node_count: graph.node_count(),
+        edge_count: graph.edge_count(),
+        path_count: graph.path_count(),
+        total_len: graph.total_length(),
+    };
 
     let mut min_x = std::f32::MAX;
     let mut max_x = std::f32::MIN;
@@ -109,7 +116,7 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, P
     let top_left = Point::new(min_x, min_y);
     let bottom_right = Point::new(max_x, max_y);
 
-    Ok((spine, top_left, bottom_right))
+    Ok((spine, top_left, bottom_right, stats))
 }
 
 fn main() {
@@ -134,7 +141,7 @@ fn main() {
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let (layout, top_left, bottom_right) = gfa_with_layout(gfa_file, layout_file).unwrap();
+    let (layout, top_left, bottom_right, stats) = gfa_with_layout(gfa_file, layout_file).unwrap();
 
     // let init_layout = layout.clone();
 
@@ -235,6 +242,8 @@ fn main() {
 
     let mut gui = GfaestusGui::new(queue.clone(), &render_pass).unwrap();
 
+    gui.set_graph_stats(stats);
+
     let mut vec_vertices: Vec<Vertex> = Vec::new();
     layout.vertices_into_lines(&mut vec_vertices);
 
@@ -326,6 +335,11 @@ fn main() {
 
     println!("MainView.view: {:?}", main_view.view);
 
+    let mut gui_screen_rect = Some(Point {
+        x: width,
+        y: height,
+    });
+
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();
         last_frame_t = std::time::Instant::now();
@@ -334,14 +348,6 @@ fn main() {
 
         t += delta.as_secs_f32();
         last_time = now;
-
-        gui.begin_frame(
-            Some(Point {
-                x: width,
-                y: height,
-            }),
-            mouse_pos,
-        );
 
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
@@ -515,6 +521,9 @@ fn main() {
                 recreate_swapchain = true;
             }
             Event::RedrawEventsCleared => {
+                gui.begin_frame(gui_screen_rect, mouse_pos);
+                gui_screen_rect = None;
+
                 let frame_t = std::time::Instant::now();
 
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
@@ -539,6 +548,11 @@ fn main() {
                         width = viewport.dimensions[0];
                         height = viewport.dimensions[1];
                     }
+
+                    gui_screen_rect = Some(Point {
+                        x: width,
+                        y: height,
+                    });
 
                     recreate_swapchain = false;
                 }
