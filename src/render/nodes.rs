@@ -151,20 +151,18 @@ impl NodeDrawSystem {
     ) -> Option<u32> {
         let xu = point.x as u32;
         let yu = point.y as u32;
-        println!("reading node id at {}, {}", xu, yu);
         if xu >= screen_width || yu >= screen_height {
             return None;
         }
-
         let ix = yu * screen_width + xu;
-        println!("buffer index {}", ix);
-
         let buffer = self.node_id_color_buffer.as_ref()?;
-        println!("has buffer");
-        let value = buffer.read().unwrap().get(ix as usize).copied();
-        println!("read value");
+        let value = buffer.read().unwrap().get(ix as usize).copied()?;
 
-        value
+        if value == 0 {
+            None
+        } else {
+            Some(value)
+        }
     }
 
     pub fn draw<VI>(

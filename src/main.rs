@@ -341,8 +341,6 @@ fn main() {
         y: height,
     });
 
-    let mut click_point = None;
-
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();
         last_frame_t = std::time::Instant::now();
@@ -426,7 +424,10 @@ fn main() {
 
                         gui.push_event(egui_event);
 
-                        click_point = Some(focus);
+                        let node_id_at = main_view
+                            .read_node_id_at(width as u32, height as u32, focus)
+                            .map(|nid| NodeId::from(nid as u64));
+                        gui.set_selected_node(node_id_at);
 
                         #[rustfmt::skip]
                         let to_world_map = {
@@ -485,6 +486,11 @@ fn main() {
                     screen_tgt.y -= height / 2.0;
 
                     mouse_pos = point;
+
+                    let node_id_at = main_view
+                        .read_node_id_at(width as u32, height as u32, point)
+                        .map(|nid| NodeId::from(nid as u64));
+                    gui.set_hover_node(node_id_at);
 
                     #[rustfmt::skip]
                         let to_world_map = {
@@ -676,28 +682,6 @@ fn main() {
 
                 match future {
                     Ok(future) => {
-                        future.wait(None).unwrap();
-
-                        if let Some(focus) = click_point {
-                            if let Some(node_id) =
-                                main_view.read_node_id_at(width as u32, height as u32, focus)
-                            {
-                                println!("Clicked node {}", node_id);
-                            }
-                            click_point = None;
-                        }
-
-                        // if let Some(buf) = main_view.clone_node_id_color_buffer() {
-                        //     let mut non_zeros = 0;
-                        //     for v in buf {
-                        //         if v != 0 {
-                        //             non_zeros += 1;
-                        //         }
-                        //     }
-
-                        //     println!("found {} nonzero values", non_zeros);
-                        // }
-
                         previous_frame_end = Some(future.boxed());
                     }
                     Err(FlushError::OutOfDate) => {

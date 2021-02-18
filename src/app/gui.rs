@@ -139,21 +139,41 @@ impl GfaestusGui {
         self.hover_node_id = node;
     }
 
+    pub fn set_selected_node(&mut self, node: Option<NodeId>) {
+        self.selected_node_id = node;
+    }
+
     fn node_hover_tooltip(&self, at: Point, node_id: NodeId) {
-        let x_offset = -32.0;
         let y_offset = -24.0;
 
         let pos = egui::pos2(
-            at.x + x_offset,
+            at.x,
             at.y + y_offset,
             // (.x - 32.0).max(0.0).min(width),
             // (.y - 24.0).max(0.0).min(height),
         );
 
-        egui::Area::new("node_hover_tooltip")
+        let mut x_offset = 0.0;
+
+        let area = egui::Area::new("node_hover_tooltip").fixed_pos(pos);
+
+        area.show(&self.ctx, |ui| {
+            ui.centered_and_justified(|ui| {
+                let label = egui::widgets::Label::new(node_id.0.to_string());
+                x_offset = label.layout(ui).size.x / 2.0;
+                ui.add(label);
+            });
+        });
+    }
+
+    fn node_select_info(&self, at: Point, node_id: NodeId) {
+        let pos = egui::pos2(at.x, at.y);
+
+        egui::Area::new("node_select_info")
             .fixed_pos(pos)
             .show(&self.ctx, |ui| {
-                ui.label(node_id.0.to_string());
+                let label = format!("Selected: {}", node_id.0);
+                ui.label(label);
             });
     }
 
@@ -205,8 +225,17 @@ impl GfaestusGui {
 
         self.ctx.begin_frame(raw_input);
 
+        let scr = self.ctx.input().screen_rect();
+
         if let Some(node_id) = self.hover_node_id {
             self.node_hover_tooltip(mouse_pos, node_id);
+        }
+
+        if let Some(node_id) = self.selected_node_id {
+            let x = 12.0;
+            let y = 0.95 * scr.max.y;
+            let pos = Point { x, y };
+            self.node_select_info(pos, node_id);
         }
 
         if self.graph_stats.enabled {
