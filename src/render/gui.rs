@@ -222,10 +222,24 @@ impl GuiDrawSystem {
             height: viewport_dims[1],
         };
 
+        let texture = self.cached_texture.as_ref().unwrap().texture.clone();
+
+        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
+        let set = Arc::new(
+            PersistentDescriptorSet::start(layout.clone())
+                .add_sampled_image(texture.clone(), self.sampler.clone())
+                .unwrap()
+                .build()
+                .unwrap(),
+        );
+
         let mut vertices: Vec<GuiVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
         for clipped in clipped_meshes.into_iter() {
+            vertices.clear();
+            indices.clear();
+
             let rect = &clipped.0;
             let mesh = &clipped.1;
 
@@ -243,30 +257,25 @@ impl GuiDrawSystem {
                 ];
                 GuiVertex { pos, uv, color }
             }));
+
+            let vertex_buffer = self
+                .vertex_buffer_pool
+                .chunk(vertices.iter().copied())
+                .unwrap();
+            let index_buffer = self
+                .index_buffer_pool
+                .chunk(indices.iter().copied())
+                .unwrap();
+
+            builder.draw_indexed(
+                self.pipeline.clone(),
+                &dynamic_state,
+                vec![Arc::new(vertex_buffer.clone())],
+                index_buffer.clone(),
+                set.clone(),
+                screen_size_pc,
+            )?;
         }
-
-        let vertex_buffer = self.vertex_buffer_pool.chunk(vertices).unwrap();
-        let index_buffer = self.index_buffer_pool.chunk(indices).unwrap();
-
-        let texture = self.cached_texture.as_ref().unwrap().texture.clone();
-
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-        let set = Arc::new(
-            PersistentDescriptorSet::start(layout.clone())
-                .add_sampled_image(texture.clone(), self.sampler.clone())
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
-
-        builder.draw_indexed(
-            self.pipeline.clone(),
-            &dynamic_state,
-            vec![Arc::new(vertex_buffer.clone())],
-            index_buffer.clone(),
-            set.clone(),
-            screen_size_pc,
-        )?;
 
         let builder = builder.build()?;
 

@@ -34,8 +34,17 @@ pub struct GfaestusGui {
     selected_node_id: Option<NodeId>,
     gui_draw_system: GuiDrawSystem,
     graph_stats: GraphStatsUi,
+    view_info: ViewInfoUi,
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct ViewInfoUi {
+    enabled: bool,
+    position: Point,
+    view: View,
+    mouse_screen: Point,
+    mouse_world: Point,
+}
 
 #[derive(Debug, Default, Clone, Copy)]
 struct GraphStatsUi {
@@ -96,6 +105,12 @@ impl GfaestusGui {
             ..GraphStatsUi::default()
         };
 
+        let view_info = ViewInfoUi {
+            position: Point { x: 12.0, y: 140.0 },
+            enabled: true,
+            ..ViewInfoUi::default()
+        };
+
         Ok(Self {
             ctx,
             events,
@@ -103,11 +118,21 @@ impl GfaestusGui {
             selected_node_id,
             gui_draw_system,
             graph_stats,
+            view_info,
         })
     }
 
     pub fn set_graph_stats(&mut self, stats: GraphStats) {
         self.graph_stats.stats = stats;
+    }
+
+    pub fn set_view_info_view(&mut self, view: View) {
+        self.view_info.view = view;
+    }
+
+    pub fn set_view_info_mouse(&mut self, mouse_screen: Point, mouse_world: Point) {
+        self.view_info.mouse_screen = mouse_screen;
+        self.view_info.mouse_world = mouse_world;
     }
 
     pub fn set_hover_node(&mut self, node: Option<NodeId>) {
@@ -146,6 +171,29 @@ impl GfaestusGui {
             });
     }
 
+    fn view_info(&self, at: Point) {
+        let pos = egui::pos2(at.x, at.y);
+        let info = self.view_info;
+
+        egui::Area::new("view_mouse_info")
+            .fixed_pos(pos)
+            .show(&self.ctx, |ui| {
+                ui.label(format!(
+                    "view origin: x: {:6}\ty: {:6}",
+                    info.view.center.x, info.view.center.y
+                ));
+                ui.label(format!("view scale: {}", info.view.scale));
+                ui.label(format!(
+                    "mouse world:  {:6}\t{:6}",
+                    info.mouse_world.x, info.mouse_world.y
+                ));
+                ui.label(format!(
+                    "mouse screen: {:6}\t{:6}",
+                    info.mouse_screen.x, info.mouse_screen.y
+                ));
+            });
+    }
+
     pub fn begin_frame(&mut self, screen_rect: Option<Point>, mouse_pos: Point) {
         let mut raw_input = egui::RawInput::default();
         let screen_rect = screen_rect.map(|p| egui::Rect {
@@ -165,6 +213,8 @@ impl GfaestusGui {
             self.graph_stats(self.graph_stats.position);
         }
 
+        if self.view_info.enabled {
+            self.view_info(self.view_info.position);
         }
 
         /*

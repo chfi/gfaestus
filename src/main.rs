@@ -481,6 +481,42 @@ fn main() {
 
                     mouse_pos = point;
 
+                    #[rustfmt::skip]
+                        let to_world_map = {
+                            let w = width;
+                            let h = height;
+
+                            let s = main_view.view.scale;
+
+                            let vcx = main_view.view.center.x;
+                            let vcy = main_view.view.center.y;
+
+                            // transform from screen coords (top left (0, 0), bottom right (w, h))
+                            // to screen center = (0, 0), bottom right (w/2, h/2);
+                            //
+                            // then scale so bottom right = (s*w/2, s*h/2);
+                            //
+                            // finally translate by view center to world coordinates
+                            //
+                            // i.e. view_offset * scale * screen_center
+                            let view_scale_screen =
+                                glm::mat4(s,   0.0, 0.0, vcx - (w * s * 0.5),
+                                          0.0, s,   0.0, vcy - (h * s * 0.5),
+                                          0.0, 0.0, 1.0, 0.0,
+                                          0.0, 0.0, 0.0, 1.0);
+
+                            view_scale_screen
+                        };
+                    let projected = to_world_map * glm::vec4(point.x, point.y, 0.0, 1.0);
+
+                    gui.set_view_info_mouse(
+                        point,
+                        Point {
+                            x: projected[0],
+                            y: projected[1],
+                        },
+                    );
+
                     let egui_event = egui::Event::PointerMoved(egui::Pos2 {
                         x: point.x,
                         y: point.y,
@@ -521,6 +557,8 @@ fn main() {
                 recreate_swapchain = true;
             }
             Event::RedrawEventsCleared => {
+                gui.set_view_info_view(main_view.view());
+
                 gui.begin_frame(gui_screen_rect, mouse_pos);
                 gui_screen_rect = None;
 
