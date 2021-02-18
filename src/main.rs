@@ -171,6 +171,7 @@ fn main() {
 
     let device_ext = DeviceExtensions {
         khr_swapchain: true,
+        khr_storage_buffer_storage_class: true,
         ..DeviceExtensions::none()
     };
 
@@ -340,6 +341,8 @@ fn main() {
         y: height,
     });
 
+    let mut click_point = None;
+
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();
         last_frame_t = std::time::Instant::now();
@@ -422,6 +425,8 @@ fn main() {
                         };
 
                         gui.push_event(egui_event);
+
+                        click_point = Some(focus);
 
                         #[rustfmt::skip]
                         let to_world_map = {
@@ -671,6 +676,28 @@ fn main() {
 
                 match future {
                     Ok(future) => {
+                        future.wait(None).unwrap();
+
+                        if let Some(focus) = click_point {
+                            if let Some(node_id) =
+                                main_view.read_node_id_at(width as u32, height as u32, focus)
+                            {
+                                println!("Clicked node {}", node_id);
+                            }
+                            click_point = None;
+                        }
+
+                        // if let Some(buf) = main_view.clone_node_id_color_buffer() {
+                        //     let mut non_zeros = 0;
+                        //     for v in buf {
+                        //         if v != 0 {
+                        //             non_zeros += 1;
+                        //         }
+                        //     }
+
+                        //     println!("found {} nonzero values", non_zeros);
+                        // }
+
                         previous_frame_end = Some(future.boxed());
                     }
                     Err(FlushError::OutOfDate) => {

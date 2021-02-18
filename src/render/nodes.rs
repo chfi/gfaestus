@@ -53,6 +53,8 @@ pub struct NodeDrawSystem {
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     // node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
     node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
+    node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
+    // node_id_color_buffer:
 }
 
 impl NodeDrawSystem {
@@ -92,6 +94,7 @@ impl NodeDrawSystem {
             pipeline,
             vertex_buffer_pool,
             node_id_color_image: None,
+            node_id_color_buffer: None,
         }
     }
 
@@ -121,12 +124,48 @@ impl NodeDrawSystem {
             Some(self.gfx_queue.family()),
         )?;
 
+        let buffer = CpuAccessibleBuffer::from_iter(
+            self.gfx_queue.device().clone(),
+            BufferUsage::all(),
+            false,
+            (0..width * height).map(|_| 0u32),
+        )?;
+
         self.node_id_color_image = Some(image);
+        self.node_id_color_buffer = Some(buffer);
 
         Ok(())
     }
 
+    pub fn clone_node_id_color_buffer(&self) -> Option<Vec<u32>> {
+        let buf = self.node_id_color_buffer.as_ref()?;
+        let buf_read = buf.read().unwrap();
+        Some(Vec::from(&buf_read[..]))
+    }
+
+    pub fn read_node_id_at(
         &self,
+        screen_width: u32,
+        screen_height: u32,
+        point: Point,
+    ) -> Option<u32> {
+        let xu = point.x as u32;
+        let yu = point.y as u32;
+        println!("reading node id at {}, {}", xu, yu);
+        if xu >= screen_width || yu >= screen_height {
+            return None;
+        }
+
+        let ix = yu * screen_width + xu;
+        println!("buffer index {}", ix);
+
+        let buffer = self.node_id_color_buffer.as_ref()?;
+        println!("has buffer");
+        let value = buffer.read().unwrap().get(ix as usize).copied();
+        println!("read value");
+
+        value
+    }
 
     pub fn draw<VI>(
         &mut self,
@@ -155,7 +194,7 @@ impl NodeDrawSystem {
             viewport.dimensions
         };
 
-        self.create_id_color_image(viewport_dims[0] as u32, viewport_dims[1] as u32)?;
+        // self.create_id_color_image(viewport_dims[0] as u32, viewport_dims[1] as u32)?;
 
         #[rustfmt::skip]
         let view_pc = {
@@ -188,13 +227,27 @@ impl NodeDrawSystem {
             }
         };
 
+        let data_buffer = {
+            let data_iter =
+                (0..((viewport_dims[0] as u32) * (viewport_dims[1] as u32))).map(|_| 0u32);
+            CpuAccessibleBuffer::from_iter(
+                self.gfx_queue.device().clone(),
+                BufferUsage::all(),
+                false,
+                data_iter,
+            )?
+        };
+
         let layout = self.pipeline.descriptor_set_layout(0).unwrap();
         let set = {
-            let set = PersistentDescriptorSet::start(layout.clone())
-                .add_image(self.node_id_color_image.as_ref().unwrap().clone())?;
+            let set =
+                PersistentDescriptorSet::start(layout.clone()).add_buffer(data_buffer.clone())?;
+            // .add_image(self.node_id_color_image.as_ref().unwrap().clone())?;
             let set = set.build()?;
             Arc::new(set)
         };
+
+        self.node_id_color_buffer = Some(data_buffer.clone());
 
         let vertex_buffer = self.vertex_buffer_pool.chunk(vertices)?;
 
