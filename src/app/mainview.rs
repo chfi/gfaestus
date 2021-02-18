@@ -109,6 +109,12 @@ impl MainView {
         self.view = new_view;
     }
 
+    pub fn set_initial_view(&mut self, center: Option<Point>, scale: Option<f32>) {
+        let center = center.unwrap_or(self.anim_handler.initial_view.center);
+        let scale = scale.unwrap_or(self.anim_handler.initial_view.scale);
+        self.anim_handler.initial_view = View { center, scale };
+    }
+
     pub fn reset_view(&mut self) {
         self.view = self.anim_handler.initial_view;
     }

@@ -48,6 +48,7 @@ use gfaestus::layout::*;
 
 use gfaestus::render::*;
 
+use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
 
 use rgb::*;
@@ -232,15 +233,12 @@ fn main() {
 
     let mut main_view = MainView::new(queue.clone(), &render_pass).unwrap();
 
+    let mut gui = GfaestusGui::new(queue.clone(), &render_pass).unwrap();
+
     let mut vec_vertices: Vec<Vertex> = Vec::new();
     layout.vertices_into_lines(&mut vec_vertices);
 
     main_view.set_vertices(vec_vertices.iter().copied());
-
-    let mut gui_draw_system = GuiDrawSystem::new(
-        queue.clone(),
-        Subpass::from(render_pass.clone(), 0).unwrap(),
-    );
 
     let mut dynamic_state = DynamicState {
         line_width: None,
@@ -253,6 +251,7 @@ fn main() {
 
     let layout_dims = bottom_right - top_left;
     main_view.set_view_center(top_left + (layout_dims / 2.0));
+    main_view.set_initial_view(Some(top_left + (layout_dims / 2.0)), None);
 
     let (_line_buf_ix, line_future) = {
         let mut lines: Vec<(Point, Point)> = Vec::new();
@@ -321,39 +320,7 @@ fn main() {
 
     let mut draw_grid = true;
 
-    let mut egui_ctx = egui::CtxRef::default();
-
-    let mut egui_evs: Vec<egui::Event> = Vec::new();
-
     let mut mouse_pos = Point { x: 0.0, y: 0.0 };
-
-    let mut font_defs = egui::FontDefinitions::default();
-
-    {
-        let fam_size = &mut font_defs.family_and_size;
-
-        fam_size.insert(
-            egui::TextStyle::Small,
-            (egui::FontFamily::Proportional, 12.0),
-        );
-
-        fam_size.insert(
-            egui::TextStyle::Body,
-            (egui::FontFamily::Proportional, 16.0),
-        );
-
-        fam_size.insert(
-            egui::TextStyle::Button,
-            (egui::FontFamily::Proportional, 18.0),
-        );
-
-        fam_size.insert(
-            egui::TextStyle::Heading,
-            (egui::FontFamily::Proportional, 22.0),
-        );
-    }
-
-    egui_ctx.set_fonts(font_defs);
 
     let mut last_frame_t = std::time::Instant::now();
 
@@ -368,40 +335,13 @@ fn main() {
         t += delta.as_secs_f32();
         last_time = now;
 
-        let mut raw_input = egui::RawInput::default();
-        raw_input.screen_rect = Some(egui::Rect {
-            min: egui::Pos2 { x: 0.0, y: 0.0 },
-            max: egui::Pos2 {
+        gui.begin_frame(
+            Some(Point {
                 x: width,
                 y: height,
-            },
-        });
-        raw_input.events = std::mem::take(&mut egui_evs);
-
-        egui_ctx.begin_frame(raw_input);
-
-        let pos = egui::pos2(
-            (mouse_pos.x - 32.0).max(0.0).min(width),
-            (mouse_pos.y - 24.0).max(0.0).min(height),
+            }),
+            mouse_pos,
         );
-
-        if paused {
-            egui::Area::new("my_area")
-                .fixed_pos(pos)
-                .show(&egui_ctx, |ui| {
-                    ui.label("hello world");
-                });
-        }
-
-        // if !paused {
-        //     since_last_update += delta.as_secs_f32();
-
-        //     if since_last_update > 0.1 {
-        //         physics::repulsion_spines(since_last_update, &mut spines);
-
-        //         since_last_update = 0.0;
-        //     }
-        // }
 
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
@@ -452,6 +392,11 @@ fn main() {
                 }
                 Action::PausePhysics => {
                     main_view.reset_view();
+                    if paused {
+                        gui.set_hover_node(Some(NodeId::from(123)));
+                    } else {
+                        gui.set_hover_node(None);
+                    }
                     paused = !paused;
                 }
                 Action::ResetLayout => {
@@ -470,7 +415,7 @@ fn main() {
                             modifiers: Default::default(),
                         };
 
-                        egui_evs.push(egui_event);
+                        gui.push_event(egui_event);
 
                         #[rustfmt::skip]
                         let to_world_map = {
@@ -535,7 +480,7 @@ fn main() {
                         y: point.y,
                     });
 
-                    egui_evs.push(egui_event);
+                    gui.push_event(egui_event);
                 }
             }
         }
@@ -551,7 +496,7 @@ fn main() {
                 modifiers: Default::default(),
             };
 
-            egui_evs.push(egui_event);
+            gui.push_event(egui_event);
         }
 
         main_view.tick_animation(Some(mouse_pos), dt);
@@ -648,36 +593,25 @@ fn main() {
                     }
                 }
 
-                let (output, shapes) = egui_ctx.end_frame();
-                let clipped_meshes = egui_ctx.tessellate(shapes);
-
-                let egui_tex = egui_ctx.texture();
-                let texture_upload_future = gui_draw_system.upload_texture(&egui_tex);
-
-                if !clipped_meshes.is_empty() {
+                let future = if let Some(gui_res) = gui.end_frame_and_draw(&dynamic_state) {
+                    let (cmd_buf, future) = gui_res.unwrap();
                     unsafe {
-                        let gui_buf = gui_draw_system
-                            .draw_egui_ctx(&dynamic_state, &clipped_meshes)
-                            .unwrap();
-                        builder.execute_commands(gui_buf).unwrap();
+                        builder.execute_commands(cmd_buf).unwrap();
                     }
-                }
+                    future.unwrap_or(sync::now(device.clone()).boxed())
+                } else {
+                    sync::now(device.clone()).boxed()
+                };
 
                 builder.end_render_pass().unwrap();
 
                 let command_buffer = builder.build().unwrap();
 
-                let tex_future = if let Some(tex_fut) = texture_upload_future {
-                    tex_fut.unwrap()
-                } else {
-                    sync::now(device.clone()).boxed()
-                };
-
                 let future = previous_frame_end
                     .take()
                     .unwrap()
                     .join(acquire_future)
-                    .join(tex_future)
+                    .join(future)
                     .then_execute(queue.clone(), command_buffer)
                     .unwrap()
                     .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)

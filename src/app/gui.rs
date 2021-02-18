@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -10,15 +12,153 @@ use handlegraph::{
 use anyhow::{Context, Result};
 
 use rgb::*;
+use vulkano::{
+    command_buffer::{AutoCommandBuffer, DynamicState},
+    device::Queue,
+    framebuffer::{RenderPassAbstract, Subpass},
+    sync::GpuFuture,
+};
 
 use crate::geometry::*;
 use crate::gfa::*;
 use crate::input::*;
-// use crate::layout::physics;
-// use crate::layout::*;
-use crate::render::*;
+// use crate::render::*;
+use crate::render::GuiDrawSystem;
 use crate::view;
 use crate::view::View;
+
+pub struct GfaestusGui {
+    ctx: egui::CtxRef,
+    events: Vec<egui::Event>,
+    hover_node_id: Option<NodeId>,
+    selected_node_id: Option<NodeId>,
+    gui_draw_system: GuiDrawSystem,
+}
+
+impl GfaestusGui {
+    pub fn new<R>(gfx_queue: Arc<Queue>, render_pass: &Arc<R>) -> Result<GfaestusGui>
+    where
+        R: RenderPassAbstract + Send + Sync + 'static,
+    {
+        let gui_draw_system =
+            GuiDrawSystem::new(gfx_queue, Subpass::from(render_pass.clone(), 0).unwrap());
+
+        let ctx = egui::CtxRef::default();
+
+        let font_defs = {
+            let mut font_defs = egui::FontDefinitions::default();
+            let fam_size = &mut font_defs.family_and_size;
+            fam_size.insert(
+                egui::TextStyle::Small,
+                (egui::FontFamily::Proportional, 12.0),
+            );
+            fam_size.insert(
+                egui::TextStyle::Body,
+                (egui::FontFamily::Proportional, 16.0),
+            );
+            fam_size.insert(
+                egui::TextStyle::Button,
+                (egui::FontFamily::Proportional, 18.0),
+            );
+            fam_size.insert(
+                egui::TextStyle::Heading,
+                (egui::FontFamily::Proportional, 22.0),
+            );
+            font_defs
+        };
+        ctx.set_fonts(font_defs);
+
+        let events: Vec<egui::Event> = Vec::new();
+
+        let hover_node_id = None;
+        let selected_node_id = None;
+
+        Ok(Self {
+            ctx,
+            events,
+            hover_node_id,
+            selected_node_id,
+            gui_draw_system,
+        })
+    }
+
+    pub fn set_hover_node(&mut self, node: Option<NodeId>) {
+        self.hover_node_id = node;
+    }
+
+    pub fn begin_frame(&mut self, screen_rect: Option<Point>, mouse_pos: Point) {
+        let mut raw_input = egui::RawInput::default();
+        let screen_rect = screen_rect.map(|p| egui::Rect {
+            min: egui::Pos2 { x: 0.0, y: 0.0 },
+            max: egui::Pos2 { x: p.x, y: p.y },
+        });
+        raw_input.screen_rect = screen_rect;
+        raw_input.events = std::mem::take(&mut self.events);
+
+        self.ctx.begin_frame(raw_input);
+
+        if let Some(node_id) = self.hover_node_id {
+            let x_offset = -32.0;
+            let y_offset = -24.0;
+
+            let pos = egui::pos2(
+                mouse_pos.x + x_offset,
+                mouse_pos.y + y_offset,
+                // (mouse_pos.x - 32.0).max(0.0).min(width),
+                // (mouse_pos.y - 24.0).max(0.0).min(height),
+            );
+
+            egui::Area::new("node_hover_tooltip")
+                .fixed_pos(pos)
+                .show(&self.ctx, |ui| {
+                    ui.label(node_id.0.to_string());
+                });
+        }
+
+        /*
+        if let Some(node_id) = self.selected_node_id {
+            egui::Area::new("node_info_box")
+                .fixed_pos(pos)
+                .show(&self.ctx, |ui| {
+                    ui.label(node_id.0.to_string());
+                });
+        }
+         */
+    }
+
+    fn draw_tessellated(
+        &mut self,
+        dynamic_state: &DynamicState,
+        clipped_meshes: &[egui::ClippedMesh],
+    ) -> Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)> {
+        let egui_tex = self.ctx.texture();
+        let tex_future = self.gui_draw_system.upload_texture(&egui_tex).transpose()?;
+        let cmd_buf = self
+            .gui_draw_system
+            .draw_egui_ctx(dynamic_state, clipped_meshes)?;
+
+        Ok((cmd_buf, tex_future))
+    }
+
+    pub fn push_event(&mut self, event: egui::Event) {
+        self.events.push(event);
+    }
+
+    pub fn end_frame_and_draw(
+        &mut self,
+        dynamic_state: &DynamicState,
+        // ) -> Option<Result<AutoCommandBuffer>> {
+    ) -> Option<Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)>> {
+        let (output, shapes) = self.ctx.end_frame();
+        let clipped_meshes = self.ctx.tessellate(shapes);
+
+        if clipped_meshes.is_empty() {
+            return None;
+        }
+
+        Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
+    }
+}
 
 // struct GraphViewActiveSet {
 //     node_tooltip: bool,
@@ -55,6 +195,7 @@ pub struct GraphView {
 }
 */
 
+/*
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 struct NodeHoverTooltip {
     node_id: Option<NodeId>,
@@ -81,6 +222,7 @@ pub struct GfaestusGui {
     mouse_pos: Point,
     window_dims: Point,
 }
+*/
 
 /*
 
