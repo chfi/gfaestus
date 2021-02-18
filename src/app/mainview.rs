@@ -368,12 +368,6 @@ impl AnimHandler {
         let delta_mult = current_scale.log2();
         let delta_mult = delta_mult.max(1.0);
         self.view_scale_delta += dz * delta_mult;
-        println!(
-            "zoom_delta: {:6} * {:6} -> {}",
-            delta_mult,
-            dz,
-            dz * delta_mult
-        );
     }
 }
 

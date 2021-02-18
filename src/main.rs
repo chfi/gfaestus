@@ -91,11 +91,11 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, P
     let mut max_y = std::f32::MIN;
 
     for node in spine.nodes.iter() {
-        min_x = min_x.min(node.p0.x).min(node.p0.x);
-        max_x = max_x.max(node.p0.x).max(node.p0.x);
+        min_x = min_x.min(node.p0.x).min(node.p1.x);
+        max_x = max_x.max(node.p0.x).max(node.p1.x);
 
-        min_y = min_y.min(node.p0.y).min(node.p0.y);
-        max_y = max_y.max(node.p0.y).max(node.p0.y);
+        min_y = min_y.min(node.p0.y).min(node.p1.y);
+        max_y = max_y.max(node.p0.y).max(node.p1.y);
     }
 
     println!("min_x: {}", min_x);

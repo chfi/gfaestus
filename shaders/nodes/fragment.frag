@@ -4,8 +4,6 @@ flat layout (location = 0) in int node_id;
 
 layout (location = 0) out vec4 f_color;
 
-// layout (set = 0, binding = 0, r32)
-// layout (set = 0, binding = 0) uniform writeonly image2D img;
 layout (set = 0, binding = 0) buffer Data {
   uint data[];
 } data;
@@ -18,25 +16,16 @@ layout (push_constant) uniform View {
 } vo;
 
 void main() {
-  int color_id = node_id % 7;
+  int color_id = (node_id - 1) % 7;
 
-  // uint x = uint(vo.viewport_dims.x * gl_FragCoord.x);
-  // uint y = uint(vo.viewport_dims.y * gl_FragCoord.y);
-  // uint x = uint(gl_FragCoord.x);
-  // uint y = uint(gl_FragCoord.y);
   uint w = uint(vo.viewport_dims.x);
   uint h = uint(vo.viewport_dims.y);
 
-  float x = gl_FragCoord.x - (vo.viewport_dims.x / 2.0);
-  float y = gl_FragCoord.y - (vo.viewport_dims.y / 2.0);
+  float x = floor(gl_FragCoord.x);
+  float y = floor(gl_FragCoord.y);
 
   uint ix = uint((y * vo.viewport_dims.x) + x);
   data.data[ix] = uint(node_id);
-
-  // data.data[(y * w) + x] = uint(node_id);
-  // data.data[(y * w) + h] = 123;
-  // data.data[y] = 123;
-  // data
 
   switch (color_id) {
     case 0:

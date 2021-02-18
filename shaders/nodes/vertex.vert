@@ -15,6 +15,7 @@ layout (push_constant) uniform View {
 void main() {
   gl_Position = vo.view * vec4(position, 0.0, 1.0);
 
-  int id = gl_VertexIndex / VERTICES_PER_NODE;
+  // NodeIds are 1-indexed
+  int id = 1 + (gl_VertexIndex / VERTICES_PER_NODE);
   node_id = id;
 }
