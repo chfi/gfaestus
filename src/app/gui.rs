@@ -143,29 +143,6 @@ impl GfaestusGui {
         self.selected_node_id = node;
     }
 
-    fn node_hover_tooltip(&self, at: Point, node_id: NodeId) {
-        let y_offset = -24.0;
-
-        let pos = egui::pos2(
-            at.x,
-            at.y + y_offset,
-            // (.x - 32.0).max(0.0).min(width),
-            // (.y - 24.0).max(0.0).min(height),
-        );
-
-        let mut x_offset = 0.0;
-
-        let area = egui::Area::new("node_hover_tooltip").fixed_pos(pos);
-
-        area.show(&self.ctx, |ui| {
-            ui.centered_and_justified(|ui| {
-                let label = egui::widgets::Label::new(node_id.0.to_string());
-                x_offset = label.layout(ui).size.x / 2.0;
-                ui.add(label);
-            });
-        });
-    }
-
     fn node_select_info(&self, at: Point, node_id: NodeId) {
         let pos = egui::pos2(at.x, at.y);
 
@@ -214,7 +191,7 @@ impl GfaestusGui {
             });
     }
 
-    pub fn begin_frame(&mut self, screen_rect: Option<Point>, mouse_pos: Point) {
+    pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
         let mut raw_input = egui::RawInput::default();
         let screen_rect = screen_rect.map(|p| egui::Rect {
             min: egui::Pos2 { x: 0.0, y: 0.0 },
@@ -228,7 +205,7 @@ impl GfaestusGui {
         let scr = self.ctx.input().screen_rect();
 
         if let Some(node_id) = self.hover_node_id {
-            self.node_hover_tooltip(mouse_pos, node_id);
+            egui::containers::popup::show_tooltip_text(&self.ctx, node_id.0.to_string())
         }
 
         if let Some(node_id) = self.selected_node_id {

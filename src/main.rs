@@ -570,7 +570,7 @@ fn main() {
             Event::RedrawEventsCleared => {
                 gui.set_view_info_view(main_view.view());
 
-                gui.begin_frame(gui_screen_rect, mouse_pos);
+                gui.begin_frame(gui_screen_rect);
                 gui_screen_rect = None;
 
                 let frame_t = std::time::Instant::now();

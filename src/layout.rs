@@ -86,7 +86,13 @@ impl Spine {
         let mut node_ids = Vec::with_capacity(graph.node_count());
         let mut nodes = Vec::with_capacity(graph.node_count());
 
-        for handle in graph.handles() {
+        // make sure the nodes are stored in ascending NodeId order so
+        // that the vertex index in the NodeDrawSystem render pipeline
+        // is correctly mapped to node ID
+        let mut handles = graph.handles().collect::<Vec<_>>();
+        handles.sort();
+
+        for handle in handles {
             let id = handle.id();
 
             let (p0, p1) = *layout_map.get(&id).unwrap();

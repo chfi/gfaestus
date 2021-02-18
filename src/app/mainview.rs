@@ -174,10 +174,6 @@ impl MainView {
             .draw(dynamic_state, vertices, self.view, offset, node_width)
     }
 
-    pub fn clone_node_id_color_buffer(&self) -> Option<Vec<u32>> {
-        self.node_draw_system.clone_node_id_color_buffer()
-    }
-
     pub fn read_node_id_at(
         &self,
         screen_width: u32,

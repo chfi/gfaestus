@@ -1,16 +1,11 @@
 #[allow(unused_imports)]
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer};
-use vulkano::{
-    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState},
-    image::StorageImage,
-};
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::device::Queue;
 use vulkano::{
     descriptor::descriptor_set::PersistentDescriptorSet,
     framebuffer::{RenderPassAbstract, Subpass},
 };
-use vulkano::{device::Queue, image::Dimensions};
-
-use vulkano::format::R32Uint;
 
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
@@ -51,10 +46,7 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    // node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
-    node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
-    // node_id_color_buffer:
 }
 
 impl NodeDrawSystem {
@@ -93,54 +85,8 @@ impl NodeDrawSystem {
             gfx_queue,
             pipeline,
             vertex_buffer_pool,
-            node_id_color_image: None,
             node_id_color_buffer: None,
         }
-    }
-
-    fn id_color_image_dims(&self) -> Option<(u32, u32)> {
-        if let Some(img) = &self.node_id_color_image {
-            if let Dimensions::Dim2d { width, height } = img.dimensions() {
-                return Some((width, height));
-            }
-        }
-        None
-    }
-
-    fn create_id_color_image(&mut self, width: u32, height: u32) -> Result<()> {
-        // Don't need to do anything if we already have an image of the correct size
-        if let Some((w, h)) = self.id_color_image_dims() {
-            if w == width && height == h {
-                return Ok(());
-            }
-        }
-
-        // Otherwise, create a new one even if we have an image
-
-        let image = StorageImage::new(
-            self.gfx_queue.device().clone(),
-            Dimensions::Dim2d { width, height },
-            R32Uint,
-            Some(self.gfx_queue.family()),
-        )?;
-
-        let buffer = CpuAccessibleBuffer::from_iter(
-            self.gfx_queue.device().clone(),
-            BufferUsage::all(),
-            false,
-            (0..width * height).map(|_| 0u32),
-        )?;
-
-        self.node_id_color_image = Some(image);
-        self.node_id_color_buffer = Some(buffer);
-
-        Ok(())
-    }
-
-    pub fn clone_node_id_color_buffer(&self) -> Option<Vec<u32>> {
-        let buf = self.node_id_color_buffer.as_ref()?;
-        let buf_read = buf.read().unwrap();
-        Some(Vec::from(&buf_read[..]))
     }
 
     pub fn read_node_id_at(
@@ -192,8 +138,6 @@ impl NodeDrawSystem {
             viewport.dimensions
         };
 
-        // self.create_id_color_image(viewport_dims[0] as u32, viewport_dims[1] as u32)?;
-
         #[rustfmt::skip]
         let view_pc = {
             // is this correct?
@@ -217,7 +161,6 @@ impl NodeDrawSystem {
 
             vs::ty::View {
                 node_width,
-                // node_width: aspect_aware_node_width,
                 viewport_dims,
                 view: view_data,
                 scale: view.scale,
@@ -240,7 +183,6 @@ impl NodeDrawSystem {
         let set = {
             let set =
                 PersistentDescriptorSet::start(layout.clone()).add_buffer(data_buffer.clone())?;
-            // .add_image(self.node_id_color_image.as_ref().unwrap().clone())?;
             let set = set.build()?;
             Arc::new(set)
         };

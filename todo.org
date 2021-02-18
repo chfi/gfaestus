@@ -1,5 +1,27 @@
 * plan/next
 
+[2021-02-18 Thu 18:00]
+
+MainView and GUI are now working, though on a single thread with
+all communication handled by main.rs just calling functions on the
+two objects.
+
+the NodeDrawSystem's fragment shader now writes the node ID of the
+fragment to a separate buffer, which is read from by the main thread
+to find the node that the cursor is on top of at each frame.
+
+the system assumes that the node IDs are compact and start from 1, and
+that nodes are sent to the GPU in node ID order, with the vertex
+shader setting the pipeline's `node_id` variable by simply dividing
+the vertex index by 2 and adding 1
+
+this works as long as the input GFA satisfies those constraints, and
+all vertices in the entire graph are used in the NodeDrawSystem
+pipeline, but a more robust solution would be to use the value taken
+from the fragment shader buffer as an index into a slice of NodeIds
+corresponding to the vertices -- something to keep in mind once the
+rendering system becomes more flexible
+
 [2021-02-16 Tue 16:00]
 
 redesigning the application structure:
