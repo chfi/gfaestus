@@ -4,6 +4,9 @@ flat layout (location = 0) in int node_id;
 
 layout (location = 0) out vec4 f_color;
 
+// layout (set = 0, binding = 0, r32)
+layout (set = 0, binding = 0) uniform writeonly image2D img;
+
 void main() {
   int color_id = node_id % 7;
 

@@ -1,8 +1,16 @@
 #[allow(unused_imports)]
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer};
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
-use vulkano::device::Queue;
-use vulkano::framebuffer::{RenderPassAbstract, Subpass};
+use vulkano::{
+    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState},
+    image::StorageImage,
+};
+use vulkano::{
+    descriptor::descriptor_set::PersistentDescriptorSet,
+    framebuffer::{RenderPassAbstract, Subpass},
+};
+use vulkano::{device::Queue, image::Dimensions};
+
+use vulkano::format::R32Uint;
 
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
@@ -43,6 +51,8 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+    // node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
+    node_id_color_image: Option<Arc<StorageImage<R32Uint>>>,
 }
 
 impl NodeDrawSystem {
@@ -81,11 +91,45 @@ impl NodeDrawSystem {
             gfx_queue,
             pipeline,
             vertex_buffer_pool,
+            node_id_color_image: None,
         }
     }
 
-    pub fn draw<VI>(
+    fn id_color_image_dims(&self) -> Option<(u32, u32)> {
+        if let Some(img) = &self.node_id_color_image {
+            if let Dimensions::Dim2d { width, height } = img.dimensions() {
+                return Some((width, height));
+            }
+        }
+        None
+    }
+
+    fn create_id_color_image(&mut self, width: u32, height: u32) -> Result<()> {
+        // Don't need to do anything if we already have an image of the correct size
+        if let Some((w, h)) = self.id_color_image_dims() {
+            if w == width && height == h {
+                return Ok(());
+            }
+        }
+
+        // Otherwise, create a new one even if we have an image
+
+        let image = StorageImage::new(
+            self.gfx_queue.device().clone(),
+            Dimensions::Dim2d { width, height },
+            R32Uint,
+            Some(self.gfx_queue.family()),
+        )?;
+
+        self.node_id_color_image = Some(image);
+
+        Ok(())
+    }
+
         &self,
+
+    pub fn draw<VI>(
+        &mut self,
         dynamic_state: &DynamicState,
         vertices: VI,
         view: View,
@@ -111,6 +155,8 @@ impl NodeDrawSystem {
             viewport.dimensions
         };
 
+        self.create_id_color_image(viewport_dims[0] as u32, viewport_dims[1] as u32)?;
+
         #[rustfmt::skip]
         let view_pc = {
             // is this correct?
@@ -132,9 +178,6 @@ impl NodeDrawSystem {
 
             let view_data = view::mat4_to_array(&matrix);
 
-            // let aspect_aware_node_width = (width / height) * node_width;
-            let aspect_aware_node_width = (height / width) * node_width;
-
             vs::ty::View {
                 node_width,
                 // node_width: aspect_aware_node_width,
@@ -145,13 +188,21 @@ impl NodeDrawSystem {
             }
         };
 
+        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
+        let set = {
+            let set = PersistentDescriptorSet::start(layout.clone())
+                .add_image(self.node_id_color_image.as_ref().unwrap().clone())?;
+            let set = set.build()?;
+            Arc::new(set)
+        };
+
         let vertex_buffer = self.vertex_buffer_pool.chunk(vertices)?;
 
         builder.draw(
             self.pipeline.clone(),
             dynamic_state,
             vec![Arc::new(vertex_buffer)],
-            (), // set.clone()
+            set.clone(),
             view_pc,
         )?;
 
