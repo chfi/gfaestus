@@ -341,6 +341,8 @@ fn main() {
         y: height,
     });
 
+    let anim_thread = main_view.anim_handler_thread();
+
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();
         last_frame_t = std::time::Instant::now();
@@ -471,7 +473,8 @@ fn main() {
                         x: dx * speed,
                         y: dy * speed,
                     };
-                    main_view.pan_const(Some(delta.x), Some(delta.y));
+                    // main_view.pan_const(Some(delta.x), Some(delta.y));
+                    anim_thread.pan_const(Some(delta.x), Some(delta.y));
                 }
                 Action::PausePhysics => {
                     main_view.reset_view();
@@ -546,16 +549,19 @@ fn main() {
                                 .read_node_id_at(width as u32, height as u32, focus)
                                 .map(|nid| NodeId::from(nid as u64));
                             gui.set_selected_node(node_id_at);
-                            main_view.set_mouse_pan(Some(focus));
+                            // main_view.set_mouse_pan(Some(focus));
+                            anim_thread.set_mouse_pan(Some(focus));
                         }
                     } else {
-                        main_view.set_mouse_pan(None);
+                        // main_view.set_mouse_pan(None);
+                        anim_thread.set_mouse_pan(None);
                     }
                     //
                 }
                 Action::MouseZoom { focus, delta } => {
                     let _focus = focus;
-                    main_view.zoom_delta(delta);
+                    // main_view.zoom_delta(delta);
+                    anim_thread.zoom_delta(delta);
                 }
                 Action::MouseAt { point } => {
                     let mut screen_tgt = point;
@@ -568,6 +574,8 @@ fn main() {
                         .read_node_id_at(width as u32, height as u32, point)
                         .map(|nid| NodeId::from(nid as u64));
                     gui.set_hover_node(node_id_at);
+
+                    // anim_thread.set_mouse_pos(Some(point));
 
                     #[rustfmt::skip]
                         let to_world_map = {
@@ -630,7 +638,8 @@ fn main() {
             gui.push_event(egui_event);
         }
 
-        main_view.tick_animation(Some(mouse_pos), dt);
+        anim_thread.set_mouse_pos(Some(mouse_pos));
+        // main_view.tick_animation(Some(mouse_pos), dt);
 
         match event {
             Event::WindowEvent {

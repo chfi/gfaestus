@@ -53,16 +53,18 @@ use crate::view::View;
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
     line_draw_system: LineDrawSystem,
-    view: AtomicCell<View>,
+    view: Arc<AtomicCell<View>>,
     vertices: Vec<Vertex>,
     draw_grid: bool,
     pub anim_handler: AnimHandler,
     base_node_width: f32,
-    // anim_thread: UIThread,
-    // anim_cmd_tx: channel::Sender<UICmd>,
 }
 
 impl MainView {
+    pub fn anim_handler_thread(&self) -> AnimHandlerThread {
+        anim_handler_thread(self.anim_handler.clone(), self.view.clone())
+    }
+
     pub fn new<R>(gfx_queue: Arc<Queue>, render_pass: &Arc<R>) -> Result<MainView>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
@@ -88,7 +90,7 @@ impl MainView {
         let view = View::default();
 
         let anim_handler = AnimHandler::new(view);
-        let view = AtomicCell::new(view);
+        let view = Arc::new(AtomicCell::new(view));
 
         let base_node_width = 100.0;
 
@@ -278,7 +280,108 @@ pub enum MainViewSendMsg {
     },
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum AnimMsg {
+    SetMousePan(Option<Point>),
+    PanConst { dx: Option<f32>, dy: Option<f32> },
+    PanDelta { dxy: Point },
+    ZoomDelta { dz: f32 },
+}
+
+pub struct AnimHandlerThread {
+    view: Arc<AtomicCell<View>>,
+    mouse_pos: Arc<AtomicCell<Option<Point>>>,
+    _join_handle: std::thread::JoinHandle<()>,
+    msg_tx: channel::Sender<AnimMsg>,
+}
+
+impl AnimHandlerThread {
+    pub fn view(&self) -> View {
+        self.view.load()
+    }
+
+    pub fn set_mouse_pos(&self, pos: Option<Point>) {
+        self.mouse_pos.store(pos);
+    }
+
+    pub fn set_mouse_pan(&self, origin: Option<Point>) {
+        self.msg_tx.send(AnimMsg::SetMousePan(origin)).unwrap();
+    }
+
+    pub fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
+        self.msg_tx.send(AnimMsg::PanConst { dx, dy }).unwrap();
+    }
+
+    pub fn pan_delta(&self, dxy: Point) {
+        self.msg_tx.send(AnimMsg::PanDelta { dxy }).unwrap();
+    }
+
+    pub fn zoom_delta(&self, dz: f32) {
+        self.msg_tx.send(AnimMsg::ZoomDelta { dz }).unwrap();
+    }
+}
+
+pub fn anim_handler_thread(
+    anim_handler: AnimHandler,
+    view: Arc<AtomicCell<View>>,
+) -> AnimHandlerThread {
+    let mouse_pos = Arc::new(AtomicCell::new(None));
+
+    let inner_view = view.clone();
+    let inner_mouse_pos = mouse_pos.clone();
+
+    let (msg_tx, msg_rx) = channel::unbounded::<AnimMsg>();
+
+    let _join_handle = std::thread::spawn(move || {
+        let update_delay = std::time::Duration::from_millis(5);
+        let sleep_delay = std::time::Duration::from_micros(2500);
+
+        let view = inner_view;
+        let mouse_pos = inner_mouse_pos;
+        let mut anim = anim_handler;
+
+        let mut last_update = std::time::Instant::now();
+
+        loop {
+            while let Ok(msg) = msg_rx.try_recv() {
+                match msg {
+                    AnimMsg::SetMousePan(origin) => match origin {
+                        Some(origin) => anim.start_mouse_pan(origin),
+                        None => anim.end_mouse_pan(),
+                    },
+                    AnimMsg::PanConst { dx, dy } => {
+                        anim.pan_const(dx, dy);
+                    }
+                    AnimMsg::PanDelta { dxy } => {
+                        anim.pan_delta(dxy);
+                    }
+                    AnimMsg::ZoomDelta { dz } => {
+                        let view = view.load();
+                        anim.zoom_delta(view.scale, dz)
+                    }
+                }
+            }
+
+            if last_update.elapsed() > update_delay {
+                let dt = last_update.elapsed().as_secs_f32();
+                let pos = mouse_pos.load();
+                anim.update_cell(&view, pos, dt);
+                last_update = std::time::Instant::now();
+            } else {
+                std::thread::sleep(sleep_delay);
+            }
+        }
+    });
+
+    AnimHandlerThread {
+        view,
+        _join_handle,
+        mouse_pos,
+        msg_tx,
+    }
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct AnimHandler {
     mouse_pan_screen_origin: Option<Point>,
     view_anim_target: Option<View>,
@@ -395,7 +498,7 @@ impl AnimHandler {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct AnimSettings {
     // zoom_friction:
     // pan_friction:
