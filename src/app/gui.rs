@@ -71,6 +71,10 @@ impl GfaestusGui {
 
         let ctx = egui::CtxRef::default();
 
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals.window_corner_radius = 0.0;
+        ctx.set_style(style);
+
         let font_defs = {
             let mut font_defs = egui::FontDefinitions::default();
             let fam_size = &mut font_defs.family_and_size;
@@ -143,17 +147,6 @@ impl GfaestusGui {
         self.selected_node_id = node;
     }
 
-    fn node_select_info(&self, at: Point, node_id: NodeId) {
-        let pos = egui::pos2(at.x, at.y);
-
-        egui::Area::new("node_select_info")
-            .fixed_pos(pos)
-            .show(&self.ctx, |ui| {
-                let label = format!("Selected: {}", node_id.0);
-                ui.label(label);
-            });
-    }
-
     fn graph_stats(&self, at: Point) {
         let pos = egui::pos2(at.x, at.y);
         let stats = self.graph_stats.stats;
@@ -209,10 +202,35 @@ impl GfaestusGui {
         }
 
         if let Some(node_id) = self.selected_node_id {
-            let x = 12.0;
-            let y = 0.95 * scr.max.y;
-            let pos = Point { x, y };
-            self.node_select_info(pos, node_id);
+            let top_left = egui::Pos2 {
+                x: 0.0,
+                y: 0.80 * scr.max.y,
+            };
+            let bottom_right = egui::Pos2 {
+                x: 200.0,
+                y: scr.max.y,
+            };
+
+            let rect = egui::Rect {
+                min: top_left,
+                max: bottom_right,
+            };
+
+            egui::Window::new("node_select_info")
+                .fixed_rect(rect)
+                .title_bar(false)
+                .show(&self.ctx, |ui| {
+                    ui.expand_to_include_rect(egui::Rect {
+                        min: top_left,
+                        max: egui::Pos2 {
+                            x: bottom_right.x,
+                            y: bottom_right.y,
+                            // y: scr.max.y - 5.0,
+                        },
+                    });
+                    let label = format!("Selected: {}", node_id.0);
+                    ui.label(label);
+                });
         }
 
         if self.graph_stats.enabled {
@@ -222,16 +240,6 @@ impl GfaestusGui {
         if self.view_info.enabled {
             self.view_info(self.view_info.position);
         }
-
-        /*
-        if let Some(node_id) = self.selected_node_id {
-            egui::Area::new("node_info_box")
-                .fixed_pos(pos)
-                .show(&self.ctx, |ui| {
-                    ui.label(node_id.0.to_string());
-                });
-        }
-         */
     }
 
     fn draw_tessellated(
