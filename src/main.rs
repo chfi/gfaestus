@@ -140,6 +140,7 @@ fn main() {
 
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
+    let init_t = std::time::Instant::now();
 
     let (layout, top_left, bottom_right, stats) = gfa_with_layout(gfa_file, layout_file).unwrap();
 
@@ -342,6 +343,8 @@ fn main() {
     });
 
     let anim_thread = main_view.anim_handler_thread();
+
+    println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     event_loop.run(move |event, _, control_flow| {
         let dt = last_frame_t.elapsed().as_secs_f32();
@@ -570,13 +573,6 @@ fn main() {
 
                     mouse_pos = point;
 
-                    let node_id_at = main_view
-                        .read_node_id_at(width as u32, height as u32, point)
-                        .map(|nid| NodeId::from(nid as u64));
-                    gui.set_hover_node(node_id_at);
-
-                    // anim_thread.set_mouse_pos(Some(point));
-
                     #[rustfmt::skip]
                         let to_world_map = {
                             let w = width;
@@ -639,7 +635,6 @@ fn main() {
         }
 
         anim_thread.set_mouse_pos(Some(mouse_pos));
-        // main_view.tick_animation(Some(mouse_pos), dt);
 
         match event {
             Event::WindowEvent {
@@ -655,14 +650,23 @@ fn main() {
                 recreate_swapchain = true;
             }
             Event::RedrawEventsCleared => {
+                let frame_t = std::time::Instant::now();
+
+                previous_frame_end.as_mut().unwrap().cleanup_finished();
+
+                let node_id_at = main_view
+                    .read_node_id_at(width as u32, height as u32, mouse_pos)
+                    .map(|nid| NodeId::from(nid as u64));
+
+                gui.set_hover_node(node_id_at);
+                if mouse_pressed {
+                    gui.set_selected_node(node_id_at);
+                }
+
                 gui.set_view_info_view(main_view.view());
 
                 gui.begin_frame(gui_screen_rect);
                 gui_screen_rect = None;
-
-                let frame_t = std::time::Instant::now();
-
-                previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 if recreate_swapchain {
                     let dimensions: [u32; 2] = surface.window().inner_size().into();
@@ -769,6 +773,8 @@ fn main() {
 
                 match future {
                     Ok(future) => {
+                        future.wait(None).unwrap();
+
                         previous_frame_end = Some(future.boxed());
                     }
                     Err(FlushError::OutOfDate) => {
