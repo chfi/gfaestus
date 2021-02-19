@@ -334,7 +334,7 @@ fn main() {
 
     let mut last_frame_t = std::time::Instant::now();
 
-    println!("MainView.view: {:?}", main_view.view);
+    println!("MainView.view: {:?}", main_view.view());
 
     let mut gui_screen_rect = Some(Point {
         x: width,
@@ -505,10 +505,11 @@ fn main() {
                             let w = width;
                             let h = height;
 
-                            let s = main_view.view.scale;
+                            let view = main_view.view();
+                            let s = view.scale;
 
-                            let vcx = main_view.view.center.x;
-                            let vcy = main_view.view.center.y;
+                            let vcx = view.center.x;
+                            let vcy = view.center.y;
 
                             // transform from screen coords (top left (0, 0), bottom right (w, h))
                             // to screen center = (0, 0), bottom right (w/2, h/2);
@@ -573,10 +574,11 @@ fn main() {
                             let w = width;
                             let h = height;
 
-                            let s = main_view.view.scale;
+                            let view = main_view.view();
+                            let s = view.scale;
 
-                            let vcx = main_view.view.center.x;
-                            let vcy = main_view.view.center.y;
+                            let vcx = view.center.x;
+                            let vcy = view.center.y;
 
                             // transform from screen coords (top left (0, 0), bottom right (w, h))
                             // to screen center = (0, 0), bottom right (w/2, h/2);

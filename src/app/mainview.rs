@@ -28,7 +28,9 @@ use vulkano::swapchain::{
     SwapchainCreationError,
 };
 
+use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
+
 use std::sync::Arc;
 use std::time::Instant;
 use vulkano::sync::{self, FlushError, GpuFuture};
@@ -51,7 +53,7 @@ use crate::view::View;
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
     line_draw_system: LineDrawSystem,
-    pub view: View,
+    view: AtomicCell<View>,
     vertices: Vec<Vertex>,
     draw_grid: bool,
     pub anim_handler: AnimHandler,
@@ -86,6 +88,7 @@ impl MainView {
         let view = View::default();
 
         let anim_handler = AnimHandler::new(view);
+        let view = AtomicCell::new(view);
 
         let base_node_width = 100.0;
 
@@ -101,12 +104,11 @@ impl MainView {
     }
 
     pub fn view(&self) -> View {
-        self.view
+        self.view.load()
     }
 
     pub fn tick_animation(&mut self, mouse_pos: Option<Point>, dt: f32) {
-        let new_view = self.anim_handler.update(self.view, mouse_pos, dt);
-        self.view = new_view;
+        self.anim_handler.update_cell(&self.view, mouse_pos, dt);
     }
 
     pub fn set_initial_view(&mut self, center: Option<Point>, scale: Option<f32>) {
@@ -116,7 +118,7 @@ impl MainView {
     }
 
     pub fn reset_view(&mut self) {
-        self.view = self.anim_handler.initial_view;
+        self.view.store(self.anim_handler.initial_view);
     }
 
     pub fn set_vertices<VI>(&mut self, vertices: VI)
@@ -137,17 +139,18 @@ impl MainView {
         dynamic_state: &DynamicState,
         offset: Point,
     ) -> Result<AutoCommandBuffer> {
+        let view = self.view.load();
         let node_width = {
             let mut width = self.base_node_width;
-            if self.view.scale > 100.0 {
-                width *= self.view.scale / 100.0;
+            if view.scale > 100.0 {
+                width *= view.scale / 100.0;
             }
             width
         };
         self.node_draw_system.draw(
             dynamic_state,
             self.vertices.iter().copied(),
-            self.view,
+            view,
             offset,
             node_width,
         )
@@ -163,15 +166,16 @@ impl MainView {
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
+        let view = self.view.load();
         let node_width = {
             let mut width = self.base_node_width;
-            if self.view.scale > 100.0 {
-                width *= self.view.scale / 100.0;
+            if view.scale > 100.0 {
+                width *= view.scale / 100.0;
             }
             width
         };
         self.node_draw_system
-            .draw(dynamic_state, vertices, self.view, offset, node_width)
+            .draw(dynamic_state, vertices, view, offset, node_width)
     }
 
     pub fn read_node_id_at(
@@ -193,15 +197,20 @@ impl MainView {
     }
 
     pub fn draw_lines(&self, dynamic_state: &DynamicState) -> Result<AutoCommandBuffer> {
-        self.line_draw_system.draw_stored(dynamic_state, self.view)
+        let view = self.view.load();
+        self.line_draw_system.draw_stored(dynamic_state, view)
     }
 
-    pub fn set_view_center(&mut self, center: Point) {
-        self.view.center = center;
+    pub fn set_view_center(&self, center: Point) {
+        let mut view = self.view.load();
+        view.center = center;
+        self.view.store(view);
     }
 
     pub fn set_view_scale(&mut self, scale: f32) {
-        self.view.scale = scale;
+        let mut view = self.view.load();
+        view.scale = scale;
+        self.view.store(view);
     }
 
     pub fn set_mouse_pan(&mut self, origin: Option<Point>) {
@@ -220,7 +229,8 @@ impl MainView {
     }
 
     pub fn zoom_delta(&mut self, dz: f32) {
-        self.anim_handler.zoom_delta(self.view.scale, dz)
+        let view = self.view.load();
+        self.anim_handler.zoom_delta(view.scale, dz)
     }
 }
 
@@ -289,7 +299,14 @@ impl AnimHandler {
         }
     }
 
+    fn update_cell(&mut self, view: &AtomicCell<View>, mouse_pos: Option<Point>, dt: f32) {
+        let before = view.load();
+        let new = self.update(before, mouse_pos, dt);
+        view.store(new);
+    }
+
     fn update(&mut self, mut view: View, mouse_pos: Option<Point>, dt: f32) -> View {
+        // println!("dt {}", dt);
         view.scale += view.scale * dt * self.view_scale_delta;
 
         if let Some(min_scale) = self.settings.min_view_scale {
