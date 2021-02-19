@@ -309,8 +309,19 @@ impl AnimHandler {
 
         view.center += dxy * view.scale;
 
-        let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
-        let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
+        // let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
+        // let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
+
+        let zoom_friction = if dt >= 1.0 {
+            0.0
+        } else {
+            1.0 - (10.0_f32.powf(dt - 1.0))
+        };
+        let pan_friction = if dt >= 1.0 {
+            0.0
+        } else {
+            1.0 - (10.0_f32.powf(dt - 1.0))
+        };
 
         self.view_pan_delta *= pan_friction;
         self.view_scale_delta *= zoom_friction;
