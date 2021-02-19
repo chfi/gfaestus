@@ -240,6 +240,34 @@ impl GfaestusGui {
         if self.view_info.enabled {
             self.view_info(self.view_info.position);
         }
+
+        {
+            let mouse_egui = self.ctx.is_pointer_over_area();
+            let p0 = egui::Pos2 {
+                x: 0.8 * scr.max.x,
+                y: 0.0,
+            };
+
+            let p1 = egui::Pos2 {
+                x: scr.max.x,
+                y: 80.0,
+            };
+
+            egui::Window::new("mouse_over_egui")
+                .fixed_rect(egui::Rect { min: p0, max: p1 })
+                .title_bar(false)
+                .show(&self.ctx, |ui| {
+                    if mouse_egui {
+                        ui.label("Mouse is over egui");
+                    } else {
+                        ui.label("Mouse outside egui");
+                    }
+                });
+        }
+    }
+
+    pub fn pointer_over_gui(&self) -> bool {
+        self.ctx.is_pointer_over_area()
     }
 
     fn draw_tessellated(

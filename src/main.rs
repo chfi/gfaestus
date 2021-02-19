@@ -424,11 +424,6 @@ fn main() {
 
                         gui.push_event(egui_event);
 
-                        let node_id_at = main_view
-                            .read_node_id_at(width as u32, height as u32, focus)
-                            .map(|nid| NodeId::from(nid as u64));
-                        gui.set_selected_node(node_id_at);
-
                         #[rustfmt::skip]
                         let to_world_map = {
                             let w = width;
@@ -463,14 +458,19 @@ fn main() {
                         // };
 
                         // eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
-
                         // eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
 
                         let mut origin = focus;
                         origin.x -= width / 2.0;
                         origin.y -= height / 2.0;
 
-                        main_view.set_mouse_pan(Some(focus));
+                        if !gui.pointer_over_gui() {
+                            let node_id_at = main_view
+                                .read_node_id_at(width as u32, height as u32, focus)
+                                .map(|nid| NodeId::from(nid as u64));
+                            gui.set_selected_node(node_id_at);
+                            main_view.set_mouse_pan(Some(focus));
+                        }
                     } else {
                         main_view.set_mouse_pan(None);
                     }
