@@ -35,6 +35,10 @@ pub struct GfaestusGui {
     gui_draw_system: GuiDrawSystem,
     graph_stats: GraphStatsUi,
     view_info: ViewInfoUi,
+
+    inspection_ui: bool,
+    settings_ui: bool,
+    memory_ui: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -123,6 +127,9 @@ impl GfaestusGui {
             gui_draw_system,
             graph_stats,
             view_info,
+            inspection_ui: false,
+            settings_ui: false,
+            memory_ui: false,
         })
     }
 
@@ -264,6 +271,31 @@ impl GfaestusGui {
                     }
                 });
         }
+
+        if self.inspection_ui {
+            egui::Window::new("inspection_ui_window")
+                .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
+        }
+
+        if self.settings_ui {
+            egui::Window::new("settings_ui_window").show(&self.ctx, |ui| self.ctx.settings_ui(ui));
+        }
+
+        if self.memory_ui {
+            egui::Window::new("memory_ui_window").show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+        }
+    }
+
+    pub fn toggle_inspection_ui(&mut self) {
+        self.inspection_ui = !self.inspection_ui;
+    }
+
+    pub fn toggle_settings_ui(&mut self) {
+        self.settings_ui = !self.settings_ui;
+    }
+
+    pub fn toggle_memory_ui(&mut self) {
+        self.memory_ui = !self.memory_ui;
     }
 
     pub fn pointer_over_gui(&self) -> bool {

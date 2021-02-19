@@ -366,6 +366,82 @@ fn main() {
                     mouse_pressed = true;
                 }
             }
+
+            if let SemanticInput::OtherKey { key, pressed } = semin {
+                use winit::event::VirtualKeyCode as Key;
+                match key {
+                    // Key::Key1 => {}
+                    // Key::Key2 => {}
+                    // Key::Key3 => {}
+                    // Key::Key4 => {}
+                    // Key::Key5 => {}
+                    // Key::Key6 => {}
+                    // Key::Key7 => {}
+                    // Key::Key8 => {}
+                    // Key::Key9 => {}
+                    // Key::Key0 => {}
+                    // Key::A => {}
+                    // Key::B => {}
+                    // Key::C => {}
+                    // Key::D => {}
+                    // Key::E => {}
+                    // Key::F => {}
+                    // Key::G => {}
+                    // Key::H => {}
+                    // Key::I => {}
+                    // Key::J => {}
+                    // Key::K => {}
+                    // Key::L => {}
+                    // Key::M => {}
+                    // Key::N => {}
+                    // Key::O => {}
+                    // Key::P => {}
+                    // Key::Q => {}
+                    // Key::R => {}
+                    // Key::S => {}
+                    // Key::T => {}
+                    // Key::U => {}
+                    // Key::V => {}
+                    // Key::W => {}
+                    // Key::X => {}
+                    // Key::Y => {}
+                    // Key::Z => {}
+                    // Key::Escape => {}
+                    Key::F1 => {
+                        if pressed {
+                            gui.toggle_inspection_ui();
+                        }
+                    }
+                    Key::F2 => {
+                        if pressed {
+                            gui.toggle_settings_ui();
+                        }
+                    }
+                    Key::F3 => {
+                        if pressed {
+                            gui.toggle_memory_ui();
+                        }
+                    }
+                    // Key::F2 => {}
+                    // Key::F3 => {}
+                    // Key::F4 => {}
+                    // Key::F5 => {}
+                    // Key::F6 => {}
+                    // Key::F7 => {}
+                    // Key::F8 => {}
+                    // Key::F9 => {}
+                    // Key::F10 => {}
+                    // Key::F11 => {}
+                    // Key::Pause => {}
+                    // Key::Insert => {}
+                    // Key::Home => {}
+                    // Key::Delete => {}
+                    // Key::End => {}
+                    // Key::PageDown => {}
+                    // Key::PageUp => {}
+                    _ => {}
+                }
+            }
         }
 
         while let Ok(action) = input_action_rx.try_recv() {

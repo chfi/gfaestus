@@ -19,6 +19,7 @@ use crate::geometry::*;
 
 // use crate::ui::UICmd;
 
+#[derive(Debug, Clone, Copy)]
 pub enum InputEvent {
     KeyboardInput(event::KeyboardInput),
     MouseInput(event::MouseButton, InputChange),
@@ -78,6 +79,10 @@ pub enum SemanticInput {
     MouseButtonPan(InputChange),
     MouseZoomDelta(f32),
     MouseCursorPos(Point),
+    OtherKey {
+        key: winit::event::VirtualKeyCode,
+        pressed: bool,
+    },
 }
 
 impl SemanticInput {
@@ -103,7 +108,7 @@ impl SemanticInput {
                         Key::Left => Some(SemIn::KeyPanLeft(input_change)),
                         Key::Space => Some(SemIn::KeyPause(input_change)),
                         Key::Return => Some(SemIn::KeyReset(input_change)),
-                        _ => None,
+                        x => Some(SemIn::OtherKey { key: x, pressed }),
                     };
 
                     return semantic_input;
@@ -307,6 +312,7 @@ impl InputActionWorker {
 
         let _worker_thread = thread::spawn(move || {
             while let Ok(in_event) = raw_event_rx.recv() {
+                if let InputEvent::KeyboardInput(ev) = in_event {}
                 if let Some(sem_ev) = SemanticInput::parse_input_event(in_event) {
                     semantic_input_tx.send(sem_ev).unwrap();
 
