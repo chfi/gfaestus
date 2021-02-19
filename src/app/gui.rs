@@ -39,6 +39,16 @@ pub struct GfaestusGui {
     inspection_ui: bool,
     settings_ui: bool,
     memory_ui: bool,
+
+    frame_rate_box: FrameRateBox,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct FrameRateBox {
+    enabled: bool,
+    fps: f32,
+    frame_time: f32,
+    frame: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -119,6 +129,13 @@ impl GfaestusGui {
             ..ViewInfoUi::default()
         };
 
+        let frame_rate_box = FrameRateBox {
+            enabled: true,
+            fps: 0.0,
+            frame_time: 0.0,
+            frame: 0,
+        };
+
         Ok(Self {
             ctx,
             events,
@@ -130,7 +147,14 @@ impl GfaestusGui {
             inspection_ui: false,
             settings_ui: false,
             memory_ui: false,
+            frame_rate_box,
         })
+    }
+
+    pub fn set_frame_rate(&mut self, frame: usize, fps: f32, frame_time: f32) {
+        self.frame_rate_box.frame = frame;
+        self.frame_rate_box.fps = fps;
+        self.frame_rate_box.frame_time = frame_time;
     }
 
     pub fn set_graph_stats(&mut self, stats: GraphStats) {
@@ -248,8 +272,7 @@ impl GfaestusGui {
             self.view_info(self.view_info.position);
         }
 
-        {
-            let mouse_egui = self.ctx.is_pointer_over_area();
+        if self.frame_rate_box.enabled {
             let p0 = egui::Pos2 {
                 x: 0.8 * scr.max.x,
                 y: 0.0,
@@ -264,11 +287,12 @@ impl GfaestusGui {
                 .fixed_rect(egui::Rect { min: p0, max: p1 })
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
-                    if mouse_egui {
-                        ui.label("Mouse is over egui");
-                    } else {
-                        ui.label("Mouse outside egui");
-                    }
+                    // ui.label(format!("Frame: {}", self.frame_rate_box.frame));
+                    ui.label(format!("FPS:   {:.2}", self.frame_rate_box.fps));
+                    ui.label(format!(
+                        "update time: {:.2}",
+                        self.frame_rate_box.frame_time
+                    ));
                 });
         }
 

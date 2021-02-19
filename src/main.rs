@@ -325,7 +325,7 @@ fn main() {
 
     let mut paused = false;
 
-    const FRAME_HISTORY_LEN: usize = 30;
+    const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
 
@@ -774,7 +774,6 @@ fn main() {
                 match future {
                     Ok(future) => {
                         future.wait(None).unwrap();
-
                         previous_frame_end = Some(future.boxed());
                     }
                     Err(FlushError::OutOfDate) => {
@@ -790,17 +789,16 @@ fn main() {
                 let frame_time = frame_t.elapsed().as_secs_f32();
                 frame_time_history[frame % frame_time_history.len()] = frame_time;
 
-                /*
-                if frame > FRAME_HISTORY_LEN && frame % 30 == 0 {
+                if frame > FRAME_HISTORY_LEN && frame % FRAME_HISTORY_LEN == 0 {
                     let ft_sum: f32 = frame_time_history.iter().sum();
                     let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
                     let fps = 1.0 / avg;
-                    println!("time: {:.2}\tframe: {}", t, frame);
-                    println!("avg update time: {:.6}\t{} FPS", avg, fps);
-                    println!("node vertex & color count: {}", vertex_count);
-                    println!("view scale {}\tlast width: {}", view.scale, last_width);
+                    gui.set_frame_rate(frame, fps, avg);
+                    // println!("time: {:.2}\tframe: {}", t, frame);
+                    // println!("avg update time: {:.6}\t{} FPS", avg, fps);
+                    // println!("node vertex & color count: {}", vertex_count);
+                    // println!("view scale {}\tlast width: {}", view.scale, last_width);
                 }
-                */
 
                 frame += 1;
             }
