@@ -1,32 +1,25 @@
-#![allow(unused_imports)]
-
-use vulkano::descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract};
+#[allow(unused_imports)]
 use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
-use vulkano::format::Format;
-use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{ImageUsage, SwapchainImage};
+#[allow(unused_imports)]
+use vulkano::framebuffer::{
+    Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
+};
+use vulkano::image::{AttachmentImage, ImageUsage, SwapchainImage};
+#[allow(unused_imports)]
 use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+
 use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
-    image::{AttachmentImage, Dimensions},
-};
-use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::vertex::TwoBuffersDefinition,
-};
-
-use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline};
-
 use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
-    SwapchainCreationError,
+    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode,
+    SurfaceTransform, Swapchain, SwapchainCreationError,
 };
 use vulkano::sync::{self, FlushError, GpuFuture};
+use vulkano::{
+    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
+    pipeline::viewport::Viewport,
+};
 
 use vulkano_win::VkSurfaceBuild;
-
-use crossbeam::channel;
 
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -36,25 +29,18 @@ use std::sync::Arc;
 
 use std::time::Instant;
 
-use gfaestus::geometry::*;
-use gfaestus::gfa::*;
-use gfaestus::view;
-use gfaestus::view::View;
-
-use gfaestus::universe::*;
-
-use gfaestus::input::*;
-
-use gfaestus::render::*;
-
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
+use gfaestus::geometry::*;
+use gfaestus::input::*;
+use gfaestus::render::*;
+use gfaestus::universe::*;
 
 use rgb::*;
 
 use nalgebra_glm as glm;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -111,7 +97,8 @@ fn main() {
     let t = std::time::Instant::now();
     let init_t = std::time::Instant::now();
 
-    let (universe, stats) = universe_from_gfa_layout(gfa_file, layout_file).unwrap();
+    let (universe, stats) =
+        universe_from_gfa_layout(gfa_file, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
@@ -138,7 +125,9 @@ fn main() {
 
     let queue_family = physical
         .queue_families()
-        .find(|&q| q.supports_graphics() && surface.is_supported(q).unwrap_or(false))
+        .find(|&q| {
+            q.supports_graphics() && surface.is_supported(q).unwrap_or(false)
+        })
         .unwrap();
 
     let device_ext = DeviceExtensions {
@@ -269,12 +258,15 @@ fn main() {
             .unwrap()
     };
 
-    let mut framebuffers = window_size_update(&images, render_pass.clone(), &mut dynamic_state);
+    let mut framebuffers =
+        window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
     let mut width = 100.0;
     let mut height = 100.0;
 
-    if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0)) {
+    if let Some(viewport) =
+        dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
+    {
         width = viewport.dimensions[0];
         height = viewport.dimensions[1];
     }
@@ -292,7 +284,6 @@ fn main() {
     };
 
     let mut last_time = Instant::now();
-    let mut t = 0.0;
 
     let mut paused = false;
 
@@ -318,12 +309,10 @@ fn main() {
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     event_loop.run(move |event, _, control_flow| {
-        let dt = last_frame_t.elapsed().as_secs_f32();
         last_frame_t = std::time::Instant::now();
         let now = Instant::now();
         let delta = now.duration_since(last_time);
 
-        t += delta.as_secs_f32();
         last_time = now;
 
         if let Event::WindowEvent { event, .. } = &event {
@@ -504,7 +493,8 @@ fn main() {
 
                             view_scale_screen
                         };
-                        let projected = to_world_map * glm::vec4(focus.x, focus.y, 0.0, 1.0);
+                        let projected = to_world_map
+                            * glm::vec4(focus.x, focus.y, 0.0, 1.0);
 
                         // let proj = Point {
                         //     x: projected[0],
@@ -520,7 +510,11 @@ fn main() {
 
                         if !gui.pointer_over_gui() {
                             let node_id_at = main_view
-                                .read_node_id_at(width as u32, height as u32, focus)
+                                .read_node_id_at(
+                                    width as u32,
+                                    height as u32,
+                                    focus,
+                                )
                                 .map(|nid| NodeId::from(nid as u64));
                             gui.set_selected_node(node_id_at);
                             // main_view.set_mouse_pan(Some(focus));
@@ -571,7 +565,8 @@ fn main() {
 
                             view_scale_screen
                         };
-                    let projected = to_world_map * glm::vec4(point.x, point.y, 0.0, 1.0);
+                    let projected =
+                        to_world_map * glm::vec4(point.x, point.y, 0.0, 1.0);
 
                     gui.set_view_info_mouse(
                         point,
@@ -640,21 +635,30 @@ fn main() {
                 gui_screen_rect = None;
 
                 if recreate_swapchain {
-                    let dimensions: [u32; 2] = surface.window().inner_size().into();
+                    let dimensions: [u32; 2] =
+                        surface.window().inner_size().into();
 
                     let (new_swapchain, new_images) =
                         match swapchain.recreate_with_dimensions(dimensions) {
                             Ok(r) => r,
-                            Err(SwapchainCreationError::UnsupportedDimensions) => return,
-                            Err(e) => panic!("Failed to recreate swapchain: {:?}", e),
+                            Err(
+                                SwapchainCreationError::UnsupportedDimensions,
+                            ) => return,
+                            Err(e) => {
+                                panic!("Failed to recreate swapchain: {:?}", e)
+                            }
                         };
 
                     swapchain = new_swapchain;
 
-                    framebuffers =
-                        window_size_update(&new_images, render_pass.clone(), &mut dynamic_state);
+                    framebuffers = window_size_update(
+                        &new_images,
+                        render_pass.clone(),
+                        &mut dynamic_state,
+                    );
 
-                    if let Some(viewport) = dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
+                    if let Some(viewport) =
+                        dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
                     {
                         width = viewport.dimensions[0];
                         height = viewport.dimensions[1];
@@ -669,13 +673,16 @@ fn main() {
                 }
 
                 let (image_num, suboptimal, acquire_future) =
-                    match swapchain::acquire_next_image(swapchain.clone(), None) {
+                    match swapchain::acquire_next_image(swapchain.clone(), None)
+                    {
                         Ok(r) => r,
                         Err(AcquireError::OutOfDate) => {
                             recreate_swapchain = true;
                             return;
                         }
-                        Err(e) => panic!("Failed to acquire next image: {:?}", e),
+                        Err(e) => {
+                            panic!("Failed to acquire next image: {:?}", e)
+                        }
                     };
 
                 if suboptimal {
@@ -691,11 +698,12 @@ fn main() {
                 // let clear = [0.7, 0.7, 0.7, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
-                let mut builder = AutoCommandBufferBuilder::primary_one_time_submit(
-                    device.clone(),
-                    queue.family(),
-                )
-                .unwrap();
+                let mut builder =
+                    AutoCommandBufferBuilder::primary_one_time_submit(
+                        device.clone(),
+                        queue.family(),
+                    )
+                    .unwrap();
 
                 builder
                     .begin_render_pass(
@@ -714,12 +722,15 @@ fn main() {
 
                 if draw_grid {
                     unsafe {
-                        let cmd_buf = main_view.draw_lines(&dynamic_state).unwrap();
+                        let cmd_buf =
+                            main_view.draw_lines(&dynamic_state).unwrap();
                         builder.execute_commands(cmd_buf).unwrap();
                     }
                 }
 
-                let future = if let Some(gui_res) = gui.end_frame_and_draw(&dynamic_state) {
+                let future = if let Some(gui_res) =
+                    gui.end_frame_and_draw(&dynamic_state)
+                {
                     let (cmd_buf, future) = gui_res.unwrap();
                     unsafe {
                         builder.execute_commands(cmd_buf).unwrap();
@@ -740,7 +751,11 @@ fn main() {
                     .join(future)
                     .then_execute(queue.clone(), command_buffer)
                     .unwrap()
-                    .then_swapchain_present(queue.clone(), swapchain.clone(), image_num)
+                    .then_swapchain_present(
+                        queue.clone(),
+                        swapchain.clone(),
+                        image_num,
+                    )
                     .then_signal_fence_and_flush();
 
                 match future {
@@ -750,16 +765,19 @@ fn main() {
                     }
                     Err(FlushError::OutOfDate) => {
                         recreate_swapchain = true;
-                        previous_frame_end = Some(sync::now(device.clone()).boxed());
+                        previous_frame_end =
+                            Some(sync::now(device.clone()).boxed());
                     }
                     Err(e) => {
                         eprintln!("Failed to flush future: {:?}", e);
-                        previous_frame_end = Some(sync::now(device.clone()).boxed());
+                        previous_frame_end =
+                            Some(sync::now(device.clone()).boxed());
                     }
                 }
 
                 let frame_time = frame_t.elapsed().as_secs_f32();
-                frame_time_history[frame % frame_time_history.len()] = frame_time;
+                frame_time_history[frame % frame_time_history.len()] =
+                    frame_time;
 
                 if frame > FRAME_HISTORY_LEN && frame % FRAME_HISTORY_LEN == 0 {
                     let ft_sum: f32 = frame_time_history.iter().sum();

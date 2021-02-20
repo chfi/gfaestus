@@ -1,6 +1,10 @@
 #[allow(unused_imports)]
-use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer};
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::buffer::{
+    BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer,
+};
+use vulkano::command_buffer::{
+    AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
+};
 use vulkano::device::Queue;
 use vulkano::{
     descriptor::descriptor_set::PersistentDescriptorSet,
@@ -123,11 +127,12 @@ impl NodeDrawSystem {
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -169,8 +174,9 @@ impl NodeDrawSystem {
         };
 
         let data_buffer = {
-            let data_iter =
-                (0..((viewport_dims[0] as u32) * (viewport_dims[1] as u32))).map(|_| 0u32);
+            let data_iter = (0..((viewport_dims[0] as u32)
+                * (viewport_dims[1] as u32)))
+                .map(|_| 0u32);
             CpuAccessibleBuffer::from_iter(
                 self.gfx_queue.device().clone(),
                 BufferUsage::all(),
@@ -181,8 +187,8 @@ impl NodeDrawSystem {
 
         let layout = self.pipeline.descriptor_set_layout(0).unwrap();
         let set = {
-            let set =
-                PersistentDescriptorSet::start(layout.clone()).add_buffer(data_buffer.clone())?;
+            let set = PersistentDescriptorSet::start(layout.clone())
+                .add_buffer(data_buffer.clone())?;
             let set = set.build()?;
             Arc::new(set)
         };

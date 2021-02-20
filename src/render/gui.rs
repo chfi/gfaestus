@@ -1,21 +1,26 @@
 use vulkano::framebuffer::{RenderPassAbstract, Subpass};
-use vulkano::sampler::{
-    Filter, MipmapMode, Sampler, SamplerAddressMode, UnnormalizedSamplerAddressMode,
-};
+use vulkano::sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode};
+
 #[allow(unused_imports)]
 use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
+    buffer::{
+        BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer,
+    },
     image::{
-        AttachmentImage, Dimensions, ImageUsage, ImmutableImage, StorageImage, SwapchainImage,
+        AttachmentImage, Dimensions, ImageUsage, ImmutableImage, StorageImage,
+        SwapchainImage,
     },
 };
 use vulkano::{
-    command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState},
+    command_buffer::{
+        AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
+    },
     sync::GpuFuture,
 };
-use vulkano::{descriptor::descriptor_set::PersistentDescriptorSet, device::Queue};
+use vulkano::{
+    descriptor::descriptor_set::PersistentDescriptorSet, device::Queue,
+};
 
-use vulkano::format::Format;
 use vulkano::format::R8Unorm;
 
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
@@ -25,14 +30,6 @@ use std::sync::Arc;
 use anyhow::Result;
 
 use rustc_hash::FxHashMap;
-
-use nalgebra_glm as glm;
-
-use crate::geometry::*;
-use crate::view;
-use crate::view::View;
-
-use super::Vertex;
 
 mod vs {
     vulkano_shaders::shader! {
@@ -79,8 +76,6 @@ pub struct GuiDrawSystem {
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     vertex_buffer_pool: CpuBufferPool<GuiVertex>,
     index_buffer_pool: CpuBufferPool<u32>,
-    // descriptor_set
-    // vertex_buffers: Vec<(
 }
 
 impl GuiDrawSystem {
@@ -96,8 +91,10 @@ impl GuiDrawSystem {
 
         let vertex_buffer_pool: CpuBufferPool<GuiVertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
-        let index_buffer_pool: CpuBufferPool<u32> =
-            CpuBufferPool::new(gfx_queue.device().clone(), BufferUsage::index_buffer());
+        let index_buffer_pool: CpuBufferPool<u32> = CpuBufferPool::new(
+            gfx_queue.device().clone(),
+            BufferUsage::index_buffer(),
+        );
 
         use vulkano::pipeline::blend::{AttachmentBlend, BlendFactor, BlendOp};
 
@@ -163,7 +160,10 @@ impl GuiDrawSystem {
         self.cached_texture.as_ref().map(|gt| gt.version)
     }
 
-    fn force_upload_texture(&mut self, texture: &egui::Texture) -> Result<Box<dyn GpuFuture>> {
+    fn force_upload_texture(
+        &mut self,
+        texture: &egui::Texture,
+    ) -> Result<Box<dyn GpuFuture>> {
         let (img, tex_future) = ImmutableImage::from_iter(
             texture.pixels.iter().cloned(),
             Dimensions::Dim2d {
@@ -202,11 +202,12 @@ impl GuiDrawSystem {
         dynamic_state: &DynamicState,
         clipped_meshes: &[egui::ClippedMesh],
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state

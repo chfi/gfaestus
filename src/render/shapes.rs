@@ -1,5 +1,7 @@
 use vulkano::buffer::{BufferUsage, CpuAccessibleBuffer};
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::command_buffer::{
+    AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
+};
 use vulkano::device::Queue;
 use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 
@@ -215,7 +217,12 @@ impl Shape {
         self
     }
 
-    pub fn border_filled(mut self, fill: RGBA<f32>, border: RGBA<f32>, width: f32) -> Self {
+    pub fn border_filled(
+        mut self,
+        fill: RGBA<f32>,
+        border: RGBA<f32>,
+        width: f32,
+    ) -> Self {
         self.style = DrawStyle::border_filled(fill, border, width);
         self
     }
@@ -308,11 +315,12 @@ impl ShapeDrawSystem {
         dynamic_state: &DynamicState,
         shape: Shape,
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -329,10 +337,20 @@ impl ShapeDrawSystem {
             Primitive::Rect {
                 top_left,
                 bottom_right,
-            } => rect_push_constant(color, viewport_dims, top_left, bottom_right, false),
-            Primitive::Circle { center, radius } => {
-                circle_push_constant(color, viewport_dims, center, radius, false)
-            }
+            } => rect_push_constant(
+                color,
+                viewport_dims,
+                top_left,
+                bottom_right,
+                false,
+            ),
+            Primitive::Circle { center, radius } => circle_push_constant(
+                color,
+                viewport_dims,
+                center,
+                radius,
+                false,
+            ),
         };
 
         builder.draw(
@@ -355,11 +373,12 @@ impl ShapeDrawSystem {
         circle_rad: f32,
         invert: bool,
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -398,11 +417,12 @@ impl ShapeDrawSystem {
         p1: Point,
         invert: bool,
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -413,8 +433,13 @@ impl ShapeDrawSystem {
             viewport.dimensions
         };
 
-        let push_constants =
-            rect_push_constant(RGBA::new(1.0, 1.0, 1.0, 1.0), viewport_dims, p0, p1, invert);
+        let push_constants = rect_push_constant(
+            RGBA::new(1.0, 1.0, 1.0, 1.0),
+            viewport_dims,
+            p0,
+            p1,
+            invert,
+        );
 
         builder.draw(
             self.pipeline.clone(),

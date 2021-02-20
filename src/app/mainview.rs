@@ -1,39 +1,13 @@
-use handlegraph::handle::NodeId;
-use vulkano::format::Format;
-use vulkano::framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass};
-use vulkano::image::{ImageUsage, SwapchainImage};
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::{
-    buffer::{BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer},
-    image::{AttachmentImage, Dimensions},
-};
-use vulkano::{
-    command_buffer::AutoCommandBuffer,
-    device::{Device, DeviceExtensions, RawDeviceExtensions},
-};
-use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::vertex::TwoBuffersDefinition,
-};
-use vulkano::{
-    descriptor::{descriptor_set::PersistentDescriptorSet, PipelineLayoutAbstract},
-    device::Queue,
-};
-
-use vulkano::pipeline::{viewport::Viewport, GraphicsPipeline};
-
-use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode, SurfaceTransform, Swapchain,
-    SwapchainCreationError,
-};
+use vulkano::command_buffer::AutoCommandBuffer;
+use vulkano::command_buffer::DynamicState;
+use vulkano::device::Queue;
+use vulkano::framebuffer::{RenderPassAbstract, Subpass};
+use vulkano::sync::GpuFuture;
 
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
 use std::sync::Arc;
-use std::time::Instant;
-use vulkano::sync::{self, FlushError, GpuFuture};
 
 use rgb::*;
 
@@ -41,13 +15,12 @@ use nalgebra_glm as glm;
 
 use anyhow::{Context, Result};
 
+use handlegraph::handle::NodeId;
+
 use crate::geometry::*;
 use crate::gfa::*;
 use crate::input::*;
-// use crate::layout::physics;
-// use crate::layout::*;
 use crate::render::*;
-use crate::view;
 use crate::view::View;
 
 pub struct MainView {
@@ -65,7 +38,10 @@ impl MainView {
         anim_handler_thread(self.anim_handler.clone(), self.view.clone())
     }
 
-    pub fn new<R>(gfx_queue: Arc<Queue>, render_pass: &Arc<R>) -> Result<MainView>
+    pub fn new<R>(
+        gfx_queue: Arc<Queue>,
+        render_pass: &Arc<R>,
+    ) -> Result<MainView>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
     {
@@ -113,7 +89,11 @@ impl MainView {
         self.anim_handler.update_cell(&self.view, mouse_pos, dt);
     }
 
-    pub fn set_initial_view(&mut self, center: Option<Point>, scale: Option<f32>) {
+    pub fn set_initial_view(
+        &mut self,
+        center: Option<Point>,
+        scale: Option<f32>,
+    ) {
         let center = center.unwrap_or(self.anim_handler.initial_view.center);
         let scale = scale.unwrap_or(self.anim_handler.initial_view.scale);
         self.anim_handler.initial_view = View { center, scale };
@@ -176,8 +156,13 @@ impl MainView {
             }
             width
         };
-        self.node_draw_system
-            .draw(dynamic_state, vertices, view, offset, node_width)
+        self.node_draw_system.draw(
+            dynamic_state,
+            vertices,
+            view,
+            offset,
+            node_width,
+        )
     }
 
     pub fn read_node_id_at(
@@ -186,8 +171,11 @@ impl MainView {
         screen_height: u32,
         point: Point,
     ) -> Option<u32> {
-        self.node_draw_system
-            .read_node_id_at(screen_width, screen_height, point)
+        self.node_draw_system.read_node_id_at(
+            screen_width,
+            screen_height,
+            point,
+        )
     }
 
     pub fn add_lines(
@@ -198,7 +186,10 @@ impl MainView {
         self.line_draw_system.add_lines(lines, color)
     }
 
-    pub fn draw_lines(&self, dynamic_state: &DynamicState) -> Result<AutoCommandBuffer> {
+    pub fn draw_lines(
+        &self,
+        dynamic_state: &DynamicState,
+    ) -> Result<AutoCommandBuffer> {
         let view = self.view.load();
         self.line_draw_system.draw_stored(dynamic_state, view)
     }
@@ -402,13 +393,23 @@ impl AnimHandler {
         }
     }
 
-    fn update_cell(&mut self, view: &AtomicCell<View>, mouse_pos: Option<Point>, dt: f32) {
+    fn update_cell(
+        &mut self,
+        view: &AtomicCell<View>,
+        mouse_pos: Option<Point>,
+        dt: f32,
+    ) {
         let before = view.load();
         let new = self.update(before, mouse_pos, dt);
         view.store(new);
     }
 
-    fn update(&mut self, mut view: View, mouse_pos: Option<Point>, dt: f32) -> View {
+    fn update(
+        &mut self,
+        mut view: View,
+        mouse_pos: Option<Point>,
+        dt: f32,
+    ) -> View {
         // println!("dt {}", dt);
         view.scale += view.scale * dt * self.view_scale_delta;
 

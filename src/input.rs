@@ -4,20 +4,11 @@ use winit::{
     event_loop::ControlFlow,
 };
 
-/*
-use parking_lot::Mutex;
-use std::sync::Arc;
-use std::time::Instant;
-*/
-
 use std::thread;
 
 use crossbeam::channel;
 
 use crate::geometry::*;
-// use crate::view::View;
-
-// use crate::ui::UICmd;
 
 #[derive(Debug, Clone, Copy)]
 pub enum InputEvent {
@@ -30,18 +21,26 @@ pub enum InputEvent {
 }
 
 impl InputEvent {
-    pub fn from_window_event(win_event: &WindowEvent<'_>) -> Option<InputEvent> {
+    pub fn from_window_event(
+        win_event: &WindowEvent<'_>,
+    ) -> Option<InputEvent> {
         use WindowEvent as WinEvent;
         match win_event {
-            WinEvent::KeyboardInput { input, .. } => Some(InputEvent::KeyboardInput(*input)),
+            WinEvent::KeyboardInput { input, .. } => {
+                Some(InputEvent::KeyboardInput(*input))
+            }
             WinEvent::MouseInput { button, state, .. } => {
                 let input_change = match state {
                     winit::event::ElementState::Pressed => InputChange::Pressed,
-                    winit::event::ElementState::Released => InputChange::Released,
+                    winit::event::ElementState::Released => {
+                        InputChange::Released
+                    }
                 };
                 Some(InputEvent::MouseInput(*button, input_change))
             }
-            WinEvent::MouseWheel { delta, .. } => Some(InputEvent::MouseWheel(*delta)),
+            WinEvent::MouseWheel { delta, .. } => {
+                Some(InputEvent::MouseWheel(*delta))
+            }
             WinEvent::CursorMoved { position, .. } => {
                 let x = position.x as f32;
                 let y = position.y as f32;
@@ -93,7 +92,8 @@ impl SemanticInput {
             InputEvent::KeyboardInput(input) => {
                 use winit::event::VirtualKeyCode as Key;
 
-                let pressed = input.state == winit::event::ElementState::Pressed;
+                let pressed =
+                    input.state == winit::event::ElementState::Pressed;
                 let input_change = if pressed {
                     InputChange::Pressed
                 } else {
@@ -118,7 +118,9 @@ impl SemanticInput {
             }
             InputEvent::MouseInput(button, input_change) => {
                 let to_send = match button {
-                    event::MouseButton::Left => Some(SemIn::MouseButtonPan(input_change)),
+                    event::MouseButton::Left => {
+                        Some(SemIn::MouseButtonPan(input_change))
+                    }
                     _ => None,
                     // event::MouseButton::Right => {}
                     // event::MouseButton::Middle => {}
@@ -176,7 +178,8 @@ impl SemanticInputWorker {
 pub fn input_event_handler() -> SemanticInputWorker {
     let (input_tx, input_rx) = channel::unbounded::<InputEvent>();
 
-    let (semantic_input_tx, semantic_input_rx) = channel::unbounded::<SemanticInput>();
+    let (semantic_input_tx, semantic_input_rx) =
+        channel::unbounded::<SemanticInput>();
 
     let _worker_thread = thread::spawn(move || {
         while let Ok(in_event) = input_rx.recv() {
@@ -256,8 +259,12 @@ impl SemanticInputState {
                 self.key_pan_left = state.pressed();
                 Some(self.key_pan_action())
             }
-            SemIn::KeyPause(InputChange::Pressed) => Some(InputAction::PausePhysics),
-            SemIn::KeyReset(InputChange::Pressed) => Some(InputAction::ResetLayout),
+            SemIn::KeyPause(InputChange::Pressed) => {
+                Some(InputAction::PausePhysics)
+            }
+            SemIn::KeyReset(InputChange::Pressed) => {
+                Some(InputAction::ResetLayout)
+            }
             SemIn::MouseButtonPan(state) => {
                 use InputChange::{Pressed, Released};
                 match (state, self.mouse_pan) {
@@ -297,8 +304,10 @@ pub struct InputActionWorker {
 impl InputActionWorker {
     pub fn new() -> Self {
         let (raw_event_tx, raw_event_rx) = channel::unbounded::<InputEvent>();
-        let (semantic_input_tx, semantic_input_rx) = channel::unbounded::<SemanticInput>();
-        let (input_action_tx, input_action_rx) = channel::unbounded::<InputAction>();
+        let (semantic_input_tx, semantic_input_rx) =
+            channel::unbounded::<SemanticInput>();
+        let (input_action_tx, input_action_rx) =
+            channel::unbounded::<InputAction>();
 
         let mut input_state = SemanticInputState {
             key_pan_up: false,
@@ -313,7 +322,8 @@ impl InputActionWorker {
         let _worker_thread = thread::spawn(move || {
             while let Ok(in_event) = raw_event_rx.recv() {
                 if let InputEvent::KeyboardInput(ev) = in_event {}
-                if let Some(sem_ev) = SemanticInput::parse_input_event(in_event) {
+                if let Some(sem_ev) = SemanticInput::parse_input_event(in_event)
+                {
                     semantic_input_tx.send(sem_ev).unwrap();
 
                     let input_action = input_state.apply_sem_input(sem_ev);

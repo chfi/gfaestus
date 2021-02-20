@@ -1,5 +1,7 @@
 use vulkano::buffer::{BufferUsage, CpuBufferPool, ImmutableBuffer};
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState};
+use vulkano::command_buffer::{
+    AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
+};
 use vulkano::device::Queue;
 use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 
@@ -134,11 +136,12 @@ impl LineDrawSystem {
         dynamic_state: &DynamicState,
         view: View,
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -194,11 +197,12 @@ impl LineDrawSystem {
         color: RGB<f32>,
         view: View,
     ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder = AutoCommandBufferBuilder::secondary_graphics(
-            self.gfx_queue.device().clone(),
-            self.gfx_queue.family(),
-            self.pipeline.clone().subpass(),
-        )?;
+        let mut builder: AutoCommandBufferBuilder =
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.pipeline.clone().subpass(),
+            )?;
 
         let viewport_dims = {
             let viewport = dynamic_state

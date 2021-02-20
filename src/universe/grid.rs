@@ -4,8 +4,6 @@ use crate::geometry::*;
 
 // use anyhow::{Result};
 
-// pub type EntryVal
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct CellDims {
     pub width: f32,
@@ -136,7 +134,9 @@ impl QueryShape {
         }
 
         match self {
-            QueryShape::Circle { point, radius } => point.dist(query_point) <= *radius,
+            QueryShape::Circle { point, radius } => {
+                point.dist(query_point) <= *radius
+            }
             QueryShape::Rect { .. } => true,
         }
     }
@@ -258,11 +258,16 @@ impl<T: EntryVal> Cell<T> {
     }
 
     #[inline]
-    pub fn indices_in_x_radius(&self, x: f32, radius: f32) -> Option<(usize, usize)> {
+    pub fn indices_in_x_radius(
+        &self,
+        x: f32,
+        radius: f32,
+    ) -> Option<(usize, usize)> {
         let min_x = x - radius;
         let max_x = x + radius;
 
-        if max_x < self.top_left.x || max_x > self.top_left.x + self.dims.width {
+        if max_x < self.top_left.x || max_x > self.top_left.x + self.dims.width
+        {
             return None;
         }
 
@@ -297,7 +302,12 @@ impl<T: EntryVal> Cell<T> {
     }
 
     #[inline]
-    pub fn remove_in_radius_by<F>(&mut self, point: Point, radius: f32, mut pred: F) -> Vec<T>
+    pub fn remove_in_radius_by<F>(
+        &mut self,
+        point: Point,
+        radius: f32,
+        mut pred: F,
+    ) -> Vec<T>
     where
         F: FnMut(Entry<T>) -> bool,
     {
@@ -336,8 +346,13 @@ pub struct Grid<T: EntryVal> {
 }
 
 impl<T: EntryVal> Grid<T> {
-    pub fn new(top_left: Point, grid_dims: GridDims, cell_dims: CellDims) -> Self {
-        let mut cells: Vec<Cell<T>> = Vec::with_capacity(grid_dims.cell_count());
+    pub fn new(
+        top_left: Point,
+        grid_dims: GridDims,
+        cell_dims: CellDims,
+    ) -> Self {
+        let mut cells: Vec<Cell<T>> =
+            Vec::with_capacity(grid_dims.cell_count());
 
         for column in 0..grid_dims.columns {
             for row in 0..grid_dims.rows {
@@ -377,7 +392,10 @@ impl<T: EntryVal> Grid<T> {
     }
 
     #[inline]
-    pub fn cell_col_row_at_point(&self, point: Point) -> Option<(usize, usize)> {
+    pub fn cell_col_row_at_point(
+        &self,
+        point: Point,
+    ) -> Option<(usize, usize)> {
         let (top_left, bottom_right) = self.world_rect();
         if point.x < top_left.x
             || point.y < top_left.y
@@ -426,7 +444,11 @@ impl<T: EntryVal> Grid<T> {
     /// the grid, or at all -- any cells that have any overlap with
     /// the rect are returned
     #[inline]
-    pub fn cell_indices_in_world_rect(&self, p0: Point, p1: Point) -> Vec<usize> {
+    pub fn cell_indices_in_world_rect(
+        &self,
+        p0: Point,
+        p1: Point,
+    ) -> Vec<usize> {
         let dims = self.world_unit_dims();
 
         let min_x = p0.x.min(p1.x);
@@ -453,7 +475,8 @@ impl<T: EntryVal> Grid<T> {
 
         for col in left..=right {
             for row in top..=bottom {
-                let ix = (row / self.grid_dims.columns) + (col % self.grid_dims.columns);
+                let ix = (row / self.grid_dims.columns)
+                    + (col % self.grid_dims.columns);
                 indices.push(ix);
             }
         }
@@ -464,7 +487,11 @@ impl<T: EntryVal> Grid<T> {
 
 impl<T: EntryVal> Grid<T> {
     #[inline]
-    pub fn insert_entry(&mut self, point: Point, value: T) -> Option<(usize, usize)> {
+    pub fn insert_entry(
+        &mut self,
+        point: Point,
+        value: T,
+    ) -> Option<(usize, usize)> {
         let grid_ix = self.cell_index_at_point(point)?;
         let cell = self.cells.get_mut(grid_ix)?;
         let cell_ix = cell.insert_entry(point, value)?;

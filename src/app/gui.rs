@@ -9,9 +9,8 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
-use rgb::*;
 use vulkano::{
     command_buffer::{AutoCommandBuffer, DynamicState},
     device::Queue,
@@ -20,11 +19,7 @@ use vulkano::{
 };
 
 use crate::geometry::*;
-use crate::gfa::*;
-use crate::input::*;
-// use crate::render::*;
 use crate::render::GuiDrawSystem;
-use crate::view;
 use crate::view::View;
 
 pub struct GfaestusGui {
@@ -76,12 +71,17 @@ pub struct GraphStats {
 }
 
 impl GfaestusGui {
-    pub fn new<R>(gfx_queue: Arc<Queue>, render_pass: &Arc<R>) -> Result<GfaestusGui>
+    pub fn new<R>(
+        gfx_queue: Arc<Queue>,
+        render_pass: &Arc<R>,
+    ) -> Result<GfaestusGui>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
     {
-        let gui_draw_system =
-            GuiDrawSystem::new(gfx_queue, Subpass::from(render_pass.clone(), 0).unwrap());
+        let gui_draw_system = GuiDrawSystem::new(
+            gfx_queue,
+            Subpass::from(render_pass.clone(), 0).unwrap(),
+        );
 
         let ctx = egui::CtxRef::default();
 
@@ -165,7 +165,11 @@ impl GfaestusGui {
         self.view_info.view = view;
     }
 
-    pub fn set_view_info_mouse(&mut self, mouse_screen: Point, mouse_world: Point) {
+    pub fn set_view_info_mouse(
+        &mut self,
+        mouse_screen: Point,
+        mouse_world: Point,
+    ) {
         self.view_info.mouse_screen = mouse_screen;
         self.view_info.mouse_world = mouse_world;
     }
@@ -182,23 +186,24 @@ impl GfaestusGui {
         let pos = egui::pos2(at.x, at.y);
         let stats = self.graph_stats.stats;
 
-        egui::Area::new("graph_summary_stats")
-            .fixed_pos(pos)
-            .show(&self.ctx, |ui| {
+        egui::Area::new("graph_summary_stats").fixed_pos(pos).show(
+            &self.ctx,
+            |ui| {
                 ui.label(format!("nodes: {}", stats.node_count));
                 ui.label(format!("edges: {}", stats.edge_count));
                 ui.label(format!("paths: {}", stats.path_count));
                 ui.label(format!("total length: {}", stats.total_len));
-            });
+            },
+        );
     }
 
     fn view_info(&self, at: Point) {
         let pos = egui::pos2(at.x, at.y);
         let info = self.view_info;
 
-        egui::Area::new("view_mouse_info")
-            .fixed_pos(pos)
-            .show(&self.ctx, |ui| {
+        egui::Area::new("view_mouse_info").fixed_pos(pos).show(
+            &self.ctx,
+            |ui| {
                 ui.label(format!(
                     "view origin: x: {:6}\ty: {:6}",
                     info.view.center.x, info.view.center.y
@@ -212,7 +217,8 @@ impl GfaestusGui {
                     "mouse screen: {:6}\t{:6}",
                     info.mouse_screen.x, info.mouse_screen.y
                 ));
-            });
+            },
+        );
     }
 
     pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
@@ -229,7 +235,10 @@ impl GfaestusGui {
         let scr = self.ctx.input().screen_rect();
 
         if let Some(node_id) = self.hover_node_id {
-            egui::containers::popup::show_tooltip_text(&self.ctx, node_id.0.to_string())
+            egui::containers::popup::show_tooltip_text(
+                &self.ctx,
+                node_id.0.to_string(),
+            )
         }
 
         if let Some(node_id) = self.selected_node_id {
@@ -302,11 +311,13 @@ impl GfaestusGui {
         }
 
         if self.settings_ui {
-            egui::Window::new("settings_ui_window").show(&self.ctx, |ui| self.ctx.settings_ui(ui));
+            egui::Window::new("settings_ui_window")
+                .show(&self.ctx, |ui| self.ctx.settings_ui(ui));
         }
 
         if self.memory_ui {
-            egui::Window::new("memory_ui_window").show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+            egui::Window::new("memory_ui_window")
+                .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
     }
 
@@ -332,7 +343,8 @@ impl GfaestusGui {
         clipped_meshes: &[egui::ClippedMesh],
     ) -> Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)> {
         let egui_tex = self.ctx.texture();
-        let tex_future = self.gui_draw_system.upload_texture(&egui_tex).transpose()?;
+        let tex_future =
+            self.gui_draw_system.upload_texture(&egui_tex).transpose()?;
         let cmd_buf = self
             .gui_draw_system
             .draw_egui_ctx(dynamic_state, clipped_meshes)?;
@@ -348,7 +360,7 @@ impl GfaestusGui {
         &mut self,
         dynamic_state: &DynamicState,
     ) -> Option<Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)>> {
-        let (output, shapes) = self.ctx.end_frame();
+        let (_output, shapes) = self.ctx.end_frame();
         let clipped_meshes = self.ctx.tessellate(shapes);
 
         if clipped_meshes.is_empty() {
@@ -358,105 +370,3 @@ impl GfaestusGui {
         Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
     }
 }
-
-// struct GraphViewActiveSet {
-//     node_tooltip: bool,
-//     node_info: bool,
-//     graph_summary_stats: bool,
-//     view_info: bool,
-// }
-
-/*
-#[derive(Debug, Default, Clone, PartialEq)]
-struct NodeInfo {
-    // node_id: Option<NodeId>,
-    sequence: Vec<u8>,
-    paths: Vec<PathId>,
-    neighbors: Vec<NodeId>,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-struct GraphSummaryStats {
-    node_count: usize,
-    edge_count: usize,
-    path_count: usize,
-    total_len: usize,
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct GraphView {
-    node_hover: Option<NodeId>,
-    node_selected: Option<NodeId>,
-    node_selected_info: NodeInfo,
-    graph_summary_stats: GraphSummaryStats,
-    frame: usize,
-    mouse_pos: Point,
-}
-*/
-
-/*
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-struct NodeHoverTooltip {
-    node_id: Option<NodeId>,
-    offset: Point,
-}
-
-#[derive(Debug, Default, Clone, PartialEq)]
-struct NodeInfoBox {
-    node_id: Option<NodeId>,
-    sequence: Vec<u8>,
-    paths: Vec<Vec<u8>>,
-    neighbors: Vec<NodeId>,
-}
-
-#[derive(Default, Clone, PartialEq)]
-pub struct GfaestusGui {
-    ctx: egui::CtxRef,
-    events: Vec<egui::Event>,
-    // raw_input
-    // ref to PackedGraph?
-    node_hover: NodeHoverTooltip,
-    node_info_box: NodeInfoBox,
-
-    mouse_pos: Point,
-    window_dims: Point,
-}
-*/
-
-/*
-
-impl GfaestusGui {
-    // pub fn set_screen_rect(&mut self, width: f32, height: f32) {
-    // }
-    pub fn add_event(&mut self, event: egui::Event) {
-        self.events.push(event);
-    }
-
-    pub fn begin_frame(&mut self, screen_dims: Option<Point>) {
-        let mut raw_input = egui::RawInput::default();
-
-        let screen_rect = screen_dims.map(|p| egui::Rect {
-            min: egui::Pos2 { x: 0.0, y: 0.0 },
-            max: egui::Pos2 { x: p.x, y: p.y },
-        });
-
-        raw_input.screen_rect = screen_rect;
-        raw_input.events = std::mem::take(&mut self.events);
-
-        self.ctx.begin_frame(raw_input);
-
-        if let Some(node_id) = self.node_hover.node_id.as_ref() {
-            let pos = egui::pos2(
-                (self.mouse_pos.x - 32.0).max(0.0).min(width),
-                (self.mouse_pos.y - 24.0).max(0.0).min(height),
-            );
-
-            egui::Area::new("node_hover_tooltip")
-                .fixed_pos(pos)
-                .show(&egui_ctx, |ui| {
-                    ui.label(node_id.0.to_string());
-                });
-        }
-    }
-}
-*/

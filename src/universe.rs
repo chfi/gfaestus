@@ -10,12 +10,10 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-use nalgebra_glm as glm;
-
 use anyhow::Result;
 
 use crate::geometry::*;
-use crate::render::{Color, Vertex};
+use crate::render::Vertex;
 
 pub mod config;
 pub mod grid;
@@ -76,7 +74,10 @@ impl<G: GraphLayout> Universe<G> {
 }
 
 impl Universe<FlatLayout> {
-    pub fn from_laid_out_graph(graph: &PackedGraph, layout_path: &str) -> Result<Self> {
+    pub fn from_laid_out_graph(
+        graph: &PackedGraph,
+        layout_path: &str,
+    ) -> Result<Self> {
         let bp_per_world_unit = 1.0;
         let offset = Point::new(0.0, 0.0);
         let angle = 0.0;
@@ -128,7 +129,10 @@ impl GraphLayout for FlatLayout {
 }
 
 impl FlatLayout {
-    fn from_laid_out_graph(graph: &PackedGraph, layout_path: &str) -> Result<Self> {
+    fn from_laid_out_graph(
+        graph: &PackedGraph,
+        layout_path: &str,
+    ) -> Result<Self> {
         use std::fs::File;
         use std::io::prelude::*;
         use std::io::BufReader;
@@ -142,7 +146,8 @@ impl FlatLayout {
         // throw away header
         lines.next().unwrap()?;
 
-        let mut layout_map: FxHashMap<NodeId, (Point, Point)> = FxHashMap::default();
+        let mut layout_map: FxHashMap<NodeId, (Point, Point)> =
+            FxHashMap::default();
 
         let mut prev_point = None;
 
