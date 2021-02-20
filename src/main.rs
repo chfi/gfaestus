@@ -466,55 +466,13 @@ fn main() {
 
                         gui.push_event(egui_event);
 
-                        #[rustfmt::skip]
-                        let to_world_map = {
-                            let w = width;
-                            let h = height;
-
-                            let view = main_view.view();
-                            let s = view.scale;
-
-                            let vcx = view.center.x;
-                            let vcy = view.center.y;
-
-                            // transform from screen coords (top left (0, 0), bottom right (w, h))
-                            // to screen center = (0, 0), bottom right (w/2, h/2);
-                            //
-                            // then scale so bottom right = (s*w/2, s*h/2);
-                            //
-                            // finally translate by view center to world coordinates
-                            //
-                            // i.e. view_offset * scale * screen_center
-                            let view_scale_screen =
-                                glm::mat4(s,   0.0, 0.0, vcx - (w * s * 0.5),
-                                          0.0, s,   0.0, vcy - (h * s * 0.5),
-                                          0.0, 0.0, 1.0, 0.0,
-                                          0.0, 0.0, 0.0, 1.0);
-
-                            view_scale_screen
-                        };
-                        let projected = to_world_map
-                            * glm::vec4(focus.x, focus.y, 0.0, 1.0);
-
-                        // let proj = Point {
-                        //     x: projected[0],
-                        //     y: projected[1],
-                        // };
-
-                        // eprintln!("click screen coords: {:8}, {:8}", focus.x, focus.y);
-                        // eprintln!("click world coords:  {:8}, {:8}", proj.x, proj.y);
-
                         let mut origin = focus;
                         origin.x -= width / 2.0;
                         origin.y -= height / 2.0;
 
                         if !gui.pointer_over_gui() {
                             let node_id_at = main_view
-                                .read_node_id_at(
-                                    width as u32,
-                                    height as u32,
-                                    focus,
-                                )
+                                .read_node_id_at((width, height), focus)
                                 .map(|nid| NodeId::from(nid as u64));
                             gui.set_selected_node(node_id_at);
                             // main_view.set_mouse_pan(Some(focus));
@@ -524,7 +482,6 @@ fn main() {
                         // main_view.set_mouse_pan(None);
                         anim_thread.set_mouse_pan(None);
                     }
-                    //
                 }
                 Action::MouseZoom { focus, delta } => {
                     let _focus = focus;
@@ -538,43 +495,11 @@ fn main() {
 
                     mouse_pos = point;
 
-                    #[rustfmt::skip]
-                        let to_world_map = {
-                            let w = width;
-                            let h = height;
+                    let world_point = main_view
+                        .view()
+                        .screen_point_to_world((width, height), point);
 
-                            let view = main_view.view();
-                            let s = view.scale;
-
-                            let vcx = view.center.x;
-                            let vcy = view.center.y;
-
-                            // transform from screen coords (top left (0, 0), bottom right (w, h))
-                            // to screen center = (0, 0), bottom right (w/2, h/2);
-                            //
-                            // then scale so bottom right = (s*w/2, s*h/2);
-                            //
-                            // finally translate by view center to world coordinates
-                            //
-                            // i.e. view_offset * scale * screen_center
-                            let view_scale_screen =
-                                glm::mat4(s,   0.0, 0.0, vcx - (w * s * 0.5),
-                                          0.0, s,   0.0, vcy - (h * s * 0.5),
-                                          0.0, 0.0, 1.0, 0.0,
-                                          0.0, 0.0, 0.0, 1.0);
-
-                            view_scale_screen
-                        };
-                    let projected =
-                        to_world_map * glm::vec4(point.x, point.y, 0.0, 1.0);
-
-                    gui.set_view_info_mouse(
-                        point,
-                        Point {
-                            x: projected[0],
-                            y: projected[1],
-                        },
-                    );
+                    gui.set_view_info_mouse(point, world_point);
 
                     let egui_event = egui::Event::PointerMoved(egui::Pos2 {
                         x: point.x,
@@ -621,7 +546,7 @@ fn main() {
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
 
                 let node_id_at = main_view
-                    .read_node_id_at(width as u32, height as u32, mouse_pos)
+                    .read_node_id_at((width, height), mouse_pos)
                     .map(|nid| NodeId::from(nid as u64));
 
                 gui.set_hover_node(node_id_at);

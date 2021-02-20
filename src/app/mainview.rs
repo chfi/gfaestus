@@ -21,7 +21,7 @@ use crate::geometry::*;
 use crate::gfa::*;
 use crate::input::*;
 use crate::render::*;
-use crate::view::View;
+use crate::view::{ScreenDims, View};
 
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
@@ -165,17 +165,12 @@ impl MainView {
         )
     }
 
-    pub fn read_node_id_at(
+    pub fn read_node_id_at<Dims: Into<ScreenDims>>(
         &self,
-        screen_width: u32,
-        screen_height: u32,
+        screen_dims: Dims,
         point: Point,
     ) -> Option<u32> {
-        self.node_draw_system.read_node_id_at(
-            screen_width,
-            screen_height,
-            point,
-        )
+        self.node_draw_system.read_node_id_at(screen_dims, point)
     }
 
     pub fn add_lines(

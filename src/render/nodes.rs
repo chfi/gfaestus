@@ -21,7 +21,7 @@ use nalgebra_glm as glm;
 
 use crate::geometry::*;
 use crate::view;
-use crate::view::View;
+use crate::view::{ScreenDims, View};
 
 use super::Vertex;
 
@@ -93,15 +93,18 @@ impl NodeDrawSystem {
         }
     }
 
-    pub fn read_node_id_at(
+    pub fn read_node_id_at<Dims: Into<ScreenDims>>(
         &self,
-        screen_width: u32,
-        screen_height: u32,
+        screen_dims: Dims,
         point: Point,
     ) -> Option<u32> {
+        let screen = screen_dims.into();
+        let screen_width = screen.width as u32;
+        let screen_height = screen.height as u32;
+
         let xu = point.x as u32;
         let yu = point.y as u32;
-        if xu >= screen_width || yu >= screen_height {
+        if xu >= screen_width as u32 || yu >= screen_height as u32 {
             return None;
         }
         let ix = yu * screen_width + xu;

@@ -3,6 +3,7 @@ use crate::geometry::Point;
 use nalgebra_glm as glm;
 
 #[rustfmt::skip]
+    #[inline]
 pub fn viewport_scale(width: f32, height: f32) -> glm::Mat4 {
     let w = width;
     let h = height;
@@ -12,7 +13,73 @@ pub fn viewport_scale(width: f32, height: f32) -> glm::Mat4 {
               0.0,     0.0,     0.0, 1.0)
 }
 
-/// the "default" scale is such that the node width is 10px
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct ScreenDims {
+    pub width: f32,
+    pub height: f32,
+}
+
+impl From<Point> for ScreenDims {
+    #[inline]
+    fn from(point: Point) -> Self {
+        Self {
+            width: point.x,
+            height: point.y,
+        }
+    }
+}
+
+impl From<(f32, f32)> for ScreenDims {
+    #[inline]
+    fn from((width, height): (f32, f32)) -> Self {
+        Self { width, height }
+    }
+}
+
+impl From<[f32; 2]> for ScreenDims {
+    #[inline]
+    fn from(dims: [f32; 2]) -> Self {
+        Self {
+            width: dims[0],
+            height: dims[1],
+        }
+    }
+}
+
+impl From<[u32; 2]> for ScreenDims {
+    #[inline]
+    fn from(dims: [u32; 2]) -> Self {
+        Self {
+            width: dims[0] as f32,
+            height: dims[1] as f32,
+        }
+    }
+}
+
+impl std::convert::TryFrom<vulkano::image::Dimensions> for ScreenDims {
+    type Error = ();
+
+    #[inline]
+    fn try_from(dims: vulkano::image::Dimensions) -> Result<Self, ()> {
+        use vulkano::image::Dimensions as Dims;
+        match dims {
+            Dims::Dim2d { width, height } => Ok(Self {
+                width: width as f32,
+                height: height as f32,
+            }),
+            Dims::Dim2dArray { width, height, .. } => Ok(Self {
+                width: width as f32,
+                height: height as f32,
+            }),
+            Dims::Dim3d { width, height, .. } => Ok(Self {
+                width: width as f32,
+                height: height as f32,
+            }),
+            _ => Err(()),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {
     pub center: Point,
@@ -20,6 +87,7 @@ pub struct View {
 }
 
 impl Default for View {
+    #[inline]
     fn default() -> Self {
         Self {
             center: Point::new(0.0, 0.0),
@@ -30,6 +98,7 @@ impl Default for View {
 
 impl View {
     #[rustfmt::skip]
+    #[inline]
     pub fn to_scaled_matrix(&self) -> glm::Mat4 {
 
         let scale = 1.0 / self.scale;
@@ -51,8 +120,48 @@ impl View {
 
         scaling  * translation
     }
+
+    #[rustfmt::skip]
+    #[inline]
+    pub fn screen_to_world_map<Dims: Into<ScreenDims>>(&self, dims: Dims) -> glm::Mat4 {
+        let dims = dims.into();
+
+        let w = dims.width;
+        let h = dims.height;
+
+        let s = self.scale;
+        let vcx = self.center.x;
+        let vcy = self.center.y;
+
+        // transform from screen coords (top left (0, 0), bottom right (w, h))
+        // to screen center = (0, 0), bottom right (w/2, h/2);
+        //
+        // then scale so bottom right = (s*w/2, s*h/2);
+        //
+        // finally translate by view center to world coordinates
+        //
+        // i.e. view_offset * scale * screen_center
+        let view_scale_screen =
+            glm::mat4(s,   0.0, 0.0, vcx - (w * s * 0.5),
+                      0.0, s,   0.0, vcy - (h * s * 0.5),
+                      0.0, 0.0, 1.0, 0.0,
+                      0.0, 0.0, 0.0, 1.0);
+
+        view_scale_screen
+    }
+
+    #[rustfmt::skip]
+    #[inline]
+    pub fn screen_point_to_world<Dims: Into<ScreenDims>>(&self, dims: Dims, screen_point: Point) -> Point {
+        let to_world_mat = self.screen_to_world_map(dims);
+
+        let projected = to_world_mat * glm::vec4(screen_point.x, screen_point.y, 0.0, 1.0);
+
+        Point { x: projected[0], y: projected[1] }
+    }
 }
 
+#[inline]
 pub fn mat4_to_array(matrix: &glm::Mat4) -> [[f32; 4]; 4] {
     let s = glm::value_ptr(matrix);
 
