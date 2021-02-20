@@ -27,6 +27,7 @@ pub struct GfaestusGui {
     events: Vec<egui::Event>,
     hover_node_id: Option<NodeId>,
     selected_node_id: Option<NodeId>,
+    selected_node_info: Option<NodeInfo>,
     gui_draw_system: GuiDrawSystem,
     graph_stats: GraphStatsUi,
     view_info: ViewInfoUi,
@@ -36,6 +37,14 @@ pub struct GfaestusGui {
     memory_ui: bool,
 
     frame_rate_box: FrameRateBox,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct NodeInfo {
+    node_id: NodeId,
+    len: usize,
+    degree: (usize, usize),
+    coverage: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -141,6 +150,7 @@ impl GfaestusGui {
             events,
             hover_node_id,
             selected_node_id,
+            selected_node_info: None,
             gui_draw_system,
             graph_stats,
             view_info,
@@ -180,6 +190,32 @@ impl GfaestusGui {
 
     pub fn set_selected_node(&mut self, node: Option<NodeId>) {
         self.selected_node_id = node;
+        if node.is_none() {
+            self.selected_node_info = None;
+        }
+    }
+
+    pub fn selected_node(&self) -> Option<NodeId> {
+        self.selected_node_id
+    }
+
+    pub fn selected_node_info_id(&self) -> Option<NodeId> {
+        self.selected_node_info.map(|i| i.node_id)
+    }
+
+    pub fn set_selected_node_info(
+        &mut self,
+        node_id: NodeId,
+        len: usize,
+        degree: (usize, usize),
+        coverage: usize,
+    ) {
+        self.selected_node_info = Some(NodeInfo {
+            node_id,
+            len,
+            degree,
+            coverage,
+        });
     }
 
     fn graph_stats(&self, pos: Point) {
@@ -259,8 +295,21 @@ impl GfaestusGui {
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
                     ui.expand_to_include_rect(rect);
-                    let label = format!("Selected: {}", node_id.0);
+                    let label = format!("Selected node: {}", node_id.0);
                     ui.label(label);
+                    if let Some(node_info) = self.selected_node_info {
+                        let lb_len = format!("Length: {}", node_info.len);
+                        let lb_deg = format!(
+                            "Degree: ({}, {})",
+                            node_info.degree.0, node_info.degree.1
+                        );
+                        let lb_cov =
+                            format!("Coverage: {}", node_info.coverage);
+
+                        ui.label(lb_len);
+                        ui.label(lb_deg);
+                        ui.label(lb_cov);
+                    }
                 });
         }
 

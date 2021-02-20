@@ -32,6 +32,7 @@ use std::time::Instant;
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
 use gfaestus::geometry::*;
+use gfaestus::graph_query::*;
 use gfaestus::input::*;
 use gfaestus::render::*;
 use gfaestus::universe::*;
@@ -55,12 +56,14 @@ use handlegraph::{
 use handlegraph::packedgraph::PackedGraph;
 
 fn universe_from_gfa_layout(
-    gfa_path: &str,
+    graph_query: &GraphQuery,
     layout_path: &str,
 ) -> Result<(Universe<FlatLayout>, GraphStats)> {
+    /*
     let mut mmap = gfa::mmap::MmapGFA::new(gfa_path)?;
-
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
+    */
+    let graph = graph_query.graph();
 
     let universe = Universe::from_laid_out_graph(&graph, layout_path)?;
 
@@ -97,8 +100,10 @@ fn main() {
     let t = std::time::Instant::now();
     let init_t = std::time::Instant::now();
 
+    let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
+
     let (universe, stats) =
-        universe_from_gfa_layout(gfa_file, layout_file).unwrap();
+        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
@@ -537,6 +542,24 @@ fn main() {
                 gui.set_hover_node(node_id_at);
                 if mouse_pressed {
                     gui.set_selected_node(node_id_at);
+                }
+
+                if let Some(node_id) = gui.selected_node() {
+                    if gui.selected_node_info_id() != Some(node_id) {
+                        let request = GraphQueryRequest::NodeStats(node_id);
+                        let resp = graph_query.query_request_blocking(request);
+                        if let GraphQueryResp::NodeStats {
+                            node_id,
+                            len,
+                            degree,
+                            coverage,
+                        } = resp
+                        {
+                            gui.set_selected_node_info(
+                                node_id, len, degree, coverage,
+                            );
+                        }
+                    }
                 }
 
                 gui.set_view_info_view(main_view.view());
