@@ -31,6 +31,7 @@ pub struct UniverseBuilder {
     pub view_config: ViewConfig,
 }
 
+/*
 impl UniverseBuilder {
     pub fn build(self) -> Universe {
         let grid_dims = grid::GridDims {
@@ -58,6 +59,7 @@ impl UniverseBuilder {
         }
     }
 }
+*/
 
 #[derive(Debug, Clone, Copy)]
 pub struct LayoutConfig {

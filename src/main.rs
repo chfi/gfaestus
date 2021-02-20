@@ -41,10 +41,9 @@ use gfaestus::gfa::*;
 use gfaestus::view;
 use gfaestus::view::View;
 
-use gfaestus::input::*;
+use gfaestus::universe::*;
 
-// use gfaestus::layout::physics;
-use gfaestus::layout::*;
+use gfaestus::input::*;
 
 use gfaestus::render::*;
 
@@ -56,8 +55,6 @@ use rgb::*;
 use nalgebra_glm as glm;
 
 use anyhow::{Context, Result};
-
-use gfa::mmap::MmapGFA;
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -71,11 +68,15 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
-fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, Point, GraphStats)> {
-    let mut mmap = MmapGFA::new(gfa_path)?;
+fn universe_from_gfa_layout(
+    gfa_path: &str,
+    layout_path: &str,
+) -> Result<(Universe<FlatLayout>, GraphStats)> {
+    let mut mmap = gfa::mmap::MmapGFA::new(gfa_path)?;
 
     let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
-    let spine = Spine::from_laid_out_graph(&graph, layout_path)?;
+
+    let universe = Universe::from_laid_out_graph(&graph, layout_path)?;
 
     let stats = GraphStats {
         node_count: graph.node_count(),
@@ -84,39 +85,7 @@ fn gfa_with_layout(gfa_path: &str, layout_path: &str) -> Result<(Spine, Point, P
         total_len: graph.total_length(),
     };
 
-    let mut min_x = std::f32::MAX;
-    let mut max_x = std::f32::MIN;
-
-    let mut min_y = std::f32::MAX;
-    let mut max_y = std::f32::MIN;
-
-    for node in spine.nodes.iter() {
-        min_x = min_x.min(node.p0.x).min(node.p1.x);
-        max_x = max_x.max(node.p0.x).max(node.p1.x);
-
-        min_y = min_y.min(node.p0.y).min(node.p1.y);
-        max_y = max_y.max(node.p0.y).max(node.p1.y);
-    }
-
-    println!("min_x: {}", min_x);
-    println!("max_x: {}", max_x);
-
-    println!("min_y: {}", min_y);
-    println!("max_y: {}", max_y);
-
-    /*
-    println!("NodeId\tp0x\tp0y\tp1x\tp1y");
-    for (n_id, node) in spine.node_ids.iter().zip(spine.nodes.iter()) {
-        let p0 = node.p0;
-        let p1 = node.p1;
-        println!("{}\t{}\t{}\t{}\t{}", n_id.0, p0.x, p0.y, p1.x, p1.y);
-    }
-    */
-
-    let top_left = Point::new(min_x, min_y);
-    let bottom_right = Point::new(max_x, max_y);
-
-    Ok((spine, top_left, bottom_right, stats))
+    Ok((universe, stats))
 }
 
 fn main() {
@@ -142,7 +111,9 @@ fn main() {
     let t = std::time::Instant::now();
     let init_t = std::time::Instant::now();
 
-    let (layout, top_left, bottom_right, stats) = gfa_with_layout(gfa_file, layout_file).unwrap();
+    let (universe, stats) = universe_from_gfa_layout(gfa_file, layout_file).unwrap();
+
+    let (top_left, bottom_right) = universe.layout().bounding_box();
 
     // let init_layout = layout.clone();
 
@@ -150,8 +121,8 @@ fn main() {
 
     eprintln!(
         "Loaded {} nodes\t{} points",
-        layout.nodes.len(),
-        layout.nodes.len() * 2
+        universe.layout().nodes().len(),
+        universe.layout().nodes().len() * 2
     );
 
     let extensions = vulkano_win::required_extensions();
@@ -247,7 +218,7 @@ fn main() {
     gui.set_graph_stats(stats);
 
     let mut vec_vertices: Vec<Vertex> = Vec::new();
-    layout.vertices_into_lines(&mut vec_vertices);
+    universe.layout().node_line_vertices(&mut vec_vertices);
 
     main_view.set_vertices(vec_vertices.iter().copied());
 
@@ -735,8 +706,9 @@ fn main() {
                     .unwrap();
 
                 unsafe {
-                    let secondary_buf =
-                        main_view.draw_nodes(&dynamic_state, layout.offset).unwrap();
+                    let secondary_buf = main_view
+                        .draw_nodes(&dynamic_state, universe.offset)
+                        .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }
 
