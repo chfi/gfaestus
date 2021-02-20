@@ -304,8 +304,6 @@ fn main() {
         y: height,
     });
 
-    let anim_thread = main_view.anim_handler_thread();
-
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     event_loop.run(move |event, _, control_flow| {
@@ -436,8 +434,7 @@ fn main() {
                         x: dx * speed,
                         y: dy * speed,
                     };
-                    // main_view.pan_const(Some(delta.x), Some(delta.y));
-                    anim_thread.pan_const(Some(delta.x), Some(delta.y));
+                    main_view.pan_const(Some(delta.x), Some(delta.y));
                 }
                 Action::PausePhysics => {
                     main_view.reset_view();
@@ -472,18 +469,15 @@ fn main() {
                                 .read_node_id_at((width, height), focus)
                                 .map(|nid| NodeId::from(nid as u64));
                             gui.set_selected_node(node_id_at);
-                            // main_view.set_mouse_pan(Some(focus));
-                            anim_thread.set_mouse_pan(Some(focus));
+                            main_view.set_mouse_pan(Some(focus));
                         }
                     } else {
-                        // main_view.set_mouse_pan(None);
-                        anim_thread.set_mouse_pan(None);
+                        main_view.set_mouse_pan(None);
                     }
                 }
                 Action::MouseZoom { focus, delta } => {
                     let _focus = focus;
-                    // main_view.zoom_delta(delta);
-                    anim_thread.zoom_delta(delta);
+                    main_view.zoom_delta(delta);
                 }
                 Action::MouseAt { point } => {
                     let mut screen_tgt = point;
@@ -516,7 +510,7 @@ fn main() {
             gui.push_event(egui_event);
         }
 
-        anim_thread.set_mouse_pos(Some(mouse_pos));
+        main_view.set_mouse_pos(Some(mouse_pos));
 
         match event {
             Event::WindowEvent {

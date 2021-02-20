@@ -29,15 +29,11 @@ pub struct MainView {
     view: Arc<AtomicCell<View>>,
     vertices: Vec<Vertex>,
     draw_grid: bool,
-    pub anim_handler: AnimHandler,
+    anim_handler_thread: AnimHandlerThread,
     base_node_width: f32,
 }
 
 impl MainView {
-    pub fn anim_handler_thread(&self) -> AnimHandlerThread {
-        anim_handler_thread(self.anim_handler.clone(), self.view.clone())
-    }
-
     pub fn new<R>(
         gfx_queue: Arc<Queue>,
         render_pass: &Arc<R>,
@@ -65,28 +61,31 @@ impl MainView {
 
         let view = View::default();
 
-        let anim_handler = AnimHandler::new(view);
+        let anim_handler = AnimHandler::default();
         let view = Arc::new(AtomicCell::new(view));
 
         let base_node_width = 100.0;
 
-        Ok(Self {
+        let anim_handler_thread =
+            anim_handler_thread(anim_handler, view.clone());
+
+        let main_view = Self {
             node_draw_system,
             line_draw_system,
             vertices,
             draw_grid,
             view,
-            anim_handler,
+            anim_handler_thread,
             base_node_width,
-        })
+        };
+
+        // main_view.anim_handler_thread();
+
+        Ok(main_view)
     }
 
     pub fn view(&self) -> View {
         self.view.load()
-    }
-
-    pub fn tick_animation(&mut self, mouse_pos: Option<Point>, dt: f32) {
-        self.anim_handler.update_cell(&self.view, mouse_pos, dt);
     }
 
     pub fn set_initial_view(
@@ -94,13 +93,15 @@ impl MainView {
         center: Option<Point>,
         scale: Option<f32>,
     ) {
-        let center = center.unwrap_or(self.anim_handler.initial_view.center);
-        let scale = scale.unwrap_or(self.anim_handler.initial_view.scale);
-        self.anim_handler.initial_view = View { center, scale };
+        let center =
+            center.unwrap_or(self.anim_handler_thread.initial_view.center);
+        let scale =
+            scale.unwrap_or(self.anim_handler_thread.initial_view.scale);
+        self.anim_handler_thread.initial_view = View { center, scale };
     }
 
     pub fn reset_view(&mut self) {
-        self.view.store(self.anim_handler.initial_view);
+        self.view.store(self.anim_handler_thread.initial_view);
     }
 
     pub fn set_vertices<VI>(&mut self, vertices: VI)
@@ -201,24 +202,24 @@ impl MainView {
         self.view.store(view);
     }
 
+    pub fn set_mouse_pos(&self, pos: Option<Point>) {
+        self.anim_handler_thread.mouse_pos.store(pos);
+    }
+
     pub fn set_mouse_pan(&mut self, origin: Option<Point>) {
-        match origin {
-            Some(origin) => self.anim_handler.start_mouse_pan(origin),
-            None => self.anim_handler.end_mouse_pan(),
-        }
+        self.anim_handler_thread.set_mouse_pan(origin);
     }
 
     pub fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
-        self.anim_handler.pan_const(dx, dy);
+        self.anim_handler_thread.pan_const(dx, dy);
     }
 
     pub fn pan_delta(&mut self, dxy: Point) {
-        self.anim_handler.pan_delta(dxy);
+        self.anim_handler_thread.pan_delta(dxy);
     }
 
     pub fn zoom_delta(&mut self, dz: f32) {
-        let view = self.view.load();
-        self.anim_handler.zoom_delta(view.scale, dz)
+        self.anim_handler_thread.zoom_delta(dz)
     }
 }
 
@@ -275,6 +276,8 @@ enum AnimMsg {
 }
 
 pub struct AnimHandlerThread {
+    settings: Arc<AtomicCell<AnimSettings>>,
+    initial_view: View,
     view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Option<Point>>>,
     _join_handle: std::thread::JoinHandle<()>,
@@ -282,37 +285,42 @@ pub struct AnimHandlerThread {
 }
 
 impl AnimHandlerThread {
-    pub fn view(&self) -> View {
+    fn view(&self) -> View {
         self.view.load()
     }
 
-    pub fn set_mouse_pos(&self, pos: Option<Point>) {
+    fn set_mouse_pos(&self, pos: Option<Point>) {
         self.mouse_pos.store(pos);
     }
 
-    pub fn set_mouse_pan(&self, origin: Option<Point>) {
+    fn set_mouse_pan(&self, origin: Option<Point>) {
         self.msg_tx.send(AnimMsg::SetMousePan(origin)).unwrap();
     }
 
-    pub fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
+    fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
         self.msg_tx.send(AnimMsg::PanConst { dx, dy }).unwrap();
     }
 
-    pub fn pan_delta(&self, dxy: Point) {
+    fn pan_delta(&self, dxy: Point) {
         self.msg_tx.send(AnimMsg::PanDelta { dxy }).unwrap();
     }
 
-    pub fn zoom_delta(&self, dz: f32) {
+    fn zoom_delta(&self, dz: f32) {
         self.msg_tx.send(AnimMsg::ZoomDelta { dz }).unwrap();
     }
 }
 
-pub fn anim_handler_thread(
+fn anim_handler_thread(
     anim_handler: AnimHandler,
     view: Arc<AtomicCell<View>>,
 ) -> AnimHandlerThread {
     let mouse_pos = Arc::new(AtomicCell::new(None));
 
+    let settings: Arc<AtomicCell<AnimSettings>> =
+        Arc::new(AtomicCell::new(AnimSettings::default()));
+    let initial_view = view.load();
+
+    let inner_settings = settings.clone();
     let inner_view = view.clone();
     let inner_mouse_pos = mouse_pos.clone();
 
@@ -322,6 +330,7 @@ pub fn anim_handler_thread(
         let update_delay = std::time::Duration::from_millis(5);
         let sleep_delay = std::time::Duration::from_micros(2500);
 
+        let settings = inner_settings;
         let view = inner_view;
         let mouse_pos = inner_mouse_pos;
         let mut anim = anim_handler;
@@ -339,7 +348,8 @@ pub fn anim_handler_thread(
                         anim.pan_const(dx, dy);
                     }
                     AnimMsg::PanDelta { dxy } => {
-                        anim.pan_delta(dxy);
+                        let settings = settings.load();
+                        anim.pan_delta(&settings, dxy);
                     }
                     AnimMsg::ZoomDelta { dz } => {
                         let view = view.load();
@@ -350,8 +360,9 @@ pub fn anim_handler_thread(
 
             if last_update.elapsed() > update_delay {
                 let dt = last_update.elapsed().as_secs_f32();
+                let settings = settings.load();
                 let pos = mouse_pos.load();
-                anim.update_cell(&view, pos, dt);
+                anim.update_cell(&settings, &view, pos, dt);
                 last_update = std::time::Instant::now();
             } else {
                 std::thread::sleep(sleep_delay);
@@ -364,6 +375,8 @@ pub fn anim_handler_thread(
         _join_handle,
         mouse_pos,
         msg_tx,
+        settings,
+        initial_view,
     }
 }
 
@@ -374,51 +387,41 @@ pub struct AnimHandler {
     view_pan_const: Point,
     view_pan_delta: Point,
     view_scale_delta: f32,
-    settings: AnimSettings,
-    initial_view: View,
-    // view_pan_accel: Point,
-    // view_scale_accel: f32,
 }
 
 impl AnimHandler {
-    fn new(initial_view: View) -> Self {
-        Self {
-            initial_view,
-            ..AnimHandler::default()
-        }
-    }
-
     fn update_cell(
         &mut self,
+        settings: &AnimSettings,
         view: &AtomicCell<View>,
         mouse_pos: Option<Point>,
         dt: f32,
     ) {
         let before = view.load();
-        let new = self.update(before, mouse_pos, dt);
+        let new = self.update(settings, before, mouse_pos, dt);
         view.store(new);
     }
 
     fn update(
         &mut self,
+        settings: &AnimSettings,
         mut view: View,
         mouse_pos: Option<Point>,
         dt: f32,
     ) -> View {
-        // println!("dt {}", dt);
         view.scale += view.scale * dt * self.view_scale_delta;
 
-        if let Some(min_scale) = self.settings.min_view_scale {
+        if let Some(min_scale) = settings.min_view_scale {
             view.scale = view.scale.max(min_scale);
         }
 
-        if let Some(max_scale) = self.settings.max_view_scale {
+        if let Some(max_scale) = settings.max_view_scale {
             view.scale = view.scale.min(max_scale);
         }
 
         let dxy = match (self.mouse_pan_screen_origin, mouse_pos) {
             (Some(origin), Some(mouse_pos)) => {
-                (mouse_pos - origin) * self.settings.mouse_pan_mult * dt
+                (mouse_pos - origin) * settings.mouse_pan_mult * dt
             }
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
@@ -477,10 +480,10 @@ impl AnimHandler {
         self.view_pan_const = dxy;
     }
 
-    fn pan_delta(&mut self, dxy: Point) {
+    fn pan_delta(&mut self, settings: &AnimSettings, dxy: Point) {
         self.view_pan_delta += dxy;
 
-        if let Some(max_speed) = self.settings.max_speed {
+        if let Some(max_speed) = settings.max_speed {
             let d = &mut self.view_pan_delta;
             d.x = d.x.clamp(-max_speed, max_speed);
             d.y = d.y.clamp(-max_speed, max_speed);
@@ -496,8 +499,6 @@ impl AnimHandler {
 
 #[derive(Debug, Clone, Copy)]
 struct AnimSettings {
-    // zoom_friction:
-    // pan_friction:
     min_view_scale: Option<f32>,
     max_view_scale: Option<f32>,
     max_speed: Option<f32>,

@@ -24,6 +24,8 @@ pub use config::*;
 // Trait abstracting over Grid and FlatLayout -- this definition only
 // supports FlatLayout, though, and should be changed to use iterators
 // to support more solutions
+//
+// note: `node_ids` and `nodes` must be in the same order
 pub trait GraphLayout {
     fn node_ids(&self) -> &[NodeId];
 
@@ -31,6 +33,8 @@ pub trait GraphLayout {
 
     fn bounding_box(&self) -> (Point, Point);
 
+    // `vertices` must contain the vertices for nodes in the same
+    // order as returned by the `node_ids` and `nodes` methods
     #[inline]
     fn node_line_vertices(&self, vertices: &mut Vec<Vertex>) {
         vertices.clear();
