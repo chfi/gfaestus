@@ -182,8 +182,7 @@ impl GfaestusGui {
         self.selected_node_id = node;
     }
 
-    fn graph_stats(&self, at: Point) {
-        let pos = egui::pos2(at.x, at.y);
+    fn graph_stats(&self, pos: Point) {
         let stats = self.graph_stats.stats;
 
         egui::Area::new("graph_summary_stats").fixed_pos(pos).show(
@@ -197,8 +196,7 @@ impl GfaestusGui {
         );
     }
 
-    fn view_info(&self, at: Point) {
-        let pos = egui::pos2(at.x, at.y);
+    fn view_info(&self, pos: Point) {
         let info = self.view_info;
 
         egui::Area::new("view_mouse_info").fixed_pos(pos).show(
@@ -224,8 +222,8 @@ impl GfaestusGui {
     pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
         let mut raw_input = egui::RawInput::default();
         let screen_rect = screen_rect.map(|p| egui::Rect {
-            min: egui::Pos2 { x: 0.0, y: 0.0 },
-            max: egui::Pos2 { x: p.x, y: p.y },
+            min: Point::ZERO.into(),
+            max: p.into(),
         });
         raw_input.screen_rect = screen_rect;
         raw_input.events = std::mem::take(&mut self.events);
@@ -242,32 +240,25 @@ impl GfaestusGui {
         }
 
         if let Some(node_id) = self.selected_node_id {
-            let top_left = egui::Pos2 {
+            let top_left = Point {
                 x: 0.0,
                 y: 0.80 * scr.max.y,
             };
-            let bottom_right = egui::Pos2 {
+            let bottom_right = Point {
                 x: 200.0,
                 y: scr.max.y,
             };
 
             let rect = egui::Rect {
-                min: top_left,
-                max: bottom_right,
+                min: top_left.into(),
+                max: bottom_right.into(),
             };
 
             egui::Window::new("node_select_info")
                 .fixed_rect(rect)
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
-                    ui.expand_to_include_rect(egui::Rect {
-                        min: top_left,
-                        max: egui::Pos2 {
-                            x: bottom_right.x,
-                            y: bottom_right.y,
-                            // y: scr.max.y - 5.0,
-                        },
-                    });
+                    ui.expand_to_include_rect(rect);
                     let label = format!("Selected: {}", node_id.0);
                     ui.label(label);
                 });
@@ -282,21 +273,23 @@ impl GfaestusGui {
         }
 
         if self.frame_rate_box.enabled {
-            let p0 = egui::Pos2 {
+            let p0 = Point {
                 x: 0.8 * scr.max.x,
                 y: 0.0,
             };
 
-            let p1 = egui::Pos2 {
+            let p1 = Point {
                 x: scr.max.x,
                 y: 80.0,
             };
 
             egui::Window::new("mouse_over_egui")
-                .fixed_rect(egui::Rect { min: p0, max: p1 })
+                .fixed_rect(egui::Rect {
+                    min: p0.into(),
+                    max: p1.into(),
+                })
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
-                    // ui.label(format!("Frame: {}", self.frame_rate_box.frame));
                     ui.label(format!("FPS:   {:.2}", self.frame_rate_box.fps));
                     ui.label(format!(
                         "update time: {:.2}",

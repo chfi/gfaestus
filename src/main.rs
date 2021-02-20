@@ -455,10 +455,7 @@ fn main() {
                 Action::MousePan(focus) => {
                     if let Some(focus) = focus {
                         let egui_event = egui::Event::PointerButton {
-                            pos: egui::Pos2 {
-                                x: focus.x,
-                                y: focus.y,
-                            },
+                            pos: focus.into(),
                             button: egui::PointerButton::Primary,
                             pressed: true,
                             modifiers: Default::default(),
@@ -501,10 +498,7 @@ fn main() {
 
                     gui.set_view_info_mouse(point, world_point);
 
-                    let egui_event = egui::Event::PointerMoved(egui::Pos2 {
-                        x: point.x,
-                        y: point.y,
-                    });
+                    let egui_event = egui::Event::PointerMoved(point.into());
 
                     gui.push_event(egui_event);
                 }
@@ -513,10 +507,7 @@ fn main() {
 
         if mouse_released || mouse_pressed {
             let egui_event = egui::Event::PointerButton {
-                pos: egui::Pos2 {
-                    x: mouse_pos.x,
-                    y: mouse_pos.y,
-                },
+                pos: mouse_pos.into(),
                 button: egui::PointerButton::Primary,
                 pressed: mouse_pressed,
                 modifiers: Default::default(),

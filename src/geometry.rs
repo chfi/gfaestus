@@ -11,6 +11,8 @@ pub struct Point {
 }
 
 impl Point {
+    pub const ZERO: Self = Point { x: 0.0, y: 0.0 };
+
     #[inline]
     pub fn new<T: Into<f32>>(x: T, y: T) -> Self {
         let x = x.into();
@@ -72,6 +74,26 @@ impl From<(i32, i32)> for Point {
         let x = x as f32;
         let y = y as f32;
         Point { x, y }
+    }
+}
+
+impl Into<egui::Pos2> for Point {
+    #[inline]
+    fn into(self) -> egui::Pos2 {
+        egui::Pos2 {
+            x: self.x,
+            y: self.y,
+        }
+    }
+}
+
+impl Into<egui::Vec2> for Point {
+    #[inline]
+    fn into(self) -> egui::Vec2 {
+        egui::Vec2 {
+            x: self.x,
+            y: self.y,
+        }
     }
 }
 
