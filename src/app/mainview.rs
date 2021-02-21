@@ -227,63 +227,67 @@ impl MainView {
         self.anim_handler_thread.zoom_delta(dz)
     }
 
-    // fn apply_input(&mut self, input_state: &InputState<MainViewInputs>, input: MainViewInputs) {
-    fn apply_digital_input(
-        &mut self,
-        state: DigitalState,
-        input: MainViewInputs,
-        mouse_pos: Point,
-    ) {
+    fn apply_input(&mut self, input: SystemInput<MainViewInputs>) {
         use MainViewInputs as In;
-
-        let pressed = state.pressed();
-
-        let pan_delta = |invert: bool| {
-            if pressed {
-                if invert {
-                    -1.0
-                } else {
-                    1.0
-                }
-            } else {
-                0.0
-            }
-        };
+        let payload = input.payload();
 
         match input {
-            In::ButtonMousePan => {
-                if pressed {
-                    self.set_mouse_pan(Some(mouse_pos));
-                } else {
-                    self.set_mouse_pan(None);
+            SystemInput::Keyboard { state, .. } => {
+                let pressed = state.pressed();
+
+                let pan_delta = |invert: bool| {
+                    let delta = if pressed { 1.0 } else { 0.0 };
+                    if invert {
+                        -delta
+                    } else {
+                        delta
+                    }
+                };
+
+                match payload {
+                    In::KeyClearSelection => {
+                        // TODO currently handled in main.rs
+                    }
+                    In::KeyPanUp => {
+                        self.pan_const(None, Some(pan_delta(true)));
+                    }
+                    In::KeyPanRight => {
+                        self.pan_const(Some(pan_delta(false)), None);
+                    }
+                    In::KeyPanDown => {
+                        self.pan_const(None, Some(pan_delta(false)));
+                    }
+                    In::KeyPanLeft => {
+                        self.pan_const(Some(pan_delta(true)), None);
+                    }
+                    In::KeyResetView => {
+                        if pressed {
+                            self.reset_view();
+                        }
+                    }
+                    _ => (),
                 }
             }
-            In::ButtonSelect => {
-                // TODO currently handled in main.rs
-            }
-            In::KeyClearSelection => {
-                // TODO currently handled in main.rs
-            }
-            In::KeyPanUp => {
-                self.pan_const(None, Some(pan_delta(true)));
-            }
-            In::KeyPanRight => {
-                self.pan_const(Some(pan_delta(false)), None);
-            }
-            In::KeyPanDown => {
-                self.pan_const(None, Some(pan_delta(false)));
-            }
-            In::KeyPanLeft => {
-                self.pan_const(Some(pan_delta(true)), None);
-            }
-            In::KeyResetView => {
-                if pressed {
-                    self.reset_view();
+            SystemInput::MouseButton { pos, state, .. } => {
+                let pressed = state.pressed();
+                match payload {
+                    In::ButtonMousePan => {
+                        if pressed {
+                            self.set_mouse_pan(Some(pos));
+                        } else {
+                            self.set_mouse_pan(None);
+                        }
+                    }
+                    In::ButtonSelect => {
+                        // TODO currently handled in main.rs
+                    }
+                    _ => (),
                 }
             }
-            In::WheelZoom => {
-                // TODO this should be handled separately
-                unimplemented!();
+            SystemInput::Wheel { delta, .. } => {
+                if let In::WheelZoom = payload {
+                    self.zoom_delta(delta);
+                }
             }
         }
     }

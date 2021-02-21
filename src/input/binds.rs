@@ -95,9 +95,19 @@ pub struct KeyBind<T: Copy + PartialEq> {
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SystemInput<T: InputPayload> {
-    Keyboard { state: DigitalState, payload: T },
-    MouseButton { state: DigitalState, payload: T },
-    Wheel { delta: f32, payload: T },
+    Keyboard {
+        state: DigitalState,
+        payload: T,
+    },
+    MouseButton {
+        pos: Point,
+        state: DigitalState,
+        payload: T,
+    },
+    Wheel {
+        delta: f32,
+        payload: T,
+    },
 }
 
 impl<T: InputPayload> SystemInput<T> {
@@ -134,7 +144,7 @@ impl<T: InputPayload> InputState<T> {
                     self.keys.remove(&payload);
                 }
             }
-            SystemInput::MouseButton { state, payload } => {
+            SystemInput::MouseButton { state, payload, .. } => {
                 if state.pressed() {
                     self.mouse_buttons.insert(payload);
                 } else {
@@ -159,6 +169,25 @@ pub enum MainViewInputs {
     WheelZoom,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GuiInput {
+    KeyClearSelection,
+    KeyEguiInspectionUi,
+    KeyEguiSettingsUi,
+    KeyEguiMemoryUi,
+    // KeyGfaestusSettingsUi,
+    ButtonLeft,
+    ButtonRight,
+    WheelScroll,
+}
+
+#[derive(Debug)]
+pub struct InputManager {
+    main_view_bindings: SystemInputBindings<MainViewInputs>,
+    gui_bindings: SystemInputBindings<GuiInput>,
+    // layout_bindings: SystemInputBindings<LayoutInput>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct SystemInputBindings<Inputs>
 where
@@ -174,6 +203,7 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
         &self,
         input_state: &mut InputState<Inputs>,
         event: &event::WindowEvent,
+        mouse_pos: Point,
     ) -> Option<Vec<SystemInput<Inputs>>> {
         match event {
             // WindowEvent::ModifiersChanged(_) => {}
@@ -206,7 +236,11 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                     .iter()
                     .map(|&mousebind| {
                         let payload = mousebind.payload;
-                        SystemInput::MouseButton { state, payload }
+                        SystemInput::MouseButton {
+                            pos: mouse_pos,
+                            state,
+                            payload,
+                        }
                     })
                     .collect::<Vec<_>>();
 
@@ -237,6 +271,58 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                 }])
             }
             _ => None,
+        }
+    }
+}
+
+impl std::default::Default for SystemInputBindings<GuiInput> {
+    fn default() -> Self {
+        use event::VirtualKeyCode as Key;
+        use GuiInput as Input;
+
+        let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
+            [
+                (Key::Escape, Input::KeyClearSelection),
+                (Key::F1, Input::KeyEguiInspectionUi),
+                (Key::F2, Input::KeyEguiSettingsUi),
+                (Key::F3, Input::KeyEguiMemoryUi),
+            ]
+            .iter()
+            .copied()
+            .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
+            .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [
+            (
+                event::MouseButton::Left,
+                vec![MouseButtonBind {
+                    payload: Input::ButtonLeft,
+                }],
+            ),
+            (
+                event::MouseButton::Right,
+                vec![MouseButtonBind {
+                    payload: Input::ButtonRight,
+                }],
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let wheel_bind = WheelBind {
+            invert: false,
+            mult: 1.0,
+            payload: Input::WheelScroll,
+        };
+
+        Self {
+            key_binds,
+            mouse_binds,
+            wheel_bind,
         }
     }
 }

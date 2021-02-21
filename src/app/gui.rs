@@ -22,9 +22,12 @@ use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
 
+use crate::input::binds::*;
+
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
     events: Vec<egui::Event>,
+    frame_scroll_delta: f32,
     hover_node_id: Option<NodeId>,
     selected_node_id: Option<NodeId>,
     selected_node_info: Option<NodeInfo>,
@@ -148,6 +151,7 @@ impl GfaestusGui {
         Ok(Self {
             ctx,
             events,
+            frame_scroll_delta: 0.0,
             hover_node_id,
             selected_node_id,
             selected_node_info: None,
@@ -263,6 +267,11 @@ impl GfaestusGui {
         });
         raw_input.screen_rect = screen_rect;
         raw_input.events = std::mem::take(&mut self.events);
+        raw_input.scroll_delta = egui::Vec2 {
+            x: 0.0,
+            y: self.frame_scroll_delta,
+        };
+        self.frame_scroll_delta = 0.0;
 
         self.ctx.begin_frame(raw_input);
 
@@ -410,5 +419,60 @@ impl GfaestusGui {
         }
 
         Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
+    }
+
+    fn apply_input(&mut self, input: SystemInput<GuiInput>) {
+        use GuiInput as In;
+        let payload = input.payload();
+
+        match input {
+            SystemInput::Keyboard { state, .. } => {
+                if state.pressed() {
+                    match payload {
+                        GuiInput::KeyClearSelection => {
+                            self.set_selected_node(None);
+                        }
+                        GuiInput::KeyEguiInspectionUi => {
+                            self.inspection_ui = !self.inspection_ui;
+                        }
+                        GuiInput::KeyEguiSettingsUi => {
+                            self.settings_ui = !self.settings_ui;
+                        }
+                        GuiInput::KeyEguiMemoryUi => {
+                            self.memory_ui = !self.memory_ui;
+                        }
+                        _ => (),
+                    }
+                }
+            }
+            SystemInput::MouseButton { pos, state, .. } => {
+                let pressed = state.pressed();
+
+                let button = match payload {
+                    GuiInput::ButtonLeft => Some(egui::PointerButton::Primary),
+                    GuiInput::ButtonRight => {
+                        Some(egui::PointerButton::Secondary)
+                    }
+
+                    _ => None,
+                };
+
+                if let Some(button) = button {
+                    let egui_event = egui::Event::PointerButton {
+                        pos: pos.into(),
+                        button,
+                        pressed,
+                        modifiers: Default::default(),
+                    };
+
+                    self.push_event(egui_event);
+                }
+            }
+            SystemInput::Wheel { delta, .. } => {
+                if let In::WheelScroll = payload {
+                    self.frame_scroll_delta = delta;
+                }
+            }
+        }
     }
 }
