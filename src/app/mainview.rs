@@ -231,6 +231,7 @@ pub enum DisplayLayer {
     Graph,
 }
 
+/*
 pub enum MainViewInputs {
     ButtonMousePan,
     KeyModMousePan,
@@ -254,6 +255,7 @@ pub enum MainViewInput {
     KeyDown { pressed: bool },
     KeyLeft { pressed: bool },
 }
+*/
 
 pub enum MainViewRecvMsg {
     ResetView,

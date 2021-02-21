@@ -12,10 +12,12 @@ use crate::geometry::*;
 
 pub mod binds;
 
+pub use binds::DigitalState;
+
 #[derive(Debug, Clone, Copy)]
 pub enum InputEvent {
     KeyboardInput(event::KeyboardInput),
-    MouseInput(event::MouseButton, InputChange),
+    MouseInput(event::MouseButton, DigitalState),
     MouseWheel(event::MouseScrollDelta),
     CursorMoved(Point),
     // CursorEntered(event::CursorEntered),
@@ -33,9 +35,11 @@ impl InputEvent {
             }
             WinEvent::MouseInput { button, state, .. } => {
                 let input_change = match state {
-                    winit::event::ElementState::Pressed => InputChange::Pressed,
+                    winit::event::ElementState::Pressed => {
+                        DigitalState::Pressed
+                    }
                     winit::event::ElementState::Released => {
-                        InputChange::Released
+                        DigitalState::Released
                     }
                 };
                 Some(InputEvent::MouseInput(*button, input_change))
@@ -53,25 +57,15 @@ impl InputEvent {
     }
 }
 
-impl InputChange {
-    pub fn pressed(&self) -> bool {
-        *self == InputChange::Pressed
-    }
-
-    pub fn released(&self) -> bool {
-        *self == InputChange::Released
-    }
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SemanticInput {
-    KeyPanUp(InputChange),
-    KeyPanRight(InputChange),
-    KeyPanDown(InputChange),
-    KeyPanLeft(InputChange),
-    KeyPause(InputChange),
-    KeyReset(InputChange),
-    MouseButtonPan(InputChange),
+    KeyPanUp(DigitalState),
+    KeyPanRight(DigitalState),
+    KeyPanDown(DigitalState),
+    KeyPanLeft(DigitalState),
+    KeyPause(DigitalState),
+    KeyReset(DigitalState),
+    MouseButtonPan(DigitalState),
     MouseZoomDelta(f32),
     MouseCursorPos(Point),
     OtherKey {
@@ -91,9 +85,9 @@ impl SemanticInput {
                 let pressed =
                     input.state == winit::event::ElementState::Pressed;
                 let input_change = if pressed {
-                    InputChange::Pressed
+                    DigitalState::Pressed
                 } else {
-                    InputChange::Released
+                    DigitalState::Released
                 };
 
                 if let Some(key) = input.virtual_keycode {
@@ -255,14 +249,14 @@ impl SemanticInputState {
                 self.key_pan_left = state.pressed();
                 Some(self.key_pan_action())
             }
-            SemIn::KeyPause(InputChange::Pressed) => {
+            SemIn::KeyPause(DigitalState::Pressed) => {
                 Some(InputAction::PausePhysics)
             }
-            SemIn::KeyReset(InputChange::Pressed) => {
+            SemIn::KeyReset(DigitalState::Pressed) => {
                 Some(InputAction::ResetLayout)
             }
             SemIn::MouseButtonPan(state) => {
-                use InputChange::{Pressed, Released};
+                use DigitalState::{Pressed, Released};
                 match (state, self.mouse_pan) {
                     (Pressed, None) => {
                         let focus = self.mouse_pos;
