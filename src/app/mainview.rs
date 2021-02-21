@@ -231,6 +231,18 @@ pub enum DisplayLayer {
     Graph,
 }
 
+pub enum MainViewInputs {
+    ButtonMousePan,
+    KeyModMousePan,
+    ButtonMouseSelect,
+    KeyClearSelection,
+    KeyPanUp,
+    KeyPanRight,
+    KeyPanDown,
+    KeyPanLeft,
+    KeyResetView,
+}
+
 pub enum MainViewInput {
     MousePos(Point),
     MousePrimaryButton { pressed: bool, point: Point },

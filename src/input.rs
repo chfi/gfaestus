@@ -10,6 +10,8 @@ use crossbeam::channel;
 
 use crate::geometry::*;
 
+pub mod binds;
+
 #[derive(Debug, Clone, Copy)]
 pub enum InputEvent {
     KeyboardInput(event::KeyboardInput),
@@ -49,12 +51,6 @@ impl InputEvent {
             _ => None,
         }
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum InputChange {
-    Pressed,
-    Released,
 }
 
 impl InputChange {
