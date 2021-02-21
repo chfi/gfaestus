@@ -79,8 +79,6 @@ impl MainView {
             base_node_width,
         };
 
-        // main_view.anim_handler_thread();
-
         Ok(main_view)
     }
 
@@ -130,9 +128,16 @@ impl MainView {
             }
             width
         };
+
+        let vertices = if self.node_draw_system.has_cached_vertices() {
+            None
+        } else {
+            Some(self.vertices.iter().copied())
+        };
+
         self.node_draw_system.draw(
             dynamic_state,
-            self.vertices.iter().copied(),
+            vertices,
             view,
             offset,
             node_width,
@@ -159,7 +164,7 @@ impl MainView {
         };
         self.node_draw_system.draw(
             dynamic_state,
-            vertices,
+            Some(vertices),
             view,
             offset,
             node_width,

@@ -49,6 +49,7 @@ mod fs {
 pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
+    cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
 }
@@ -89,6 +90,7 @@ impl NodeDrawSystem {
             gfx_queue,
             pipeline,
             vertex_buffer_pool,
+            cached_vertex_buffer: None,
             node_id_color_buffer: None,
         }
     }
@@ -118,10 +120,14 @@ impl NodeDrawSystem {
         }
     }
 
+    pub fn has_cached_vertices(&self) -> bool {
+        self.cached_vertex_buffer.is_some()
+    }
+
     pub fn draw<VI>(
         &mut self,
         dynamic_state: &DynamicState,
-        vertices: VI,
+        vertices: Option<VI>,
         view: View,
         offset: Point,
         node_width: f32,
@@ -198,12 +204,21 @@ impl NodeDrawSystem {
 
         self.node_id_color_buffer = Some(data_buffer.clone());
 
-        let vertex_buffer = self.vertex_buffer_pool.chunk(vertices)?;
+        let vertex_buffer = if let Some(vertices) = vertices {
+            println!("replacing vertex cache");
+            let chunk = self.vertex_buffer_pool.chunk(vertices)?;
+            let arc_chunk = Arc::new(chunk);
+            self.cached_vertex_buffer = Some(arc_chunk.clone());
+            arc_chunk
+        } else {
+            self.cached_vertex_buffer.as_ref().unwrap().clone()
+        };
 
         builder.draw(
             self.pipeline.clone(),
             dynamic_state,
-            vec![Arc::new(vertex_buffer)],
+            vec![vertex_buffer],
+            // vec![Arc::new(vertex_buffer)],
             set.clone(),
             view_pc,
         )?;
