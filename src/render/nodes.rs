@@ -150,13 +150,15 @@ impl NodeDrawSystem {
         view: View,
         offset: Point,
         node_width: f32,
+        use_lines: bool,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
         let min_node_width = 2.0;
-        let use_rect_pipeline = view.scale < (node_width / min_node_width);
+        let use_rect_pipeline = !use_lines
+            || (use_lines && view.scale < (node_width / min_node_width));
 
         let mut builder: AutoCommandBufferBuilder = if use_rect_pipeline {
             AutoCommandBufferBuilder::secondary_graphics(

@@ -137,6 +137,7 @@ impl MainView {
             view,
             offset,
             node_width,
+            false,
         )
     }
 
@@ -164,6 +165,7 @@ impl MainView {
             view,
             offset,
             node_width,
+            false,
         )
     }
 
