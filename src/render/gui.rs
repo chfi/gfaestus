@@ -22,14 +22,11 @@ use vulkano::{
 };
 
 use vulkano::format::R8Unorm;
-
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
 use std::sync::Arc;
 
 use anyhow::Result;
-
-use rustc_hash::FxHashMap;
 
 mod vs {
     vulkano_shaders::shader! {
@@ -241,7 +238,7 @@ impl GuiDrawSystem {
             vertices.clear();
             indices.clear();
 
-            let rect = &clipped.0;
+            let _rect = &clipped.0;
             let mesh = &clipped.1;
 
             indices.extend(mesh.indices.iter().copied());

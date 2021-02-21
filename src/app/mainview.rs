@@ -11,15 +11,11 @@ use std::sync::Arc;
 
 use rgb::*;
 
-use nalgebra_glm as glm;
-
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use handlegraph::handle::NodeId;
 
 use crate::geometry::*;
-use crate::gfa::*;
-use crate::input::*;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
 
@@ -28,7 +24,7 @@ pub struct MainView {
     line_draw_system: LineDrawSystem,
     view: Arc<AtomicCell<View>>,
     vertices: Vec<Vertex>,
-    draw_grid: bool,
+    pub draw_grid: bool,
     anim_handler_thread: AnimHandlerThread,
     base_node_width: f32,
 }
@@ -283,19 +279,25 @@ enum AnimMsg {
 pub struct AnimHandlerThread {
     settings: Arc<AtomicCell<AnimSettings>>,
     initial_view: View,
-    view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Option<Point>>>,
     _join_handle: std::thread::JoinHandle<()>,
     msg_tx: channel::Sender<AnimMsg>,
 }
 
 impl AnimHandlerThread {
-    fn view(&self) -> View {
-        self.view.load()
+    #[allow(dead_code)]
+    fn update_settings<F>(&self, f: F)
+    where
+        F: Fn(AnimSettings) -> AnimSettings,
+    {
+        let old = self.settings.load();
+        let new = f(old);
+        self.settings.store(new);
     }
 
-    fn set_mouse_pos(&self, pos: Option<Point>) {
-        self.mouse_pos.store(pos);
+    #[allow(dead_code)]
+    fn anim_settings(&self) -> AnimSettings {
+        self.settings.load()
     }
 
     fn set_mouse_pan(&self, origin: Option<Point>) {
@@ -326,7 +328,7 @@ fn anim_handler_thread(
     let initial_view = view.load();
 
     let inner_settings = settings.clone();
-    let inner_view = view.clone();
+    let inner_view = view;
     let inner_mouse_pos = mouse_pos.clone();
 
     let (msg_tx, msg_rx) = channel::unbounded::<AnimMsg>();
@@ -376,7 +378,6 @@ fn anim_handler_thread(
     });
 
     AnimHandlerThread {
-        view,
         _join_handle,
         mouse_pos,
         msg_tx,

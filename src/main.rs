@@ -27,8 +27,6 @@ use winit::window::{Window, WindowBuilder};
 
 use std::sync::Arc;
 
-use std::time::Instant;
-
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
 use gfaestus::geometry::*;
@@ -38,8 +36,6 @@ use gfaestus::render::*;
 use gfaestus::universe::*;
 
 use rgb::*;
-
-use nalgebra_glm as glm;
 
 use anyhow::Result;
 
@@ -288,19 +284,13 @@ fn main() {
         Some(fut.boxed())
     };
 
-    let mut last_time = Instant::now();
-
     let mut paused = false;
 
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
 
-    let mut draw_grid = true;
-
     let mut mouse_pos = Point { x: 0.0, y: 0.0 };
-
-    let mut last_frame_t = std::time::Instant::now();
 
     println!("MainView.view: {:?}", main_view.view());
 
@@ -312,12 +302,6 @@ fn main() {
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     event_loop.run(move |event, _, control_flow| {
-        last_frame_t = std::time::Instant::now();
-        let now = Instant::now();
-        let delta = now.duration_since(last_time);
-
-        last_time = now;
-
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
         }
@@ -451,7 +435,7 @@ fn main() {
                     paused = !paused;
                 }
                 Action::ResetLayout => {
-                    draw_grid = !draw_grid;
+                    main_view.draw_grid = !main_view.draw_grid;
                     // layout = init_layout.clone();
                 }
                 Action::MousePan(focus) => {
@@ -653,7 +637,7 @@ fn main() {
                     builder.execute_commands(secondary_buf).unwrap();
                 }
 
-                if draw_grid {
+                if main_view.draw_grid {
                     unsafe {
                         let cmd_buf =
                             main_view.draw_lines(&dynamic_state).unwrap();

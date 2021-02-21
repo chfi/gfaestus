@@ -321,7 +321,6 @@ impl InputActionWorker {
 
         let _worker_thread = thread::spawn(move || {
             while let Ok(in_event) = raw_event_rx.recv() {
-                if let InputEvent::KeyboardInput(ev) = in_event {}
                 if let Some(sem_ev) = SemanticInput::parse_input_event(in_event)
                 {
                     semantic_input_tx.send(sem_ev).unwrap();

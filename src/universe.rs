@@ -222,7 +222,7 @@ impl FlatLayout {
         })
     }
 
-    fn apply_layout_tsv(&mut self, path: &str) -> Result<()> {
+    pub fn apply_layout_tsv(&mut self, path: &str) -> Result<()> {
         use std::fs::File;
         use std::io::prelude::*;
         use std::io::BufReader;
