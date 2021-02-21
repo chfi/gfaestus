@@ -50,14 +50,15 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
-    pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+    rect_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+    line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
 }
 
 impl NodeDrawSystem {
     pub fn new<R>(gfx_queue: Arc<Queue>, subpass: Subpass<R>) -> NodeDrawSystem
     where
-        R: RenderPassAbstract + Send + Sync + 'static,
+        R: RenderPassAbstract + Clone + Send + Sync + 'static,
     {
         let _ = include_str!("../../shaders/nodes/vertex.vert");
         let _ = include_str!("../../shaders/nodes/geometry.geom");
@@ -70,7 +71,7 @@ impl NodeDrawSystem {
         let vertex_buffer_pool: CpuBufferPool<Vertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
 
-        let pipeline = {
+        let rect_pipeline = {
             Arc::new(
                 GraphicsPipeline::start()
                     .vertex_input_single_buffer::<Vertex>()
@@ -78,6 +79,22 @@ impl NodeDrawSystem {
                     .line_list()
                     .geometry_shader(gs.main_entry_point(), ())
                     .viewports_dynamic_scissors_irrelevant(1)
+                    .fragment_shader(fs.main_entry_point(), ())
+                    .render_pass(subpass.clone())
+                    .blend_alpha_blending()
+                    .build(gfx_queue.device().clone())
+                    .unwrap(),
+            ) as Arc<_>
+        };
+
+        let line_pipeline = {
+            Arc::new(
+                GraphicsPipeline::start()
+                    .vertex_input_single_buffer::<Vertex>()
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .line_list()
+                    .viewports_dynamic_scissors_irrelevant(1)
+                    .line_width_dynamic()
                     .fragment_shader(fs.main_entry_point(), ())
                     .render_pass(subpass)
                     .blend_alpha_blending()
@@ -88,10 +105,12 @@ impl NodeDrawSystem {
 
         NodeDrawSystem {
             gfx_queue,
-            pipeline,
+            // pipeline,
             vertex_buffer_pool,
             cached_vertex_buffer: None,
             node_id_color_buffer: None,
+            rect_pipeline,
+            line_pipeline,
         }
     }
 
@@ -136,12 +155,22 @@ impl NodeDrawSystem {
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        let mut builder: AutoCommandBufferBuilder =
+        let min_node_width = 2.0;
+        let use_rect_pipeline = view.scale < (node_width / min_node_width);
+
+        let mut builder: AutoCommandBufferBuilder = if use_rect_pipeline {
             AutoCommandBufferBuilder::secondary_graphics(
                 self.gfx_queue.device().clone(),
                 self.gfx_queue.family(),
-                self.pipeline.clone().subpass(),
-            )?;
+                self.rect_pipeline.clone().subpass(),
+            )
+        } else {
+            AutoCommandBufferBuilder::secondary_graphics(
+                self.gfx_queue.device().clone(),
+                self.gfx_queue.family(),
+                self.line_pipeline.clone().subpass(),
+            )
+        }?;
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -194,14 +223,6 @@ impl NodeDrawSystem {
             )?
         };
 
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-        let set = {
-            let set = PersistentDescriptorSet::start(layout.clone())
-                .add_buffer(data_buffer.clone())?;
-            let set = set.build()?;
-            Arc::new(set)
-        };
-
         self.node_id_color_buffer = Some(data_buffer.clone());
 
         let vertex_buffer = if let Some(vertices) = vertices {
@@ -214,14 +235,44 @@ impl NodeDrawSystem {
             self.cached_vertex_buffer.as_ref().unwrap().clone()
         };
 
-        builder.draw(
-            self.pipeline.clone(),
-            dynamic_state,
-            vec![vertex_buffer],
-            // vec![Arc::new(vertex_buffer)],
-            set.clone(),
-            view_pc,
-        )?;
+        if use_rect_pipeline {
+            let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+            let set = {
+                let set = PersistentDescriptorSet::start(layout.clone())
+                    .add_buffer(data_buffer.clone())?;
+                let set = set.build()?;
+                Arc::new(set)
+            };
+
+            builder.draw(
+                self.rect_pipeline.clone(),
+                &dynamic_state,
+                vec![vertex_buffer],
+                set.clone(),
+                view_pc,
+            )?;
+        } else {
+            let layout = self.line_pipeline.descriptor_set_layout(0).unwrap();
+            let set = {
+                let set = PersistentDescriptorSet::start(layout.clone())
+                    .add_buffer(data_buffer.clone())?;
+                let set = set.build()?;
+                Arc::new(set)
+            };
+
+            // let line_width = (50.0 / view.scale).max(2.0);
+            let line_width = (50.0 / view.scale).max(min_node_width);
+            let mut dynamic_state = dynamic_state.clone();
+            dynamic_state.line_width = Some(line_width);
+
+            builder.draw(
+                self.line_pipeline.clone(),
+                &dynamic_state,
+                vec![vertex_buffer],
+                set.clone(),
+                view_pc,
+            )?;
+        }
 
         let builder = builder.build()?;
 
