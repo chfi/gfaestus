@@ -19,6 +19,8 @@ use crate::geometry::*;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
 
+use crate::input::binds::*;
+
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
     line_draw_system: LineDrawSystem,
@@ -224,6 +226,67 @@ impl MainView {
     pub fn zoom_delta(&mut self, dz: f32) {
         self.anim_handler_thread.zoom_delta(dz)
     }
+
+    // fn apply_input(&mut self, input_state: &InputState<MainViewInputs>, input: MainViewInputs) {
+    fn apply_digital_input(
+        &mut self,
+        state: DigitalState,
+        input: MainViewInputs,
+        mouse_pos: Point,
+    ) {
+        use MainViewInputs as In;
+
+        let pressed = state.pressed();
+
+        let pan_delta = |invert: bool| {
+            if pressed {
+                if invert {
+                    -1.0
+                } else {
+                    1.0
+                }
+            } else {
+                0.0
+            }
+        };
+
+        match input {
+            In::ButtonMousePan => {
+                if pressed {
+                    self.set_mouse_pan(Some(mouse_pos));
+                } else {
+                    self.set_mouse_pan(None);
+                }
+            }
+            In::ButtonSelect => {
+                // TODO currently handled in main.rs
+            }
+            In::KeyClearSelection => {
+                // TODO currently handled in main.rs
+            }
+            In::KeyPanUp => {
+                self.pan_const(None, Some(pan_delta(true)));
+            }
+            In::KeyPanRight => {
+                self.pan_const(Some(pan_delta(false)), None);
+            }
+            In::KeyPanDown => {
+                self.pan_const(None, Some(pan_delta(false)));
+            }
+            In::KeyPanLeft => {
+                self.pan_const(Some(pan_delta(true)), None);
+            }
+            In::KeyResetView => {
+                if pressed {
+                    self.reset_view();
+                }
+            }
+            In::WheelZoom => {
+                // TODO this should be handled separately
+                unimplemented!();
+            }
+        }
+    }
 }
 
 pub enum DisplayLayer {
@@ -321,6 +384,9 @@ impl AnimHandlerThread {
     }
 
     fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
+        let speed = self.settings.load().key_pan_speed;
+        let dx = dx.map(|x| x * speed);
+        let dy = dy.map(|x| x * speed);
         self.msg_tx.send(AnimMsg::PanConst { dx, dy }).unwrap();
     }
 
@@ -524,7 +590,9 @@ struct AnimSettings {
     min_view_scale: Option<f32>,
     max_view_scale: Option<f32>,
     max_speed: Option<f32>,
+    key_pan_speed: f32,
     mouse_pan_mult: f32,
+    wheel_zoom_base_speed: f32,
 }
 
 impl std::default::Default for AnimSettings {
@@ -533,7 +601,9 @@ impl std::default::Default for AnimSettings {
             min_view_scale: Some(0.5),
             max_view_scale: None,
             max_speed: Some(600.0),
+            key_pan_speed: 400.0,
             mouse_pan_mult: 1.0,
+            wheel_zoom_base_speed: 0.45,
         }
     }
 }

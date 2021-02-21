@@ -100,6 +100,52 @@ pub enum SystemInput<T: InputPayload> {
     Wheel { delta: f32, payload: T },
 }
 
+impl<T: InputPayload> SystemInput<T> {
+    pub fn payload(&self) -> T {
+        match self {
+            SystemInput::Keyboard { payload, .. } => *payload,
+            SystemInput::MouseButton { payload, .. } => *payload,
+            SystemInput::Wheel { payload, .. } => *payload,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct InputState<T: InputPayload> {
+    keys: FxHashSet<T>,
+    mouse_buttons: FxHashSet<T>,
+}
+
+impl<T: InputPayload> InputState<T> {
+    pub fn is_key_down(&self, key_input: T) -> bool {
+        self.keys.contains(&key_input)
+    }
+
+    pub fn is_mouse_down(&self, mouse_input: T) -> bool {
+        self.mouse_buttons.contains(&mouse_input)
+    }
+
+    pub fn update(&mut self, input: SystemInput<T>) {
+        match input {
+            SystemInput::Keyboard { state, payload } => {
+                if state.pressed() {
+                    self.keys.insert(payload);
+                } else {
+                    self.keys.remove(&payload);
+                }
+            }
+            SystemInput::MouseButton { state, payload } => {
+                if state.pressed() {
+                    self.mouse_buttons.insert(payload);
+                } else {
+                    self.mouse_buttons.remove(&payload);
+                }
+            }
+            _ => (),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MainViewInputs {
     ButtonMousePan,
@@ -126,6 +172,7 @@ where
 impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
     pub fn apply(
         &self,
+        input_state: &mut InputState<Inputs>,
         event: &event::WindowEvent,
     ) -> Option<Vec<SystemInput<Inputs>>> {
         match event {
@@ -145,6 +192,10 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                     })
                     .collect::<Vec<_>>();
 
+                for &input in inputs.iter() {
+                    input_state.update(input);
+                }
+
                 Some(inputs)
             }
             WindowEvent::MouseInput { state, button, .. } => {
@@ -158,6 +209,10 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                         SystemInput::MouseButton { state, payload }
                     })
                     .collect::<Vec<_>>();
+
+                for &input in inputs.iter() {
+                    input_state.update(input);
+                }
 
                 Some(inputs)
             }
