@@ -31,6 +31,7 @@ use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
+use gfaestus::input::binds::*;
 use gfaestus::input::*;
 use gfaestus::render::*;
 use gfaestus::universe::*;
@@ -272,10 +273,24 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
+    let (winit_tx, winit_rx) =
+        crossbeam::channel::unbounded::<WindowEvent<'static>>();
+
+    let input_manager = InputManager::new(winit_rx);
+
+    // let input_manager = Arc::new(InputManager::new(winit_rx));
+
+    // let input_manager_loop = {
+    //     let input_manager = input_manager.clone();
+    //     std::thread::spawn(move || input_manager.handle_events())
+    // };
+
+    /*
     let input_action_handler = InputActionWorker::new();
 
     let semantic_input_rx = input_action_handler.clone_semantic_rx();
     let input_action_rx = input_action_handler.clone_action_rx();
+    */
 
     let mut recreate_swapchain = false;
 
@@ -302,12 +317,36 @@ fn main() {
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     event_loop.run(move |event, _, control_flow| {
+        let mut mouse_released = false;
+        let mut mouse_pressed = false;
+
+        // TODO handle scale factor change before calling to_static() on event
+
+        let event = if let Some(ev) = event.to_static() {
+            ev
+        } else {
+            return;
+        };
+
+        if let Event::WindowEvent { event, .. } = &event {
+            let ev = event.clone();
+            winit_tx.send(ev).unwrap();
+        }
+
+        input_manager.handle_events();
+
+        // if let Event::WindowEvent { event, .. } = &event {
+        //     let event = event.().to_static();
+        // if let Some(winit_ev) = event.
+        // input_manager.push_winit_event
+        // input_action_handler.send_window_event(&event);
+        // }
+
+        /*
         if let Event::WindowEvent { event, .. } = &event {
             input_action_handler.send_window_event(&event);
         }
 
-        let mut mouse_released = false;
-        let mut mouse_pressed = false;
         while let Ok(semin) = semantic_input_rx.try_recv() {
             if let SemanticInput::MouseButtonPan(input_change) = semin {
                 if input_change.released() {
@@ -322,75 +361,21 @@ fn main() {
             if let SemanticInput::OtherKey { key, pressed } = semin {
                 use winit::event::VirtualKeyCode as Key;
                 match key {
-                    // Key::Key1 => {}
-                    // Key::Key2 => {}
-                    // Key::Key3 => {}
-                    // Key::Key4 => {}
-                    // Key::Key5 => {}
-                    // Key::Key6 => {}
-                    // Key::Key7 => {}
-                    // Key::Key8 => {}
-                    // Key::Key9 => {}
-                    // Key::Key0 => {}
-                    // Key::A => {}
-                    // Key::B => {}
-                    // Key::C => {}
-                    // Key::D => {}
-                    // Key::E => {}
-                    // Key::F => {}
-                    // Key::G => {}
-                    // Key::H => {}
-                    // Key::I => {}
-                    // Key::J => {}
-                    // Key::K => {}
-                    // Key::L => {}
-                    // Key::M => {}
-                    // Key::N => {}
-                    // Key::O => {}
-                    // Key::P => {}
-                    // Key::Q => {}
-                    // Key::R => {}
-                    // Key::S => {}
-                    // Key::T => {}
-                    // Key::U => {}
-                    // Key::V => {}
-                    // Key::W => {}
-                    // Key::X => {}
-                    // Key::Y => {}
-                    // Key::Z => {}
-                    // Key::Escape => {}
                     Key::F1 => {
                         if pressed {
-                            gui.toggle_inspection_ui();
+                            gui.toggle_egui_inspection_ui();
                         }
                     }
                     Key::F2 => {
                         if pressed {
-                            gui.toggle_settings_ui();
+                            gui.toggle_egui_settings_ui();
                         }
                     }
                     Key::F3 => {
                         if pressed {
-                            gui.toggle_memory_ui();
+                            gui.toggle_egui_memory_ui();
                         }
                     }
-                    // Key::F2 => {}
-                    // Key::F3 => {}
-                    // Key::F4 => {}
-                    // Key::F5 => {}
-                    // Key::F6 => {}
-                    // Key::F7 => {}
-                    // Key::F8 => {}
-                    // Key::F9 => {}
-                    // Key::F10 => {}
-                    // Key::F11 => {}
-                    // Key::Pause => {}
-                    // Key::Insert => {}
-                    // Key::Home => {}
-                    // Key::Delete => {}
-                    // Key::End => {}
-                    // Key::PageDown => {}
-                    // Key::PageUp => {}
                     _ => {}
                 }
             }
@@ -498,6 +483,7 @@ fn main() {
 
             gui.push_event(egui_event);
         }
+        */
 
         main_view.set_mouse_pos(Some(mouse_pos));
 
