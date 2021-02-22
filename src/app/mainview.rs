@@ -182,7 +182,7 @@ impl MainView {
     }
 
     pub fn add_lines(
-        &mut self,
+        &self,
         lines: &[(Point, Point)],
         color: RGB<f32>,
     ) -> Result<(usize, Box<dyn GpuFuture>)> {

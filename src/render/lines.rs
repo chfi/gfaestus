@@ -15,6 +15,9 @@ use anyhow::Result;
 
 use rgb::*;
 
+use crossbeam::atomic::AtomicCell;
+use parking_lot::Mutex;
+
 use crate::geometry::*;
 use crate::view;
 use crate::view::View;
@@ -45,8 +48,8 @@ pub struct LineDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<LineVertex>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    vertex_buffers: Vec<(usize, Arc<ImmutableBuffer<[LineVertex]>>)>,
-    next_buffer: usize,
+    vertex_buffers: Mutex<Vec<(usize, Arc<ImmutableBuffer<[LineVertex]>>)>>,
+    next_buffer: AtomicCell<usize>,
 }
 
 fn line_vertices(lines: &[(Point, Point)], color: RGB<f32>) -> Vec<LineVertex> {
@@ -100,8 +103,8 @@ impl LineDrawSystem {
             gfx_queue,
             pipeline,
             vertex_buffer_pool,
-            vertex_buffers,
-            next_buffer: 0,
+            vertex_buffers: Mutex::new(vertex_buffers),
+            next_buffer: AtomicCell::new(0),
         }
     }
 
@@ -111,7 +114,7 @@ impl LineDrawSystem {
     /// `LineDrawSystem`, and a `GpuFuture` representing the upload of
     /// the resulting vertices to the GPU
     pub fn add_lines(
-        &mut self,
+        &self,
         lines: &[(Point, Point)],
         color: RGB<f32>,
     ) -> Result<(usize, Box<dyn GpuFuture>)> {
@@ -123,10 +126,11 @@ impl LineDrawSystem {
             self.gfx_queue.clone(),
         )?;
 
-        let index = self.next_buffer;
-        self.vertex_buffers.push((index, vbuf));
-
-        self.next_buffer += 1;
+        let index = self.next_buffer.fetch_add(1);
+        {
+            let mut buf_lock = self.vertex_buffers.lock();
+            buf_lock.push((index, vbuf));
+        }
 
         Ok((index, buf_future.boxed()))
     }
@@ -171,11 +175,13 @@ impl LineDrawSystem {
 
         };
 
-        let vertex_buffers = self
-            .vertex_buffers
-            .iter()
-            .map(|(_, b)| (b.clone()) as Arc<_>)
-            .collect::<Vec<_>>();
+        let vertex_buffers = {
+            let buf_lock = self.vertex_buffers.lock();
+            buf_lock
+                .iter()
+                .map(|(_, b)| (b.clone()) as Arc<_>)
+                .collect::<Vec<_>>()
+        };
 
         builder.draw(
             self.pipeline.clone(),
