@@ -29,6 +29,7 @@ use std::sync::Arc;
 
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
+use gfaestus::app::{AppMsg, AppState};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::binds::*;
@@ -278,6 +279,9 @@ fn main() {
 
     let input_manager = InputManager::new(winit_rx);
 
+    let main_view_rx = input_manager.clone_main_view_rx();
+    let gui_rx = input_manager.clone_gui_rx();
+
     // let input_manager = Arc::new(InputManager::new(winit_rx));
 
     // let input_manager_loop = {
@@ -316,6 +320,10 @@ fn main() {
 
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
+    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
+
+    let mut app_state = AppState::default();
+
     event_loop.run(move |event, _, control_flow| {
         let mut mouse_released = false;
         let mut mouse_pressed = false;
@@ -334,6 +342,19 @@ fn main() {
         }
 
         input_manager.handle_events();
+
+        while let Ok(gui_in) = gui_rx.try_recv() {
+            gui.apply_input(&app_msg_tx, gui_in);
+        }
+
+        while let Ok(main_view_in) = main_view_rx.try_recv() {
+            let dims = (width, height);
+            main_view.apply_input(dims, &app_msg_tx, main_view_in);
+        }
+
+        while let Ok(app_msg) = app_msg_rx.try_recv() {
+            gui.apply_app_msg(app_msg);
+        }
 
         // if let Event::WindowEvent { event, .. } = &event {
         //     let event = event.().to_static();

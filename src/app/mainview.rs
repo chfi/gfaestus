@@ -227,7 +227,12 @@ impl MainView {
         self.anim_handler_thread.zoom_delta(dz)
     }
 
-    fn apply_input(&mut self, input: SystemInput<MainViewInputs>) {
+    pub fn apply_input<Dims: Into<ScreenDims>>(
+        &mut self,
+        screen_dims: Dims,
+        app_msg_tx: &channel::Sender<crate::app::AppMsg>,
+        input: SystemInput<MainViewInputs>,
+    ) {
         use MainViewInputs as In;
         let payload = input.payload();
 
@@ -246,7 +251,9 @@ impl MainView {
 
                 match payload {
                     In::KeyClearSelection => {
-                        // TODO currently handled in main.rs
+                        app_msg_tx
+                            .send(crate::app::AppMsg::SelectNode(None))
+                            .unwrap();
                     }
                     In::KeyPanUp => {
                         self.pan_const(None, Some(pan_delta(true)));
@@ -279,7 +286,13 @@ impl MainView {
                         }
                     }
                     In::ButtonSelect => {
-                        // TODO currently handled in main.rs
+                        let selected_node = self
+                            .read_node_id_at(screen_dims, pos)
+                            .map(|nid| NodeId::from(nid as u64));
+
+                        app_msg_tx
+                            .send(crate::app::AppMsg::SelectNode(selected_node))
+                            .unwrap();
                     }
                     _ => (),
                 }

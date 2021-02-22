@@ -18,6 +18,8 @@ use vulkano::{
     sync::GpuFuture,
 };
 
+use crossbeam::channel;
+
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
@@ -442,7 +444,23 @@ impl GfaestusGui {
         Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
     }
 
-    fn apply_input(&mut self, input: SystemInput<GuiInput>) {
+    pub fn apply_app_msg(&mut self, app_msg: crate::app::AppMsg) {
+        use crate::app::AppMsg;
+        match app_msg {
+            AppMsg::SelectNode(id) => {
+                self.set_selected_node(id);
+            }
+            AppMsg::HoverNode(id) => {
+                self.set_hover_node(id);
+            }
+        }
+    }
+
+    pub fn apply_input(
+        &mut self,
+        app_msg_tx: &channel::Sender<crate::app::AppMsg>,
+        input: SystemInput<GuiInput>,
+    ) {
         use GuiInput as In;
         let payload = input.payload();
 
@@ -451,7 +469,10 @@ impl GfaestusGui {
                 if state.pressed() {
                     match payload {
                         GuiInput::KeyClearSelection => {
-                            self.set_selected_node(None);
+                            app_msg_tx
+                                .send(crate::app::AppMsg::SelectNode(None))
+                                .unwrap();
+                            // self.set_selected_node(None);
                         }
                         GuiInput::KeyEguiInspectionUi => {
                             self.toggle_egui_inspection_ui();
