@@ -20,6 +20,7 @@ use crate::render::*;
 use crate::view::{ScreenDims, View};
 
 use crate::input::binds::*;
+use crate::input::MousePos;
 
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
@@ -29,10 +30,12 @@ pub struct MainView {
     pub draw_grid: bool,
     anim_handler_thread: AnimHandlerThread,
     base_node_width: f32,
+    // mouse_pos: MousePos,
 }
 
 impl MainView {
     pub fn new<R>(
+        // mouse_pos: MousePos,
         gfx_queue: Arc<Queue>,
         render_pass: &Arc<R>,
     ) -> Result<MainView>
@@ -75,6 +78,7 @@ impl MainView {
             view,
             anim_handler_thread,
             base_node_width,
+            // mouse_pos,
         };
 
         Ok(main_view)
@@ -84,20 +88,18 @@ impl MainView {
         self.view.load()
     }
 
-    pub fn set_initial_view(
-        &mut self,
-        center: Option<Point>,
-        scale: Option<f32>,
-    ) {
-        let center =
-            center.unwrap_or(self.anim_handler_thread.initial_view.center);
-        let scale =
-            scale.unwrap_or(self.anim_handler_thread.initial_view.scale);
-        self.anim_handler_thread.initial_view = View { center, scale };
+    pub fn set_initial_view(&self, center: Option<Point>, scale: Option<f32>) {
+        let old_init_view = self.anim_handler_thread.initial_view.load();
+        let center = center.unwrap_or(old_init_view.center);
+        let scale = scale.unwrap_or(old_init_view.scale);
+        self.anim_handler_thread
+            .initial_view
+            .store(View { center, scale });
     }
 
-    pub fn reset_view(&mut self) {
-        self.view.store(self.anim_handler_thread.initial_view);
+    pub fn reset_view(&self) {
+        self.view
+            .store(self.anim_handler_thread.initial_view.load());
     }
 
     pub fn set_vertices<VI>(&mut self, vertices: VI)
@@ -201,7 +203,7 @@ impl MainView {
         self.view.store(view);
     }
 
-    pub fn set_view_scale(&mut self, scale: f32) {
+    pub fn set_view_scale(&self, scale: f32) {
         let mut view = self.view.load();
         view.scale = scale;
         self.view.store(view);
@@ -211,24 +213,24 @@ impl MainView {
         self.anim_handler_thread.mouse_pos.store(pos);
     }
 
-    pub fn set_mouse_pan(&mut self, origin: Option<Point>) {
+    pub fn set_mouse_pan(&self, origin: Option<Point>) {
         self.anim_handler_thread.set_mouse_pan(origin);
     }
 
-    pub fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
+    pub fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
         self.anim_handler_thread.pan_const(dx, dy);
     }
 
-    pub fn pan_delta(&mut self, dxy: Point) {
+    pub fn pan_delta(&self, dxy: Point) {
         self.anim_handler_thread.pan_delta(dxy);
     }
 
-    pub fn zoom_delta(&mut self, dz: f32) {
+    pub fn zoom_delta(&self, dz: f32) {
         self.anim_handler_thread.zoom_delta(dz)
     }
 
     pub fn apply_input<Dims: Into<ScreenDims>>(
-        &mut self,
+        &self,
         screen_dims: Dims,
         app_msg_tx: &channel::Sender<crate::app::AppMsg>,
         input: SystemInput<MainViewInputs>,
@@ -311,59 +313,6 @@ pub enum DisplayLayer {
     Graph,
 }
 
-/*
-pub enum MainViewInputs {
-    ButtonMousePan,
-    KeyModMousePan,
-    ButtonMouseSelect,
-    KeyClearSelection,
-    KeyPanUp,
-    KeyPanRight,
-    KeyPanDown,
-    KeyPanLeft,
-    KeyResetView,
-}
-
-pub enum MainViewInput {
-    MousePos(Point),
-    MousePrimaryButton { pressed: bool, point: Point },
-    MouseSecondaryButton { pressed: bool, point: Point },
-    MouseWheel { delta: f32 },
-    // ArrowKeys { up: bool, right: bool, down: bool, left: bool },
-    KeyUp { pressed: bool },
-    KeyRight { pressed: bool },
-    KeyDown { pressed: bool },
-    KeyLeft { pressed: bool },
-}
-*/
-
-pub enum MainViewRecvMsg {
-    ResetView,
-    SetView {
-        center: Option<Point>,
-        scale: Option<f32>,
-    },
-    SetLayer {
-        layer: DisplayLayer,
-        on: bool,
-    },
-    ToggleLayer {
-        layer: DisplayLayer,
-    },
-}
-
-pub enum MainViewSendMsg {
-    NodeAtScreenPoint {
-        point: Point,
-        node: NodeId,
-    },
-    // world coordinates
-    ViewExtent {
-        top_left: Point,
-        bottom_right: Point,
-    },
-}
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum AnimMsg {
     SetMousePan(Option<Point>),
@@ -374,7 +323,7 @@ enum AnimMsg {
 
 pub struct AnimHandlerThread {
     settings: Arc<AtomicCell<AnimSettings>>,
-    initial_view: View,
+    initial_view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Option<Point>>>,
     _join_handle: std::thread::JoinHandle<()>,
     msg_tx: channel::Sender<AnimMsg>,
@@ -425,6 +374,7 @@ fn anim_handler_thread(
     let settings: Arc<AtomicCell<AnimSettings>> =
         Arc::new(AtomicCell::new(AnimSettings::default()));
     let initial_view = view.load();
+    let initial_view = Arc::new(AtomicCell::new(initial_view));
 
     let inner_settings = settings.clone();
     let inner_view = view;

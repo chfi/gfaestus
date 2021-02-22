@@ -16,13 +16,37 @@ pub use binds::DigitalState;
 
 use binds::*;
 
+/// A wrapper over `Arc<AtomicCell<Point>>`, which can be shared
+/// across systems, but only the InputManager has access to the
+/// contents & the mutation method
+#[derive(Clone)]
+pub struct MousePos {
+    pos: Arc<AtomicCell<Point>>,
+}
+
+impl MousePos {
+    fn new(point: Point) -> Self {
+        Self {
+            pos: Arc::new(AtomicCell::new(point)),
+        }
+    }
+
+    fn store(&self, new: Point) {
+        self.pos.store(new);
+    }
+
+    pub fn read(&self) -> Point {
+        self.pos.load()
+    }
+}
+
 struct InputChannels<T: InputPayload> {
     tx: channel::Sender<SystemInput<T>>,
     rx: channel::Receiver<SystemInput<T>>,
 }
 
 pub struct InputManager {
-    mouse_screen_pos: Arc<AtomicCell<Point>>,
+    mouse_screen_pos: MousePos,
     mouse_over_gui: Arc<AtomicCell<bool>>,
 
     winit_rx: channel::Receiver<event::WindowEvent<'static>>,
@@ -49,8 +73,12 @@ impl InputManager {
         self.mouse_over_gui.store(is_over);
     }
 
-    pub fn mouse_pos(&self) -> Point {
-        self.mouse_screen_pos.load()
+    pub fn read_mouse_pos(&self) -> Point {
+        self.mouse_screen_pos.pos.load()
+    }
+
+    pub fn clone_mouse_pos(&self) -> MousePos {
+        self.mouse_screen_pos.clone()
     }
 
     pub fn handle_events(&self) {
@@ -62,7 +90,7 @@ impl InputManager {
                 });
             }
 
-            let mouse_pos = self.mouse_screen_pos.load();
+            let mouse_pos = self.mouse_screen_pos.read();
 
             if let Some(gui_inputs) =
                 self.gui_bindings.apply(&winit_ev, mouse_pos)
@@ -90,7 +118,7 @@ impl InputManager {
     pub fn new(
         winit_rx: channel::Receiver<event::WindowEvent<'static>>,
     ) -> Self {
-        let mouse_screen_pos = Arc::new(AtomicCell::new(Point::ZERO));
+        let mouse_screen_pos = MousePos::new(Point::ZERO);
         let mouse_over_gui = Arc::new(AtomicCell::new(false));
 
         let main_view_bindings: SystemInputBindings<MainViewInputs> =

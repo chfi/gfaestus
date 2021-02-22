@@ -6,6 +6,7 @@ use crossbeam::channel;
 use handlegraph::handle::NodeId;
 
 use crate::geometry::*;
+use crate::input::MousePos;
 use crate::view::*;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -14,9 +15,8 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
 }
 
-#[derive(Debug, Clone, Copy)]
 pub struct App {
-    mouse_pos: Point,
+    mouse_pos: MousePos,
     screen_dims: ScreenDims,
 
     hover_node: Option<NodeId>,
@@ -24,9 +24,12 @@ pub struct App {
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Self {
+    pub fn new<Dims: Into<ScreenDims>>(
+        mouse_pos: MousePos,
+        screen_dims: Dims,
+    ) -> Self {
         Self {
-            mouse_pos: Point::ZERO,
+            mouse_pos,
             screen_dims: screen_dims.into(),
             hover_node: None,
             selected_node: None,
@@ -46,15 +49,11 @@ impl App {
     }
 
     pub fn mouse_pos(&self) -> Point {
-        self.mouse_pos
+        self.mouse_pos.read()
     }
 
     pub fn update_dims<Dims: Into<ScreenDims>>(&mut self, screen_dims: Dims) {
         self.screen_dims = screen_dims.into();
-    }
-
-    pub fn update_mouse_pos(&mut self, pos: Point) {
-        self.mouse_pos = pos;
     }
 
     pub fn apply_app_msg(&mut self, msg: &AppMsg) {
