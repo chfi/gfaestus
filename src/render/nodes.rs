@@ -46,13 +46,29 @@ mod fs {
     }
 }
 
+struct NodeDrawCache {
+    cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
+    node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
+}
+
+impl std::default::Default for NodeDrawCache {
+    fn default() -> Self {
+        Self {
+            cached_vertex_buffer: None,
+            node_id_color_buffer: None,
+        }
+    }
+}
+
+use parking_lot::Mutex;
+
 pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
-    cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
     rect_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
+
+    caches: Mutex<NodeDrawCache>,
 }
 
 impl NodeDrawSystem {
@@ -107,10 +123,9 @@ impl NodeDrawSystem {
             gfx_queue,
             // pipeline,
             vertex_buffer_pool,
-            cached_vertex_buffer: None,
-            node_id_color_buffer: None,
             rect_pipeline,
             line_pipeline,
+            caches: Mutex::new(Default::default()),
         }
     }
 
@@ -129,8 +144,12 @@ impl NodeDrawSystem {
             return None;
         }
         let ix = yu * screen_width + xu;
-        let buffer = self.node_id_color_buffer.as_ref()?;
-        let value = buffer.read().unwrap().get(ix as usize).copied()?;
+        let value = {
+            let cache_lock = self.caches.lock();
+            let buffer = cache_lock.node_id_color_buffer.as_ref()?;
+            let value = buffer.read().unwrap().get(ix as usize).copied()?;
+            value
+        };
 
         if value == 0 {
             None
@@ -140,11 +159,12 @@ impl NodeDrawSystem {
     }
 
     pub fn has_cached_vertices(&self) -> bool {
-        self.cached_vertex_buffer.is_some()
+        let cache_lock = self.caches.lock();
+        cache_lock.cached_vertex_buffer.is_some()
     }
 
     pub fn draw<VI>(
-        &mut self,
+        &self,
         dynamic_state: &DynamicState,
         vertices: Option<VI>,
         view: View,
@@ -225,16 +245,22 @@ impl NodeDrawSystem {
             )?
         };
 
-        self.node_id_color_buffer = Some(data_buffer.clone());
+        let vertex_buffer = {
+            let mut cache_lock = self.caches.lock();
 
-        let vertex_buffer = if let Some(vertices) = vertices {
-            println!("replacing vertex cache");
-            let chunk = self.vertex_buffer_pool.chunk(vertices)?;
-            let arc_chunk = Arc::new(chunk);
-            self.cached_vertex_buffer = Some(arc_chunk.clone());
-            arc_chunk
-        } else {
-            self.cached_vertex_buffer.as_ref().unwrap().clone()
+            cache_lock.node_id_color_buffer = Some(data_buffer.clone());
+
+            let inner_buf = if let Some(vertices) = vertices {
+                println!("replacing vertex cache");
+                let chunk = self.vertex_buffer_pool.chunk(vertices)?;
+                let arc_chunk = Arc::new(chunk);
+                cache_lock.cached_vertex_buffer = Some(arc_chunk.clone());
+                arc_chunk
+            } else {
+                cache_lock.cached_vertex_buffer.as_ref().unwrap().clone()
+            };
+
+            inner_buf
         };
 
         if use_rect_pipeline {

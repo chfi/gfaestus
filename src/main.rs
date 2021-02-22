@@ -206,7 +206,28 @@ fn main() {
         .unwrap(),
     );
 
-    let mut main_view = MainView::new(queue.clone(), &render_pass).unwrap();
+    let (winit_tx, winit_rx) =
+        crossbeam::channel::unbounded::<WindowEvent<'static>>();
+
+    let input_manager = InputManager::new(winit_rx);
+
+    // let input_manager = Arc::new(InputManager::new(winit_rx));
+    // let input_manager_loop = {
+    //     let input_manager = input_manager.clone();
+    //     std::thread::spawn(move || input_manager.handle_events())
+    // };
+
+    let main_view_rx = input_manager.clone_main_view_rx();
+    let gui_rx = input_manager.clone_gui_rx();
+
+    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0));
+
+    let mut main_view = MainView::new(
+        // input_manager.clone_mouse_pos(),
+        queue.clone(),
+        &render_pass,
+    )
+    .unwrap();
 
     let mut gui = GfaestusGui::new(queue.clone(), &render_pass).unwrap();
 
@@ -267,8 +288,6 @@ fn main() {
     let mut framebuffers =
         window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
-    let mut app = App::new((100.0, 100.0));
-
     if let Some(viewport) =
         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
     {
@@ -277,21 +296,6 @@ fn main() {
 
         app.update_dims((width, height));
     }
-
-    let (winit_tx, winit_rx) =
-        crossbeam::channel::unbounded::<WindowEvent<'static>>();
-
-    let input_manager = InputManager::new(winit_rx);
-
-    let main_view_rx = input_manager.clone_main_view_rx();
-    let gui_rx = input_manager.clone_gui_rx();
-
-    // let input_manager = Arc::new(InputManager::new(winit_rx));
-
-    // let input_manager_loop = {
-    //     let input_manager = input_manager.clone();
-    //     std::thread::spawn(move || input_manager.handle_events())
-    // };
 
     let mut recreate_swapchain = false;
 
@@ -323,9 +327,10 @@ fn main() {
             winit_tx.send(ev).unwrap();
         }
 
+        // hacky -- this should take place after mouse pos is updated
+        // in egui but before input is sent to mainview
+        input_manager.set_mouse_over_gui(gui.pointer_over_gui());
         input_manager.handle_events();
-
-        app.update_mouse_pos(input_manager.mouse_pos());
 
         let screen_dims = app.dims();
         let mouse_pos = app.mouse_pos();

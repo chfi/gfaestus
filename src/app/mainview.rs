@@ -116,7 +116,7 @@ impl MainView {
     }
 
     pub fn draw_nodes(
-        &mut self,
+        &self,
         dynamic_state: &DynamicState,
         offset: Point,
     ) -> Result<AutoCommandBuffer> {
@@ -146,7 +146,7 @@ impl MainView {
     }
 
     pub fn draw_nodes_dynamic<VI>(
-        &mut self,
+        &self,
         dynamic_state: &DynamicState,
         vertices: VI,
         offset: Point,
