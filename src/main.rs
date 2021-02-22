@@ -32,7 +32,6 @@ use gfaestus::app::mainview::*;
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
-use gfaestus::input::binds::*;
 use gfaestus::input::*;
 use gfaestus::render::*;
 use gfaestus::universe::*;
@@ -57,10 +56,6 @@ fn universe_from_gfa_layout(
     graph_query: &GraphQuery,
     layout_path: &str,
 ) -> Result<(Universe<FlatLayout>, GraphStats)> {
-    /*
-    let mut mmap = gfa::mmap::MmapGFA::new(gfa_path)?;
-    let graph = gfaestus::gfa::load::packed_graph_from_mmap(&mut mmap)?;
-    */
     let graph = graph_query.graph();
 
     let universe = Universe::from_laid_out_graph(&graph, layout_path)?;
@@ -91,8 +86,6 @@ fn main() {
         eprintln!("must provide path to a layout file");
         std::process::exit(1);
     };
-
-    // let layout_file = args.get(2);
 
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
@@ -274,17 +267,16 @@ fn main() {
     let mut framebuffers =
         window_size_update(&images, render_pass.clone(), &mut dynamic_state);
 
-    let mut width = 100.0;
-    let mut height = 100.0;
+    let mut app = App::new((100.0, 100.0));
 
     if let Some(viewport) =
         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
     {
-        width = viewport.dimensions[0];
-        height = viewport.dimensions[1];
-    }
+        let width = viewport.dimensions[0];
+        let height = viewport.dimensions[1];
 
-    let mut app = App::new((width, height));
+        app.update_dims((width, height));
+    }
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -308,19 +300,11 @@ fn main() {
         Some(fut.boxed())
     };
 
-    let mut paused = false;
-
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
 
     println!("MainView.view: {:?}", main_view.view());
-
-    let mut gui_screen_rect = Some(Point {
-        x: width,
-        y: height,
-    });
-
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
@@ -412,8 +396,7 @@ fn main() {
 
                 gui.set_view_info_view(main_view.view());
 
-                gui.begin_frame(gui_screen_rect);
-                gui_screen_rect = None;
+                gui.begin_frame(Some(app.dims().into()));
 
                 if recreate_swapchain {
                     let dimensions: [u32; 2] =
@@ -441,16 +424,11 @@ fn main() {
                     if let Some(viewport) =
                         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
                     {
-                        width = viewport.dimensions[0];
-                        height = viewport.dimensions[1];
+                        let width = viewport.dimensions[0];
+                        let height = viewport.dimensions[1];
 
                         app.update_dims((width, height));
                     }
-
-                    gui_screen_rect = Some(Point {
-                        x: width,
-                        y: height,
-                    });
 
                     recreate_swapchain = false;
                 }
@@ -472,13 +450,7 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
-                // let clear = if paused {
-                //     [0.05, 0.0, 0.0, 1.0]
-                // } else {
-                //     [0.0, 0.0, 0.05, 1.0]
-                // };
                 let clear = [0.0, 0.0, 0.05, 1.0];
-                // let clear = [0.7, 0.7, 0.7, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
                 let mut builder =
@@ -511,10 +483,10 @@ fn main() {
                     }
                 }
 
-                let future = if let Some(gui_res) =
+                let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)
                 {
-                    let (cmd_buf, future) = gui_res.unwrap();
+                    let (cmd_buf, future) = gui_result.unwrap();
                     unsafe {
                         builder.execute_commands(cmd_buf).unwrap();
                     }

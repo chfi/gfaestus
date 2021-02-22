@@ -29,6 +29,16 @@ impl From<Point> for ScreenDims {
     }
 }
 
+impl Into<Point> for ScreenDims {
+    #[inline]
+    fn into(self) -> Point {
+        Point {
+            x: self.width,
+            y: self.height,
+        }
+    }
+}
+
 impl From<(f32, f32)> for ScreenDims {
     #[inline]
     fn from((width, height): (f32, f32)) -> Self {
