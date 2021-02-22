@@ -448,10 +448,14 @@ impl GfaestusGui {
         use crate::app::AppMsg;
         match app_msg {
             AppMsg::SelectNode(id) => {
-                self.set_selected_node(id);
+                if self.selected_node_id != id {
+                    self.set_selected_node(id);
+                }
             }
             AppMsg::HoverNode(id) => {
-                self.set_hover_node(id);
+                if self.hover_node_id != id {
+                    self.set_hover_node(id);
+                }
             }
         }
     }

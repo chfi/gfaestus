@@ -289,13 +289,6 @@ fn main() {
     //     std::thread::spawn(move || input_manager.handle_events())
     // };
 
-    /*
-    let input_action_handler = InputActionWorker::new();
-
-    let semantic_input_rx = input_action_handler.clone_semantic_rx();
-    let input_action_rx = input_action_handler.clone_action_rx();
-    */
-
     let mut recreate_swapchain = false;
 
     let mut previous_frame_end = {
@@ -343,170 +336,51 @@ fn main() {
 
         input_manager.handle_events();
 
+        let mouse_pos = input_manager.mouse_pos();
+        let screen_dims = (width, height);
+
+        gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
+        main_view.set_mouse_pos(Some(mouse_pos));
+
+        let hover_node = main_view
+            .read_node_id_at(screen_dims, mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
+
+        app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+
         while let Ok(gui_in) = gui_rx.try_recv() {
             gui.apply_input(&app_msg_tx, gui_in);
         }
 
         while let Ok(main_view_in) = main_view_rx.try_recv() {
-            let dims = (width, height);
-            main_view.apply_input(dims, &app_msg_tx, main_view_in);
+            main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
         }
 
         while let Ok(app_msg) = app_msg_rx.try_recv() {
             gui.apply_app_msg(app_msg);
         }
 
-        // if let Event::WindowEvent { event, .. } = &event {
-        //     let event = event.().to_static();
-        // if let Some(winit_ev) = event.
-        // input_manager.push_winit_event
-        // input_action_handler.send_window_event(&event);
-        // }
+        let world_point = main_view
+            .view()
+            .screen_point_to_world(screen_dims, mouse_pos);
 
-        /*
-        if let Event::WindowEvent { event, .. } = &event {
-            input_action_handler.send_window_event(&event);
-        }
+        gui.set_view_info_mouse(mouse_pos, world_point);
 
-        while let Ok(semin) = semantic_input_rx.try_recv() {
-            if let SemanticInput::MouseButtonPan(input_change) = semin {
-                if input_change.released() {
-                    mouse_released = true;
-                    mouse_pressed = false;
-                } else if input_change.pressed() {
-                    mouse_released = false;
-                    mouse_pressed = true;
-                }
-            }
-
-            if let SemanticInput::OtherKey { key, pressed } = semin {
-                use winit::event::VirtualKeyCode as Key;
-                match key {
-                    Key::F1 => {
-                        if pressed {
-                            gui.toggle_egui_inspection_ui();
-                        }
-                    }
-                    Key::F2 => {
-                        if pressed {
-                            gui.toggle_egui_settings_ui();
-                        }
-                    }
-                    Key::F3 => {
-                        if pressed {
-                            gui.toggle_egui_memory_ui();
-                        }
-                    }
-                    _ => {}
+        if let Some(node_id) = gui.selected_node() {
+            if gui.selected_node_info_id() != Some(node_id) {
+                let request = GraphQueryRequest::NodeStats(node_id);
+                let resp = graph_query.query_request_blocking(request);
+                if let GraphQueryResp::NodeStats {
+                    node_id,
+                    len,
+                    degree,
+                    coverage,
+                } = resp
+                {
+                    gui.set_selected_node_info(node_id, len, degree, coverage);
                 }
             }
         }
-
-        while let Ok(action) = input_action_rx.try_recv() {
-            use InputAction as Action;
-            match action {
-                Action::KeyPan {
-                    up,
-                    right,
-                    down,
-                    left,
-                } => {
-                    let dx = match (left, right) {
-                        (false, false) => 0.0,
-                        (true, false) => -1.0,
-                        (false, true) => 1.0,
-                        (true, true) => 0.0,
-                    };
-                    let dy = match (up, down) {
-                        (false, false) => 0.0,
-                        (true, false) => -1.0,
-                        (false, true) => 1.0,
-                        (true, true) => 0.0,
-                    };
-
-                    let speed = 400.0;
-                    let delta = Point {
-                        x: dx * speed,
-                        y: dy * speed,
-                    };
-                    main_view.pan_const(Some(delta.x), Some(delta.y));
-                }
-                Action::PausePhysics => {
-                    main_view.reset_view();
-                    if paused {
-                        gui.set_hover_node(Some(NodeId::from(123)));
-                    } else {
-                        gui.set_hover_node(None);
-                    }
-                    paused = !paused;
-                }
-                Action::ResetLayout => {
-                    main_view.draw_grid = !main_view.draw_grid;
-                    // layout = init_layout.clone();
-                }
-                Action::MousePan(focus) => {
-                    if let Some(focus) = focus {
-                        let egui_event = egui::Event::PointerButton {
-                            pos: focus.into(),
-                            button: egui::PointerButton::Primary,
-                            pressed: true,
-                            modifiers: Default::default(),
-                        };
-
-                        gui.push_event(egui_event);
-
-                        let mut origin = focus;
-                        origin.x -= width / 2.0;
-                        origin.y -= height / 2.0;
-
-                        if !gui.pointer_over_gui() {
-                            let node_id_at = main_view
-                                .read_node_id_at((width, height), focus)
-                                .map(|nid| NodeId::from(nid as u64));
-                            gui.set_selected_node(node_id_at);
-                            main_view.set_mouse_pan(Some(focus));
-                        }
-                    } else {
-                        main_view.set_mouse_pan(None);
-                    }
-                }
-                Action::MouseZoom { focus, delta } => {
-                    let _focus = focus;
-                    main_view.zoom_delta(delta);
-                }
-                Action::MouseAt { point } => {
-                    let mut screen_tgt = point;
-                    screen_tgt.x -= width / 2.0;
-                    screen_tgt.y -= height / 2.0;
-
-                    mouse_pos = point;
-
-                    let world_point = main_view
-                        .view()
-                        .screen_point_to_world((width, height), point);
-
-                    gui.set_view_info_mouse(point, world_point);
-
-                    let egui_event = egui::Event::PointerMoved(point.into());
-
-                    gui.push_event(egui_event);
-                }
-            }
-        }
-
-        if mouse_released || mouse_pressed {
-            let egui_event = egui::Event::PointerButton {
-                pos: mouse_pos.into(),
-                button: egui::PointerButton::Primary,
-                pressed: mouse_pressed,
-                modifiers: Default::default(),
-            };
-
-            gui.push_event(egui_event);
-        }
-        */
-
-        main_view.set_mouse_pos(Some(mouse_pos));
 
         match event {
             Event::WindowEvent {
@@ -525,33 +399,6 @@ fn main() {
                 let frame_t = std::time::Instant::now();
 
                 previous_frame_end.as_mut().unwrap().cleanup_finished();
-
-                let node_id_at = main_view
-                    .read_node_id_at((width, height), mouse_pos)
-                    .map(|nid| NodeId::from(nid as u64));
-
-                gui.set_hover_node(node_id_at);
-                if mouse_pressed {
-                    gui.set_selected_node(node_id_at);
-                }
-
-                if let Some(node_id) = gui.selected_node() {
-                    if gui.selected_node_info_id() != Some(node_id) {
-                        let request = GraphQueryRequest::NodeStats(node_id);
-                        let resp = graph_query.query_request_blocking(request);
-                        if let GraphQueryResp::NodeStats {
-                            node_id,
-                            len,
-                            degree,
-                            coverage,
-                        } = resp
-                        {
-                            gui.set_selected_node_info(
-                                node_id, len, degree, coverage,
-                            );
-                        }
-                    }
-                }
 
                 gui.set_view_info_view(main_view.view());
 

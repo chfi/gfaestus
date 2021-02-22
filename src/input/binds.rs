@@ -4,12 +4,6 @@ use winit::{
     event_loop::ControlFlow,
 };
 
-use std::thread;
-
-use crossbeam::atomic::AtomicCell;
-use crossbeam::channel;
-use std::sync::Arc;
-
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
@@ -193,118 +187,9 @@ pub enum GuiInput {
     KeyEguiInspectionUi,
     KeyEguiSettingsUi,
     KeyEguiMemoryUi,
-    // KeyGfaestusSettingsUi,
     ButtonLeft,
     ButtonRight,
     WheelScroll,
-}
-
-struct InputChannels<T: InputPayload> {
-    tx: channel::Sender<SystemInput<T>>,
-    rx: channel::Receiver<SystemInput<T>>,
-}
-
-// struct InputManagerThread {
-
-// }
-
-pub struct InputManager {
-    mouse_screen_pos: Arc<AtomicCell<Point>>,
-    mouse_over_gui: Arc<AtomicCell<bool>>,
-
-    winit_rx: channel::Receiver<event::WindowEvent<'static>>,
-
-    main_view_bindings: SystemInputBindings<MainViewInputs>,
-    main_view_channels: InputChannels<MainViewInputs>,
-
-    gui_bindings: SystemInputBindings<GuiInput>,
-    gui_channels: InputChannels<GuiInput>,
-}
-
-impl InputManager {
-    pub fn clone_main_view_rx(
-        &self,
-    ) -> channel::Receiver<SystemInput<MainViewInputs>> {
-        self.main_view_channels.rx.clone()
-    }
-
-    pub fn clone_gui_rx(&self) -> channel::Receiver<SystemInput<GuiInput>> {
-        self.gui_channels.rx.clone()
-    }
-
-    pub fn set_mouse_over_gui(&self, is_over: bool) {
-        self.mouse_over_gui.store(is_over);
-    }
-
-    pub fn handle_events(&self) {
-        while let Ok(winit_ev) = self.winit_rx.try_recv() {
-            if let event::WindowEvent::CursorMoved { position, .. } = winit_ev {
-                self.mouse_screen_pos.store(Point {
-                    x: position.x as f32,
-                    y: position.y as f32,
-                });
-            }
-
-            let mouse_pos = self.mouse_screen_pos.load();
-
-            if let Some(gui_inputs) =
-                self.gui_bindings.apply(&winit_ev, mouse_pos)
-            {
-                for input in gui_inputs {
-                    self.gui_channels.tx.send(input).unwrap();
-                }
-            }
-
-            if let Some(main_view_inputs) =
-                self.main_view_bindings.apply(&winit_ev, mouse_pos)
-            {
-                let mouse_over_gui = self.mouse_over_gui.load();
-                for input in main_view_inputs {
-                    if input.is_keyboard()
-                        || (input.is_mouse() && !mouse_over_gui)
-                    {
-                        self.main_view_channels.tx.send(input).unwrap();
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn new(
-        winit_rx: channel::Receiver<event::WindowEvent<'static>>,
-    ) -> Self {
-        let mouse_screen_pos = Arc::new(AtomicCell::new(Point::ZERO));
-        let mouse_over_gui = Arc::new(AtomicCell::new(false));
-
-        let main_view_bindings: SystemInputBindings<MainViewInputs> =
-            Default::default();
-
-        let gui_bindings: SystemInputBindings<GuiInput> = Default::default();
-
-        let (main_view_tx, main_view_rx) =
-            channel::unbounded::<SystemInput<MainViewInputs>>();
-        let (gui_tx, gui_rx) = channel::unbounded::<SystemInput<GuiInput>>();
-
-        let main_view_channels = InputChannels {
-            tx: main_view_tx.clone(),
-            rx: main_view_rx.clone(),
-        };
-
-        let gui_channels = InputChannels {
-            tx: gui_tx.clone(),
-            rx: gui_rx.clone(),
-        };
-
-        Self {
-            mouse_screen_pos,
-            mouse_over_gui,
-            winit_rx,
-            main_view_bindings,
-            main_view_channels,
-            gui_bindings,
-            gui_channels,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -484,7 +369,7 @@ impl std::default::Default for SystemInputBindings<MainViewInputs> {
         .collect();
 
         let wheel_bind = WheelBind {
-            invert: false,
+            invert: true,
             mult: 0.45,
             payload: Inputs::WheelZoom,
         };
