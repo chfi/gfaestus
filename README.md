@@ -1,5 +1,6 @@
 # gfaestus - Vulkan-accelerated GFA visualization
 
+### Demo: https://youtu.be/TOJZeeCqatk
 
 `gfaestus` is a tool for visualizing and interacting with genome graphs
 in the [GFA format](http://gfa-spec.github.io/GFA-spec/GFA1.html).
