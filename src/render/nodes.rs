@@ -13,6 +13,7 @@ use vulkano::{
 
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -59,8 +60,6 @@ impl std::default::Default for NodeDrawCache {
         }
     }
 }
-
-use parking_lot::Mutex;
 
 pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,

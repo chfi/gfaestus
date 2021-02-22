@@ -24,6 +24,7 @@ use vulkano::{
 use vulkano::format::R8Unorm;
 use vulkano::pipeline::{GraphicsPipeline, GraphicsPipelineAbstract};
 
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -69,7 +70,7 @@ pub struct GuiDrawSystem {
     gfx_queue: Arc<Queue>,
     // texture_cache: FxHashMap<u64, Arc<ImmutableImage<R8Unorm>>>,
     sampler: Arc<Sampler>,
-    cached_texture: Option<GuiTexture>,
+    cached_texture: Mutex<Option<GuiTexture>>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     vertex_buffer_pool: CpuBufferPool<GuiVertex>,
     index_buffer_pool: CpuBufferPool<u32>,
@@ -148,17 +149,18 @@ impl GuiDrawSystem {
             pipeline,
             vertex_buffer_pool,
             index_buffer_pool,
-            cached_texture: None,
+            cached_texture: Mutex::new(None),
             sampler,
         }
     }
 
     pub fn texture_version(&self) -> Option<u64> {
-        self.cached_texture.as_ref().map(|gt| gt.version)
+        let lock = self.cached_texture.lock();
+        lock.as_ref().map(|gt| gt.version)
     }
 
     fn force_upload_texture(
-        &mut self,
+        &self,
         texture: &egui::Texture,
     ) -> Result<Box<dyn GpuFuture>> {
         let (img, tex_future) = ImmutableImage::from_iter(
@@ -172,16 +174,19 @@ impl GuiDrawSystem {
             self.gfx_queue.clone(),
         )?;
 
-        self.cached_texture = Some(GuiTexture {
-            version: texture.version,
-            texture: img,
-        });
+        {
+            let mut cache_lock = self.cached_texture.lock();
+            *cache_lock = Some(GuiTexture {
+                version: texture.version,
+                texture: img,
+            });
+        }
 
         Ok(tex_future.boxed())
     }
 
     pub fn upload_texture(
-        &mut self,
+        &self,
         texture: &egui::Texture,
     ) -> Option<Result<Box<dyn GpuFuture>>> {
         let cached_version = self.texture_version();
@@ -220,7 +225,10 @@ impl GuiDrawSystem {
             height: viewport_dims[1],
         };
 
-        let texture = self.cached_texture.as_ref().unwrap().texture.clone();
+        let texture = {
+            let lock = self.cached_texture.lock();
+            lock.as_ref().unwrap().texture.clone()
+        };
 
         let layout = self.pipeline.descriptor_set_layout(0).unwrap();
         let set = Arc::new(

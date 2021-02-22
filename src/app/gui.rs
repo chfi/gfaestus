@@ -19,6 +19,7 @@ use vulkano::{
 };
 
 use crossbeam::channel;
+use parking_lot::Mutex;
 
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
@@ -412,7 +413,7 @@ impl GfaestusGui {
     }
 
     fn draw_tessellated(
-        &mut self,
+        &self,
         dynamic_state: &DynamicState,
         clipped_meshes: &[egui::ClippedMesh],
     ) -> Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)> {
@@ -431,7 +432,7 @@ impl GfaestusGui {
     }
 
     pub fn end_frame_and_draw(
-        &mut self,
+        &self,
         dynamic_state: &DynamicState,
     ) -> Option<Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)>> {
         let (_output, shapes) = self.ctx.end_frame();
