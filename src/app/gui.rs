@@ -26,20 +26,63 @@ use crate::input::binds::*;
 
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
-    events: Vec<egui::Event>,
-    frame_scroll_delta: f32,
+    frame_input: FrameInput,
+    enabled_ui_elements: EnabledUiElements,
+
+    gui_draw_system: GuiDrawSystem,
+
     hover_node_id: Option<NodeId>,
     selected_node_id: Option<NodeId>,
     selected_node_info: Option<NodeInfo>,
-    gui_draw_system: GuiDrawSystem,
+
     graph_stats: GraphStatsUi,
     view_info: ViewInfoUi,
-
-    inspection_ui: bool,
-    settings_ui: bool,
-    memory_ui: bool,
-
     frame_rate_box: FrameRateBox,
+}
+
+#[derive(Debug, Default, Clone)]
+struct FrameInput {
+    events: Vec<egui::Event>,
+    scroll_delta: f32,
+}
+
+impl FrameInput {
+    fn into_raw_input(&mut self) -> egui::RawInput {
+        let mut raw_input = egui::RawInput::default();
+        raw_input.events = std::mem::take(&mut self.events);
+        raw_input.scroll_delta = egui::Vec2 {
+            x: 0.0,
+            y: self.scroll_delta,
+        };
+        self.scroll_delta = 0.0;
+
+        raw_input
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct EnabledUiElements {
+    egui_inspection_ui: bool,
+    egui_settings_ui: bool,
+    egui_memory_ui: bool,
+    frame_rate: bool,
+    graph_stats: bool,
+    view_info: bool,
+    selected_node: bool,
+}
+
+impl std::default::Default for EnabledUiElements {
+    fn default() -> Self {
+        Self {
+            egui_inspection_ui: false,
+            egui_settings_ui: false,
+            egui_memory_ui: false,
+            frame_rate: true,
+            graph_stats: true,
+            view_info: true,
+            selected_node: true,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -52,7 +95,6 @@ struct NodeInfo {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct FrameRateBox {
-    enabled: bool,
     fps: f32,
     frame_time: f32,
     frame: usize,
@@ -60,7 +102,6 @@ struct FrameRateBox {
 
 #[derive(Debug, Default, Clone, Copy)]
 struct ViewInfoUi {
-    enabled: bool,
     position: Point,
     view: View,
     mouse_screen: Point,
@@ -70,7 +111,6 @@ struct ViewInfoUi {
 #[derive(Debug, Default, Clone, Copy)]
 struct GraphStatsUi {
     position: Point,
-    enabled: bool,
     stats: GraphStats,
 }
 
@@ -102,47 +142,34 @@ impl GfaestusGui {
         ctx.set_style(style);
 
         let font_defs = {
+            use egui::FontFamily as Family;
+            use egui::TextStyle as Style;
+
             let mut font_defs = egui::FontDefinitions::default();
             let fam_size = &mut font_defs.family_and_size;
-            fam_size.insert(
-                egui::TextStyle::Small,
-                (egui::FontFamily::Proportional, 12.0),
-            );
-            fam_size.insert(
-                egui::TextStyle::Body,
-                (egui::FontFamily::Proportional, 16.0),
-            );
-            fam_size.insert(
-                egui::TextStyle::Button,
-                (egui::FontFamily::Proportional, 18.0),
-            );
-            fam_size.insert(
-                egui::TextStyle::Heading,
-                (egui::FontFamily::Proportional, 22.0),
-            );
+
+            fam_size.insert(Style::Small, (Family::Proportional, 12.0));
+            fam_size.insert(Style::Body, (Family::Proportional, 16.0));
+            fam_size.insert(Style::Button, (Family::Proportional, 18.0));
+            fam_size.insert(Style::Heading, (Family::Proportional, 22.0));
             font_defs
         };
         ctx.set_fonts(font_defs);
-
-        let events: Vec<egui::Event> = Vec::new();
 
         let hover_node_id = None;
         let selected_node_id = None;
 
         let graph_stats = GraphStatsUi {
             position: Point { x: 12.0, y: 20.0 },
-            enabled: true,
             ..GraphStatsUi::default()
         };
 
         let view_info = ViewInfoUi {
             position: Point { x: 12.0, y: 140.0 },
-            enabled: true,
             ..ViewInfoUi::default()
         };
 
         let frame_rate_box = FrameRateBox {
-            enabled: true,
             fps: 0.0,
             frame_time: 0.0,
             frame: 0,
@@ -150,17 +177,14 @@ impl GfaestusGui {
 
         Ok(Self {
             ctx,
-            events,
-            frame_scroll_delta: 0.0,
+            frame_input: FrameInput::default(),
+            enabled_ui_elements: EnabledUiElements::default(),
             hover_node_id,
             selected_node_id,
             selected_node_info: None,
             gui_draw_system,
             graph_stats,
             view_info,
-            inspection_ui: false,
-            settings_ui: false,
-            memory_ui: false,
             frame_rate_box,
         })
     }
@@ -260,18 +284,12 @@ impl GfaestusGui {
     }
 
     pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
-        let mut raw_input = egui::RawInput::default();
+        let mut raw_input = self.frame_input.into_raw_input();
         let screen_rect = screen_rect.map(|p| egui::Rect {
             min: Point::ZERO.into(),
             max: p.into(),
         });
         raw_input.screen_rect = screen_rect;
-        raw_input.events = std::mem::take(&mut self.events);
-        raw_input.scroll_delta = egui::Vec2 {
-            x: 0.0,
-            y: self.frame_scroll_delta,
-        };
-        self.frame_scroll_delta = 0.0;
 
         self.ctx.begin_frame(raw_input);
 
@@ -322,15 +340,15 @@ impl GfaestusGui {
                 });
         }
 
-        if self.graph_stats.enabled {
+        if self.enabled_ui_elements.graph_stats {
             self.graph_stats(self.graph_stats.position);
         }
 
-        if self.view_info.enabled {
+        if self.enabled_ui_elements.view_info {
             self.view_info(self.view_info.position);
         }
 
-        if self.frame_rate_box.enabled {
+        if self.enabled_ui_elements.frame_rate {
             let p0 = Point {
                 x: 0.8 * scr.max.x,
                 y: 0.0,
@@ -356,32 +374,35 @@ impl GfaestusGui {
                 });
         }
 
-        if self.inspection_ui {
-            egui::Window::new("inspection_ui_window")
+        if self.enabled_ui_elements.egui_inspection_ui {
+            egui::Window::new("egui_inspection_ui_window")
                 .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
         }
 
-        if self.settings_ui {
-            egui::Window::new("settings_ui_window")
+        if self.enabled_ui_elements.egui_settings_ui {
+            egui::Window::new("egui_settings_ui_window")
                 .show(&self.ctx, |ui| self.ctx.settings_ui(ui));
         }
 
-        if self.memory_ui {
-            egui::Window::new("memory_ui_window")
+        if self.enabled_ui_elements.egui_memory_ui {
+            egui::Window::new("egui_memory_ui_window")
                 .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
     }
 
-    pub fn toggle_inspection_ui(&mut self) {
-        self.inspection_ui = !self.inspection_ui;
+    pub fn toggle_egui_inspection_ui(&mut self) {
+        self.enabled_ui_elements.egui_inspection_ui =
+            !self.enabled_ui_elements.egui_inspection_ui;
     }
 
-    pub fn toggle_settings_ui(&mut self) {
-        self.settings_ui = !self.settings_ui;
+    pub fn toggle_egui_settings_ui(&mut self) {
+        self.enabled_ui_elements.egui_settings_ui =
+            !self.enabled_ui_elements.egui_settings_ui;
     }
 
-    pub fn toggle_memory_ui(&mut self) {
-        self.memory_ui = !self.memory_ui;
+    pub fn toggle_egui_memory_ui(&mut self) {
+        self.enabled_ui_elements.egui_memory_ui =
+            !self.enabled_ui_elements.egui_memory_ui;
     }
 
     pub fn pointer_over_gui(&self) -> bool {
@@ -404,7 +425,7 @@ impl GfaestusGui {
     }
 
     pub fn push_event(&mut self, event: egui::Event) {
-        self.events.push(event);
+        self.frame_input.events.push(event);
     }
 
     pub fn end_frame_and_draw(
@@ -433,13 +454,13 @@ impl GfaestusGui {
                             self.set_selected_node(None);
                         }
                         GuiInput::KeyEguiInspectionUi => {
-                            self.inspection_ui = !self.inspection_ui;
+                            self.toggle_egui_inspection_ui();
                         }
                         GuiInput::KeyEguiSettingsUi => {
-                            self.settings_ui = !self.settings_ui;
+                            self.toggle_egui_settings_ui();
                         }
                         GuiInput::KeyEguiMemoryUi => {
-                            self.memory_ui = !self.memory_ui;
+                            self.toggle_egui_memory_ui();
                         }
                         _ => (),
                     }
@@ -470,7 +491,7 @@ impl GfaestusGui {
             }
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelScroll = payload {
-                    self.frame_scroll_delta = delta;
+                    self.frame_input.scroll_delta = delta;
                 }
             }
         }
