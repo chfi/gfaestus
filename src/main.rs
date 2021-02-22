@@ -29,7 +29,7 @@ use std::sync::Arc;
 
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
-use gfaestus::app::{AppMsg, AppState};
+use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::binds::*;
@@ -104,6 +104,16 @@ fn main() {
         universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
+
+    eprintln!(
+        "layout bounding box\t({:.2}, {:.2})\t({:.2}, {:.2})",
+        top_left.x, top_left.y, bottom_right.x, bottom_right.y
+    );
+    eprintln!(
+        "layout width: {:.2}\theight: {:.2}",
+        bottom_right.x - top_left.x,
+        bottom_right.y - top_left.y
+    );
 
     // let init_layout = layout.clone();
 
@@ -274,6 +284,8 @@ fn main() {
         height = viewport.dimensions[1];
     }
 
+    let mut app = App::new((width, height));
+
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -302,8 +314,6 @@ fn main() {
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
 
-    let mut mouse_pos = Point { x: 0.0, y: 0.0 };
-
     println!("MainView.view: {:?}", main_view.view());
 
     let mut gui_screen_rect = Some(Point {
@@ -315,12 +325,7 @@ fn main() {
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
 
-    let mut app_state = AppState::default();
-
     event_loop.run(move |event, _, control_flow| {
-        let mut mouse_released = false;
-        let mut mouse_pressed = false;
-
         // TODO handle scale factor change before calling to_static() on event
 
         let event = if let Some(ev) = event.to_static() {
@@ -336,8 +341,10 @@ fn main() {
 
         input_manager.handle_events();
 
-        let mouse_pos = input_manager.mouse_pos();
-        let screen_dims = (width, height);
+        app.update_mouse_pos(input_manager.mouse_pos());
+
+        let screen_dims = app.dims();
+        let mouse_pos = app.mouse_pos();
 
         gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
         main_view.set_mouse_pos(Some(mouse_pos));
@@ -357,8 +364,11 @@ fn main() {
         }
 
         while let Ok(app_msg) = app_msg_rx.try_recv() {
-            gui.apply_app_msg(app_msg);
+            app.apply_app_msg(&app_msg);
         }
+
+        gui.set_hover_node(app.hover_node());
+        gui.set_selected_node(app.selected_node());
 
         let world_point = main_view
             .view()
@@ -433,6 +443,8 @@ fn main() {
                     {
                         width = viewport.dimensions[0];
                         height = viewport.dimensions[1];
+
+                        app.update_dims((width, height));
                     }
 
                     gui_screen_rect = Some(Point {
