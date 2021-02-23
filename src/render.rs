@@ -79,12 +79,6 @@ impl PostProcessingPass {
                     format: final_format,
                     samples: samples,
                 },
-                mask_msaa: {
-                    load: Clear,
-                    store: DontCare,
-                    format: Format::R8G8B8A8Unorm,
-                    samples: samples,
-                },
                 final_color: {
                     load: Clear,
                     store: Store,
@@ -106,10 +100,10 @@ impl PostProcessingPass {
             },
             passes: [
                 {
-                    color: [color_msaa, mask_msaa],
+                    color: [color_msaa, mask],
                     depth_stencil: {},
                     input: [],
-                    resolve: [pre_color, mask]
+                    resolve: [pre_color]
                 },
                 {
                     color: [final_color],
