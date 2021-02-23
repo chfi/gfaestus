@@ -181,7 +181,7 @@ fn main() {
     };
 
     let single_pass_msaa =
-        SinglePassMSAA::new(queue.clone(), 8, swapchain.format()).unwrap();
+        SinglePass::new(queue.clone(), None, swapchain.format()).unwrap();
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -517,7 +517,8 @@ fn main() {
                     let ft_sum: f32 = frame_time_history.iter().sum();
                     let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
                     let fps = 1.0 / avg;
-                    gui.set_frame_rate(frame, fps, avg);
+                    let avg_ms = avg * 1000.0;
+                    gui.set_frame_rate(frame, fps, avg_ms);
                     // println!("time: {:.2}\tframe: {}", t, frame);
                     // println!("avg update time: {:.6}\t{} FPS", avg, fps);
                     // println!("node vertex & color count: {}", vertex_count);

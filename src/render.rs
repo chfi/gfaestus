@@ -11,12 +11,13 @@ pub use shapes::ShapeDrawSystem;
 use std::sync::Arc;
 
 use vulkano::{
-    device::Queue,
+    device::{Device, Queue},
     format::Format,
     framebuffer::{
         Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
     },
     image::{AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess},
+    instance::PhysicalDevice,
 };
 
 use anyhow::Result;
@@ -44,18 +45,35 @@ pub struct Color {
 
 vulkano::impl_vertex!(Color, color);
 
-pub struct SinglePassMSAA {
+pub struct SinglePass {
     gfx_queue: Arc<Queue>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     samples: u32,
+    format: Format,
 }
 
-impl SinglePassMSAA {
+impl SinglePass {
     pub fn new(
         gfx_queue: Arc<Queue>,
-        samples: u32,
+        samples: Option<u32>,
         output_format: Format,
     ) -> Result<Self> {
+        let supported_samples =
+            supported_sample_counts(&gfx_queue.device().physical_device());
+
+        let min_support = 1;
+        let max_support =
+            supported_samples.last().copied().unwrap_or(min_support);
+
+        let samples = if let Some(samples) = samples {
+            supported_samples
+                .into_iter()
+                .find(|&s| s >= samples)
+                .unwrap_or(max_support)
+        } else {
+            max_support
+        };
+
         let render_pass = vulkano::single_pass_renderpass!(
         gfx_queue.device().clone(),
         attachments: {
@@ -85,6 +103,7 @@ impl SinglePassMSAA {
             gfx_queue,
             render_pass,
             samples,
+            format: output_format,
         })
     }
 
@@ -115,7 +134,7 @@ impl SinglePassMSAA {
             self.gfx_queue.device().clone(),
             img_dims,
             self.samples,
-            <I as ImageAccess>::format(&image),
+            self.format,
         )?;
 
         let framebuffer: Framebuffer<
@@ -128,4 +147,23 @@ impl SinglePassMSAA {
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
+}
+
+fn supported_sample_counts(device: &PhysicalDevice) -> Vec<u32> {
+    let limits = device.limits();
+
+    let color_sample_counts = limits.framebuffer_color_sample_counts();
+    let depth_sample_counts = limits.framebuffer_depth_sample_counts();
+
+    let counts = color_sample_counts & depth_sample_counts;
+
+    let mut res = Vec::new();
+
+    for i in 0..32 {
+        if (counts >> i) & 1 == 1 {
+            res.push(1 << i);
+        }
+    }
+
+    res
 }

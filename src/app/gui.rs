@@ -366,9 +366,9 @@ impl GfaestusGui {
                 })
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
-                    ui.label(format!("FPS:   {:.2}", self.frame_rate_box.fps));
+                    ui.label(format!("FPS: {:.2}", self.frame_rate_box.fps));
                     ui.label(format!(
-                        "update time: {:.2}",
+                        "update time: {:.2} ms",
                         self.frame_rate_box.frame_time
                     ));
                 });
