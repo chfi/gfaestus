@@ -13,7 +13,10 @@ use std::sync::Arc;
 use vulkano::{
     device::Queue,
     format::Format,
-    framebuffer::{RenderPassAbstract, Subpass},
+    framebuffer::{
+        Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
+    },
+    image::{AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess},
 };
 
 use anyhow::Result;
@@ -44,6 +47,7 @@ vulkano::impl_vertex!(Color, color);
 pub struct SinglePassMSAA {
     gfx_queue: Arc<Queue>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    samples: u32,
 }
 
 impl SinglePassMSAA {
@@ -80,6 +84,7 @@ impl SinglePassMSAA {
         Ok(Self {
             gfx_queue,
             render_pass,
+            samples,
         })
     }
 
@@ -95,5 +100,32 @@ impl SinglePassMSAA {
 
     pub fn queue(&self) -> Arc<Queue> {
         self.gfx_queue.clone()
+    }
+
+    pub fn framebuffer<I>(
+        &self,
+        image: I,
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
+    where
+        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
+    {
+        let img_dims = ImageAccess::dimensions(&image).width_height();
+
+        let intermediary = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            <I as ImageAccess>::format(&image),
+        )?;
+
+        let framebuffer: Framebuffer<
+            Arc<dyn RenderPassAbstract + Send + Sync>,
+            (((), Arc<AttachmentImage>), I),
+        > = Framebuffer::start(self.render_pass())
+            .add(intermediary.clone())?
+            .add(image.clone())?
+            .build()?;
+
+        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
 }

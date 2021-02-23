@@ -152,7 +152,7 @@ fn main() {
 
     let queue = queues.next().unwrap();
 
-    let (mut swapchain, images) = {
+    let (mut swapchain, mut images) = {
         let caps = surface.capabilities(physical).unwrap();
         let alpha = caps.supported_composite_alpha.iter().next().unwrap();
         let format = caps.supported_formats[0].0;
@@ -259,11 +259,7 @@ fn main() {
             .unwrap()
     };
 
-    let mut framebuffers = window_size_update(
-        &images,
-        single_pass_msaa.render_pass(),
-        &mut dynamic_state,
-    );
+    update_viewport(&images[0], &mut dynamic_state);
 
     if let Some(viewport) =
         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
@@ -396,12 +392,9 @@ fn main() {
                         };
 
                     swapchain = new_swapchain;
+                    images = new_images;
 
-                    framebuffers = window_size_update(
-                        &new_images,
-                        single_pass_msaa.render_pass(),
-                        &mut dynamic_state,
-                    );
+                    update_viewport(&images[0], &mut dynamic_state);
 
                     if let Some(viewport) =
                         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
@@ -432,6 +425,10 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
+                let framebuffer = single_pass_msaa
+                    .framebuffer(images[image_num].clone())
+                    .unwrap();
+
                 let clear = [0.0, 0.0, 0.05, 1.0];
                 let clear_values = vec![clear.into(), clear.into()];
 
@@ -444,7 +441,7 @@ fn main() {
 
                 builder
                     .begin_render_pass(
-                        framebuffers[image_num].clone(),
+                        framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
                         clear_values,
                     )
@@ -534,12 +531,12 @@ fn main() {
     });
 }
 
-fn window_size_update(
-    images: &[Arc<SwapchainImage<Window>>],
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+fn update_viewport(
+    // image: Arc<SwapchainImage<Window>>,
+    image: &SwapchainImage<Window>,
     dynamic_state: &mut DynamicState,
-) -> Vec<Arc<dyn FramebufferAbstract + Send + Sync>> {
-    let dims = images[0].dimensions();
+) {
+    let dims = image.dimensions();
     let dimensions = [dims[0] as f32, dims[1] as f32];
 
     let viewport = Viewport {
@@ -548,31 +545,6 @@ fn window_size_update(
         depth_range: 0.0..1.0,
     };
     dynamic_state.viewports = Some(vec![viewport]);
-
-    let device = render_pass.device();
-
-    images
-        .iter()
-        .map(|image| {
-            let intermediary = AttachmentImage::transient_multisampled(
-                device.clone(),
-                dims,
-                8,
-                image.swapchain().format(),
-            )
-            .unwrap();
-
-            Arc::new(
-                Framebuffer::start(render_pass.clone())
-                    .add(intermediary.clone())
-                    .unwrap()
-                    .add(image.clone())
-                    .unwrap()
-                    .build()
-                    .unwrap(),
-            ) as Arc<dyn FramebufferAbstract + Send + Sync>
-        })
-        .collect::<Vec<_>>()
 }
 
 /* vulkano debug stuff (for future reference)
