@@ -52,27 +52,95 @@ pub struct SinglePass {
     format: Format,
 }
 
+pub struct PostProcessingPass {
+    gfx_queue: Arc<Queue>,
+    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    samples: u32,
+    final_format: Format,
+}
+
+impl PostProcessingPass {
+    pub fn new(
+        gfx_queue: Arc<Queue>,
+        samples: Option<u32>,
+        final_format: Format,
+    ) -> Result<Self> {
+        let samples = pick_supported_sample_count(
+            &gfx_queue.device().physical_device(),
+            samples,
+        );
+
+        let render_pass = vulkano::ordered_passes_renderpass!(
+            gfx_queue.device().clone(),
+            attachments: {
+                color_msaa: {
+                    load: Clear,
+                    store: DontCare,
+                    format: final_format,
+                    samples: samples,
+                },
+                mask_msaa: {
+                    load: Clear,
+                    store: DontCare,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: samples,
+                },
+                final_color: {
+                    load: Clear,
+                    store: Store,
+                    format: final_format,
+                    samples: 1,
+                },
+                pre_color: {
+                    load: Clear,
+                    store: Store,
+                    format: final_format,
+                    samples: 1,
+                },
+                mask: {
+                    load: Clear,
+                    store: DontCare,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: 1,
+                }
+            },
+            passes: [
+                {
+                    color: [color_msaa, mask_msaa],
+                    depth_stencil: {},
+                    input: [],
+                    resolve: [pre_color, mask]
+                },
+                {
+                    color: [final_color],
+                    depth_stencil: {},
+                    input: [pre_color, mask],
+                    resolve: []
+                }
+            ]
+        )?;
+
+        let render_pass = Arc::new(render_pass);
+
+        Ok(Self {
+            gfx_queue,
+            render_pass,
+            samples,
+            final_format,
+        })
+    }
+}
+
 impl SinglePass {
     pub fn new(
         gfx_queue: Arc<Queue>,
         samples: Option<u32>,
         output_format: Format,
     ) -> Result<Self> {
-        let supported_samples =
-            supported_sample_counts(&gfx_queue.device().physical_device());
-
-        let min_support = 1;
-        let max_support =
-            supported_samples.last().copied().unwrap_or(min_support);
-
-        let samples = if let Some(samples) = samples {
-            supported_samples
-                .into_iter()
-                .find(|&s| s >= samples)
-                .unwrap_or(max_support)
-        } else {
-            max_support
-        };
+        let samples = pick_supported_sample_count(
+            &gfx_queue.device().physical_device(),
+            samples,
+        );
 
         let render_pass = vulkano::single_pass_renderpass!(
         gfx_queue.device().clone(),
@@ -146,6 +214,25 @@ impl SinglePass {
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
+    }
+}
+
+fn pick_supported_sample_count(
+    device: &PhysicalDevice,
+    samples: Option<u32>,
+) -> u32 {
+    let supported_samples = supported_sample_counts(device);
+
+    let min_support = 1;
+    let max_support = supported_samples.last().copied().unwrap_or(min_support);
+
+    if let Some(samples) = samples {
+        supported_samples
+            .into_iter()
+            .find(|&s| s >= samples)
+            .unwrap_or(max_support)
+    } else {
+        max_support
     }
 }
 
