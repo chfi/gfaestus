@@ -123,6 +123,68 @@ impl PostProcessingPass {
             final_format,
         })
     }
+
+    pub fn render_pass(&self) -> Arc<dyn RenderPassAbstract + Send + Sync> {
+        self.render_pass.clone()
+    }
+
+    pub fn first_pass(
+        &self,
+    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
+        Subpass::from(self.render_pass.clone(), 0).unwrap()
+    }
+
+    pub fn second_pass(
+        &self,
+    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
+        Subpass::from(self.render_pass.clone(), 1).unwrap()
+    }
+
+    pub fn framebuffer<I>(
+        &self,
+        image: I,
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
+    where
+        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
+    {
+        let img_dims = ImageAccess::dimensions(&image).width_height();
+
+        let color_msaa = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            self.final_format,
+        )?;
+
+        let atch_usage = ImageUsage {
+            transient_attachment: true,
+            input_attachment: true,
+            ..ImageUsage::none()
+        };
+
+        let pre_color = AttachmentImage::with_usage(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.final_format,
+            atch_usage,
+        )?;
+
+        let mask = AttachmentImage::with_usage(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            Format::R8G8B8A8Unorm,
+            atch_usage,
+        )?;
+
+        let framebuffer = Framebuffer::start(self.render_pass())
+            .add(color_msaa.clone())?
+            .add(image.clone())?
+            .add(pre_color.clone())?
+            .add(mask.clone())?
+            .build()?;
+
+        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
+    }
 }
 
 impl SinglePass {
