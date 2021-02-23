@@ -37,24 +37,15 @@ impl MainView {
     pub fn new<R>(
         // mouse_pos: MousePos,
         gfx_queue: Arc<Queue>,
-        render_pass: &Arc<R>,
+        subpass: Subpass<R>,
     ) -> Result<MainView>
     where
-        R: RenderPassAbstract + Send + Sync + 'static,
+        R: RenderPassAbstract + Send + Sync + Clone + 'static,
     {
-        let node_draw_system = {
-            // todo map Option -> Result
-            let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
-            // Ok(NodeDrawSystem::new(gfx_queue.clone(), subpass))
-            NodeDrawSystem::new(gfx_queue.clone(), subpass)
-        };
+        let node_draw_system =
+            NodeDrawSystem::new(gfx_queue.clone(), subpass.clone());
 
-        let line_draw_system = {
-            // todo map Option -> Result
-            let subpass = Subpass::from(render_pass.clone(), 0).unwrap();
-            // Ok(LineDrawSystem::new(gfx_queue.clone(), subpass))
-            LineDrawSystem::new(gfx_queue.clone(), subpass)
-        };
+        let line_draw_system = LineDrawSystem::new(gfx_queue.clone(), subpass);
 
         let vertices: Vec<Vertex> = Vec::new();
 

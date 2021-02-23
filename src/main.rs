@@ -180,31 +180,8 @@ fn main() {
         .unwrap()
     };
 
-    let render_pass = Arc::new(
-        vulkano::single_pass_renderpass!(
-            device.clone(),
-            attachments: {
-                intermediary: {
-                    load: Clear,
-                    store: DontCare,
-                    format: swapchain.format(),
-                    samples: 8,
-                },
-                color: {
-                    load: Clear,
-                    store: Store,
-                    format: swapchain.format(),
-                    samples: 1,
-                }
-            },
-            pass: {
-                color: [intermediary],
-                depth_stencil: {}
-                resolve: [color],
-            }
-        )
-        .unwrap(),
-    );
+    let single_pass_msaa =
+        SinglePassMSAA::new(queue.clone(), 8, swapchain.format()).unwrap();
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -222,14 +199,11 @@ fn main() {
 
     let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0));
 
-    let mut main_view = MainView::new(
-        // input_manager.clone_mouse_pos(),
-        queue.clone(),
-        &render_pass,
-    )
-    .unwrap();
+    let mut main_view =
+        MainView::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
 
-    let mut gui = GfaestusGui::new(queue.clone(), &render_pass).unwrap();
+    let mut gui =
+        GfaestusGui::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
 
     gui.set_graph_stats(stats);
 
@@ -285,8 +259,11 @@ fn main() {
             .unwrap()
     };
 
-    let mut framebuffers =
-        window_size_update(&images, render_pass.clone(), &mut dynamic_state);
+    let mut framebuffers = window_size_update(
+        &images,
+        single_pass_msaa.render_pass(),
+        &mut dynamic_state,
+    );
 
     if let Some(viewport) =
         dynamic_state.viewports.as_ref().and_then(|v| v.get(0))
@@ -422,7 +399,7 @@ fn main() {
 
                     framebuffers = window_size_update(
                         &new_images,
-                        render_pass.clone(),
+                        single_pass_msaa.render_pass(),
                         &mut dynamic_state,
                     );
 

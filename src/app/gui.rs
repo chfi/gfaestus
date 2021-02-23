@@ -128,15 +128,12 @@ pub struct GraphStats {
 impl GfaestusGui {
     pub fn new<R>(
         gfx_queue: Arc<Queue>,
-        render_pass: &Arc<R>,
+        subpass: Subpass<R>,
     ) -> Result<GfaestusGui>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
     {
-        let gui_draw_system = GuiDrawSystem::new(
-            gfx_queue,
-            Subpass::from(render_pass.clone(), 0).unwrap(),
-        );
+        let gui_draw_system = GuiDrawSystem::new(gfx_queue, subpass);
 
         let ctx = egui::CtxRef::default();
 
