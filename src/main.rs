@@ -181,7 +181,10 @@ fn main() {
     };
 
     let single_pass_msaa =
-        SinglePass::new(queue.clone(), None, swapchain.format()).unwrap();
+        SinglePassMSAA::new(queue.clone(), None, swapchain.format()).unwrap();
+
+    let single_pass =
+        SinglePass::new(queue.clone(), swapchain.format()).unwrap();
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -269,6 +272,17 @@ fn main() {
 
         app.update_dims((width, height));
     }
+
+    let mut offscreen_image = {
+        let dims = app.dims();
+
+        OffscreenImage::new(
+            queue.clone(),
+            dims.width as u32,
+            dims.height as u32,
+        )
+        .unwrap()
+    };
 
     let mut recreate_swapchain = false;
 
@@ -403,6 +417,10 @@ fn main() {
                         let height = viewport.dimensions[1];
 
                         app.update_dims((width, height));
+
+                        offscreen_image
+                            .recreate(width as u32, height as u32)
+                            .unwrap();
                     }
 
                     recreate_swapchain = false;

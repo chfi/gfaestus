@@ -209,6 +209,79 @@ impl SinglePassMSAA {
     }
 }
 
+pub struct OffscreenImage {
+    gfx_queue: Arc<Queue>,
+    color: Arc<AttachmentImage>,
+    dims: [u32; 2],
+    sampler: Arc<Sampler>,
+}
+
+impl OffscreenImage {
+    pub fn new(gfx_queue: Arc<Queue>, width: u32, height: u32) -> Result<Self> {
+        let color = AttachmentImage::with_usage(
+            gfx_queue.device().clone(),
+            [width, height],
+            Format::R8G8B8A8Unorm,
+            ImageUsage {
+                color_attachment: true,
+                sampled: true,
+                ..ImageUsage::none()
+            },
+        )?;
+
+        let sampler = Sampler::new(
+            gfx_queue.device().clone(),
+            Filter::Linear,
+            Filter::Linear,
+            MipmapMode::Linear,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            SamplerAddressMode::ClampToEdge,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+        )?;
+
+        Ok(Self {
+            gfx_queue,
+            color,
+            dims: [width, height],
+            sampler,
+        })
+    }
+
+    pub fn recreate(&mut self, width: u32, height: u32) -> Result<bool> {
+        if self.dims == [width, height] {
+            return Ok(false);
+        }
+
+        let color = AttachmentImage::with_usage(
+            self.gfx_queue.device().clone(),
+            [width, height],
+            Format::R8G8B8A8Unorm,
+            ImageUsage {
+                color_attachment: true,
+                sampled: true,
+                ..ImageUsage::none()
+            },
+        )?;
+
+        self.color = color;
+        self.dims = [width, height];
+
+        Ok(true)
+    }
+
+    pub fn image(&self) -> &Arc<AttachmentImage> {
+        &self.color
+    }
+
+    pub fn sampler(&self) -> &Arc<Sampler> {
+        &self.sampler
+    }
+}
+
 fn pick_supported_sample_count(
     device: &PhysicalDevice,
     samples: Option<u32>,
