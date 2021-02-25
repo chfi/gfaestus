@@ -250,12 +250,17 @@ impl NodeDrawSystem {
         };
 
         let data_buffer = {
+            let buffer_usage = BufferUsage {
+                storage_buffer: true,
+                ..BufferUsage::none()
+            };
+
             let data_iter = (0..((viewport_dims[0] as u32)
                 * (viewport_dims[1] as u32)))
                 .map(|_| 0u32);
             CpuAccessibleBuffer::from_iter(
                 self.gfx_queue.device().clone(),
-                BufferUsage::all(),
+                buffer_usage,
                 false,
                 data_iter,
             )?

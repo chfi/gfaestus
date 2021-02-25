@@ -48,7 +48,6 @@ pub struct PostDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    // sampler: Arc<Sampler>,
 }
 
 impl PostDrawSystem {
@@ -77,25 +76,10 @@ impl PostDrawSystem {
             ) as Arc<_>
         };
 
-        // let sampler = Sampler::new(
-        //     gfx_queue.device().clone(),
-        //     Filter::Nearest,
-        //     Filter::Nearest,
-        //     MipmapMode::Nearest,
-        //     SamplerAddressMode::ClampToEdge,
-        //     SamplerAddressMode::ClampToEdge,
-        //     SamplerAddressMode::ClampToEdge,
-        //     0.0,
-        //     1.0,
-        //     0.0,
-        //     0.0,
-        // )
-        // .unwrap();
-
         let vertex_buffer = {
             CpuAccessibleBuffer::from_iter(
                 gfx_queue.device().clone(),
-                BufferUsage::all(),
+                BufferUsage::vertex_buffer(),
                 false,
                 [
                     Vertex {
@@ -118,7 +102,6 @@ impl PostDrawSystem {
             gfx_queue,
             vertex_buffer,
             pipeline,
-            // sampler,
         }
     }
 
