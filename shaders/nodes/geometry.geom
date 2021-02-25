@@ -20,12 +20,15 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
   vec2 to_pos1 = vec2(pos1.x - pos0.x, pos1.y - pos0.y);
   vec2 norm_to_pos1 = normalize(to_pos1);
 
-  // float nw_over_vs = vo.node_width / vo.scale;
-
   float screen_w = vo.viewport_dims.x;
   float screen_h = vo.viewport_dims.y;
 
-  // vec2 width_vec = (vo.node_width / vo.scale) * vec2(1.0 / screen_h, 1.0 / screen_w);
+  float min_side = min(screen_w, screen_h);
+  float pixel_size = 1 / min_side;
+
+  if (length(to_pos1) < pixel_size * 0.3) {
+    return;
+  }
 
   bool wider = screen_w >= screen_h;
   float ratio = wider ? (screen_w / screen_h) : (screen_h / screen_w);
@@ -33,10 +36,8 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
   vec2 to_pos1_orth;
 
   if (wider) {
-      // to_pos1_orth = vec2(-norm_to_pos1.y * ratio, norm_to_pos1.x);
       to_pos1_orth = vec2(-norm_to_pos1.y, norm_to_pos1.x * ratio);
   } else {
-      // to_pos1_orth = vec2(-norm_to_pos1.y, norm_to_pos1.x * ratio);
       to_pos1_orth = vec2(-norm_to_pos1.y * ratio, norm_to_pos1.x);
   }
 
@@ -44,7 +45,6 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
 
   node_id = id;
 
-  // float node_width = vo.node_width / (vo.scale * ((screen_w + screen_h) / 2.0));
   float node_width = vo.node_width / (vo.scale * max(screen_w, screen_h));
 
   gl_Position = pos0 + vec4(to_pos1_orth, 0.0, 0.0) * node_width;
