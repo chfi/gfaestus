@@ -4,9 +4,12 @@ use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
 use vulkano::framebuffer::{
     Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
 };
-use vulkano::image::{AttachmentImage, ImageUsage, SwapchainImage};
 #[allow(unused_imports)]
 use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
+use vulkano::{
+    format::Format,
+    image::{AttachmentImage, ImageUsage, SwapchainImage},
+};
 
 use vulkano::instance::{Instance, PhysicalDevice};
 use vulkano::swapchain::{
@@ -183,8 +186,15 @@ fn main() {
     let single_pass_msaa =
         SinglePassMSAA::new(queue.clone(), None, swapchain.format()).unwrap();
 
+    let single_pass_msaa_offscreen =
+        SinglePassMSAA::new(queue.clone(), None, Format::R8G8B8A8Unorm)
+            .unwrap();
+
     let single_pass =
         SinglePass::new(queue.clone(), swapchain.format()).unwrap();
+
+    let single_pass_offscreen =
+        SinglePass::new(queue.clone(), Format::R8G8B8A8Unorm).unwrap();
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -202,11 +212,14 @@ fn main() {
 
     let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0));
 
+    // let mut main_view =
+    //     MainView::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
     let mut main_view =
-        MainView::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
+        MainView::new(queue.clone(), single_pass_msaa_offscreen.subpass())
+            .unwrap();
 
     let mut gui =
-        GfaestusGui::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
+        GfaestusGui::new(queue.clone(), single_pass.subpass()).unwrap();
 
     gui.set_graph_stats(stats);
 
@@ -443,12 +456,60 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
-                let framebuffer = single_pass_msaa
-                    .framebuffer(images[image_num].clone())
+                // let framebuffer = single_pass_msaa
+                //     .framebuffer(images[image_num].clone())
+                //     .unwrap();
+
+                let framebuffer =
+                    single_pass.framebuffer(images[image_num].clone()).unwrap();
+
+                let msaa_offscreen_framebuffer = single_pass_msaa_offscreen
+                    .framebuffer(offscreen_image.image().clone())
+                    .unwrap();
+
+                // let offscreen_framebuffer = single_pass
+                //     .framebuffer(offscreen_image.image().clone())
+                //     .unwrap();
+                let offscreen_framebuffer = single_pass_offscreen
+                    .framebuffer(offscreen_image.image().clone())
                     .unwrap();
 
                 let clear = [0.0, 0.0, 0.05, 1.0];
-                let clear_values = vec![clear.into(), clear.into()];
+                let msaa_clear_values = vec![clear.into(), clear.into()];
+
+                let offscreen_clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
+
+                let mut builder =
+                    AutoCommandBufferBuilder::primary_one_time_submit(
+                        device.clone(),
+                        queue.family(),
+                    )
+                    .unwrap();
+
+                builder
+                    .begin_render_pass(
+                        msaa_offscreen_framebuffer,
+                        SubpassContents::SecondaryCommandBuffers,
+                        msaa_clear_values,
+                    )
+                    .unwrap();
+
+                unsafe {
+                    let secondary_buf = main_view
+                        .draw_nodes(&dynamic_state, universe.offset)
+                        .unwrap();
+                    builder.execute_commands(secondary_buf).unwrap();
+                }
+
+                builder.end_render_pass().unwrap();
+                let command_buffer = builder.build().unwrap();
+
+                let first_pass_future = previous_frame_end
+                    .take()
+                    .unwrap()
+                    .join(acquire_future)
+                    .then_execute(queue.clone(), command_buffer)
+                    .unwrap();
 
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(
@@ -461,17 +522,15 @@ fn main() {
                     .begin_render_pass(
                         framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
-                        clear_values,
+                        offscreen_clear_values,
                     )
                     .unwrap();
 
-                unsafe {
-                    let secondary_buf = main_view
-                        .draw_nodes(&dynamic_state, universe.offset)
-                        .unwrap();
-                    builder.execute_commands(secondary_buf).unwrap();
-                }
+                // TODO run post-processing pipeline
 
+                // builder.end_render_pass().unw
+
+                /*
                 if main_view.draw_grid {
                     unsafe {
                         let cmd_buf =
@@ -479,6 +538,7 @@ fn main() {
                         builder.execute_commands(cmd_buf).unwrap();
                     }
                 }
+                */
 
                 let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)
@@ -496,6 +556,18 @@ fn main() {
 
                 let command_buffer = builder.build().unwrap();
 
+                let future = first_pass_future
+                    .join(future)
+                    .then_execute(queue.clone(), command_buffer)
+                    .unwrap()
+                    .then_swapchain_present(
+                        queue.clone(),
+                        swapchain.clone(),
+                        image_num,
+                    )
+                    .then_signal_fence_and_flush();
+
+                /*
                 let future = previous_frame_end
                     .take()
                     .unwrap()
@@ -509,6 +581,7 @@ fn main() {
                         image_num,
                     )
                     .then_signal_fence_and_flush();
+                */
 
                 match future {
                     Ok(future) => {
