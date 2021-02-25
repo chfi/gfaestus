@@ -1,11 +1,13 @@
 pub mod gui;
 pub mod lines;
 pub mod nodes;
+pub mod post;
 pub mod shapes;
 
 pub use gui::GuiDrawSystem;
 pub use lines::LineDrawSystem;
 pub use nodes::NodeDrawSystem;
+pub use post::PostDrawSystem;
 pub use shapes::ShapeDrawSystem;
 
 use std::sync::Arc;

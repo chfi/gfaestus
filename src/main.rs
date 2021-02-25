@@ -196,6 +196,9 @@ fn main() {
     let single_pass_offscreen =
         SinglePass::new(queue.clone(), Format::R8G8B8A8Unorm).unwrap();
 
+    let post_draw_system =
+        PostDrawSystem::new(queue.clone(), single_pass.subpass());
+
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -525,6 +528,16 @@ fn main() {
                         offscreen_clear_values,
                     )
                     .unwrap();
+
+                let os_img = offscreen_image.image().clone();
+                let os_sampler = offscreen_image.sampler().clone();
+
+                unsafe {
+                    let cmd_buf = post_draw_system
+                        .draw(os_img, os_sampler, &dynamic_state)
+                        .unwrap();
+                    builder.execute_commands(cmd_buf).unwrap();
+                }
 
                 // TODO run post-processing pipeline
 
