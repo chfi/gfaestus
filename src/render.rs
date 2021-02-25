@@ -11,6 +11,12 @@ pub use shapes::ShapeDrawSystem;
 use std::sync::Arc;
 
 use vulkano::{
+    descriptor::{
+        descriptor_set::{
+            FixedSizeDescriptorSetsPool, PersistentDescriptorSet,
+        },
+        DescriptorSet,
+    },
     device::{Device, Queue},
     format::Format,
     framebuffer::{
@@ -19,6 +25,8 @@ use vulkano::{
     image::{AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess},
     instance::PhysicalDevice,
 };
+
+use vulkano::sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode};
 
 use anyhow::Result;
 
@@ -48,70 +56,26 @@ vulkano::impl_vertex!(Color, color);
 pub struct SinglePass {
     gfx_queue: Arc<Queue>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    samples: u32,
     format: Format,
 }
 
-pub struct PostProcessingPass {
-    gfx_queue: Arc<Queue>,
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    samples: u32,
-    final_format: Format,
-}
-
-impl PostProcessingPass {
-    pub fn new(
-        gfx_queue: Arc<Queue>,
-        samples: Option<u32>,
-        final_format: Format,
-    ) -> Result<Self> {
-        let samples = pick_supported_sample_count(
-            &gfx_queue.device().physical_device(),
-            samples,
-        );
-
-        let render_pass = vulkano::ordered_passes_renderpass!(
-            gfx_queue.device().clone(),
-            attachments: {
-                color_msaa: {
-                    load: Clear,
-                    store: DontCare,
-                    format: final_format,
-                    samples: samples,
-                },
-                final_color: {
-                    load: Clear,
-                    store: Store,
-                    format: final_format,
-                    samples: 1,
-                },
-                pre_color: {
-                    load: Clear,
-                    store: Store,
-                    format: final_format,
-                    samples: 1,
-                },
-                mask: {
-                    load: Clear,
-                    store: DontCare,
-                    format: Format::R8G8B8A8Unorm,
-                    samples: 1,
-                }
-            },
-            passes: [
-                {
-                    color: [color_msaa, mask],
-                    depth_stencil: {},
-                    input: [],
-                    resolve: [pre_color]
-                },
-                {
-                    color: [final_color],
-                    depth_stencil: {},
-                    input: [pre_color, mask],
-                    resolve: []
-                }
-            ]
+impl SinglePass {
+    pub fn new(gfx_queue: Arc<Queue>, output_format: Format) -> Result<Self> {
+        let render_pass = vulkano::single_pass_renderpass!(
+        gfx_queue.device().clone(),
+        attachments: {
+            color: {
+                load: Clear,
+                store: Store,
+                format: output_format,
+                samples: 1,
+            }
+        },
+        pass: {
+            color: [color],
+            depth_stencil: {}
+            resolve: [],
+        }
         )?;
 
         let render_pass = Arc::new(render_pass);
@@ -119,8 +83,7 @@ impl PostProcessingPass {
         Ok(Self {
             gfx_queue,
             render_pass,
-            samples,
-            final_format,
+            format: output_format,
         })
     }
 
@@ -128,16 +91,14 @@ impl PostProcessingPass {
         self.render_pass.clone()
     }
 
-    pub fn first_pass(
+    pub fn subpass(
         &self,
     ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
         Subpass::from(self.render_pass.clone(), 0).unwrap()
     }
 
-    pub fn second_pass(
-        &self,
-    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
-        Subpass::from(self.render_pass.clone(), 1).unwrap()
+    pub fn queue(&self) -> Arc<Queue> {
+        self.gfx_queue.clone()
     }
 
     pub fn framebuffer<I>(
@@ -147,47 +108,22 @@ impl PostProcessingPass {
     where
         I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
     {
-        let img_dims = ImageAccess::dimensions(&image).width_height();
-
-        let color_msaa = AttachmentImage::transient_multisampled(
-            self.gfx_queue.device().clone(),
-            img_dims,
-            self.samples,
-            self.final_format,
-        )?;
-
-        let atch_usage = ImageUsage {
-            transient_attachment: true,
-            input_attachment: true,
-            ..ImageUsage::none()
-        };
-
-        let pre_color = AttachmentImage::with_usage(
-            self.gfx_queue.device().clone(),
-            img_dims,
-            self.final_format,
-            atch_usage,
-        )?;
-
-        let mask = AttachmentImage::with_usage(
-            self.gfx_queue.device().clone(),
-            img_dims,
-            Format::R8G8B8A8Unorm,
-            atch_usage,
-        )?;
-
         let framebuffer = Framebuffer::start(self.render_pass())
-            .add(color_msaa.clone())?
             .add(image.clone())?
-            .add(pre_color.clone())?
-            .add(mask.clone())?
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
 }
 
-impl SinglePass {
+pub struct SinglePassMSAA {
+    gfx_queue: Arc<Queue>,
+    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    samples: u32,
+    format: Format,
+}
+
+impl SinglePassMSAA {
     pub fn new(
         gfx_queue: Arc<Queue>,
         samples: Option<u32>,
