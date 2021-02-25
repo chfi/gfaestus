@@ -123,8 +123,17 @@ fn main() {
 
     let extensions = vulkano_win::required_extensions();
 
-    let instance = Instance::new(None, &extensions, None).unwrap();
+    /*
+    let layers = vec![
+        "VK_LAYER_MESA_device_select",
+        "VK_LAYER_RENDERDOC_Capture",
+        "VK_LAYER_KHRONOS_validation",
+    ];
 
+    let instance = Instance::new(None, &extensions, layers).unwrap();
+    */
+
+    let instance = Instance::new(None, &extensions, None).unwrap();
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
     let event_loop = EventLoop::new();
@@ -145,9 +154,15 @@ fn main() {
         ..DeviceExtensions::none()
     };
 
+    let mut features = physical.supported_features().clone();
+
+    // this has to be false for renderdoc capture replays to work, but
+    // the application doesn't work outside renderdoc if it's false..
+    // features.buffer_device_address = false;
+
     let (device, mut queues) = Device::new(
         physical,
-        physical.supported_features(),
+        &features,
         &device_ext,
         [(queue_family, 0.5)].iter().cloned(),
     )
