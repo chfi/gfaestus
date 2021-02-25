@@ -89,6 +89,18 @@ impl NodeDrawSystem {
         let vertex_buffer_pool: CpuBufferPool<Vertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
 
+        use vulkano::pipeline::depth_stencil::{
+            Compare, DepthBounds, DepthStencil, Stencil,
+        };
+
+        let depth_stencil = DepthStencil {
+            depth_compare: Compare::Less,
+            depth_write: true,
+            depth_bounds_test: DepthBounds::Disabled,
+            stencil_front: Stencil::default(),
+            stencil_back: Stencil::default(),
+        };
+
         let rect_pipeline = {
             Arc::new(
                 GraphicsPipeline::start()
@@ -98,6 +110,7 @@ impl NodeDrawSystem {
                     .geometry_shader(gs.main_entry_point(), ())
                     .viewports_dynamic_scissors_irrelevant(1)
                     .fragment_shader(fs.main_entry_point(), ())
+                    .depth_stencil(depth_stencil.clone())
                     .render_pass(subpass.clone())
                     .blend_alpha_blending()
                     .build(gfx_queue.device().clone())
@@ -114,6 +127,7 @@ impl NodeDrawSystem {
                     .viewports_dynamic_scissors_irrelevant(1)
                     .line_width_dynamic()
                     .fragment_shader(fs.main_entry_point(), ())
+                    .depth_stencil(depth_stencil.clone())
                     .render_pass(subpass)
                     .blend_alpha_blending()
                     .build(gfx_queue.device().clone())

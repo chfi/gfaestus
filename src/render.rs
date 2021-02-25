@@ -118,6 +118,110 @@ impl SinglePass {
     }
 }
 
+pub struct SinglePassMSAADepth {
+    gfx_queue: Arc<Queue>,
+    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    samples: u32,
+    format: Format,
+}
+
+impl SinglePassMSAADepth {
+    pub fn new(
+        gfx_queue: Arc<Queue>,
+        samples: Option<u32>,
+        output_format: Format,
+    ) -> Result<Self> {
+        let samples = pick_supported_sample_count(
+            &gfx_queue.device().physical_device(),
+            samples,
+        );
+
+        let render_pass = vulkano::single_pass_renderpass!(
+        gfx_queue.device().clone(),
+        attachments: {
+            intermediary: {
+                load: Clear,
+                store: DontCare,
+                format: output_format,
+                samples: samples,
+            },
+            color: {
+                load: Clear,
+                store: Store,
+                format: output_format,
+                samples: 1,
+            },
+            depth: {
+                load: Clear,
+                store: DontCare,
+                format: Format::D16Unorm,
+                samples: samples,
+            }
+        },
+        pass: {
+            color: [intermediary],
+            depth_stencil: {depth},
+            resolve: [color],
+        }
+        )?;
+
+        let render_pass = Arc::new(render_pass);
+
+        Ok(Self {
+            gfx_queue,
+            render_pass,
+            samples,
+            format: output_format,
+        })
+    }
+
+    pub fn render_pass(&self) -> Arc<dyn RenderPassAbstract + Send + Sync> {
+        self.render_pass.clone()
+    }
+
+    pub fn subpass(
+        &self,
+    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
+        Subpass::from(self.render_pass.clone(), 0).unwrap()
+    }
+
+    pub fn queue(&self) -> Arc<Queue> {
+        self.gfx_queue.clone()
+    }
+
+    pub fn framebuffer<I>(
+        &self,
+        image: I,
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
+    where
+        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
+    {
+        let img_dims = ImageAccess::dimensions(&image).width_height();
+
+        let intermediary = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            self.format,
+        )?;
+
+        let depth = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            Format::D16Unorm,
+        )?;
+
+        let framebuffer = Framebuffer::start(self.render_pass())
+            .add(intermediary.clone())?
+            .add(image.clone())?
+            .add(depth.clone())?
+            .build()?;
+
+        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
+    }
+}
+
 pub struct SinglePassMSAA {
     gfx_queue: Arc<Queue>,
     render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,

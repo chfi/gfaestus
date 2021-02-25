@@ -190,6 +190,10 @@ fn main() {
         SinglePassMSAA::new(queue.clone(), None, Format::R8G8B8A8Unorm)
             .unwrap();
 
+    let single_pass_msaa_depth_offscreen =
+        SinglePassMSAADepth::new(queue.clone(), None, Format::R8G8B8A8Unorm)
+            .unwrap();
+
     let single_pass =
         SinglePass::new(queue.clone(), swapchain.format()).unwrap();
 
@@ -217,7 +221,8 @@ fn main() {
 
     let mut main_view = MainView::new(
         queue.clone(),
-        single_pass_msaa_offscreen.subpass(),
+        single_pass_msaa_depth_offscreen.subpass(),
+        // single_pass_msaa_offscreen.subpass(),
         single_pass.subpass(),
     )
     .unwrap();
@@ -243,7 +248,8 @@ fn main() {
 
     let layout_dims = bottom_right - top_left;
     main_view.set_view_center(top_left + (layout_dims / 2.0));
-    main_view.set_initial_view(Some(top_left + (layout_dims / 2.0)), None);
+    main_view
+        .set_initial_view(Some(top_left + (layout_dims / 2.0)), Some(60.0));
 
     let (_line_buf_ix, line_future) = {
         let mut lines: Vec<(Point, Point)> = Vec::new();
@@ -467,19 +473,23 @@ fn main() {
                 let framebuffer =
                     single_pass.framebuffer(images[image_num].clone()).unwrap();
 
-                let msaa_offscreen_framebuffer = single_pass_msaa_offscreen
-                    .framebuffer(offscreen_image.image().clone())
-                    .unwrap();
+                // let msaa_offscreen_framebuffer = single_pass_msaa_offscreen
+                //     .framebuffer(offscreen_image.image().clone())
+                //     .unwrap();
+
+                let msaa_depth_offscreen_framebuffer =
+                    single_pass_msaa_depth_offscreen
+                        .framebuffer(offscreen_image.image().clone())
+                        .unwrap();
 
                 // let offscreen_framebuffer = single_pass
                 //     .framebuffer(offscreen_image.image().clone())
                 //     .unwrap();
-                let offscreen_framebuffer = single_pass_offscreen
-                    .framebuffer(offscreen_image.image().clone())
-                    .unwrap();
+                // let offscreen_framebuffer = single_pass_offscreen
+                //     .framebuffer(offscreen_image.image().clone())
+                //     .unwrap();
 
                 let clear = [0.0, 0.0, 0.05, 1.0];
-                let msaa_clear_values = vec![clear.into(), clear.into()];
 
                 let offscreen_clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
 
@@ -490,11 +500,22 @@ fn main() {
                     )
                     .unwrap();
 
+                // let msaa_clear_values = vec![clear.into(), clear.into()];
+                // builder
+                //     .begin_render_pass(
+                //         msaa_offscreen_framebuffer,
+                //         SubpassContents::SecondaryCommandBuffers,
+                //         msaa_clear_values,
+                //     )
+                //     .unwrap();
+
+                let msaa_depth_clear_values =
+                    vec![clear.into(), clear.into(), 1.0f32.into()];
                 builder
                     .begin_render_pass(
-                        msaa_offscreen_framebuffer,
+                        msaa_depth_offscreen_framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
-                        msaa_clear_values,
+                        msaa_depth_clear_values,
                     )
                     .unwrap();
 
