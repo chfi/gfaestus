@@ -370,6 +370,7 @@ impl OffscreenImage {
             ImageUsage {
                 color_attachment: true,
                 sampled: true,
+                transfer_destination: true,
                 ..ImageUsage::none()
             },
         )?;
