@@ -215,11 +215,12 @@ fn main() {
 
     let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0));
 
-    // let mut main_view =
-    //     MainView::new(queue.clone(), single_pass_msaa.subpass()).unwrap();
-    let mut main_view =
-        MainView::new(queue.clone(), single_pass_msaa_offscreen.subpass())
-            .unwrap();
+    let mut main_view = MainView::new(
+        queue.clone(),
+        single_pass_msaa_offscreen.subpass(),
+        single_pass.subpass(),
+    )
+    .unwrap();
 
     let mut gui =
         GfaestusGui::new(queue.clone(), single_pass.subpass()).unwrap();
@@ -539,11 +540,6 @@ fn main() {
                     builder.execute_commands(cmd_buf).unwrap();
                 }
 
-                // TODO run post-processing pipeline
-
-                // builder.end_render_pass().unw
-
-                /*
                 if main_view.draw_grid {
                     unsafe {
                         let cmd_buf =
@@ -551,7 +547,6 @@ fn main() {
                         builder.execute_commands(cmd_buf).unwrap();
                     }
                 }
-                */
 
                 let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)

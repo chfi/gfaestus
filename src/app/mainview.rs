@@ -34,18 +34,21 @@ pub struct MainView {
 }
 
 impl MainView {
-    pub fn new<R>(
+    pub fn new<Rn, Rl>(
         // mouse_pos: MousePos,
         gfx_queue: Arc<Queue>,
-        subpass: Subpass<R>,
+        node_subpass: Subpass<Rn>,
+        line_subpass: Subpass<Rl>,
     ) -> Result<MainView>
     where
-        R: RenderPassAbstract + Send + Sync + Clone + 'static,
+        Rn: RenderPassAbstract + Send + Sync + Clone + 'static,
+        Rl: RenderPassAbstract + Send + Sync + Clone + 'static,
     {
         let node_draw_system =
-            NodeDrawSystem::new(gfx_queue.clone(), subpass.clone());
+            NodeDrawSystem::new(gfx_queue.clone(), node_subpass);
 
-        let line_draw_system = LineDrawSystem::new(gfx_queue.clone(), subpass);
+        let line_draw_system =
+            LineDrawSystem::new(gfx_queue.clone(), line_subpass);
 
         let vertices: Vec<Vertex> = Vec::new();
 
