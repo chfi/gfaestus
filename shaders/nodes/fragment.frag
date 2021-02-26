@@ -3,6 +3,7 @@
 flat layout (location = 0) in int node_id;
 
 layout (location = 0) out vec4 f_color;
+layout (location = 1) out vec4 f_mask;
 
 layout (set = 0, binding = 0) buffer Data {
   uint data[];
@@ -17,6 +18,14 @@ layout (push_constant) uniform View {
 
 void main() {
   int color_id = (node_id - 1) % 7;
+
+
+
+  if (node_id == 436) {
+    f_mask = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    f_mask = vec4(0.0, 0.0, 0.0, 0.0);
+  }
 
   uint w = uint(vo.viewport_dims.x);
   uint h = uint(vo.viewport_dims.y);

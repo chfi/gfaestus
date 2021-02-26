@@ -512,11 +512,13 @@ fn main() {
                 let clear = [0.0, 0.0, 0.05, 1.0];
                 let msaa_depth_clear_values = vec![
                     clear.into(),
-                    clear.into(),
+                    [0.0, 0.0, 0.0, 0.0].into(),
+                    // clear.into(),
                     // [0.0, 0.0, 0.0, 1.0].into(),
                     clear.into(),
                     1.0f32.into(),
-                    clear.into(),
+                    // clear.into(),
+                    [0.0, 0.0, 0.0, 0.0].into(),
                     // [0.0, 0.0, 0.0, 1.0].into(),
                 ];
 
@@ -561,17 +563,32 @@ fn main() {
                     )
                     .unwrap();
 
-                let os_img = render_pipeline.offscreen_color().image().clone();
-                let os_sampler =
+                let color_img =
+                    render_pipeline.offscreen_color().image().clone();
+                let color_sampler =
                     render_pipeline.offscreen_color().sampler().clone();
+
+                let mask_img = render_pipeline.offscreen_mask().image().clone();
+                let mask_sampler =
+                    render_pipeline.offscreen_mask().sampler().clone();
 
                 post_draw_system
                     .draw_primary(
                         &mut builder,
-                        os_img,
-                        os_sampler,
+                        color_img,
+                        color_sampler,
                         &dynamic_state,
                         false,
+                    )
+                    .unwrap();
+
+                post_draw_system
+                    .draw_primary(
+                        &mut builder,
+                        mask_img,
+                        mask_sampler,
+                        &dynamic_state,
+                        true,
                     )
                     .unwrap();
 
