@@ -58,102 +58,55 @@ pub struct Color {
 
 vulkano::impl_vertex!(Color, color);
 
-pub struct SinglePass {
+pub struct RenderPipeline {
     gfx_queue: Arc<Queue>,
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    format: Format,
-}
 
-impl SinglePass {
-    pub fn new(
-        gfx_queue: Arc<Queue>,
-        output_format: Format,
-        clear: bool,
-    ) -> Result<Self> {
-        let render_pass = if clear {
-            Arc::new(vulkano::single_pass_renderpass!(
-            gfx_queue.device().clone(),
-            attachments: {
-                color: {
-                    load: Clear,
-                    store: Store,
-                    format: output_format,
-                    samples: 1,
-                }
-            },
-            pass: {
-                color: [color],
-                depth_stencil: {}
-                resolve: [],
-            }
-                )?) as Arc<dyn RenderPassAbstract + Send + Sync>
-        } else {
-            Arc::new(vulkano::single_pass_renderpass!(
-            gfx_queue.device().clone(),
-            attachments: {
-                color: {
-                    load: DontCare,
-                    store: Store,
-                    format: output_format,
-                    samples: 1,
-                }
-            },
-            pass: {
-                color: [color],
-                depth_stencil: {}
-                resolve: [],
-            }
-                )?) as Arc<dyn RenderPassAbstract + Send + Sync>
-        };
-
-        Ok(Self {
-            gfx_queue,
-            render_pass,
-            format: output_format,
-        })
-    }
-
-    pub fn render_pass(&self) -> Arc<dyn RenderPassAbstract + Send + Sync> {
-        self.render_pass.clone()
-    }
-
-    pub fn subpass(
-        &self,
-    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
-        Subpass::from(self.render_pass.clone(), 0).unwrap()
-    }
-
-    pub fn queue(&self) -> Arc<Queue> {
-        self.gfx_queue.clone()
-    }
-
-    pub fn framebuffer<I>(
-        &self,
-        image: I,
-    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
-    where
-        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
-    {
-        let framebuffer = Framebuffer::start(self.render_pass())
-            .add(image.clone())?
-            .build()?;
-
-        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
-    }
-}
-
-pub struct SinglePassMSAADepth {
-    gfx_queue: Arc<Queue>,
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    // offscreen_format: Format,
+    final_format: Format,
     samples: u32,
-    format: Format,
+
+    // pass_msaa_depth_offscreen: Arc<dyn RenderPassAbstract + Send + Sync>,
+    // pass_single_dontcare: Arc<dyn RenderPassAbstract + Send + Sync>,
+    offscreen_msaa_depth_mask_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    offscreen_msaa_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+
+    // offscreen_msaa_depth_mask_pass: SinglePassMSAA,
+    // offscreen_msaa_pass: SinglePassMSAA,
+    final_dontcare_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+
+    offscreen_color: OffscreenImage,
+    offscreen_mask: OffscreenImage,
 }
 
-impl SinglePassMSAADepth {
+impl RenderPipeline {
+    pub fn offscreen_color(&self) -> &OffscreenImage {
+        &self.offscreen_color
+    }
+
+    pub fn offscreen_mask(&self) -> &OffscreenImage {
+        &self.offscreen_mask
+    }
+
+    pub fn offscreen_mask_pass(
+        &self,
+    ) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
+        &self.offscreen_msaa_depth_mask_pass
+    }
+
+    pub fn offscreen_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
+        &self.offscreen_msaa_pass
+    }
+
+    pub fn final_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
+        &self.final_dontcare_pass
+    }
+
     pub fn new(
         gfx_queue: Arc<Queue>,
         samples: Option<u32>,
-        output_format: Format,
+        final_format: Format,
+        width: u32,
+        height: u32,
     ) -> Result<Self> {
         let samples = pick_supported_sample_count(
             &gfx_queue.device().physical_device(),
@@ -162,75 +115,149 @@ impl SinglePassMSAADepth {
 
         use vulkano::image::ImageLayout;
 
-        let render_pass = vulkano::single_pass_renderpass!(
-        gfx_queue.device().clone(),
-        attachments: {
-            intermediary: {
-                load: Clear,
-                store: DontCare,
-                format: output_format,
-                samples: samples,
-                initial_layout: ImageLayout::Undefined,
-                final_layout: ImageLayout::ColorAttachmentOptimal,
+        let offscreen_msaa_depth_mask_pass = {
+            let render_pass = vulkano::single_pass_renderpass!(
+            gfx_queue.device().clone(),
+            attachments: {
+                intermediary: {
+                    load: Clear,
+                    store: DontCare,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: samples,
+                    initial_layout: ImageLayout::Undefined,
+                    final_layout: ImageLayout::ColorAttachmentOptimal,
+                },
+                mask_intermediary: {
+                    load: Clear,
+                    store: DontCare,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: samples,
+                    initial_layout: ImageLayout::Undefined,
+                    final_layout: ImageLayout::ColorAttachmentOptimal,
+                },
+                color: {
+                    load: Clear,
+                    store: Store,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: 1,
+                },
+                depth: {
+                    load: Clear,
+                    store: DontCare,
+                    format: Format::D16Unorm,
+                    samples: samples,
+                },
+                mask: {
+                    load: Clear,
+                    store: Store,
+                    format: Format::R8G8B8A8Unorm,
+                    samples: 1,
+                }
             },
-            color: {
-                load: Clear,
-                store: Store,
-                format: output_format,
-                samples: 1,
-            },
-            depth: {
-                load: Clear,
-                store: DontCare,
-                format: Format::D16Unorm,
-                samples: samples,
+            pass: {
+                color: [intermediary, mask_intermediary],
+                depth_stencil: {depth},
+                resolve: [color, mask],
             }
-        },
-        pass: {
-            color: [intermediary],
-            depth_stencil: {depth},
-            resolve: [color],
-        }
-        )?;
+            )?;
 
-        let render_pass = Arc::new(render_pass);
+            Arc::new(render_pass)
+        };
+
+        let offscreen_msaa_pass = {
+            let render_pass = vulkano::single_pass_renderpass!(
+                gfx_queue.device().clone(),
+                attachments: {
+                    intermediary: {
+                        load: Clear,
+                        store: DontCare,
+                        format: Format::R8G8B8A8Unorm,
+                        samples: samples,
+                    },
+                    color: {
+                        load: Clear,
+                        store: Store,
+                        format: Format::R8G8B8A8Unorm,
+                        samples: 1,
+                    }
+                },
+                pass: {
+                    color: [intermediary],
+                    depth_stencil: {}
+                    resolve: [color],
+                }
+            )?;
+
+            Arc::new(render_pass)
+        };
+
+        let final_dontcare_pass = {
+            let render_pass = vulkano::single_pass_renderpass!(
+            gfx_queue.device().clone(),
+            attachments: {
+                color: {
+                    load: DontCare,
+                    store: Store,
+                    format: final_format,
+                    samples: 1,
+                }
+            },
+            pass: {
+                color: [color],
+                depth_stencil: {}
+                resolve: [],
+            }
+                )?;
+
+            Arc::new(render_pass)
+        };
+
+        let offscreen_color =
+            OffscreenImage::new(gfx_queue.clone(), width, height)?;
+        let offscreen_mask =
+            OffscreenImage::new(gfx_queue.clone(), width, height)?;
 
         Ok(Self {
             gfx_queue,
-            render_pass,
+            final_format,
+            offscreen_msaa_depth_mask_pass,
+            offscreen_msaa_pass,
+            final_dontcare_pass,
+            offscreen_color,
+            offscreen_mask,
             samples,
-            format: output_format,
         })
     }
 
-    pub fn render_pass(&self) -> Arc<dyn RenderPassAbstract + Send + Sync> {
-        self.render_pass.clone()
+    pub fn recreate_offscreen(
+        &mut self,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        self.offscreen_color.recreate(width, height)?;
+        self.offscreen_mask.recreate(width, height)?;
+
+        Ok(())
     }
 
-    pub fn subpass(
+    pub fn offscreen_color_mask_framebuffer(
         &self,
-    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
-        Subpass::from(self.render_pass.clone(), 0).unwrap()
-    }
-
-    pub fn queue(&self) -> Arc<Queue> {
-        self.gfx_queue.clone()
-    }
-
-    pub fn framebuffer<I>(
-        &self,
-        image: I,
-    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
-    where
-        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
-    {
-        let img_dims = ImageAccess::dimensions(&image).width_height();
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
+        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
+            .width_height();
 
         let intermediary = AttachmentImage::transient_multisampled(
             self.gfx_queue.device().clone(),
             img_dims,
             self.samples,
-            self.format,
+            Format::R8G8B8A8Unorm,
+        )?;
+
+        let intermediary_mask = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            Format::R8G8B8A8Unorm,
         )?;
 
         let depth = AttachmentImage::transient_multisampled(
@@ -240,103 +267,48 @@ impl SinglePassMSAADepth {
             Format::D16Unorm,
         )?;
 
-        let framebuffer = Framebuffer::start(self.render_pass())
-            .add(intermediary.clone())?
-            .add(image.clone())?
-            .add(depth.clone())?
-            .build()?;
+        let framebuffer =
+            Framebuffer::start(self.offscreen_msaa_depth_mask_pass.clone())
+                .add(intermediary.clone())?
+                .add(intermediary_mask.clone())?
+                .add(self.offscreen_color.image().clone())?
+                .add(depth.clone())?
+                .add(self.offscreen_mask.image().clone())?
+                .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
-}
 
-pub struct SinglePassMSAA {
-    gfx_queue: Arc<Queue>,
-    render_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    samples: u32,
-    format: Format,
-}
-
-impl SinglePassMSAA {
-    pub fn new(
-        gfx_queue: Arc<Queue>,
-        samples: Option<u32>,
-        output_format: Format,
-    ) -> Result<Self> {
-        let samples = pick_supported_sample_count(
-            &gfx_queue.device().physical_device(),
-            samples,
-        );
-
-        let render_pass = vulkano::single_pass_renderpass!(
-        gfx_queue.device().clone(),
-        attachments: {
-            intermediary: {
-                load: Clear,
-                store: DontCare,
-                format: output_format,
-                samples: samples,
-            },
-            color: {
-                load: Clear,
-                store: Store,
-                format: output_format,
-                samples: 1,
-            }
-        },
-        pass: {
-            color: [intermediary],
-            depth_stencil: {}
-            resolve: [color],
-        }
-        )?;
-
-        let render_pass = Arc::new(render_pass);
-
-        Ok(Self {
-            gfx_queue,
-            render_pass,
-            samples,
-            format: output_format,
-        })
-    }
-
-    pub fn render_pass(&self) -> Arc<dyn RenderPassAbstract + Send + Sync> {
-        self.render_pass.clone()
-    }
-
-    pub fn subpass(
+    pub fn offscreen_color_framebuffer(
         &self,
-    ) -> Subpass<Arc<dyn RenderPassAbstract + Send + Sync>> {
-        Subpass::from(self.render_pass.clone(), 0).unwrap()
-    }
-
-    pub fn queue(&self) -> Arc<Queue> {
-        self.gfx_queue.clone()
-    }
-
-    pub fn framebuffer<I>(
-        &self,
-        image: I,
-    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
-    where
-        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
-    {
-        let img_dims = ImageAccess::dimensions(&image).width_height();
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
+        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
+            .width_height();
 
         let intermediary = AttachmentImage::transient_multisampled(
             self.gfx_queue.device().clone(),
             img_dims,
             self.samples,
-            self.format,
+            Format::R8G8B8A8Unorm,
         )?;
 
-        let framebuffer: Framebuffer<
-            Arc<dyn RenderPassAbstract + Send + Sync>,
-            (((), Arc<AttachmentImage>), I),
-        > = Framebuffer::start(self.render_pass())
+        let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
             .add(intermediary.clone())?
-            .add(image.clone())?
+            .add(self.offscreen_color.image().clone())?
+            .build()?;
+
+        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
+    }
+
+    pub fn dontcare_framebuffer<I>(
+        &self,
+        target: I,
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
+    where
+        I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
+    {
+        let framebuffer = Framebuffer::start(self.final_dontcare_pass.clone())
+            .add(target.clone())?
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)

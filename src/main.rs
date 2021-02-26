@@ -200,15 +200,14 @@ fn main() {
         .unwrap()
     };
 
-    let single_pass_msaa_depth_offscreen =
-        SinglePassMSAADepth::new(queue.clone(), None, Format::R8G8B8A8Unorm)
+    let mut render_pipeline =
+        RenderPipeline::new(queue.clone(), None, swapchain.format(), 800, 600)
             .unwrap();
 
-    let single_pass_dontcare =
-        SinglePass::new(queue.clone(), swapchain.format(), false).unwrap();
-
-    let post_draw_system =
-        PostDrawSystem::new(queue.clone(), single_pass_dontcare.subpass());
+    let post_draw_system = PostDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
+    );
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -228,14 +227,17 @@ fn main() {
 
     let mut main_view = MainView::new(
         queue.clone(),
-        single_pass_msaa_depth_offscreen.subpass(),
-        single_pass_dontcare.subpass(),
+        Subpass::from(render_pipeline.offscreen_mask_pass().clone(), 0)
+            .unwrap(),
+        Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     )
     .unwrap();
 
-    let mut gui =
-        GfaestusGui::new(queue.clone(), single_pass_dontcare.subpass())
-            .unwrap();
+    let mut gui = GfaestusGui::new(
+        queue.clone(),
+        Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
+    )
+    .unwrap();
 
     gui.set_graph_stats(stats);
 
@@ -452,6 +454,10 @@ fn main() {
 
                         app.update_dims((width, height));
 
+                        render_pipeline
+                            .recreate_offscreen(width as u32, height as u32)
+                            .unwrap();
+
                         let _recreated_image = offscreen_image
                             .recreate(width as u32, height as u32)
                             .unwrap();
@@ -481,9 +487,7 @@ fn main() {
 
                 // the framebuffer used when drawing nodes to the offscreen image
                 let msaa_depth_offscreen_framebuffer =
-                    single_pass_msaa_depth_offscreen
-                        .framebuffer(offscreen_image.image().clone())
-                        .unwrap();
+                    render_pipeline.offscreen_color_mask_framebuffer().unwrap();
 
                 // the framebuffer used when drawing the
                 // post-processing stage and GUI to the screen --
@@ -494,8 +498,8 @@ fn main() {
                 // the framebuffer used when drawing the GUI to the
                 // screen -- has to use a separate render pass where
                 // the color image load op is DontCare
-                let framebuffer = single_pass_dontcare
-                    .framebuffer(images[image_num].clone())
+                let framebuffer = render_pipeline
+                    .dontcare_framebuffer(images[image_num].clone())
                     .unwrap();
 
                 let mut builder =
@@ -506,8 +510,15 @@ fn main() {
                     .unwrap();
 
                 let clear = [0.0, 0.0, 0.05, 1.0];
-                let msaa_depth_clear_values =
-                    vec![clear.into(), clear.into(), 1.0f32.into()];
+                let msaa_depth_clear_values = vec![
+                    clear.into(),
+                    clear.into(),
+                    // [0.0, 0.0, 0.0, 1.0].into(),
+                    clear.into(),
+                    1.0f32.into(),
+                    clear.into(),
+                    // [0.0, 0.0, 0.0, 1.0].into(),
+                ];
 
                 builder
                     .begin_render_pass(
@@ -550,8 +561,9 @@ fn main() {
                     )
                     .unwrap();
 
-                let os_img = offscreen_image.image().clone();
-                let os_sampler = offscreen_image.sampler().clone();
+                let os_img = render_pipeline.offscreen_color().image().clone();
+                let os_sampler =
+                    render_pipeline.offscreen_color().sampler().clone();
 
                 post_draw_system
                     .draw_primary(
