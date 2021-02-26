@@ -583,9 +583,10 @@ fn main() {
                 let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)
                 {
-                    let (cmd_buf, future) = gui_result.unwrap();
+                    let (cmd_bufs, future) = gui_result.unwrap();
                     unsafe {
-                        builder.execute_commands(cmd_buf).unwrap();
+                        builder.execute_commands_from_vec(cmd_bufs).unwrap();
+                        // builder.execute_commands(cmd_buf).unwrap();
                     }
                     future.unwrap_or(sync::now(device.clone()).boxed())
                 } else {

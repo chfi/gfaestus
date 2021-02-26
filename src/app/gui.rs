@@ -413,7 +413,7 @@ impl GfaestusGui {
         &self,
         dynamic_state: &DynamicState,
         clipped_meshes: &[egui::ClippedMesh],
-    ) -> Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)> {
+    ) -> Result<(Vec<AutoCommandBuffer>, Option<Box<dyn GpuFuture>>)> {
         let egui_tex = self.ctx.texture();
         let tex_future =
             self.gui_draw_system.upload_texture(&egui_tex).transpose()?;
@@ -431,7 +431,8 @@ impl GfaestusGui {
     pub fn end_frame_and_draw(
         &self,
         dynamic_state: &DynamicState,
-    ) -> Option<Result<(AutoCommandBuffer, Option<Box<dyn GpuFuture>>)>> {
+    ) -> Option<Result<(Vec<AutoCommandBuffer>, Option<Box<dyn GpuFuture>>)>>
+    {
         let (_output, shapes) = self.ctx.end_frame();
         let clipped_meshes = self.ctx.tessellate(shapes);
 

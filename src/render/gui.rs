@@ -203,14 +203,8 @@ impl GuiDrawSystem {
         &self,
         dynamic_state: &DynamicState,
         clipped_meshes: &[egui::ClippedMesh],
-    ) -> Result<AutoCommandBuffer> {
-        let mut builder: AutoCommandBufferBuilder =
-            AutoCommandBufferBuilder::secondary_graphics(
-                self.gfx_queue.device().clone(),
-                self.gfx_queue.family(),
-                self.pipeline.clone().subpass(),
-            )?;
-
+    ) -> Result<Vec<AutoCommandBuffer>> {
+        // ) -> Result<AutoCommandBuffer> {
         let viewport_dims = {
             let viewport = dynamic_state
                 .viewports
@@ -239,9 +233,68 @@ impl GuiDrawSystem {
                 .unwrap(),
         );
 
-        let mut vertices: Vec<GuiVertex> = Vec::new();
-        let mut indices: Vec<u32> = Vec::new();
+        use rayon::prelude::*;
 
+        let res = clipped_meshes
+            .into_par_iter()
+            .map(|clipped| {
+                let mut builder: AutoCommandBufferBuilder =
+                    AutoCommandBufferBuilder::secondary_graphics(
+                        self.gfx_queue.device().clone(),
+                        self.gfx_queue.family(),
+                        self.pipeline.clone().subpass(),
+                    )
+                    .unwrap();
+
+                let _rect = &clipped.0;
+                let mesh = &clipped.1;
+
+                let indices = mesh.indices.iter().copied().collect::<Vec<_>>();
+
+                let vertices = mesh
+                    .vertices
+                    .iter()
+                    .map(|v| {
+                        let pos = [v.pos.x, v.pos.y];
+                        let uv = [v.uv.x, v.uv.y];
+                        let (r, g, b, a) = v.color.to_tuple();
+                        let color = [
+                            (r as f32) / 255.0,
+                            (g as f32) / 255.0,
+                            (b as f32) / 255.0,
+                            (a as f32) / 255.0,
+                        ];
+                        GuiVertex { pos, uv, color }
+                    })
+                    .collect::<Vec<_>>();
+
+                let vertex_buffer = self
+                    .vertex_buffer_pool
+                    .chunk(vertices.iter().copied())
+                    .unwrap();
+                let index_buffer = self
+                    .index_buffer_pool
+                    .chunk(indices.iter().copied())
+                    .unwrap();
+
+                builder
+                    .draw_indexed(
+                        self.pipeline.clone(),
+                        &dynamic_state,
+                        vec![Arc::new(vertex_buffer.clone())],
+                        index_buffer.clone(),
+                        set.clone(),
+                        screen_size_pc,
+                    )
+                    .unwrap();
+
+                builder.build().unwrap()
+            })
+            .collect::<Vec<_>>();
+
+        Ok(res)
+
+        /*
         for clipped in clipped_meshes.into_iter() {
             vertices.clear();
             indices.clear();
@@ -286,5 +339,6 @@ impl GuiDrawSystem {
         let builder = builder.build()?;
 
         Ok(builder)
+        */
     }
 }

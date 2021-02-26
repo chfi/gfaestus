@@ -681,6 +681,7 @@ dependencies = [
  "nalgebra",
  "nalgebra-glm",
  "parking_lot",
+ "rayon",
  "rgb",
  "rustc-hash",
  "vulkano",
