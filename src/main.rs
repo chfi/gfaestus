@@ -573,7 +573,7 @@ fn main() {
                     render_pipeline.offscreen_mask().sampler().clone();
 
                 post_draw_system
-                    .draw_primary(
+                    .blur_primary(
                         &mut builder,
                         color_img,
                         color_sampler,
@@ -583,7 +583,7 @@ fn main() {
                     .unwrap();
 
                 post_draw_system
-                    .draw_primary(
+                    .edge_primary(
                         &mut builder,
                         mask_img,
                         mask_sampler,

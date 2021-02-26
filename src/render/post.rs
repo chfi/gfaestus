@@ -33,21 +33,29 @@ use super::Vertex;
 mod vs {
     vulkano_shaders::shader! {
         ty: "vertex",
-        path: "shaders/post/vertex.vert",
+        path: "shaders/post/blur.vert",
     }
 }
 
-mod fs {
+mod blur_fs {
     vulkano_shaders::shader! {
         ty: "fragment",
-        path: "shaders/post/fragment.frag",
+        path: "shaders/post/blur.frag",
+    }
+}
+
+mod edge_fs {
+    vulkano_shaders::shader! {
+        ty: "fragment",
+        path: "shaders/post/edge.frag",
     }
 }
 
 pub struct PostDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer: Arc<CpuAccessibleBuffer<[Vertex]>>,
-    pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+    blur_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+    edge_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
 }
 
 impl PostDrawSystem {
@@ -55,20 +63,39 @@ impl PostDrawSystem {
     where
         R: RenderPassAbstract + Clone + Send + Sync + 'static,
     {
-        let _ = include_str!("../../shaders/post/vertex.vert");
-        let _ = include_str!("../../shaders/post/fragment.frag");
+        let _ = include_str!("../../shaders/post/blur.vert");
+        let _ = include_str!("../../shaders/post/blur.frag");
+        let _ = include_str!("../../shaders/post/edge.frag");
 
         let vs = vs::Shader::load(gfx_queue.device().clone()).unwrap();
-        let fs = fs::Shader::load(gfx_queue.device().clone()).unwrap();
+        let blur_fs =
+            blur_fs::Shader::load(gfx_queue.device().clone()).unwrap();
+        let edge_fs =
+            edge_fs::Shader::load(gfx_queue.device().clone()).unwrap();
 
-        let pipeline = {
+        let blur_pipeline = {
             Arc::new(
                 GraphicsPipeline::start()
                     .vertex_input_single_buffer::<Vertex>()
                     .vertex_shader(vs.main_entry_point(), ())
                     .triangle_list()
                     .viewports_dynamic_scissors_irrelevant(1)
-                    .fragment_shader(fs.main_entry_point(), ())
+                    .fragment_shader(blur_fs.main_entry_point(), ())
+                    .render_pass(subpass.clone())
+                    .blend_alpha_blending()
+                    .build(gfx_queue.device().clone())
+                    .unwrap(),
+            ) as Arc<_>
+        };
+
+        let edge_pipeline = {
+            Arc::new(
+                GraphicsPipeline::start()
+                    .vertex_input_single_buffer::<Vertex>()
+                    .vertex_shader(vs.main_entry_point(), ())
+                    .triangle_list()
+                    .viewports_dynamic_scissors_irrelevant(1)
+                    .fragment_shader(edge_fs.main_entry_point(), ())
                     .render_pass(subpass)
                     .blend_alpha_blending()
                     .build(gfx_queue.device().clone())
@@ -101,11 +128,12 @@ impl PostDrawSystem {
         Self {
             gfx_queue,
             vertex_buffer,
-            pipeline,
+            blur_pipeline,
+            edge_pipeline,
         }
     }
 
-    pub fn draw_primary<'a, C>(
+    pub fn blur_primary<'a, C>(
         &self,
         builder: &'a mut AutoCommandBufferBuilder,
         color_input: C,
@@ -116,7 +144,7 @@ impl PostDrawSystem {
     where
         C: ImageViewAccess + Send + Sync + 'static,
     {
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
+        let layout = self.blur_pipeline.descriptor_set_layout(0).unwrap();
 
         let set = {
             let set = PersistentDescriptorSet::start(layout.clone())
@@ -143,7 +171,7 @@ impl PostDrawSystem {
         };
 
         builder.draw(
-            self.pipeline.clone(),
+            self.blur_pipeline.clone(),
             &dynamic_state,
             vec![self.vertex_buffer.clone()],
             set.clone(),
@@ -153,6 +181,55 @@ impl PostDrawSystem {
         Ok(builder)
     }
 
+    pub fn edge_primary<'a, C>(
+        &self,
+        builder: &'a mut AutoCommandBufferBuilder,
+        color_input: C,
+        sampler: Arc<Sampler>,
+        dynamic_state: &DynamicState,
+        enabled: bool,
+    ) -> Result<&'a mut AutoCommandBufferBuilder>
+    where
+        C: ImageViewAccess + Send + Sync + 'static,
+    {
+        let layout = self.edge_pipeline.descriptor_set_layout(0).unwrap();
+
+        let set = {
+            let set = PersistentDescriptorSet::start(layout.clone())
+                .add_sampled_image(color_input, sampler)?;
+            let set = set.build()?;
+            Arc::new(set)
+        };
+
+        let viewport_dims = {
+            let viewport = dynamic_state
+                .viewports
+                .as_ref()
+                .and_then(|v| v.get(0))
+                .unwrap();
+            viewport.dimensions
+        };
+
+        let enabled = if enabled { 1 } else { 0 };
+
+        let pc = vs::ty::Dims {
+            width: viewport_dims[0],
+            height: viewport_dims[1],
+            enabled,
+        };
+
+        builder.draw(
+            self.edge_pipeline.clone(),
+            &dynamic_state,
+            vec![self.vertex_buffer.clone()],
+            set.clone(),
+            pc,
+        )?;
+
+        Ok(builder)
+    }
+
+    /*
     pub fn draw<C>(
         &self,
         color_input: C,
@@ -182,4 +259,5 @@ impl PostDrawSystem {
 
         Ok(builder)
     }
+    */
 }
