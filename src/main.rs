@@ -158,7 +158,7 @@ fn main() {
         ..DeviceExtensions::none()
     };
 
-    let mut features = physical.supported_features().clone();
+    let features = physical.supported_features().clone();
 
     // this has to be false for renderdoc capture replays to work, but
     // the application doesn't work outside renderdoc if it's false..
@@ -202,22 +202,15 @@ fn main() {
         .unwrap()
     };
 
-    let single_pass_msaa =
-        SinglePassMSAA::new(queue.clone(), None, swapchain.format()).unwrap();
-
-    let single_pass_msaa_offscreen =
-        SinglePassMSAA::new(queue.clone(), None, Format::R8G8B8A8Unorm)
-            .unwrap();
-
     let single_pass_msaa_depth_offscreen =
         SinglePassMSAADepth::new(queue.clone(), None, Format::R8G8B8A8Unorm)
             .unwrap();
 
     let single_pass =
-        SinglePass::new(queue.clone(), swapchain.format()).unwrap();
+        SinglePass::new(queue.clone(), swapchain.format(), true).unwrap();
 
-    let single_pass_offscreen =
-        SinglePass::new(queue.clone(), Format::R8G8B8A8Unorm).unwrap();
+    let single_pass_dontcare =
+        SinglePass::new(queue.clone(), swapchain.format(), false).unwrap();
 
     let post_draw_system =
         PostDrawSystem::new(queue.clone(), single_pass.subpass());
@@ -507,20 +500,9 @@ fn main() {
                         .framebuffer(offscreen_image.image().clone())
                         .unwrap();
 
-                // let offscreen_framebuffer = single_pass
-                //     .framebuffer(offscreen_image.image().clone())
-                //     .unwrap();
-                // let offscreen_framebuffer = single_pass_offscreen
-                //     .framebuffer(offscreen_image.image().clone())
-                //     .unwrap();
-
                 let clear = [0.0, 0.0, 0.05, 1.0];
 
                 let offscreen_clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
-
-                let sleep_ms = 100;
-
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
 
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(
@@ -529,46 +511,26 @@ fn main() {
                     )
                     .unwrap();
 
-                // let msaa_clear_values = vec![clear.into(), clear.into()];
-                // builder
-                //     .begin_render_pass(
-                //         msaa_offscreen_framebuffer,
-                //         SubpassContents::SecondaryCommandBuffers,
-                //         msaa_clear_values,
-                //     )
-                //     .unwrap();
-
                 let msaa_depth_clear_values =
                     vec![clear.into(), clear.into(), 1.0f32.into()];
-                // println!("begin node offscreen render pass");
+
                 builder
                     .begin_render_pass(
                         msaa_depth_offscreen_framebuffer,
+                        // SubpassContents::SecondaryCommandBuffers,
                         SubpassContents::Inline,
                         msaa_depth_clear_values,
                     )
                     .unwrap();
 
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
-                let err = main_view.draw_nodes_primary(
-                    &mut builder,
-                    &dynamic_state,
-                    universe.offset,
-                );
+                main_view
+                    .draw_nodes_primary(
+                        &mut builder,
+                        &dynamic_state,
+                        universe.offset,
+                    )
+                    .unwrap();
 
-                use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
-                if let Err(e) = &err {
-                    println!("error: {:?}", e);
-                    println!("root_cause: {:?}", e.root_cause());
-                    if let Some(ctx_err) = e.downcast_ref::<AutoCommandBufferBuilderContextError>() {
-                        println!("error: {:?}", ctx_err);
-                    }
-                    // match e {
-                    // }
-                }
-
-                err.unwrap();
-                // .unwrap();
                 /*
                 unsafe {
                     let secondary_buf = main_view
@@ -578,8 +540,6 @@ fn main() {
                 }
                 */
 
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
-                // println!("end node offscreen render pass");
                 builder.end_render_pass().unwrap();
 
                 let command_buffer = builder.build().unwrap();
@@ -598,8 +558,6 @@ fn main() {
                     )
                     .unwrap();
 
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
-                // println!("begin swapchain render pass");
                 builder
                     .begin_render_pass(
                         framebuffer.clone(),
@@ -608,74 +566,32 @@ fn main() {
                     )
                     .unwrap();
 
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
                 let os_img = offscreen_image.image().clone();
-
-                // let osf_img = msaa_depth_offscreen_framebuffer
-                //     .attached_image_view(1)
-                //     .unwrap();
-                // println!(
-                //     "initialized: {:?}",
-                //     osf_img.parent().is_layout_initialized()
-                // );
-                // println!(
-                //     "initial: {:?}",
-                //     osf_img.parent().initial_layout_requirement()
-                // );
-                // println!(
-                //     "final: {:?}",
-                //     osf_img.parent().final_layout_requirement()
-                // );
-
                 let os_sampler = offscreen_image.sampler().clone();
 
-                // print_image_usage(&os_img);
-
-                // os_img.
-                // println!("usage: {:?}", os_img.initial_layout_requirement());
-                println!("initialized: {:?}", os_img.is_layout_initialized());
-                println!("initial: {:?}", os_img.initial_layout_requirement());
-                println!("final: {:?}", os_img.final_layout_requirement());
-                // println!(
-                //     "desc set sampled: {:?}",
-                //     os_img.descriptor_set_combined_image_sampler_layout()
-                // );
-
-                // println!("post-processing");
                 post_draw_system
-                    .draw_primary(&mut builder, os_img, os_sampler, &dynamic_state)
-                    .unwrap();
-                /*
-                unsafe {
-                    let cmd_buf = post_draw_system
-                        .draw(os_img, os_sampler, &dynamic_state)
-                        .unwrap();
-                    builder.execute_commands(cmd_buf).unwrap();
-                }
-                */
-
-                builder.end_render_pass().unwrap();
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
-                // println!("grid");
-                /*
-                if main_view.draw_grid {
-                    unsafe {
-                        let cmd_buf =
-                            main_view.draw_lines(&dynamic_state).unwrap();
-                        builder.execute_commands(cmd_buf).unwrap();
-                    }
-                }
-                */
-                builder
-                    .begin_render_pass(
-                        framebuffer,
-                        SubpassContents::SecondaryCommandBuffers,
-                        offscreen_clear_values,
+                    .draw_primary(
+                        &mut builder,
+                        os_img,
+                        os_sampler,
+                        &dynamic_state,
                     )
                     .unwrap();
 
-                // std::thread::sleep(std::time::Duration::from_millis(sleep_ms));
-                // println!("gui");
+                builder.end_render_pass().unwrap();
+
+                let framebuffer_dc = single_pass_dontcare
+                    .framebuffer(images[image_num].clone())
+                    .unwrap();
+
+                builder
+                    .begin_render_pass(
+                        framebuffer_dc,
+                        SubpassContents::SecondaryCommandBuffers,
+                        vec![vulkano::format::ClearValue::None],
+                    )
+                    .unwrap();
+
                 let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)
                 {
@@ -688,27 +604,7 @@ fn main() {
                     sync::now(device.clone()).boxed()
                 };
 
-                // println!("end swapchain render pass");
                 builder.end_render_pass().unwrap();
-
-                // println!("build command buffer");
-
-                /*
-                 let first_pass_future = previous_frame_end
-                     .take()
-                     .unwrap()
-                     .join(acquire_future)
-                     .then_execute(queue.clone(), command_buffer)
-                     .unwrap();
-                let future = first_pass_future
-                    .join(future)
-                    .then_swapchain_present(
-                        queue.clone(),
-                        swapchain.clone(),
-                        image_num,
-                    )
-                    .then_signal_fence_and_flush();
-                */
 
                 let command_buffer = builder.build().unwrap();
 
@@ -781,7 +677,6 @@ fn main() {
 }
 
 fn update_viewport(
-    // image: Arc<SwapchainImage<Window>>,
     image: &SwapchainImage<Window>,
     dynamic_state: &mut DynamicState,
 ) {

@@ -18,7 +18,7 @@ use handlegraph::handle::NodeId;
 use crate::geometry::*;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
-use vulkano::command_buffer::auto::AutoCommandBufferBuilderContextError;
+use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 
 use crate::input::binds::*;
 use crate::input::MousePos;
