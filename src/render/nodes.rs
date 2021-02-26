@@ -179,6 +179,140 @@ impl NodeDrawSystem {
         cache_lock.cached_vertex_buffer.is_some()
     }
 
+    pub fn draw_primary<'a, VI>(
+        &self,
+        builder: &'a mut AutoCommandBufferBuilder,
+        dynamic_state: &DynamicState,
+        vertices: Option<VI>,
+        view: View,
+        offset: Point,
+        node_width: f32,
+        use_lines: bool,
+    ) -> Result<&'a mut AutoCommandBufferBuilder>
+    where
+        VI: IntoIterator<Item = Vertex>,
+        VI::IntoIter: ExactSizeIterator,
+    {
+        let min_node_width = 2.0;
+        let use_rect_pipeline = !use_lines
+            || (use_lines && view.scale < (node_width / min_node_width));
+
+        let viewport_dims = {
+            let viewport = dynamic_state
+                .viewports
+                .as_ref()
+                .and_then(|v| v.get(0))
+                .unwrap();
+            viewport.dimensions
+        };
+
+        #[rustfmt::skip]
+        let view_pc = {
+            // is this correct?
+            let model_mat = glm::mat4(
+                1.0, 0.0, 0.0, offset.x,
+                0.0, 1.0, 0.0, offset.y,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0
+            );
+
+            let view_mat = view.to_scaled_matrix();
+
+            let width = viewport_dims[0];
+            let height = viewport_dims[1];
+
+            let viewport_mat = view::viewport_scale(width, height);
+
+            let matrix = viewport_mat * view_mat * model_mat;
+
+            let view_data = view::mat4_to_array(&matrix);
+
+            vs::ty::View {
+                node_width,
+                viewport_dims,
+                view: view_data,
+                scale: view.scale,
+
+            }
+        };
+
+        let data_buffer = {
+            let buffer_usage = BufferUsage {
+                storage_buffer: true,
+                ..BufferUsage::none()
+            };
+
+            let data_iter = (0..((viewport_dims[0] as u32)
+                * (viewport_dims[1] as u32)))
+                .map(|_| 0u32);
+            CpuAccessibleBuffer::from_iter(
+                self.gfx_queue.device().clone(),
+                buffer_usage,
+                false,
+                data_iter,
+            )?
+        };
+
+        let vertex_buffer = {
+            let mut cache_lock = self.caches.lock();
+
+            cache_lock.node_id_color_buffer = Some(data_buffer.clone());
+
+            let inner_buf = if let Some(vertices) = vertices {
+                println!("replacing vertex cache");
+                let chunk = self.vertex_buffer_pool.chunk(vertices)?;
+                let arc_chunk = Arc::new(chunk);
+                cache_lock.cached_vertex_buffer = Some(arc_chunk.clone());
+                arc_chunk
+            } else {
+                cache_lock.cached_vertex_buffer.as_ref().unwrap().clone()
+            };
+
+            inner_buf
+        };
+
+        if use_rect_pipeline {
+            let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+            let set = {
+                let set = PersistentDescriptorSet::start(layout.clone())
+                    .add_buffer(data_buffer.clone())?;
+                let set = set.build()?;
+                Arc::new(set)
+            };
+
+            builder.draw(
+                self.rect_pipeline.clone(),
+                &dynamic_state,
+                vec![vertex_buffer],
+                set.clone(),
+                view_pc,
+            )?;
+        } else {
+            let layout = self.line_pipeline.descriptor_set_layout(0).unwrap();
+            let set = {
+                let set = PersistentDescriptorSet::start(layout.clone())
+                    .add_buffer(data_buffer.clone())?;
+                let set = set.build()?;
+                Arc::new(set)
+            };
+
+            // let line_width = (50.0 / view.scale).max(2.0);
+            let line_width = (50.0 / view.scale).max(min_node_width);
+            let mut dynamic_state = dynamic_state.clone();
+            dynamic_state.line_width = Some(line_width);
+
+            builder.draw(
+                self.line_pipeline.clone(),
+                &dynamic_state,
+                vec![vertex_buffer],
+                set.clone(),
+                view_pc,
+            )?;
+        }
+
+        Ok(builder)
+    }
+
     pub fn draw<VI>(
         &self,
         dynamic_state: &DynamicState,

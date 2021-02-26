@@ -22,7 +22,8 @@ use vulkano::{
     device::{Device, Queue},
     format::Format,
     framebuffer::{
-        Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
+        Framebuffer, FramebufferAbstract, RenderPassAbstract, RenderPassDesc,
+        Subpass,
     },
     image::{AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess},
     instance::PhysicalDevice,
@@ -40,6 +41,8 @@ pub type SubPoolChunk<T> = vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<
     T,
     std::sync::Arc<vulkano::memory::pool::StdMemoryPool>,
 >;
+
+use crate::util::*;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Vertex {
@@ -136,6 +139,8 @@ impl SinglePassMSAADepth {
             samples,
         );
 
+        use vulkano::image::ImageLayout;
+
         let render_pass = vulkano::single_pass_renderpass!(
         gfx_queue.device().clone(),
         attachments: {
@@ -144,12 +149,18 @@ impl SinglePassMSAADepth {
                 store: DontCare,
                 format: output_format,
                 samples: samples,
+                initial_layout: ImageLayout::Undefined,
+                final_layout: ImageLayout::ColorAttachmentOptimal,
             },
             color: {
                 load: Clear,
                 store: Store,
                 format: output_format,
                 samples: 1,
+                // initial_layout: ImageLayout::ColorAttachmentOptimal,
+                // initial_layout: ImageLayout::Undefined,
+                initial_layout: ImageLayout::ShaderReadOnlyOptimal,
+                final_layout: ImageLayout::ShaderReadOnlyOptimal,
             },
             depth: {
                 load: Clear,
@@ -164,6 +175,18 @@ impl SinglePassMSAADepth {
             resolve: [color],
         }
         )?;
+
+        println!();
+        println!("SinglePassMSAADepth render pass info");
+        let num_attch = render_pass.num_attachments();
+        println!("num. attachments: {}", num_attch);
+        for i in 0..num_attch {
+            let desc = render_pass.attachment_desc(i);
+            println!("{} - {:?}", i, desc);
+        }
+        println!();
+
+        // println!("render_pass: {:?}", render_pass);
 
         let render_pass = Arc::new(render_pass);
 
@@ -217,6 +240,16 @@ impl SinglePassMSAADepth {
             .add(image.clone())?
             .add(depth.clone())?
             .build()?;
+
+        // println!();
+        // println!("SinglePassMSAADepth framebuffer info");
+        // let num_attch = framebuffer.num_attachments();
+        // println!("num. attachments: {}", num_attch);
+        // for i in 0..num_attch {
+        //     let desc = framebuffer.attachment_desc(i);
+        //     println!("{} - {:?}", i, desc);
+        // }
+        // println!();
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
@@ -323,18 +356,34 @@ pub struct OffscreenImage {
 }
 
 impl OffscreenImage {
-    pub fn new(gfx_queue: Arc<Queue>, width: u32, height: u32) -> Result<Self> {
-        let color = AttachmentImage::with_usage(
+    fn create_image(
+        gfx_queue: &Queue,
+        width: u32,
+        height: u32,
+    ) -> Result<Arc<AttachmentImage>> {
+        let usage = ImageUsage {
+            // color_attachment: true,
+            sampled: true,
+            transfer_destination: true,
+            ..ImageUsage::none()
+        };
+
+        println!("OffscreenImage create_image usage: {:#?}", usage);
+
+        AttachmentImage::with_usage(
             gfx_queue.device().clone(),
             [width, height],
             Format::R8G8B8A8Unorm,
-            ImageUsage {
-                color_attachment: true,
-                sampled: true,
-                transfer_destination: true,
-                ..ImageUsage::none()
-            },
-        )?;
+            usage,
+        )
+        .map_err(|e| e.into())
+    }
+
+    pub fn new(gfx_queue: Arc<Queue>, width: u32, height: u32) -> Result<Self> {
+        let color = Self::create_image(&gfx_queue, width, height)?;
+
+        println!("OffscreenImage::new()");
+        print_image_usage(&color);
 
         let sampler = Sampler::new(
             gfx_queue.device().clone(),
@@ -363,17 +412,10 @@ impl OffscreenImage {
             return Ok(false);
         }
 
-        let color = AttachmentImage::with_usage(
-            self.gfx_queue.device().clone(),
-            [width, height],
-            Format::R8G8B8A8Unorm,
-            ImageUsage {
-                color_attachment: true,
-                sampled: true,
-                transfer_destination: true,
-                ..ImageUsage::none()
-            },
-        )?;
+        let color = Self::create_image(&self.gfx_queue, width, height)?;
+
+        println!("OffscreenImage::recreate()");
+        print_image_usage(&color);
 
         self.color = color;
         self.dims = [width, height];

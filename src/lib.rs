@@ -5,4 +5,5 @@ pub mod graph_query;
 pub mod input;
 pub mod render;
 pub mod universe;
+pub mod util;
 pub mod view;

@@ -1,5 +1,5 @@
-use vulkano::command_buffer::AutoCommandBuffer;
 use vulkano::command_buffer::DynamicState;
+use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
 use vulkano::device::Queue;
 use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 use vulkano::sync::GpuFuture;
@@ -18,6 +18,7 @@ use handlegraph::handle::NodeId;
 use crate::geometry::*;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
+use vulkano::command_buffer::auto::AutoCommandBufferBuilderContextError;
 
 use crate::input::binds::*;
 use crate::input::MousePos;
@@ -107,6 +108,38 @@ impl MainView {
 
     pub fn has_vertices(&self) -> bool {
         !self.vertices.is_empty()
+    }
+
+    pub fn draw_nodes_primary<'a>(
+        &self,
+        builder: &'a mut AutoCommandBufferBuilder,
+        dynamic_state: &DynamicState,
+        offset: Point,
+    ) -> Result<&'a mut AutoCommandBufferBuilder> {
+        let view = self.view.load();
+        let node_width = {
+            let mut width = self.base_node_width;
+            if view.scale > 100.0 {
+                width *= view.scale / 100.0;
+            }
+            width
+        };
+
+        let vertices = if self.node_draw_system.has_cached_vertices() {
+            None
+        } else {
+            Some(self.vertices.iter().copied())
+        };
+
+        self.node_draw_system.draw_primary(
+            builder,
+            dynamic_state,
+            vertices,
+            view,
+            offset,
+            node_width,
+            false,
+        )
     }
 
     pub fn draw_nodes(

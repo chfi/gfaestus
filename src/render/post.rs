@@ -105,6 +105,50 @@ impl PostDrawSystem {
         }
     }
 
+    pub fn draw_primary<'a, C>(
+        &self,
+        builder: &'a mut AutoCommandBufferBuilder,
+        color_input: C,
+        sampler: Arc<Sampler>,
+        dynamic_state: &DynamicState,
+    ) -> Result<&'a mut AutoCommandBufferBuilder>
+    where
+        C: ImageViewAccess + Send + Sync + 'static,
+    {
+        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
+
+        let set = {
+            let set = PersistentDescriptorSet::start(layout.clone())
+                .add_sampled_image(color_input, sampler)?;
+            let set = set.build()?;
+            Arc::new(set)
+        };
+
+        let viewport_dims = {
+            let viewport = dynamic_state
+                .viewports
+                .as_ref()
+                .and_then(|v| v.get(0))
+                .unwrap();
+            viewport.dimensions
+        };
+
+        let pc = vs::ty::Dims {
+            width: viewport_dims[0],
+            height: viewport_dims[1],
+        };
+
+        builder.draw(
+            self.pipeline.clone(),
+            &dynamic_state,
+            vec![self.vertex_buffer.clone()],
+            set.clone(),
+            pc,
+        )?;
+
+        Ok(builder)
+    }
+
     pub fn draw<C>(
         &self,
         color_input: C,
