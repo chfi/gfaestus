@@ -75,12 +75,17 @@ pub struct RenderPipeline {
     final_dontcare_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
 
     offscreen_color: OffscreenImage,
+    offscreen_color_2: OffscreenImage,
     offscreen_mask: OffscreenImage,
 }
 
 impl RenderPipeline {
     pub fn offscreen_color(&self) -> &OffscreenImage {
         &self.offscreen_color
+    }
+
+    pub fn offscreen_color_2(&self) -> &OffscreenImage {
+        &self.offscreen_color_2
     }
 
     pub fn offscreen_mask(&self) -> &OffscreenImage {
@@ -214,6 +219,8 @@ impl RenderPipeline {
 
         let offscreen_color =
             OffscreenImage::new(gfx_queue.clone(), width, height)?;
+        let offscreen_color_2 =
+            OffscreenImage::new(gfx_queue.clone(), width, height)?;
         let offscreen_mask =
             OffscreenImage::new(gfx_queue.clone(), width, height)?;
 
@@ -224,6 +231,7 @@ impl RenderPipeline {
             offscreen_msaa_pass,
             final_dontcare_pass,
             offscreen_color,
+            offscreen_color_2,
             offscreen_mask,
             samples,
         })
@@ -235,6 +243,7 @@ impl RenderPipeline {
         height: u32,
     ) -> Result<()> {
         self.offscreen_color.recreate(width, height)?;
+        self.offscreen_color_2.recreate(width, height)?;
         self.offscreen_mask.recreate(width, height)?;
 
         Ok(())
@@ -295,6 +304,27 @@ impl RenderPipeline {
         let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
             .add(intermediary.clone())?
             .add(self.offscreen_color.image().clone())?
+            .build()?;
+
+        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
+    }
+
+    pub fn offscreen_color_2_framebuffer(
+        &self,
+    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
+        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
+            .width_height();
+
+        let intermediary = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            Format::R8G8B8A8Unorm,
+        )?;
+
+        let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
+            .add(intermediary.clone())?
+            .add(self.offscreen_color_2.image().clone())?
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)

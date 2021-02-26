@@ -206,6 +206,7 @@ fn main() {
 
     let post_draw_system = PostDrawSystem::new(
         queue.clone(),
+        Subpass::from(render_pipeline.offscreen_pass().clone(), 0).unwrap(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     );
 
@@ -502,6 +503,9 @@ fn main() {
                     .dontcare_framebuffer(images[image_num].clone())
                     .unwrap();
 
+                let sel_framebuffer =
+                    render_pipeline.offscreen_color_2_framebuffer().unwrap();
+
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(
                         device.clone(),
@@ -555,14 +559,6 @@ fn main() {
                     )
                     .unwrap();
 
-                builder
-                    .begin_render_pass(
-                        framebuffer.clone(),
-                        SubpassContents::Inline,
-                        vec![vulkano::format::ClearValue::None],
-                    )
-                    .unwrap();
-
                 let color_img =
                     render_pipeline.offscreen_color().image().clone();
                 let color_sampler =
@@ -571,6 +567,87 @@ fn main() {
                 let mask_img = render_pipeline.offscreen_mask().image().clone();
                 let mask_sampler =
                     render_pipeline.offscreen_mask().sampler().clone();
+                /*
+                builder
+                    .begin_render_pass(
+                        framebuffer.clone(),
+                        SubpassContents::Inline,
+                        vec![vulkano::format::ClearValue::None],
+                    )
+                    .unwrap();
+
+
+                post_draw_system
+                    .blur_primary(
+                        &mut builder,
+                        color_img,
+                        color_sampler,
+                        &dynamic_state,
+                        false,
+                    )
+                    .unwrap();
+
+                // post_draw_system
+                //     .edge_primary(
+                //         &mut builder,
+                //         mask_img,
+                //         mask_sampler,
+                //         &dynamic_state,
+                //         true,
+                //     )
+                //     .unwrap();
+
+                builder.end_render_pass().unwrap();
+
+                */
+                builder
+                    .begin_render_pass(
+                        sel_framebuffer,
+                        SubpassContents::Inline,
+                        vec![
+                            [0.0, 0.0, 0.0, 1.0].into(),
+                            [0.0, 0.0, 0.0, 1.0].into(),
+                        ],
+                    )
+                    .unwrap();
+
+                post_draw_system
+                    .edge_primary(
+                        &mut builder,
+                        mask_img,
+                        mask_sampler,
+                        &dynamic_state,
+                        true,
+                    )
+                    .unwrap();
+
+                builder.end_render_pass().unwrap();
+
+                let command_buffer = builder.build().unwrap();
+
+                let second_pass_future = first_pass_future
+                    .then_execute(queue.clone(), command_buffer)
+                    .unwrap();
+
+                let mut builder =
+                    AutoCommandBufferBuilder::primary_one_time_submit(
+                        device.clone(),
+                        queue.family(),
+                    )
+                    .unwrap();
+
+                builder
+                    .begin_render_pass(
+                        framebuffer.clone(),
+                        SubpassContents::Inline,
+                        vec![vulkano::format::ClearValue::None],
+                    )
+                    .unwrap();
+
+                let color_2_img =
+                    render_pipeline.offscreen_color_2().image().clone();
+                let color_2_sampler =
+                    render_pipeline.offscreen_color_2().sampler().clone();
 
                 post_draw_system
                     .blur_primary(
@@ -583,10 +660,10 @@ fn main() {
                     .unwrap();
 
                 post_draw_system
-                    .edge_primary(
+                    .blur_primary(
                         &mut builder,
-                        mask_img,
-                        mask_sampler,
+                        color_2_img,
+                        color_2_sampler,
                         &dynamic_state,
                         true,
                     )
@@ -627,7 +704,7 @@ fn main() {
 
                 let command_buffer = builder.build().unwrap();
 
-                let future = first_pass_future
+                let future = second_pass_future
                     .join(future)
                     .then_execute(queue.clone(), command_buffer)
                     .unwrap()

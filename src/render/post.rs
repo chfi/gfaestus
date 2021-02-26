@@ -59,7 +59,11 @@ pub struct PostDrawSystem {
 }
 
 impl PostDrawSystem {
-    pub fn new<R>(gfx_queue: Arc<Queue>, subpass: Subpass<R>) -> Self
+    pub fn new<R>(
+        gfx_queue: Arc<Queue>,
+        blur_pass: Subpass<R>,
+        edge_pass: Subpass<R>,
+    ) -> Self
     where
         R: RenderPassAbstract + Clone + Send + Sync + 'static,
     {
@@ -81,7 +85,7 @@ impl PostDrawSystem {
                     .triangle_list()
                     .viewports_dynamic_scissors_irrelevant(1)
                     .fragment_shader(blur_fs.main_entry_point(), ())
-                    .render_pass(subpass.clone())
+                    .render_pass(blur_pass)
                     .blend_alpha_blending()
                     .build(gfx_queue.device().clone())
                     .unwrap(),
@@ -96,7 +100,7 @@ impl PostDrawSystem {
                     .triangle_list()
                     .viewports_dynamic_scissors_irrelevant(1)
                     .fragment_shader(edge_fs.main_entry_point(), ())
-                    .render_pass(subpass)
+                    .render_pass(edge_pass)
                     .blend_alpha_blending()
                     .build(gfx_queue.device().clone())
                     .unwrap(),
