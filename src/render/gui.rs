@@ -18,7 +18,11 @@ use vulkano::{
     sync::GpuFuture,
 };
 use vulkano::{
-    descriptor::descriptor_set::PersistentDescriptorSet, device::Queue,
+    descriptor::descriptor_set::{
+        PersistentDescriptorSet, PersistentDescriptorSetImg,
+        PersistentDescriptorSetSampler,
+    },
+    device::Queue,
 };
 
 use vulkano::format::R8Unorm;
@@ -63,12 +67,17 @@ vulkano::impl_vertex!(GuiVertex, pos, uv, color);
 
 struct GuiTexture {
     version: u64,
-    texture: Arc<ImmutableImage<R8Unorm>>,
+    _texture: Arc<ImmutableImage<R8Unorm>>,
+    descriptor: Arc<
+        PersistentDescriptorSet<(
+            ((), PersistentDescriptorSetImg<Arc<ImmutableImage<R8Unorm>>>),
+            PersistentDescriptorSetSampler,
+        )>,
+    >,
 }
 
 pub struct GuiDrawSystem {
     gfx_queue: Arc<Queue>,
-    // texture_cache: FxHashMap<u64, Arc<ImmutableImage<R8Unorm>>>,
     sampler: Arc<Sampler>,
     cached_texture: Mutex<Option<GuiTexture>>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
@@ -111,15 +120,10 @@ impl GuiDrawSystem {
             gfx_queue.device().clone(),
             Filter::Linear,
             Filter::Linear,
-            // Filter::Nearest,
-            // Filter::Nearest,
             MipmapMode::Nearest,
             SamplerAddressMode::ClampToEdge,
             SamplerAddressMode::ClampToEdge,
             SamplerAddressMode::ClampToEdge,
-            // SamplerAddressMode::Repeat,
-            // SamplerAddressMode::Repeat,
-            // SamplerAddressMode::Repeat,
             0.0,
             1.0,
             0.0,
@@ -174,11 +178,25 @@ impl GuiDrawSystem {
             self.gfx_queue.clone(),
         )?;
 
+        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
+
+        let set: Arc<
+            PersistentDescriptorSet<(
+                ((), PersistentDescriptorSetImg<Arc<ImmutableImage<R8Unorm>>>),
+                PersistentDescriptorSetSampler,
+            )>,
+        > = Arc::new(
+            PersistentDescriptorSet::start(layout.clone())
+                .add_sampled_image(img.clone(), self.sampler.clone())?
+                .build()?,
+        );
+
         {
             let mut cache_lock = self.cached_texture.lock();
             *cache_lock = Some(GuiTexture {
                 version: texture.version,
-                texture: img,
+                _texture: img,
+                descriptor: set,
             });
         }
 
@@ -204,7 +222,6 @@ impl GuiDrawSystem {
         dynamic_state: &DynamicState,
         clipped_meshes: &[egui::ClippedMesh],
     ) -> Result<Vec<AutoCommandBuffer>> {
-        // ) -> Result<AutoCommandBuffer> {
         let viewport_dims = {
             let viewport = dynamic_state
                 .viewports
@@ -219,19 +236,10 @@ impl GuiDrawSystem {
             height: viewport_dims[1],
         };
 
-        let texture = {
+        let set = {
             let lock = self.cached_texture.lock();
-            lock.as_ref().unwrap().texture.clone()
+            lock.as_ref().unwrap().descriptor.clone()
         };
-
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-        let set = Arc::new(
-            PersistentDescriptorSet::start(layout.clone())
-                .add_sampled_image(texture.clone(), self.sampler.clone())
-                .unwrap()
-                .build()
-                .unwrap(),
-        );
 
         use rayon::prelude::*;
 
@@ -293,52 +301,5 @@ impl GuiDrawSystem {
             .collect::<Vec<_>>();
 
         Ok(res)
-
-        /*
-        for clipped in clipped_meshes.into_iter() {
-            vertices.clear();
-            indices.clear();
-
-            let _rect = &clipped.0;
-            let mesh = &clipped.1;
-
-            indices.extend(mesh.indices.iter().copied());
-
-            vertices.extend(mesh.vertices.iter().map(|v| {
-                let pos = [v.pos.x, v.pos.y];
-                let uv = [v.uv.x, v.uv.y];
-                let (r, g, b, a) = v.color.to_tuple();
-                let color = [
-                    (r as f32) / 255.0,
-                    (g as f32) / 255.0,
-                    (b as f32) / 255.0,
-                    (a as f32) / 255.0,
-                ];
-                GuiVertex { pos, uv, color }
-            }));
-
-            let vertex_buffer = self
-                .vertex_buffer_pool
-                .chunk(vertices.iter().copied())
-                .unwrap();
-            let index_buffer = self
-                .index_buffer_pool
-                .chunk(indices.iter().copied())
-                .unwrap();
-
-            builder.draw_indexed(
-                self.pipeline.clone(),
-                &dynamic_state,
-                vec![Arc::new(vertex_buffer.clone())],
-                index_buffer.clone(),
-                set.clone(),
-                screen_size_pc,
-            )?;
-        }
-
-        let builder = builder.build()?;
-
-        Ok(builder)
-        */
     }
 }
