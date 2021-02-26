@@ -111,6 +111,7 @@ impl PostDrawSystem {
         color_input: C,
         sampler: Arc<Sampler>,
         dynamic_state: &DynamicState,
+        enabled: bool,
     ) -> Result<&'a mut AutoCommandBufferBuilder>
     where
         C: ImageViewAccess + Send + Sync + 'static,
@@ -133,9 +134,12 @@ impl PostDrawSystem {
             viewport.dimensions
         };
 
+        let enabled = if enabled { 1 } else { 0 };
+
         let pc = vs::ty::Dims {
             width: viewport_dims[0],
             height: viewport_dims[1],
+            enabled,
         };
 
         builder.draw(
@@ -154,6 +158,7 @@ impl PostDrawSystem {
         color_input: C,
         sampler: Arc<Sampler>,
         dynamic_state: &DynamicState,
+        enabled: bool,
     ) -> Result<AutoCommandBuffer>
     where
         C: ImageViewAccess + Send + Sync + 'static,
@@ -165,7 +170,13 @@ impl PostDrawSystem {
                 self.pipeline.clone().subpass(),
             )?;
 
-        self.draw_primary(&mut builder, color_input, sampler, dynamic_state)?;
+        self.draw_primary(
+            &mut builder,
+            color_input,
+            sampler,
+            dynamic_state,
+            enabled,
+        )?;
 
         let builder = builder.build()?;
 

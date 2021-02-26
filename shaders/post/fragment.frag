@@ -7,6 +7,7 @@ layout (location = 0) out vec4 f_color;
 layout (push_constant) uniform Dims {
   float width;
   float height;
+  bool enabled;
 } dims;
 
 vec2 uv_coord(vec2 coord) {
@@ -34,19 +35,25 @@ void main() {
   row2[1] = 0.123317;
   row2[2] = 0.077847;
 
-  vec3 result = texture(u_color_sampler, uv).rgb * row1[1];
 
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, -1.0))).rgb * row0[0];
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, 0.0))).rgb * row0[1];
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, 1.0))).rgb * row0[2];
+  if (dims.enabled) {
+    vec3 result = texture(u_color_sampler, uv).rgb * row1[1];
 
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(0.0, -1.0))).rgb * row1[0];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, -1.0))).rgb * row0[0];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, 0.0))).rgb * row0[1];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(-1.0, 1.0))).rgb * row0[2];
 
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(0.0, 1.0))).rgb * row1[2];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(0.0, -1.0))).rgb * row1[0];
 
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, -1.0))).rgb * row2[0];
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 0.0))).rgb * row2[1];
-  result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 1.0))).rgb * row2[2];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(0.0, 1.0))).rgb * row1[2];
 
-  f_color = vec4(result, 1.0);
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, -1.0))).rgb * row2[0];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 0.0))).rgb * row2[1];
+    result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 1.0))).rgb * row2[2];
+
+    f_color = vec4(result, 1.0);
+  } else {
+    vec3 result = texture(u_color_sampler, uv).rgb;
+    f_color = vec4(result, 1.0);
+  }
 }

@@ -26,9 +26,12 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
   float min_side = min(screen_w, screen_h);
   float pixel_size = 1 / min_side;
 
+  // this will need some more logic to make it look good in all cases
+  /*
   if (length(to_pos1) < pixel_size * 0.3) {
     return;
   }
+  */
 
   bool wider = screen_w >= screen_h;
   float ratio = wider ? (screen_w / screen_h) : (screen_h / screen_w);

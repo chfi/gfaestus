@@ -5,6 +5,7 @@ layout (location = 0) in vec2 position;
 layout (push_constant) uniform Dims {
   float width;
   float height;
+  bool enabled;
 } dims;
 
 void main() {

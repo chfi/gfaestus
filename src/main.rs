@@ -452,11 +452,11 @@ fn main() {
 
                         app.update_dims((width, height));
 
-                        let new_image = offscreen_image
+                        let _recreated_image = offscreen_image
                             .recreate(width as u32, height as u32)
                             .unwrap();
 
-                        println!("recreated offscreen_image: {}", new_image);
+                        // println!("recreated offscreen_image: {}", new_image);
                     }
 
                     recreate_swapchain = false;
@@ -559,6 +559,7 @@ fn main() {
                         os_img,
                         os_sampler,
                         &dynamic_state,
+                        false,
                     )
                     .unwrap();
 
