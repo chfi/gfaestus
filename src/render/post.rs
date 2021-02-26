@@ -165,89 +165,10 @@ impl PostDrawSystem {
                 self.pipeline.clone().subpass(),
             )?;
 
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-
-        let set = {
-            let set = PersistentDescriptorSet::start(layout.clone())
-                .add_sampled_image(color_input, sampler)?;
-            let set = set.build()?;
-            Arc::new(set)
-        };
-
-        let viewport_dims = {
-            let viewport = dynamic_state
-                .viewports
-                .as_ref()
-                .and_then(|v| v.get(0))
-                .unwrap();
-            viewport.dimensions
-        };
-
-        let pc = vs::ty::Dims {
-            width: viewport_dims[0],
-            height: viewport_dims[1],
-        };
-
-        builder.draw(
-            self.pipeline.clone(),
-            &dynamic_state,
-            vec![self.vertex_buffer.clone()],
-            set.clone(),
-            pc,
-        )?;
+        self.draw_primary(&mut builder, color_input, sampler, dynamic_state)?;
 
         let builder = builder.build()?;
 
         Ok(builder)
     }
-
-    /*
-    pub fn draw_blur<C, M>(
-        &self,
-        color_input: C,
-        mask_input: M,
-        dynamic_state: &DynamicState,
-    ) -> Result<AutoCommandBuffer>
-    where
-        C: ImageViewAccess + Send + Sync + 'static,
-        M: ImageViewAccess + Send + Sync + 'static,
-    {
-        let mut builder: AutoCommandBufferBuilder =
-            AutoCommandBufferBuilder::secondary_graphics(
-                self.gfx_queue.device().clone(),
-                self.gfx_queue.family(),
-                self.pipeline.clone().subpass(),
-            )?;
-
-        let layout = self.pipeline.descriptor_set_layout(0).unwrap();
-
-        // let set = {
-        //     let set = PersistentDescriptorSet::start(layout.clone())
-        //         .add_image(color_input)?
-        //         .add_image(mask_input)?;
-        //     let set = set.build()?;
-        //     Arc::new(set)
-        // };
-
-        let set = {
-            let set = PersistentDescriptorSet::start(layout.clone())
-                .add_sampled_image(color_input, self.sampler.clone())?
-                .add_sampled_image(mask_input, self.sampler.clone())?;
-            let set = set.build()?;
-            Arc::new(set)
-        };
-
-        builder.draw(
-            self.pipeline.clone(),
-            &dynamic_state,
-            vec![self.vertex_buffer.clone()],
-            set.clone(),
-            (),
-        )?;
-
-        let builder = builder.build()?;
-
-        Ok(builder)
-    }
-    */
 }

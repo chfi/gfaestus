@@ -635,10 +635,6 @@ fn main() {
                     let fps = 1.0 / avg;
                     let avg_ms = avg * 1000.0;
                     gui.set_frame_rate(frame, fps, avg_ms);
-                    // println!("time: {:.2}\tframe: {}", t, frame);
-                    // println!("avg update time: {:.6}\t{} FPS", avg, fps);
-                    // println!("node vertex & color count: {}", vertex_count);
-                    // println!("view scale {}\tlast width: {}", view.scale, last_width);
                 }
 
                 frame += 1;
