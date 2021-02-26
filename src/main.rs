@@ -31,8 +31,6 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-use std::sync::Arc;
-
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
 use gfaestus::app::{App, AppMsg};
@@ -206,14 +204,11 @@ fn main() {
         SinglePassMSAADepth::new(queue.clone(), None, Format::R8G8B8A8Unorm)
             .unwrap();
 
-    let single_pass =
-        SinglePass::new(queue.clone(), swapchain.format(), true).unwrap();
-
     let single_pass_dontcare =
         SinglePass::new(queue.clone(), swapchain.format(), false).unwrap();
 
     let post_draw_system =
-        PostDrawSystem::new(queue.clone(), single_pass.subpass());
+        PostDrawSystem::new(queue.clone(), single_pass_dontcare.subpass());
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -234,13 +229,13 @@ fn main() {
     let mut main_view = MainView::new(
         queue.clone(),
         single_pass_msaa_depth_offscreen.subpass(),
-        // single_pass_msaa_offscreen.subpass(),
-        single_pass.subpass(),
+        single_pass_dontcare.subpass(),
     )
     .unwrap();
 
     let mut gui =
-        GfaestusGui::new(queue.clone(), single_pass.subpass()).unwrap();
+        GfaestusGui::new(queue.clone(), single_pass_dontcare.subpass())
+            .unwrap();
 
     gui.set_graph_stats(stats);
 
@@ -484,25 +479,24 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
-                // let framebuffer = single_pass_msaa
-                //     .framebuffer(images[image_num].clone())
-                //     .unwrap();
-
-                let framebuffer =
-                    single_pass.framebuffer(images[image_num].clone()).unwrap();
-
-                // let msaa_offscreen_framebuffer = single_pass_msaa_offscreen
-                //     .framebuffer(offscreen_image.image().clone())
-                //     .unwrap();
-
+                // the framebuffer used when drawing nodes to the offscreen image
                 let msaa_depth_offscreen_framebuffer =
                     single_pass_msaa_depth_offscreen
                         .framebuffer(offscreen_image.image().clone())
                         .unwrap();
 
-                let clear = [0.0, 0.0, 0.05, 1.0];
+                // the framebuffer used when drawing the
+                // post-processing stage and GUI to the screen --
+                // since the post-processing shader fills every pixel
+                // of the image, we can use the DontCare load op for
+                // both the post-processing and the GUI
 
-                let offscreen_clear_values = vec![[0.0, 0.0, 0.0, 1.0].into()];
+                // the framebuffer used when drawing the GUI to the
+                // screen -- has to use a separate render pass where
+                // the color image load op is DontCare
+                let framebuffer = single_pass_dontcare
+                    .framebuffer(images[image_num].clone())
+                    .unwrap();
 
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(
@@ -511,34 +505,24 @@ fn main() {
                     )
                     .unwrap();
 
+                let clear = [0.0, 0.0, 0.05, 1.0];
                 let msaa_depth_clear_values =
                     vec![clear.into(), clear.into(), 1.0f32.into()];
 
                 builder
                     .begin_render_pass(
                         msaa_depth_offscreen_framebuffer,
-                        // SubpassContents::SecondaryCommandBuffers,
-                        SubpassContents::Inline,
+                        SubpassContents::SecondaryCommandBuffers,
                         msaa_depth_clear_values,
                     )
                     .unwrap();
 
-                main_view
-                    .draw_nodes_primary(
-                        &mut builder,
-                        &dynamic_state,
-                        universe.offset,
-                    )
-                    .unwrap();
-
-                /*
                 unsafe {
                     let secondary_buf = main_view
                         .draw_nodes(&dynamic_state, universe.offset)
                         .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }
-                */
 
                 builder.end_render_pass().unwrap();
 
@@ -562,7 +546,7 @@ fn main() {
                     .begin_render_pass(
                         framebuffer.clone(),
                         SubpassContents::Inline,
-                        offscreen_clear_values.clone(),
+                        vec![vulkano::format::ClearValue::None],
                     )
                     .unwrap();
 
@@ -580,17 +564,21 @@ fn main() {
 
                 builder.end_render_pass().unwrap();
 
-                let framebuffer_dc = single_pass_dontcare
-                    .framebuffer(images[image_num].clone())
-                    .unwrap();
-
                 builder
                     .begin_render_pass(
-                        framebuffer_dc,
+                        framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
                         vec![vulkano::format::ClearValue::None],
                     )
                     .unwrap();
+
+                if main_view.draw_grid {
+                    unsafe {
+                        let cmd_buf =
+                            main_view.draw_lines(&dynamic_state).unwrap();
+                        builder.execute_commands(cmd_buf).unwrap();
+                    }
+                }
 
                 let future = if let Some(gui_result) =
                     gui.end_frame_and_draw(&dynamic_state)
@@ -618,23 +606,6 @@ fn main() {
                         image_num,
                     )
                     .then_signal_fence_and_flush();
-
-                /*
-                let command_buffer = builder.build().unwrap();
-                let future = previous_frame_end
-                    .take()
-                    .unwrap()
-                    .join(acquire_future)
-                    .join(future)
-                    .then_execute(queue.clone(), command_buffer)
-                    .unwrap()
-                    .then_swapchain_present(
-                        queue.clone(),
-                        swapchain.clone(),
-                        image_num,
-                    )
-                    .then_signal_fence_and_flush();
-                */
 
                 match future {
                     Ok(future) => {

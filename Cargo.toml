@@ -33,3 +33,8 @@ handlegraph = "0.7.0-alpha.2"
 anyhow = "1.0"
 
 rustc-hash = "1.1"
+
+[profile.release]
+debug = true
+# overflow-checks = true
+debug-assertions = true
