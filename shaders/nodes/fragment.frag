@@ -21,11 +21,11 @@ void main() {
 
 
 
-  if (node_id == 436) {
+  // if (node_id == 436) {
     f_mask = vec4(1.0, 1.0, 1.0, 1.0);
-  } else {
-    f_mask = vec4(0.0, 0.0, 0.0, 0.0);
-  }
+  // } else {
+  //   f_mask = vec4(0.0, 0.0, 0.0, 0.0);
+  // }
 
   uint w = uint(vo.viewport_dims.x);
   uint h = uint(vo.viewport_dims.y);
