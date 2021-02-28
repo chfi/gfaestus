@@ -19,6 +19,7 @@ pub enum AppMsg {
 pub enum AppConfigMsg {
     ToggleSelectionEdgeDetect,
     ToggleSelectionEdgeBlur,
+    ToggleSelectionOutline,
 }
 
 pub struct App {
@@ -30,6 +31,7 @@ pub struct App {
 
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
+    pub selection_edge: bool,
 }
 
 impl App {
@@ -45,6 +47,7 @@ impl App {
 
             selection_edge_detect: true,
             selection_edge_blur: true,
+            selection_edge: true,
         }
     }
 
@@ -82,6 +85,9 @@ impl App {
             }
             AppConfigMsg::ToggleSelectionEdgeBlur => {
                 self.selection_edge_blur = !self.selection_edge_blur
+            }
+            AppConfigMsg::ToggleSelectionOutline => {
+                self.selection_edge = !self.selection_edge
             }
         }
     }

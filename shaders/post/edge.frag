@@ -87,7 +87,6 @@ void main() {
     f_color = vec4(result, result, result, result);
 
   } else {
-    vec3 result = texture(u_color_sampler, uv).rgb;
-    f_color = vec4(result, color.a);
+    f_color = color;
   }
 }

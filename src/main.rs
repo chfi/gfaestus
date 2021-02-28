@@ -208,8 +208,22 @@ fn main() {
         queue.clone(),
         Subpass::from(render_pipeline.post_processing_pass().clone(), 0)
             .unwrap(),
+        Subpass::from(render_pipeline.post_processing_pass().clone(), 0)
+            .unwrap(),
+    );
+
+    let post_draw_system_final = PostDrawSystem::new(
+        queue.clone(),
+        Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     );
+
+    // let post_draw_system = PostDrawSystem::new(
+    //     queue.clone(),
+    //     Subpass::from(render_pipeline.post_processing_pass().clone(), 0)
+    //         .unwrap(),
+    //     Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
+    // );
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -389,6 +403,7 @@ fn main() {
         gui.set_render_config(
             app.selection_edge_detect,
             app.selection_edge_blur,
+            app.selection_edge,
         );
 
         gui.set_hover_node(app.hover_node());
@@ -473,8 +488,6 @@ fn main() {
                         let _recreated_image = offscreen_image
                             .recreate(width as u32, height as u32)
                             .unwrap();
-
-                        // println!("recreated offscreen_image: {}", new_image);
                     }
 
                     recreate_swapchain = false;
@@ -505,23 +518,16 @@ fn main() {
                 let nodes_clear_values = vec![
                     clear.into(),
                     [0.0, 0.0, 0.0, 0.0].into(),
-                    // clear.into(),
-                    // [0.0, 0.0, 0.0, 1.0].into(),
                     clear.into(),
                     1.0f32.into(),
-                    // clear.into(),
                     [0.0, 0.0, 0.0, 0.0].into(),
-                    // [0.0, 0.0, 0.0, 1.0].into(),
                 ];
 
                 let selection_edge_framebuffer =
                     render_pipeline.selection_edge_color_framebuffer().unwrap();
 
-                let selection_edge_clear_values = vec![
-                    [0.0, 0.0, 0.0, 1.0].into(),
-                    // [0.0, 0.0, 0.0, 1.0].into(),
-                    vulkano::format::ClearValue::None,
-                ];
+                let selection_edge_clear_values =
+                    vec![[0.0, 0.0, 0.0, 0.0].into()];
 
                 // the framebuffer used when drawing the
                 // post-processing stage and GUI to the screen --
@@ -536,8 +542,10 @@ fn main() {
                     .final_framebuffer(images[image_num].clone())
                     .unwrap();
 
-                let final_clear_values =
-                    vec![vulkano::format::ClearValue::None];
+                let final_clear_values = vec![
+                    vulkano::format::ClearValue::None,
+                    vulkano::format::ClearValue::None,
+                ];
 
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(
@@ -589,39 +597,6 @@ fn main() {
                 let nodes_mask_sampler =
                     render_pipeline.nodes_mask().sampler().clone();
 
-                /*
-                builder
-                    .begin_render_pass(
-                        framebuffer.clone(),
-                        SubpassContents::Inline,
-                        vec![vulkano::format::ClearValue::None],
-                    )
-                    .unwrap();
-
-
-                post_draw_system
-                    .blur_primary(
-                        &mut builder,
-                        color_img,
-                        color_sampler,
-                        &dynamic_state,
-                        false,
-                    )
-                    .unwrap();
-
-                // post_draw_system
-                //     .edge_primary(
-                //         &mut builder,
-                //         mask_img,
-                //         mask_sampler,
-                //         &dynamic_state,
-                //         true,
-                //     )
-                //     .unwrap();
-
-                builder.end_render_pass().unwrap();
-
-                */
                 builder
                     .begin_render_pass(
                         selection_edge_framebuffer,
@@ -661,7 +636,7 @@ fn main() {
                     .begin_render_pass(
                         final_framebuffer.clone(),
                         SubpassContents::Inline,
-                        final_clear_values,
+                        final_clear_values.clone(),
                     )
                     .unwrap();
 
@@ -670,12 +645,7 @@ fn main() {
                 let selection_edge_sampler =
                     render_pipeline.selection_edge_color().sampler().clone();
 
-                // let color_2_img =
-                //     render_pipeline.offscreen_color_2().image().clone();
-                // let color_2_sampler =
-                //     render_pipeline.offscreen_color_2().sampler().clone();
-
-                post_draw_system
+                post_draw_system_final
                     .blur_primary(
                         &mut builder,
                         nodes_color_img,
@@ -686,32 +656,15 @@ fn main() {
                     .unwrap();
 
                 if app.selection_edge_blur {
-                    if app.selection_edge_detect {
-                        post_draw_system
-                            .blur_primary(
-                                &mut builder,
-                                selection_edge_img,
-                                selection_edge_sampler,
-                                &dynamic_state,
-                                true,
-                            )
-                            .unwrap();
-                    } else {
-                        let nodes_mask_img =
-                            render_pipeline.nodes_mask().image().clone();
-                        let nodes_mask_sampler =
-                            render_pipeline.nodes_mask().sampler().clone();
-
-                        post_draw_system
-                            .blur_primary(
-                                &mut builder,
-                                nodes_mask_img,
-                                nodes_mask_sampler,
-                                &dynamic_state,
-                                true,
-                            )
-                            .unwrap();
-                    }
+                    post_draw_system_final
+                        .blur_primary(
+                            &mut builder,
+                            selection_edge_img,
+                            selection_edge_sampler,
+                            &dynamic_state,
+                            true,
+                        )
+                        .unwrap();
                 }
 
                 builder.end_render_pass().unwrap();
@@ -720,7 +673,7 @@ fn main() {
                     .begin_render_pass(
                         final_framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
-                        vec![vulkano::format::ClearValue::None],
+                        final_clear_values,
                     )
                     .unwrap();
 
@@ -738,7 +691,6 @@ fn main() {
                     let (cmd_bufs, future) = gui_result.unwrap();
                     unsafe {
                         builder.execute_commands_from_vec(cmd_bufs).unwrap();
-                        // builder.execute_commands(cmd_buf).unwrap();
                     }
                     future.unwrap_or(sync::now(device.clone()).boxed())
                 } else {

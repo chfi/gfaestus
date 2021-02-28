@@ -65,7 +65,7 @@ pub struct RenderPipeline {
     samples: u32,
 
     offscreen_msaa_depth_mask_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
-    offscreen_msaa_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    offscreen_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
 
     final_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
 
@@ -95,7 +95,7 @@ impl RenderPipeline {
     pub fn post_processing_pass(
         &self,
     ) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
-        &self.offscreen_msaa_pass
+        &self.offscreen_pass
     }
 
     pub fn final_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
@@ -165,27 +165,21 @@ impl RenderPipeline {
             Arc::new(render_pass)
         };
 
-        let offscreen_msaa_pass = {
+        let offscreen_pass = {
             let render_pass = vulkano::single_pass_renderpass!(
                 gfx_queue.device().clone(),
                 attachments: {
-                    intermediary: {
-                        load: Clear,
-                        store: DontCare,
-                        format: Format::R8G8B8A8Unorm,
-                        samples: samples,
-                    },
                     color: {
-                        load: DontCare,
+                        load: Clear,
                         store: Store,
                         format: Format::R8G8B8A8Unorm,
                         samples: 1,
                     }
                 },
                 pass: {
-                    color: [intermediary],
+                    color: [color],
                     depth_stencil: {}
-                    resolve: [color],
+                    resolve: [],
                 }
             )?;
 
@@ -196,6 +190,12 @@ impl RenderPipeline {
             let render_pass = vulkano::single_pass_renderpass!(
             gfx_queue.device().clone(),
             attachments: {
+                intermediary: {
+                    load: DontCare,
+                    store: DontCare,
+                    format: final_format,
+                    samples: samples,
+                },
                 color: {
                     load: DontCare,
                     store: Store,
@@ -204,9 +204,9 @@ impl RenderPipeline {
                 }
             },
             pass: {
-                color: [color],
+                color: [intermediary],
                 depth_stencil: {}
-                resolve: [],
+                resolve: [color],
             }
                 )?;
 
@@ -224,7 +224,7 @@ impl RenderPipeline {
             gfx_queue,
             final_format,
             offscreen_msaa_depth_mask_pass,
-            offscreen_msaa_pass,
+            offscreen_pass,
             final_pass,
             nodes_color,
             nodes_mask,
@@ -310,19 +310,19 @@ impl RenderPipeline {
     pub fn selection_edge_color_framebuffer(
         &self,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        let img_dims =
-            ImageAccess::dimensions(self.selection_edge_color.image())
-                .width_height();
+        // let img_dims =
+        //     ImageAccess::dimensions(self.selection_edge_color.image())
+        //         .width_height();
 
-        let intermediary = AttachmentImage::transient_multisampled(
-            self.gfx_queue.device().clone(),
-            img_dims,
-            self.samples,
-            Format::R8G8B8A8Unorm,
-        )?;
+        // let intermediary = AttachmentImage::transient_multisampled(
+        //     self.gfx_queue.device().clone(),
+        //     img_dims,
+        //     self.samples,
+        //     Format::R8G8B8A8Unorm,
+        // )?;
 
-        let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
-            .add(intermediary.clone())?
+        let framebuffer = Framebuffer::start(self.offscreen_pass.clone())
+            // .add(intermediary.clone())?
             .add(self.selection_edge_color.image().clone())?
             .build()?;
 
@@ -336,7 +336,19 @@ impl RenderPipeline {
     where
         I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
     {
+        let img_dims =
+            ImageAccess::dimensions(self.selection_edge_color.image())
+                .width_height();
+
+        let intermediary = AttachmentImage::transient_multisampled(
+            self.gfx_queue.device().clone(),
+            img_dims,
+            self.samples,
+            self.final_format,
+        )?;
+
         let framebuffer = Framebuffer::start(self.final_pass.clone())
+            .add(intermediary)?
             .add(target.clone())?
             .build()?;
 

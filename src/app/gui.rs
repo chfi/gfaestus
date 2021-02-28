@@ -97,6 +97,7 @@ struct RenderConfigUi {
 
     selection_edge_detect: bool,
     selection_edge_blur: bool,
+    selection_edge: bool,
 
     lines: bool,
     // gui: bool,
@@ -110,6 +111,7 @@ impl std::default::Default for RenderConfigUi {
 
             selection_edge_detect: true,
             selection_edge_blur: true,
+            selection_edge: true,
 
             lines: true,
         }
@@ -312,9 +314,15 @@ impl GfaestusGui {
         );
     }
 
-    pub fn set_render_config(&mut self, edge_detect: bool, edge_blur: bool) {
+    pub fn set_render_config(
+        &mut self,
+        edge_detect: bool,
+        edge_blur: bool,
+        outline: bool,
+    ) {
         self.render_config_ui.selection_edge_detect = edge_detect;
         self.render_config_ui.selection_edge_blur = edge_blur;
+        self.render_config_ui.selection_edge = outline;
     }
 
     fn render_config_info(&self, pos: Point) {
@@ -554,6 +562,9 @@ impl GfaestusGui {
                         }
                         GuiInput::KeyToggleSelectionBlur => {
                             cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionEdgeBlur).unwrap();
+                        }
+                        GuiInput::KeyToggleSelectionOutline => {
+                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionOutline).unwrap();
                         }
                         _ => (),
                     }
