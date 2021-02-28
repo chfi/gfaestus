@@ -61,8 +61,8 @@ pub struct PostDrawSystem {
 impl PostDrawSystem {
     pub fn new<R>(
         gfx_queue: Arc<Queue>,
-        blur_pass: Subpass<R>,
         edge_pass: Subpass<R>,
+        blur_pass: Subpass<R>,
     ) -> Self
     where
         R: RenderPassAbstract + Clone + Send + Sync + 'static,

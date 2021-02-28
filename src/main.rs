@@ -206,7 +206,8 @@ fn main() {
 
     let post_draw_system = PostDrawSystem::new(
         queue.clone(),
-        Subpass::from(render_pipeline.offscreen_pass().clone(), 0).unwrap(),
+        Subpass::from(render_pipeline.post_processing_pass().clone(), 0)
+            .unwrap(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     );
 
@@ -228,8 +229,7 @@ fn main() {
 
     let mut main_view = MainView::new(
         queue.clone(),
-        Subpass::from(render_pipeline.offscreen_mask_pass().clone(), 0)
-            .unwrap(),
+        Subpass::from(render_pipeline.nodes_pass().clone(), 0).unwrap(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     )
     .unwrap();
@@ -487,34 +487,11 @@ fn main() {
                 }
 
                 // the framebuffer used when drawing nodes to the offscreen image
-                let msaa_depth_offscreen_framebuffer =
-                    render_pipeline.offscreen_color_mask_framebuffer().unwrap();
-
-                // the framebuffer used when drawing the
-                // post-processing stage and GUI to the screen --
-                // since the post-processing shader fills every pixel
-                // of the image, we can use the DontCare load op for
-                // both the post-processing and the GUI
-
-                // the framebuffer used when drawing the GUI to the
-                // screen -- has to use a separate render pass where
-                // the color image load op is DontCare
-                let framebuffer = render_pipeline
-                    .dontcare_framebuffer(images[image_num].clone())
-                    .unwrap();
-
-                let sel_framebuffer =
-                    render_pipeline.offscreen_color_2_framebuffer().unwrap();
-
-                let mut builder =
-                    AutoCommandBufferBuilder::primary_one_time_submit(
-                        device.clone(),
-                        queue.family(),
-                    )
-                    .unwrap();
+                let nodes_framebuffer =
+                    render_pipeline.nodes_framebuffer().unwrap();
 
                 let clear = [0.0, 0.0, 0.05, 1.0];
-                let msaa_depth_clear_values = vec![
+                let nodes_clear_values = vec![
                     clear.into(),
                     [0.0, 0.0, 0.0, 0.0].into(),
                     // clear.into(),
@@ -526,11 +503,43 @@ fn main() {
                     // [0.0, 0.0, 0.0, 1.0].into(),
                 ];
 
+                let selection_edge_framebuffer =
+                    render_pipeline.selection_edge_color_framebuffer().unwrap();
+
+                let selection_edge_clear_values = vec![
+                    [0.0, 0.0, 0.0, 1.0].into(),
+                    // [0.0, 0.0, 0.0, 1.0].into(),
+                    vulkano::format::ClearValue::None,
+                ];
+
+                // the framebuffer used when drawing the
+                // post-processing stage and GUI to the screen --
+                // since the post-processing shader fills every pixel
+                // of the image, we can use the DontCare load op for
+                // both the post-processing and the GUI
+
+                // the framebuffer used when drawing the GUI to the
+                // screen -- has to use a separate render pass where
+                // the color image load op is DontCare
+                let final_framebuffer = render_pipeline
+                    .final_framebuffer(images[image_num].clone())
+                    .unwrap();
+
+                let final_clear_values =
+                    vec![vulkano::format::ClearValue::None];
+
+                let mut builder =
+                    AutoCommandBufferBuilder::primary_one_time_submit(
+                        device.clone(),
+                        queue.family(),
+                    )
+                    .unwrap();
+
                 builder
                     .begin_render_pass(
-                        msaa_depth_offscreen_framebuffer,
+                        nodes_framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
-                        msaa_depth_clear_values,
+                        nodes_clear_values,
                     )
                     .unwrap();
 
@@ -559,14 +568,16 @@ fn main() {
                     )
                     .unwrap();
 
-                let color_img =
-                    render_pipeline.offscreen_color().image().clone();
-                let color_sampler =
-                    render_pipeline.offscreen_color().sampler().clone();
+                let nodes_color_img =
+                    render_pipeline.nodes_color().image().clone();
+                let nodes_color_sampler =
+                    render_pipeline.nodes_color().sampler().clone();
 
-                let mask_img = render_pipeline.offscreen_mask().image().clone();
-                let mask_sampler =
-                    render_pipeline.offscreen_mask().sampler().clone();
+                let nodes_mask_img =
+                    render_pipeline.nodes_mask().image().clone();
+                let nodes_mask_sampler =
+                    render_pipeline.nodes_mask().sampler().clone();
+
                 /*
                 builder
                     .begin_render_pass(
@@ -602,20 +613,17 @@ fn main() {
                 */
                 builder
                     .begin_render_pass(
-                        sel_framebuffer,
+                        selection_edge_framebuffer,
                         SubpassContents::Inline,
-                        vec![
-                            [0.0, 0.0, 0.0, 1.0].into(),
-                            [0.0, 0.0, 0.0, 1.0].into(),
-                        ],
+                        selection_edge_clear_values,
                     )
                     .unwrap();
 
                 post_draw_system
                     .edge_primary(
                         &mut builder,
-                        mask_img,
-                        mask_sampler,
+                        nodes_mask_img,
+                        nodes_mask_sampler,
                         &dynamic_state,
                         true,
                     )
@@ -638,22 +646,27 @@ fn main() {
 
                 builder
                     .begin_render_pass(
-                        framebuffer.clone(),
+                        final_framebuffer.clone(),
                         SubpassContents::Inline,
-                        vec![vulkano::format::ClearValue::None],
+                        final_clear_values,
                     )
                     .unwrap();
 
-                let color_2_img =
-                    render_pipeline.offscreen_color_2().image().clone();
-                let color_2_sampler =
-                    render_pipeline.offscreen_color_2().sampler().clone();
+                let selection_edge_img =
+                    render_pipeline.selection_edge_color().image().clone();
+                let selection_edge_sampler =
+                    render_pipeline.selection_edge_color().sampler().clone();
+
+                // let color_2_img =
+                //     render_pipeline.offscreen_color_2().image().clone();
+                // let color_2_sampler =
+                //     render_pipeline.offscreen_color_2().sampler().clone();
 
                 post_draw_system
                     .blur_primary(
                         &mut builder,
-                        color_img,
-                        color_sampler,
+                        nodes_color_img,
+                        nodes_color_sampler,
                         &dynamic_state,
                         false,
                     )
@@ -662,8 +675,8 @@ fn main() {
                 post_draw_system
                     .blur_primary(
                         &mut builder,
-                        color_2_img,
-                        color_2_sampler,
+                        selection_edge_img,
+                        selection_edge_sampler,
                         &dynamic_state,
                         true,
                     )
@@ -673,7 +686,7 @@ fn main() {
 
                 builder
                     .begin_render_pass(
-                        framebuffer,
+                        final_framebuffer,
                         SubpassContents::SecondaryCommandBuffers,
                         vec![vulkano::format::ClearValue::None],
                     )

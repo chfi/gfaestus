@@ -61,49 +61,45 @@ vulkano::impl_vertex!(Color, color);
 pub struct RenderPipeline {
     gfx_queue: Arc<Queue>,
 
-    // offscreen_format: Format,
     final_format: Format,
     samples: u32,
 
-    // pass_msaa_depth_offscreen: Arc<dyn RenderPassAbstract + Send + Sync>,
-    // pass_single_dontcare: Arc<dyn RenderPassAbstract + Send + Sync>,
     offscreen_msaa_depth_mask_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
     offscreen_msaa_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
 
-    // offscreen_msaa_depth_mask_pass: SinglePassMSAA,
-    // offscreen_msaa_pass: SinglePassMSAA,
-    final_dontcare_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
+    final_pass: Arc<dyn RenderPassAbstract + Send + Sync>,
 
-    offscreen_color: OffscreenImage,
-    offscreen_color_2: OffscreenImage,
-    offscreen_mask: OffscreenImage,
+    nodes_color: OffscreenImage,
+    nodes_mask: OffscreenImage,
+
+    selection_edge_color: OffscreenImage,
 }
 
 impl RenderPipeline {
-    pub fn offscreen_color(&self) -> &OffscreenImage {
-        &self.offscreen_color
+    pub fn nodes_color(&self) -> &OffscreenImage {
+        &self.nodes_color
     }
 
-    pub fn offscreen_color_2(&self) -> &OffscreenImage {
-        &self.offscreen_color_2
+    pub fn nodes_mask(&self) -> &OffscreenImage {
+        &self.nodes_mask
     }
 
-    pub fn offscreen_mask(&self) -> &OffscreenImage {
-        &self.offscreen_mask
+    pub fn selection_edge_color(&self) -> &OffscreenImage {
+        &self.selection_edge_color
     }
 
-    pub fn offscreen_mask_pass(
-        &self,
-    ) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
+    pub fn nodes_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
         &self.offscreen_msaa_depth_mask_pass
     }
 
-    pub fn offscreen_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
+    pub fn post_processing_pass(
+        &self,
+    ) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
         &self.offscreen_msaa_pass
     }
 
     pub fn final_pass(&self) -> &Arc<dyn RenderPassAbstract + Send + Sync> {
-        &self.final_dontcare_pass
+        &self.final_pass
     }
 
     pub fn new(
@@ -180,7 +176,7 @@ impl RenderPipeline {
                         samples: samples,
                     },
                     color: {
-                        load: Clear,
+                        load: DontCare,
                         store: Store,
                         format: Format::R8G8B8A8Unorm,
                         samples: 1,
@@ -196,7 +192,7 @@ impl RenderPipeline {
             Arc::new(render_pass)
         };
 
-        let final_dontcare_pass = {
+        let final_pass = {
             let render_pass = vulkano::single_pass_renderpass!(
             gfx_queue.device().clone(),
             attachments: {
@@ -217,11 +213,11 @@ impl RenderPipeline {
             Arc::new(render_pass)
         };
 
-        let offscreen_color =
+        let nodes_color =
             OffscreenImage::new(gfx_queue.clone(), width, height)?;
-        let offscreen_color_2 =
-            OffscreenImage::new(gfx_queue.clone(), width, height)?;
-        let offscreen_mask =
+        let nodes_mask = OffscreenImage::new(gfx_queue.clone(), width, height)?;
+
+        let selection_edge_color =
             OffscreenImage::new(gfx_queue.clone(), width, height)?;
 
         Ok(Self {
@@ -229,10 +225,10 @@ impl RenderPipeline {
             final_format,
             offscreen_msaa_depth_mask_pass,
             offscreen_msaa_pass,
-            final_dontcare_pass,
-            offscreen_color,
-            offscreen_color_2,
-            offscreen_mask,
+            final_pass,
+            nodes_color,
+            nodes_mask,
+            selection_edge_color,
             samples,
         })
     }
@@ -242,18 +238,18 @@ impl RenderPipeline {
         width: u32,
         height: u32,
     ) -> Result<()> {
-        self.offscreen_color.recreate(width, height)?;
-        self.offscreen_color_2.recreate(width, height)?;
-        self.offscreen_mask.recreate(width, height)?;
+        self.nodes_color.recreate(width, height)?;
+        self.nodes_mask.recreate(width, height)?;
+        self.selection_edge_color.recreate(width, height)?;
 
         Ok(())
     }
 
-    pub fn offscreen_color_mask_framebuffer(
+    pub fn nodes_framebuffer(
         &self,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
-            .width_height();
+        let img_dims =
+            ImageAccess::dimensions(self.nodes_color.image()).width_height();
 
         let intermediary = AttachmentImage::transient_multisampled(
             self.gfx_queue.device().clone(),
@@ -280,18 +276,19 @@ impl RenderPipeline {
             Framebuffer::start(self.offscreen_msaa_depth_mask_pass.clone())
                 .add(intermediary.clone())?
                 .add(intermediary_mask.clone())?
-                .add(self.offscreen_color.image().clone())?
+                .add(self.nodes_color.image().clone())?
                 .add(depth.clone())?
-                .add(self.offscreen_mask.image().clone())?
+                .add(self.nodes_mask.image().clone())?
                 .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
 
-    pub fn offscreen_color_framebuffer(
+    /*
+    pub fn nodes_color_framebuffer(
         &self,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
+        let img_dims = ImageAccess::dimensions(self.nodes_color.image())
             .width_height();
 
         let intermediary = AttachmentImage::transient_multisampled(
@@ -303,17 +300,19 @@ impl RenderPipeline {
 
         let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
             .add(intermediary.clone())?
-            .add(self.offscreen_color.image().clone())?
+            .add(self.nodes_color.image().clone())?
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
+    */
 
-    pub fn offscreen_color_2_framebuffer(
+    pub fn selection_edge_color_framebuffer(
         &self,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        let img_dims = ImageAccess::dimensions(self.offscreen_color.image())
-            .width_height();
+        let img_dims =
+            ImageAccess::dimensions(self.selection_edge_color.image())
+                .width_height();
 
         let intermediary = AttachmentImage::transient_multisampled(
             self.gfx_queue.device().clone(),
@@ -324,20 +323,20 @@ impl RenderPipeline {
 
         let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
             .add(intermediary.clone())?
-            .add(self.offscreen_color_2.image().clone())?
+            .add(self.selection_edge_color.image().clone())?
             .build()?;
 
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
 
-    pub fn dontcare_framebuffer<I>(
+    pub fn final_framebuffer<I>(
         &self,
         target: I,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>>
     where
         I: ImageAccess + ImageViewAccess + Clone + Send + Sync + 'static,
     {
-        let framebuffer = Framebuffer::start(self.final_dontcare_pass.clone())
+        let framebuffer = Framebuffer::start(self.final_pass.clone())
             .add(target.clone())?
             .build()?;
 
