@@ -605,16 +605,28 @@ fn main() {
                     )
                     .unwrap();
 
-                if app.selection_edge_detect {
-                    post_draw_system
-                        .edge_primary(
-                            &mut builder,
-                            nodes_mask_img,
-                            nodes_mask_sampler,
-                            &dynamic_state,
-                            true,
-                        )
-                        .unwrap();
+                if app.selection_edge {
+                    if app.selection_edge_detect {
+                        post_draw_system
+                            .edge_primary(
+                                &mut builder,
+                                nodes_mask_img,
+                                nodes_mask_sampler,
+                                &dynamic_state,
+                                true,
+                            )
+                            .unwrap();
+                    } else {
+                        post_draw_system
+                            .blur_primary(
+                                &mut builder,
+                                nodes_mask_img,
+                                nodes_mask_sampler,
+                                &dynamic_state,
+                                false,
+                            )
+                            .unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();
@@ -655,16 +667,28 @@ fn main() {
                     )
                     .unwrap();
 
-                if app.selection_edge_blur {
-                    post_draw_system_final
-                        .blur_primary(
-                            &mut builder,
-                            selection_edge_img,
-                            selection_edge_sampler,
-                            &dynamic_state,
-                            true,
-                        )
-                        .unwrap();
+                if app.selection_edge {
+                    if app.selection_edge_blur {
+                        post_draw_system_final
+                            .blur_primary(
+                                &mut builder,
+                                selection_edge_img,
+                                selection_edge_sampler,
+                                &dynamic_state,
+                                true,
+                            )
+                            .unwrap();
+                    } else {
+                        post_draw_system_final
+                            .blur_primary(
+                                &mut builder,
+                                selection_edge_img,
+                                selection_edge_sampler,
+                                &dynamic_state,
+                                false,
+                            )
+                            .unwrap();
+                    }
                 }
 
                 builder.end_render_pass().unwrap();
