@@ -653,7 +653,6 @@ fn main() {
                     builder
                         .clear_color_image(
                             nodes_color_img.clone(),
-                            // images[image_num].clone(),
                             [0.0, 0.0, 0.0, 1.0].into(),
                         )
                         .unwrap();

@@ -1,5 +1,7 @@
 #version 450
 
+layout (early_fragment_tests) in;
+
 flat layout (location = 0) in int node_id;
 
 layout (location = 0) out vec4 f_color;
