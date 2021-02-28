@@ -188,6 +188,7 @@ impl NodeDrawSystem {
         offset: Point,
         node_width: f32,
         use_lines: bool,
+        selected_node: i32,
     ) -> Result<&'a mut AutoCommandBufferBuilder>
     where
         VI: IntoIterator<Item = Vertex>,
@@ -232,7 +233,7 @@ impl NodeDrawSystem {
                 viewport_dims,
                 view: view_data,
                 scale: view.scale,
-
+                selected_node,
             }
         };
 
@@ -321,6 +322,7 @@ impl NodeDrawSystem {
         offset: Point,
         node_width: f32,
         use_lines: bool,
+        selected_node: i32,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
@@ -352,6 +354,7 @@ impl NodeDrawSystem {
             offset,
             node_width,
             use_lines,
+            selected_node,
         )?;
 
         let builder = builder.build()?;
