@@ -33,7 +33,7 @@ use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
-use gfaestus::app::{App, AppMsg};
+use gfaestus::app::{App, AppConfigMsg, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
@@ -336,6 +336,8 @@ fn main() {
     println!("initialized in {}", init_t.elapsed().as_secs_f32());
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) =
+        crossbeam::channel::unbounded::<AppConfigMsg>();
 
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event
@@ -369,7 +371,7 @@ fn main() {
         app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
 
         while let Ok(gui_in) = gui_rx.try_recv() {
-            gui.apply_input(&app_msg_tx, gui_in);
+            gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
         }
 
         while let Ok(main_view_in) = main_view_rx.try_recv() {
@@ -379,6 +381,15 @@ fn main() {
         while let Ok(app_msg) = app_msg_rx.try_recv() {
             app.apply_app_msg(&app_msg);
         }
+
+        while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
+            app.apply_app_config_msg(&cfg_msg);
+        }
+
+        gui.set_render_config(
+            app.selection_edge_detect,
+            app.selection_edge_blur,
+        );
 
         gui.set_hover_node(app.hover_node());
         gui.set_selected_node(app.selected_node());
@@ -619,15 +630,17 @@ fn main() {
                     )
                     .unwrap();
 
-                post_draw_system
-                    .edge_primary(
-                        &mut builder,
-                        nodes_mask_img,
-                        nodes_mask_sampler,
-                        &dynamic_state,
-                        true,
-                    )
-                    .unwrap();
+                if app.selection_edge_detect {
+                    post_draw_system
+                        .edge_primary(
+                            &mut builder,
+                            nodes_mask_img,
+                            nodes_mask_sampler,
+                            &dynamic_state,
+                            true,
+                        )
+                        .unwrap();
+                }
 
                 builder.end_render_pass().unwrap();
 
@@ -672,15 +685,34 @@ fn main() {
                     )
                     .unwrap();
 
-                post_draw_system
-                    .blur_primary(
-                        &mut builder,
-                        selection_edge_img,
-                        selection_edge_sampler,
-                        &dynamic_state,
-                        true,
-                    )
-                    .unwrap();
+                if app.selection_edge_blur {
+                    if app.selection_edge_detect {
+                        post_draw_system
+                            .blur_primary(
+                                &mut builder,
+                                selection_edge_img,
+                                selection_edge_sampler,
+                                &dynamic_state,
+                                true,
+                            )
+                            .unwrap();
+                    } else {
+                        let nodes_mask_img =
+                            render_pipeline.nodes_mask().image().clone();
+                        let nodes_mask_sampler =
+                            render_pipeline.nodes_mask().sampler().clone();
+
+                        post_draw_system
+                            .blur_primary(
+                                &mut builder,
+                                nodes_mask_img,
+                                nodes_mask_sampler,
+                                &dynamic_state,
+                                true,
+                            )
+                            .unwrap();
+                    }
+                }
 
                 builder.end_render_pass().unwrap();
 

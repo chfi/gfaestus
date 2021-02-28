@@ -190,6 +190,8 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
+    KeyToggleSelectionEdge,
+    KeyToggleSelectionBlur,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -290,6 +292,8 @@ impl std::default::Default for SystemInputBindings<GuiInput> {
                 (Key::F1, Input::KeyEguiInspectionUi),
                 (Key::F2, Input::KeyEguiSettingsUi),
                 (Key::F3, Input::KeyEguiMemoryUi),
+                (Key::Key1, Input::KeyToggleSelectionEdge),
+                (Key::Key2, Input::KeyToggleSelectionBlur),
             ]
             .iter()
             .copied()

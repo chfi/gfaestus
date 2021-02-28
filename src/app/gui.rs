@@ -41,6 +41,8 @@ pub struct GfaestusGui {
     graph_stats: GraphStatsUi,
     view_info: ViewInfoUi,
     frame_rate_box: FrameRateBox,
+
+    render_config_ui: RenderConfigUi,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -84,6 +86,32 @@ impl std::default::Default for EnabledUiElements {
             graph_stats: true,
             view_info: true,
             selected_node: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+struct RenderConfigUi {
+    nodes_color: bool,
+    nodes_mask: bool,
+
+    selection_edge_detect: bool,
+    selection_edge_blur: bool,
+
+    lines: bool,
+    // gui: bool,
+}
+
+impl std::default::Default for RenderConfigUi {
+    fn default() -> Self {
+        Self {
+            nodes_color: true,
+            nodes_mask: true,
+
+            selection_edge_detect: true,
+            selection_edge_blur: true,
+
+            lines: true,
         }
     }
 }
@@ -186,6 +214,7 @@ impl GfaestusGui {
             graph_stats,
             view_info,
             frame_rate_box,
+            render_config_ui: Default::default(),
         })
     }
 
@@ -283,6 +312,33 @@ impl GfaestusGui {
         );
     }
 
+    pub fn set_render_config(&mut self, edge_detect: bool, edge_blur: bool) {
+        self.render_config_ui.selection_edge_detect = edge_detect;
+        self.render_config_ui.selection_edge_blur = edge_blur;
+    }
+
+    fn render_config_info(&self, pos: Point) {
+        let cfg_info = self.render_config_ui;
+
+        egui::Area::new("render_config_info_ui")
+            .fixed_pos(pos)
+            .show(&self.ctx, |ui| {
+                ui.label(format!("nodes_color: {}", cfg_info.nodes_color));
+                ui.label(format!("nodes_mask: {}", cfg_info.nodes_mask));
+
+                ui.label(format!(
+                    "selection_edge_detect: {}",
+                    cfg_info.selection_edge_detect
+                ));
+                ui.label(format!(
+                    "selection_edge_blur: {}",
+                    cfg_info.selection_edge_blur
+                ));
+
+                ui.label(format!("lines: {}", cfg_info.lines));
+            });
+    }
+
     pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
         let mut raw_input = self.frame_input.into_raw_input();
         let screen_rect = screen_rect.map(|p| egui::Rect {
@@ -374,6 +430,13 @@ impl GfaestusGui {
                 });
         }
 
+        // if self.enabled_ui_elements.render_config {
+        self.render_config_info(Point {
+            x: 0.8 * scr.max.x,
+            y: 0.8 * scr.max.y,
+        });
+        // }
+
         if self.enabled_ui_elements.egui_inspection_ui {
             egui::Window::new("egui_inspection_ui_window")
                 .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
@@ -462,6 +525,7 @@ impl GfaestusGui {
     pub fn apply_input(
         &mut self,
         app_msg_tx: &channel::Sender<crate::app::AppMsg>,
+        cfg_msg_tx: &channel::Sender<crate::app::AppConfigMsg>,
         input: SystemInput<GuiInput>,
     ) {
         use GuiInput as In;
@@ -475,7 +539,6 @@ impl GfaestusGui {
                             app_msg_tx
                                 .send(crate::app::AppMsg::SelectNode(None))
                                 .unwrap();
-                            // self.set_selected_node(None);
                         }
                         GuiInput::KeyEguiInspectionUi => {
                             self.toggle_egui_inspection_ui();
@@ -485,6 +548,12 @@ impl GfaestusGui {
                         }
                         GuiInput::KeyEguiMemoryUi => {
                             self.toggle_egui_memory_ui();
+                        }
+                        GuiInput::KeyToggleSelectionEdge => {
+                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionEdgeDetect).unwrap();
+                        }
+                        GuiInput::KeyToggleSelectionBlur => {
+                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionEdgeBlur).unwrap();
                         }
                         _ => (),
                     }

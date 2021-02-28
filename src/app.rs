@@ -15,12 +15,21 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AppConfigMsg {
+    ToggleSelectionEdgeDetect,
+    ToggleSelectionEdgeBlur,
+}
+
 pub struct App {
     mouse_pos: MousePos,
     screen_dims: ScreenDims,
 
     hover_node: Option<NodeId>,
     selected_node: Option<NodeId>,
+
+    pub selection_edge_detect: bool,
+    pub selection_edge_blur: bool,
 }
 
 impl App {
@@ -33,6 +42,9 @@ impl App {
             screen_dims: screen_dims.into(),
             hover_node: None,
             selected_node: None,
+
+            selection_edge_detect: true,
+            selection_edge_blur: true,
         }
     }
 
@@ -60,6 +72,17 @@ impl App {
         match msg {
             AppMsg::SelectNode(id) => self.selected_node = *id,
             AppMsg::HoverNode(id) => self.hover_node = *id,
+        }
+    }
+
+    pub fn apply_app_config_msg(&mut self, msg: &AppConfigMsg) {
+        match msg {
+            AppConfigMsg::ToggleSelectionEdgeDetect => {
+                self.selection_edge_detect = !self.selection_edge_detect
+            }
+            AppConfigMsg::ToggleSelectionEdgeBlur => {
+                self.selection_edge_blur = !self.selection_edge_blur
+            }
         }
     }
 }
