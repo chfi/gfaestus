@@ -401,9 +401,10 @@ fn main() {
         }
 
         gui.set_render_config(
+            app.nodes_color,
+            app.selection_edge,
             app.selection_edge_detect,
             app.selection_edge_blur,
-            app.selection_edge,
         );
 
         gui.set_hover_node(app.hover_node());
@@ -647,6 +648,16 @@ fn main() {
                         queue.family(),
                     )
                     .unwrap();
+
+                if !app.nodes_color {
+                    builder
+                        .clear_color_image(
+                            nodes_color_img.clone(),
+                            // images[image_num].clone(),
+                            [0.0, 0.0, 0.0, 1.0].into(),
+                        )
+                        .unwrap();
+                }
 
                 builder
                     .begin_render_pass(

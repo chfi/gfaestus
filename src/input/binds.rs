@@ -181,6 +181,8 @@ pub enum MainViewInputs {
     WheelZoom,
 }
 
+use crate::app::RenderConfigOpts;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuiInput {
     KeyClearSelection,
@@ -190,9 +192,7 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
-    KeyToggleSelectionEdge,
-    KeyToggleSelectionBlur,
-    KeyToggleSelectionOutline,
+    KeyToggleRender(RenderConfigOpts),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -293,9 +293,22 @@ impl std::default::Default for SystemInputBindings<GuiInput> {
                 (Key::F1, Input::KeyEguiInspectionUi),
                 (Key::F2, Input::KeyEguiSettingsUi),
                 (Key::F3, Input::KeyEguiMemoryUi),
-                (Key::Key1, Input::KeyToggleSelectionEdge),
-                (Key::Key2, Input::KeyToggleSelectionBlur),
-                (Key::Key3, Input::KeyToggleSelectionOutline),
+                (
+                    Key::Key1,
+                    Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
+                ),
+                (
+                    Key::Key2,
+                    Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
+                ),
+                (
+                    Key::Key3,
+                    Input::KeyToggleRender(RenderConfigOpts::SelOutline),
+                ),
+                (
+                    Key::Key4,
+                    Input::KeyToggleRender(RenderConfigOpts::NodesColor),
+                ),
             ]
             .iter()
             .copied()

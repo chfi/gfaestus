@@ -316,13 +316,17 @@ impl GfaestusGui {
 
     pub fn set_render_config(
         &mut self,
+        nodes_color: bool,
+        outline: bool,
         edge_detect: bool,
         edge_blur: bool,
-        outline: bool,
     ) {
+        self.render_config_ui.nodes_color = nodes_color;
+
+        self.render_config_ui.selection_edge = outline;
+
         self.render_config_ui.selection_edge_detect = edge_detect;
         self.render_config_ui.selection_edge_blur = edge_blur;
-        self.render_config_ui.selection_edge = outline;
     }
 
     fn render_config_info(&self, pos: Point) {
@@ -557,14 +561,22 @@ impl GfaestusGui {
                         GuiInput::KeyEguiMemoryUi => {
                             self.toggle_egui_memory_ui();
                         }
-                        GuiInput::KeyToggleSelectionEdge => {
-                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionEdgeDetect).unwrap();
-                        }
-                        GuiInput::KeyToggleSelectionBlur => {
-                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionEdgeBlur).unwrap();
-                        }
-                        GuiInput::KeyToggleSelectionOutline => {
-                            cfg_msg_tx.send(crate::app::AppConfigMsg::ToggleSelectionOutline).unwrap();
+                        GuiInput::KeyToggleRender(opt) => {
+                            use crate::app::AppConfigMsg as Msg;
+                            use crate::app::RenderConfigOpts as Opts;
+
+                            let cfg_msg = match opt {
+                                Opts::SelOutlineEdge => {
+                                    Msg::ToggleSelectionEdgeDetect
+                                }
+                                Opts::SelOutlineBlur => {
+                                    Msg::ToggleSelectionEdgeBlur
+                                }
+                                Opts::SelOutline => Msg::ToggleSelectionOutline,
+                                Opts::NodesColor => Msg::ToggleNodesColor,
+                            };
+
+                            cfg_msg_tx.send(cfg_msg).unwrap();
                         }
                         _ => (),
                     }

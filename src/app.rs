@@ -20,6 +20,16 @@ pub enum AppConfigMsg {
     ToggleSelectionEdgeDetect,
     ToggleSelectionEdgeBlur,
     ToggleSelectionOutline,
+    ToggleNodesColor,
+    // Toggle(RenderConfigOpts),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum RenderConfigOpts {
+    SelOutlineEdge,
+    SelOutlineBlur,
+    SelOutline,
+    NodesColor,
 }
 
 pub struct App {
@@ -32,6 +42,7 @@ pub struct App {
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
     pub selection_edge: bool,
+    pub nodes_color: bool,
 }
 
 impl App {
@@ -48,6 +59,7 @@ impl App {
             selection_edge_detect: true,
             selection_edge_blur: true,
             selection_edge: true,
+            nodes_color: true,
         }
     }
 
@@ -88,6 +100,9 @@ impl App {
             }
             AppConfigMsg::ToggleSelectionOutline => {
                 self.selection_edge = !self.selection_edge
+            }
+            AppConfigMsg::ToggleNodesColor => {
+                self.nodes_color = !self.nodes_color
             }
         }
     }
