@@ -168,6 +168,12 @@ impl FlatLayout {
             let x = fields.next().unwrap().parse::<f32>()?;
             let y = fields.next().unwrap().parse::<f32>()?;
 
+            let _component = if let Some(c) = fields.next() {
+                Some(c.parse::<usize>()?)
+            } else {
+                None
+            };
+
             let this_p = Point { x, y };
 
             let node_ix = (ix / 2) + 1;
