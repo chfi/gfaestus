@@ -29,6 +29,8 @@ pub struct LayoutFlags {
     // latest_flags: Vec<(NodeId, NodeFlag)>,
     latest_selection: FxHashSet<NodeId>,
     // selection_buffer: CpuAccessibleBuffer,
+
+    // latest_flags: FxHashMap<NodeId, NodeFlag>,
 }
 
 /// Instruction for updating the flags of a single node
@@ -40,6 +42,39 @@ pub struct FlagUpdate {
 }
 
 impl LayoutFlags {
+    /*
+    pub fn update_flags(
+        &mut self,
+        new_flags: &FxHashMap<NodeId, NodeFlag>,
+        buffer: &CpuAccessibleBuffer<[u8]>,
+    ) -> Result<(), WriteLockError> {
+        let latest_keys = self.latest_flags.keys().collect::<FxHashSet<_>>();
+        let new_keys = new_flags.keys().collect::<FxHashSet<_>>();
+
+        let removed = latest_keys.difference(&new_keys);
+        let added = new_keys.difference(&latest_keys);
+
+        {
+            let mut buf = buffer.write()?;
+
+            for &node in removed {
+                let ix = node.0 as usize;
+                buf[ix] = 0;
+            }
+
+            for &node in added {
+                let ix = node.0 as usize;
+                let value = *new_flags.get(&node).unwrap() as u8;
+                buf[ix] = value;
+            }
+        }
+
+        self.latest_flags.clone_from(new_flags);
+
+        Ok(())
+    }
+    */
+
     pub fn update_selection(
         &mut self,
         new_selection: &FxHashSet<NodeId>,
