@@ -15,6 +15,8 @@ use anyhow::Result;
 
 use handlegraph::handle::NodeId;
 
+use rustc_hash::FxHashSet;
+
 use crate::geometry::*;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
@@ -23,14 +25,26 @@ use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 use crate::input::binds::*;
 use crate::input::MousePos;
 
+use super::node_flags::{FlagUpdate, LayoutFlags, NodeFlag, NodeFlags};
+
+#[derive(Debug, Default, Clone)]
+pub struct NodeData {
+    vertices: Vec<Vertex>,
+    flags: LayoutFlags,
+    // _updates: FxHashSet<NodeId>
+}
+
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
-    line_draw_system: LineDrawSystem,
-    view: Arc<AtomicCell<View>>,
-    vertices: Vec<Vertex>,
-    pub draw_grid: bool,
-    anim_handler_thread: AnimHandlerThread,
+    node_data: NodeData,
     base_node_width: f32,
+    // vertices: Vec<Vertex>,
+    // node_flags: LayoutFlags,
+    line_draw_system: LineDrawSystem,
+    pub draw_grid: bool,
+
+    view: Arc<AtomicCell<View>>,
+    anim_handler_thread: AnimHandlerThread,
     // mouse_pos: MousePos,
 }
 
@@ -51,7 +65,7 @@ impl MainView {
         let line_draw_system =
             LineDrawSystem::new(gfx_queue.clone(), line_subpass);
 
-        let vertices: Vec<Vertex> = Vec::new();
+        // let vertices: Vec<Vertex> = Vec::new();
 
         let draw_grid = false;
 
@@ -67,12 +81,15 @@ impl MainView {
 
         let main_view = Self {
             node_draw_system,
+            node_data: Default::default(),
+            // vertices,
+            base_node_width,
+
             line_draw_system,
-            vertices,
             draw_grid,
+
             view,
             anim_handler_thread,
-            base_node_width,
             // mouse_pos,
         };
 
@@ -102,12 +119,45 @@ impl MainView {
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        self.vertices.clear();
-        self.vertices.extend(vertices.into_iter());
+        self.node_data.vertices.clear();
+        self.node_data.flags.clear();
+        self.node_data.vertices.extend(vertices.into_iter());
+
+        let node_count = self.node_data.vertices.len() / 2;
+        self.node_draw_system
+            .allocate_node_selection_buffer(node_count)
+            .unwrap();
+    }
+
+    pub fn update_node_selection(
+        &mut self,
+        new_selection: &[NodeId],
+    ) -> Result<()> {
+        let sel_set = new_selection.iter().copied().collect::<FxHashSet<_>>();
+
+        /*
+        let node_count = self.node_data.vertices.len() / 2;
+
+        if !self
+            .node_draw_system
+            .is_node_selection_buffer_alloc(node_count)?
+        {
+            self.node_draw_system
+                .allocate_node_selection_buffer(node_count)?;
+        }
+        */
+
+        let draw_sys = &self.node_draw_system;
+        let flags = &mut self.node_data.flags;
+
+        draw_sys.update_node_selection(|buffer| {
+            let result = flags.update_selection(&sel_set, buffer)?;
+            Ok(result)
+        })
     }
 
     pub fn has_vertices(&self) -> bool {
-        !self.vertices.is_empty()
+        !self.node_data.vertices.is_empty()
     }
 
     pub fn draw_nodes_primary<'a>(
@@ -129,7 +179,7 @@ impl MainView {
         let vertices = if self.node_draw_system.has_cached_vertices() {
             None
         } else {
-            Some(self.vertices.iter().copied())
+            Some(self.node_data.vertices.iter().copied())
         };
 
         self.node_draw_system.draw_primary(
@@ -162,7 +212,7 @@ impl MainView {
         let vertices = if self.node_draw_system.has_cached_vertices() {
             None
         } else {
-            Some(self.vertices.iter().copied())
+            Some(self.node_data.vertices.iter().copied())
         };
 
         self.node_draw_system.draw(

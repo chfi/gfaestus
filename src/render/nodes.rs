@@ -53,6 +53,7 @@ mod fs {
 struct NodeDrawCache {
     cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
+    node_selection_buffer: Option<Arc<CpuAccessibleBuffer<[u8]>>>,
 }
 
 impl std::default::Default for NodeDrawCache {
@@ -60,7 +61,42 @@ impl std::default::Default for NodeDrawCache {
         Self {
             cached_vertex_buffer: None,
             node_id_color_buffer: None,
+            node_selection_buffer: None,
         }
+    }
+}
+
+impl NodeDrawCache {
+    fn allocate_selection_buffer(
+        &mut self,
+        queue: &Queue,
+        node_count: usize,
+    ) -> Result<()> {
+        let buffer_usage = BufferUsage {
+            transfer_source: false,
+            transfer_destination: false,
+            uniform_texel_buffer: false,
+            storage_texel_buffer: false,
+            uniform_buffer: true,
+            storage_buffer: false,
+            index_buffer: false,
+            vertex_buffer: false,
+            indirect_buffer: false,
+            device_address: false,
+        };
+
+        let data_iter = (0..node_count).map(|_| 0u8);
+
+        let buffer = CpuAccessibleBuffer::from_iter(
+            queue.device().clone(),
+            buffer_usage,
+            false,
+            data_iter,
+        )?;
+
+        self.node_selection_buffer = Some(buffer);
+
+        Ok(())
     }
 }
 
@@ -177,6 +213,46 @@ impl NodeDrawSystem {
     pub fn has_cached_vertices(&self) -> bool {
         let cache_lock = self.caches.lock();
         cache_lock.cached_vertex_buffer.is_some()
+    }
+
+    pub fn allocate_node_selection_buffer(
+        &self,
+        node_count: usize,
+    ) -> Result<()> {
+        let mut cache_lock = self.caches.lock();
+        cache_lock.allocate_selection_buffer(&self.gfx_queue, node_count)
+    }
+
+    pub fn is_node_selection_buffer_alloc(
+        &self,
+        node_count: usize,
+    ) -> Result<bool> {
+        let cache_lock = self.caches.lock();
+
+        if let Some(buffer) = cache_lock.node_selection_buffer.as_ref() {
+            let buf = buffer.read()?;
+            if buf.len() == node_count {
+                return Ok(true);
+            } else {
+                return Ok(false);
+            }
+        } else {
+            return Ok(false);
+        }
+    }
+
+    // pub fn update_node_selection(&self, node_count: usize,
+
+    pub fn update_node_selection<F>(&self, mut f: F) -> Result<()>
+    where
+        F: FnMut(&CpuAccessibleBuffer<[u8]>) -> Result<()>,
+    {
+        let cache_lock = self.caches.lock();
+        let buffer = cache_lock.node_selection_buffer.as_ref().unwrap();
+
+        f(buffer)?;
+
+        Ok(())
     }
 
     pub fn draw_primary<'a, VI>(

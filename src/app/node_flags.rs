@@ -75,6 +75,41 @@ impl LayoutFlags {
     }
     */
 
+    pub fn clear(&mut self) {
+        self.latest_selection.clear()
+    }
+
+    pub fn add_select_one(
+        &mut self,
+        node: NodeId,
+        buffer: &CpuAccessibleBuffer<[u8]>,
+    ) -> Result<(), WriteLockError> {
+        if self.latest_selection.insert(node) {
+            let mut buf = buffer.write()?;
+            let ix = (node.0 - 1) as usize;
+            buf[ix] = 1;
+        }
+        Ok(())
+    }
+
+    pub fn write_latest_buffer(
+        &self,
+        buffer: &CpuAccessibleBuffer<[u8]>,
+    ) -> Result<(), WriteLockError> {
+        let mut buf = buffer.write()?;
+
+        for ix in 0..buf.len() {
+            let node = NodeId::from((ix + 1) as u64);
+            if self.latest_selection.contains(&node) {
+                buf[ix] = 1;
+            } else {
+                buf[ix] = 0;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn update_selection(
         &mut self,
         new_selection: &FxHashSet<NodeId>,
@@ -87,12 +122,12 @@ impl LayoutFlags {
             let mut buf = buffer.write()?;
 
             for &node in removed {
-                let ix = node.0 as usize;
+                let ix = (node.0 - 1) as usize;
                 buf[ix] = 0;
             }
 
             for &node in added {
-                let ix = node.0 as usize;
+                let ix = (node.0 - 1) as usize;
                 buf[ix] = 1;
             }
         }
