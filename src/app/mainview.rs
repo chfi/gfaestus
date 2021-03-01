@@ -151,9 +151,23 @@ impl MainView {
         let flags = &mut self.node_data.flags;
 
         draw_sys.update_node_selection(|buffer| {
-            let result = flags.update_selection(&sel_set, buffer)?;
-            Ok(result)
+            let _result = flags.update_selection(&sel_set, buffer)?;
+            Ok(())
         })
+    }
+
+    pub fn clear_node_selection(&mut self) -> Result<()> {
+        let draw_sys = &self.node_draw_system;
+        let flags = &mut self.node_data.flags;
+
+        flags.clear();
+
+        draw_sys.update_node_selection(|buffer| {
+            let _result = flags.clear_buffer(buffer)?;
+            Ok(())
+        })?;
+
+        Ok(())
     }
 
     pub fn has_vertices(&self) -> bool {

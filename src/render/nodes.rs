@@ -53,7 +53,7 @@ mod fs {
 struct NodeDrawCache {
     cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
-    node_selection_buffer: Option<Arc<CpuAccessibleBuffer<[u8]>>>,
+    node_selection_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
 }
 
 impl std::default::Default for NodeDrawCache {
@@ -77,15 +77,15 @@ impl NodeDrawCache {
             transfer_destination: false,
             uniform_texel_buffer: false,
             storage_texel_buffer: false,
-            uniform_buffer: true,
-            storage_buffer: false,
+            uniform_buffer: false,
+            storage_buffer: true,
             index_buffer: false,
             vertex_buffer: false,
             indirect_buffer: false,
             device_address: false,
         };
 
-        let data_iter = (0..node_count).map(|_| 0u8);
+        let data_iter = (0..node_count).map(|_| 0u32);
 
         let buffer = CpuAccessibleBuffer::from_iter(
             queue.device().clone(),
@@ -241,11 +241,9 @@ impl NodeDrawSystem {
         }
     }
 
-    // pub fn update_node_selection(&self, node_count: usize,
-
     pub fn update_node_selection<F>(&self, mut f: F) -> Result<()>
     where
-        F: FnMut(&CpuAccessibleBuffer<[u8]>) -> Result<()>,
+        F: FnMut(&CpuAccessibleBuffer<[u32]>) -> Result<()>,
     {
         let cache_lock = self.caches.lock();
         let buffer = cache_lock.node_selection_buffer.as_ref().unwrap();
@@ -314,26 +312,62 @@ impl NodeDrawSystem {
         };
 
         let data_buffer = {
-            let buffer_usage = BufferUsage {
-                storage_buffer: true,
-                ..BufferUsage::none()
+            let mut cache_lock = self.caches.lock();
+
+            let cache_buf_len = if let Some(buffer) =
+                cache_lock.node_id_color_buffer.as_ref()
+            {
+                let buf = buffer.read()?;
+                buf.len()
+            } else {
+                0
             };
 
-            let data_iter = (0..((viewport_dims[0] as u32)
-                * (viewport_dims[1] as u32)))
-                .map(|_| 0u32);
-            CpuAccessibleBuffer::from_iter(
-                self.gfx_queue.device().clone(),
-                buffer_usage,
-                false,
-                data_iter,
-            )?
+            let mut cleared = false;
+
+            if cache_buf_len
+                != (viewport_dims[0] as usize) * (viewport_dims[1] as usize)
+            {
+                let buffer_usage = BufferUsage {
+                    storage_buffer: true,
+                    ..BufferUsage::none()
+                };
+
+                let data_iter = (0..((viewport_dims[0] as u32)
+                    * (viewport_dims[1] as u32)))
+                    .map(|_| 0u32);
+
+                let buffer = CpuAccessibleBuffer::from_iter(
+                    self.gfx_queue.device().clone(),
+                    buffer_usage,
+                    false,
+                    data_iter,
+                )?;
+
+                cache_lock.node_id_color_buffer = Some(buffer.clone());
+
+                cleared = true;
+            }
+
+            let buffer = cache_lock.node_id_color_buffer.as_ref().unwrap();
+
+            if !cleared {
+                let mut buf = buffer.write()?;
+
+                for ix in 0..buf.len() {
+                    buf[ix] = 0;
+                }
+            }
+
+            buffer.clone()
         };
+
+        // let data_buffer =
 
         let vertex_buffer = {
             let mut cache_lock = self.caches.lock();
 
-            cache_lock.node_id_color_buffer = Some(data_buffer.clone());
+            // cache_lock.node_id_color_buffer = Some(data_buffer.clone());
 
             let inner_buf = if let Some(vertices) = vertices {
                 println!("replacing vertex cache");
@@ -348,7 +382,29 @@ impl NodeDrawSystem {
             inner_buf
         };
 
+        let selection_buffer = {
+            let cache_lock = self.caches.lock();
+            cache_lock.node_selection_buffer.as_ref().unwrap().clone()
+        };
+
+        let layout = if use_rect_pipeline {
+            self.rect_pipeline.descriptor_set_layout(0).unwrap()
+        } else {
+            self.line_pipeline.descriptor_set_layout(0).unwrap()
+        };
+
+        let set = {
+            let set = PersistentDescriptorSet::start(layout.clone())
+                .add_buffer(data_buffer.clone())?
+                .add_buffer(selection_buffer)?;
+
+            let set = set.build()?;
+
+            Arc::new(set)
+        };
+
         if use_rect_pipeline {
+            /*
             let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
             let set = {
                 let set = PersistentDescriptorSet::start(layout.clone())
@@ -356,6 +412,7 @@ impl NodeDrawSystem {
                 let set = set.build()?;
                 Arc::new(set)
             };
+            */
 
             builder.draw(
                 self.rect_pipeline.clone(),
@@ -365,6 +422,7 @@ impl NodeDrawSystem {
                 view_pc,
             )?;
         } else {
+            /*
             let layout = self.line_pipeline.descriptor_set_layout(0).unwrap();
             let set = {
                 let set = PersistentDescriptorSet::start(layout.clone())
@@ -372,6 +430,7 @@ impl NodeDrawSystem {
                 let set = set.build()?;
                 Arc::new(set)
             };
+            */
 
             // let line_width = (50.0 / view.scale).max(2.0);
             let line_width = (50.0 / view.scale).max(min_node_width);

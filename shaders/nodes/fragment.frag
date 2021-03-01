@@ -11,6 +11,10 @@ layout (set = 0, binding = 0) buffer Data {
   uint data[];
 } data;
 
+layout (set = 0, binding = 1) readonly buffer Selection {
+  int flag[];
+} selection;
+
 layout (push_constant) uniform View {
   float node_width;
   float scale;

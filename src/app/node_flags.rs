@@ -46,7 +46,7 @@ impl LayoutFlags {
     pub fn update_flags(
         &mut self,
         new_flags: &FxHashMap<NodeId, NodeFlag>,
-        buffer: &CpuAccessibleBuffer<[u8]>,
+        buffer: &CpuAccessibleBuffer<[u32]>,
     ) -> Result<(), WriteLockError> {
         let latest_keys = self.latest_flags.keys().collect::<FxHashSet<_>>();
         let new_keys = new_flags.keys().collect::<FxHashSet<_>>();
@@ -64,7 +64,7 @@ impl LayoutFlags {
 
             for &node in added {
                 let ix = node.0 as usize;
-                let value = *new_flags.get(&node).unwrap() as u8;
+                let value = *new_flags.get(&node).unwrap() as u32;
                 buf[ix] = value;
             }
         }
@@ -79,10 +79,23 @@ impl LayoutFlags {
         self.latest_selection.clear()
     }
 
+    pub fn clear_buffer(
+        &mut self,
+        buffer: &CpuAccessibleBuffer<[u32]>,
+    ) -> Result<(), WriteLockError> {
+        let mut buf = buffer.write()?;
+
+        for ix in 0..buf.len() {
+            buf[ix] = 0;
+        }
+
+        Ok(())
+    }
+
     pub fn add_select_one(
         &mut self,
         node: NodeId,
-        buffer: &CpuAccessibleBuffer<[u8]>,
+        buffer: &CpuAccessibleBuffer<[u32]>,
     ) -> Result<(), WriteLockError> {
         if self.latest_selection.insert(node) {
             let mut buf = buffer.write()?;
@@ -94,7 +107,7 @@ impl LayoutFlags {
 
     pub fn write_latest_buffer(
         &self,
-        buffer: &CpuAccessibleBuffer<[u8]>,
+        buffer: &CpuAccessibleBuffer<[u32]>,
     ) -> Result<(), WriteLockError> {
         let mut buf = buffer.write()?;
 
@@ -113,7 +126,7 @@ impl LayoutFlags {
     pub fn update_selection(
         &mut self,
         new_selection: &FxHashSet<NodeId>,
-        buffer: &CpuAccessibleBuffer<[u8]>,
+        buffer: &CpuAccessibleBuffer<[u32]>,
     ) -> Result<(), WriteLockError> {
         let removed = self.latest_selection.difference(new_selection);
         let added = new_selection.difference(&self.latest_selection);

@@ -410,6 +410,24 @@ fn main() {
         gui.set_hover_node(app.hover_node());
         gui.set_selected_node(app.selected_node());
 
+        let node_selection = if let Some(n) = app.selected_node() {
+            let mut v = vec![n];
+            if n.0 > 1 {
+                v.push(NodeId::from(n.0 - 1));
+            }
+            if n.0 > 5 {
+                v.push(NodeId::from(n.0 - 2));
+                v.push(NodeId::from(n.0 - 3));
+                v.push(NodeId::from(n.0 - 4));
+                v.push(NodeId::from(n.0 - 5));
+            }
+            v
+        } else {
+            vec![]
+        };
+
+        main_view.update_node_selection(&node_selection).unwrap();
+
         let world_point = main_view
             .view()
             .screen_point_to_world(screen_dims, mouse_pos);
