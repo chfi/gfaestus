@@ -20,18 +20,17 @@ layout (push_constant) uniform View {
   float scale;
   vec2 viewport_dims;
   mat4 view;
-  int selected_node;
 } vo;
 
 void main() {
   int color_id = (node_id - 1) % 7;
 
-  if (vo.selected_node != 0) {
-    if (node_id == vo.selected_node) {
-      f_mask = vec4(1.0, 1.0, 1.0, 1.0);
-    } else {
-      f_mask = vec4(0.0, 0.0, 0.0, 0.0);
-    }
+  int is_selected = selection.flag[node_id - 1];
+
+  if ((is_selected & 1) == 1) {
+    f_mask = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    f_mask = vec4(0.0, 0.0, 0.0, 0.0);
   }
 
   uint w = uint(vo.viewport_dims.x);

@@ -179,7 +179,6 @@ impl MainView {
         builder: &'a mut AutoCommandBufferBuilder,
         dynamic_state: &DynamicState,
         offset: Point,
-        selected_node: i32,
     ) -> Result<&'a mut AutoCommandBufferBuilder> {
         let view = self.view.load();
         let node_width = {
@@ -204,7 +203,6 @@ impl MainView {
             offset,
             node_width,
             false,
-            selected_node,
         )
     }
 
@@ -212,7 +210,6 @@ impl MainView {
         &self,
         dynamic_state: &DynamicState,
         offset: Point,
-        selected_node: i32,
     ) -> Result<AutoCommandBuffer> {
         let view = self.view.load();
         let node_width = {
@@ -236,7 +233,6 @@ impl MainView {
             offset,
             node_width,
             false,
-            selected_node,
         )
     }
 
@@ -265,7 +261,6 @@ impl MainView {
             offset,
             node_width,
             false,
-            0,
         )
     }
 

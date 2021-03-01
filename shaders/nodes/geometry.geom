@@ -13,7 +13,6 @@ layout (push_constant) uniform View {
   float scale;
   vec2 viewport_dims;
   mat4 view;
-  int selected_node;
 } vo;
 
 

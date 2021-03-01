@@ -582,12 +582,9 @@ fn main() {
                     .unwrap();
 
                 unsafe {
-                    let node = app
-                        .selected_node()
-                        .map(|id| (id.0 as i32))
-                        .unwrap_or_default();
                     let secondary_buf = main_view
-                        .draw_nodes(&dynamic_state, universe.offset, node)
+                        .draw_nodes(&dynamic_state, universe.offset)
+                        // .draw_nodes(&dynamic_state, universe.offset, node)
                         .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }
