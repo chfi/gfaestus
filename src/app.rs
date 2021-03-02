@@ -16,6 +16,8 @@ use crate::input::binds::*;
 use crate::input::MousePos;
 use crate::view::*;
 
+use theme::*;
+
 pub struct App {
     mouse_pos: MousePos,
     screen_dims: ScreenDims,
