@@ -1,20 +1,10 @@
 use vulkano::{
     device::Queue,
-    format::{Format, R8G8B8A8Unorm},
-    framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract},
-    image::{
-        AttachmentImage, Dimensions, ImageAccess, ImageUsage, ImageViewAccess,
-        ImmutableImage, MipmapsCount,
-    },
-    instance::PhysicalDevice,
+    format::R8G8B8A8Unorm,
+    image::{Dimensions, ImmutableImage, MipmapsCount},
+    sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode},
+    sync::GpuFuture,
 };
-
-use vulkano::sampler::{
-    Filter, MipmapMode, Sampler, SamplerAddressMode,
-    UnnormalizedSamplerAddressMode,
-};
-
-use vulkano::sync::GpuFuture;
 
 use rgb::*;
 
@@ -26,7 +16,7 @@ use rustc_hash::FxHashMap;
 
 use crossbeam::atomic::AtomicCell;
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum ThemeId {
     Light,
     Dark,
@@ -47,6 +37,9 @@ pub struct ThemeDef {
 pub struct Theme {
     background: [f32; 4],
     node_colors: Arc<ImmutableImage<R8G8B8A8Unorm>>,
+
+    color_hash: u64,
+
     color_period: u32,
 
     is_uploaded: AtomicCell<bool>,
@@ -65,6 +58,10 @@ impl Theme {
         self.color_period
     }
 
+    pub fn color_hash(&self) -> u64 {
+        self.color_hash
+    }
+
     fn from_theme_def(
         queue: &Arc<Queue>,
         theme_def: &ThemeDef,
@@ -76,16 +73,33 @@ impl Theme {
 
         let color_period = theme_def.node_colors.len() as u32;
 
+        let mut colors_u8 = Vec::with_capacity(theme_def.node_colors.len() * 4);
+
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::new();
+
+        for &color in theme_def.node_colors.iter() {
+            let r = (255.0 * color.r).floor();
+            let g = (255.0 * color.g).floor();
+            let b = (255.0 * color.b).floor();
+            let a = 255u8;
+
+            (r as u8).hash(&mut hasher);
+            (g as u8).hash(&mut hasher);
+            (b as u8).hash(&mut hasher);
+
+            colors_u8.push(r as u8);
+            colors_u8.push(g as u8);
+            colors_u8.push(b as u8);
+            colors_u8.push(a);
+        }
+
+        let color_hash = hasher.finish();
+
         let (node_colors, future) = ImmutableImage::from_iter(
-            theme_def.node_colors.iter().map(|&nc| {
-                [
-                    (255.0 * nc.r).floor() as u8,
-                    (255.0 * nc.g).floor() as u8,
-                    (255.0 * nc.b).floor() as u8,
-                    255,
-                ]
-            }),
-            // .map(|&nc| [nc.r, nc.g, nc.b, 255]),
+            colors_u8.into_iter(),
             Dimensions::Dim1d {
                 width: color_period,
             },
@@ -100,6 +114,7 @@ impl Theme {
             Theme {
                 background,
                 node_colors,
+                color_hash,
                 color_period,
                 is_uploaded,
             },
@@ -118,6 +133,15 @@ const RAINBOW: [(f32, f32, f32); 7] = [
     (0.93, 0.51, 0.93),
 ];
 
+const RGB_NODES: [(f32, f32, f32); 6] = [
+    (1.0, 0.0, 0.0),
+    (1.0, 0.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, 1.0, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.0, 0.0, 1.0),
+];
+
 pub fn light_default() -> ThemeDef {
     let background = RGB::new(1.0, 1.0, 1.0);
 
@@ -134,13 +158,8 @@ pub fn light_default() -> ThemeDef {
 pub fn dark_default() -> ThemeDef {
     let background = RGB::new(0.0, 0.0, 0.05);
 
-    // use rainbow theme for node colors in both light and dark themes for now, but flip dir
-    let node_colors = RAINBOW
-        .iter()
-        .rev()
-        .copied()
-        .map(RGB::from)
-        .collect::<Vec<_>>();
+    let node_colors =
+        RGB_NODES.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,
@@ -292,6 +311,27 @@ impl Themes {
             .for_each(|t| t.is_uploaded.store(true));
 
         std::mem::take(&mut self.future)
+    }
+
+    // pub fn themes_to_upload(&self) -> impl Iterator<Item = (ThemeId, &Theme)> + '_ {
+    pub fn themes_to_upload(&self) -> Vec<(ThemeId, &Theme)> {
+        let mut res = Vec::new();
+
+        if !self.light.is_uploaded.load() {
+            res.push((ThemeId::Light, &self.light));
+        }
+
+        if !self.dark.is_uploaded.load() {
+            res.push((ThemeId::Light, &self.dark));
+        }
+
+        for (&theme_id, theme) in self.custom.iter() {
+            if !theme.is_uploaded.load() {
+                res.push((ThemeId::Custom(theme_id), theme));
+            }
+        }
+
+        res
     }
 
     /// Returns the active theme if it's ready to use

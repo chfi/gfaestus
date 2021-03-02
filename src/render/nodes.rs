@@ -159,6 +159,7 @@ type ThemeDescSet = PersistentDescriptorSet<(
 
 struct CachedTheme {
     theme_id: ThemeId,
+    color_hash: u64,
     width_buf: Arc<CpuAccessibleBuffer<i32>>,
     descriptor_set: Arc<ThemeDescSet>,
 }
@@ -185,8 +186,11 @@ impl CachedTheme {
             .add_sampled_image(theme.texture().clone(), sampler)?
             .build()?;
 
+        let color_hash = theme.color_hash();
+
         Ok(Self {
             theme_id,
+            color_hash,
             width_buf,
             descriptor_set: Arc::new(set),
         })
@@ -201,7 +205,7 @@ impl CachedTheme {
 struct ThemeCache {
     light: Option<CachedTheme>,
     dark: Option<CachedTheme>,
-    // custom: rustc_hash::FxHashMap<ThemeId, CachedTheme>,
+    custom: rustc_hash::FxHashMap<u32, CachedTheme>,
 }
 
 impl ThemeCache {
@@ -209,8 +213,45 @@ impl ThemeCache {
         match id {
             ThemeId::Light => self.light.as_ref().map(|t| t.get_set()),
             ThemeId::Dark => self.dark.as_ref().map(|t| t.get_set()),
-            ThemeId::Custom(_) => None,
+            ThemeId::Custom(id) => self.custom.get(&id).map(|t| t.get_set()),
         }
+    }
+
+    fn theme_hash(&self, id: ThemeId) -> Option<u64> {
+        let theme = match id {
+            ThemeId::Light => self.light.as_ref(),
+            ThemeId::Dark => self.dark.as_ref(),
+            ThemeId::Custom(id) => self.custom.get(&id),
+        };
+
+        theme.map(|t| t.color_hash)
+    }
+
+    fn set_theme(
+        &mut self,
+        queue: &Arc<Queue>,
+        layout: &Arc<UnsafeDescriptorSetLayout>,
+        sampler: &Arc<Sampler>,
+        theme_id: ThemeId,
+        theme: &Theme,
+    ) -> Result<()> {
+        let theme = CachedTheme::build_descriptor_set(
+            queue,
+            layout,
+            sampler.clone(),
+            theme_id,
+            theme,
+        )?;
+
+        match theme_id {
+            ThemeId::Light => self.light = Some(theme),
+            ThemeId::Dark => self.dark = Some(theme),
+            ThemeId::Custom(id) => {
+                self.custom.insert(id, theme);
+            }
+        }
+
+        Ok(())
     }
 
     fn fill(
@@ -338,6 +379,32 @@ impl NodeDrawSystem {
         let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
 
         theme_cache.fill(&self.gfx_queue, &layout, sampler, light, dark)?;
+
+        Ok(())
+    }
+
+    pub fn cached_theme_hash(&self, theme_id: ThemeId) -> Option<u64> {
+        let theme_cache = self.theme_cache.lock();
+        theme_cache.theme_hash(theme_id)
+    }
+
+    pub fn set_theme(
+        &self,
+        sampler: &Arc<Sampler>,
+        theme_id: ThemeId,
+        theme: &Theme,
+    ) -> Result<()> {
+        let mut theme_cache = self.theme_cache.lock();
+
+        let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+
+        theme_cache.set_theme(
+            &self.gfx_queue,
+            &layout,
+            sampler,
+            theme_id,
+            theme,
+        )?;
 
         Ok(())
     }

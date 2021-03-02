@@ -102,6 +102,24 @@ impl MainView {
         self.node_draw_system.prepare_themes(sampler, light, dark)
     }
 
+    pub fn cache_theme(
+        &self,
+        sampler: &Arc<Sampler>,
+        theme_id: ThemeId,
+        theme: &Theme,
+    ) -> Result<()> {
+        self.node_draw_system.set_theme(sampler, theme_id, theme)
+    }
+
+    pub fn valid_theme_cache(&self, theme_id: ThemeId, hash: u64) -> bool {
+        if let Some(cached) = self.node_draw_system.cached_theme_hash(theme_id)
+        {
+            cached == hash
+        } else {
+            false
+        }
+    }
+
     pub fn view(&self) -> View {
         self.view.load()
     }

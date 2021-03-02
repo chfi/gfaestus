@@ -539,12 +539,33 @@ fn main() {
                     recreate_swapchain = true;
                 }
 
+                let theme_cache_invalid = {
+                    if let Some((theme_id, theme)) = app.active_theme() {
+                        main_view
+                            .valid_theme_cache(theme_id, theme.color_hash())
+                    } else {
+                        true
+                    }
+                };
+
+                let mut theme_future = None;
+
+                if theme_cache_invalid {
+                    let to_upload = app.themes().themes_to_upload();
+                    let sampler = app.themes().sampler();
+
+                    for (id, theme) in to_upload {
+                        main_view.cache_theme(sampler, id, theme).unwrap();
+                    }
+
+                    theme_future = app.theme_upload_future();
+                }
+
+                let (theme_id, theme) = app.active_theme().unwrap();
+
                 // the framebuffer used when drawing nodes to the offscreen image
                 let nodes_framebuffer =
                     render_pipeline.nodes_framebuffer().unwrap();
-
-                let (theme_id, theme) =
-                    app.active_theme().expect("Active theme not ready for use");
 
                 let clear = theme.clear();
 
@@ -606,12 +627,26 @@ fn main() {
 
                 let command_buffer = builder.build().unwrap();
 
-                let first_pass_future = previous_frame_end
-                    .take()
-                    .unwrap()
-                    .join(acquire_future)
-                    .then_execute(queue.clone(), command_buffer)
-                    .unwrap();
+                let first_pass_future = {
+                    if let Some(theme_future) = theme_future {
+                        previous_frame_end
+                            .take()
+                            .unwrap()
+                            .join(acquire_future)
+                            .join(theme_future)
+                            .then_execute(queue.clone(), command_buffer)
+                            .unwrap()
+                            .boxed()
+                    } else {
+                        previous_frame_end
+                            .take()
+                            .unwrap()
+                            .join(acquire_future)
+                            .then_execute(queue.clone(), command_buffer)
+                            .unwrap()
+                            .boxed()
+                    }
+                };
 
                 let mut builder =
                     AutoCommandBufferBuilder::primary_one_time_submit(

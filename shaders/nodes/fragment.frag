@@ -49,10 +49,7 @@ void main() {
   uint ix = uint((y * vo.viewport_dims.x) + x);
   data.data[ix] = uint(node_id);
 
-  int color_index = (node_id - 1) % tex_width.width;
-  float color_u = float(color_index) / float(tex_width.width);
+  float color_u = float((node_id - 1) % tex_width.width) / tex_width.width;
 
-  vec3 node_color = texture(theme_sampler, color_u).rgb;
-
-  f_color = vec4(node_color, 1.0);
+  f_color = texture(theme_sampler, color_u);
 }
