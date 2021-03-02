@@ -1,8 +1,8 @@
-use vulkano::command_buffer::DynamicState;
 use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
 use vulkano::device::Queue;
 use vulkano::framebuffer::{RenderPassAbstract, Subpass};
 use vulkano::sync::GpuFuture;
+use vulkano::{command_buffer::DynamicState, sampler::Sampler};
 
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
@@ -25,7 +25,10 @@ use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 use crate::input::binds::*;
 use crate::input::MousePos;
 
-use super::node_flags::{FlagUpdate, LayoutFlags, NodeFlag, NodeFlags};
+use super::{
+    node_flags::{FlagUpdate, LayoutFlags, NodeFlag, NodeFlags},
+    theme::{Theme, ThemeId},
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct NodeData {
@@ -88,6 +91,15 @@ impl MainView {
         };
 
         Ok(main_view)
+    }
+
+    pub fn prepare_themes(
+        &self,
+        sampler: &Arc<Sampler>,
+        light: &Theme,
+        dark: &Theme,
+    ) -> Result<()> {
+        self.node_draw_system.prepare_themes(sampler, light, dark)
     }
 
     pub fn view(&self) -> View {
@@ -159,6 +171,7 @@ impl MainView {
         builder: &'a mut AutoCommandBufferBuilder,
         dynamic_state: &DynamicState,
         offset: Point,
+        theme: ThemeId,
     ) -> Result<&'a mut AutoCommandBufferBuilder> {
         let view = self.view.load();
         let node_width = {
@@ -182,7 +195,7 @@ impl MainView {
             view,
             offset,
             node_width,
-            false,
+            theme,
         )
     }
 
@@ -190,6 +203,7 @@ impl MainView {
         &self,
         dynamic_state: &DynamicState,
         offset: Point,
+        theme: ThemeId,
     ) -> Result<AutoCommandBuffer> {
         let view = self.view.load();
         let node_width = {
@@ -212,7 +226,8 @@ impl MainView {
             view,
             offset,
             node_width,
-            false,
+            // false,
+            theme,
         )
     }
 
@@ -221,6 +236,7 @@ impl MainView {
         dynamic_state: &DynamicState,
         vertices: VI,
         offset: Point,
+        theme: ThemeId,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
@@ -240,7 +256,7 @@ impl MainView {
             view,
             offset,
             node_width,
-            false,
+            theme, // false,
         )
     }
 

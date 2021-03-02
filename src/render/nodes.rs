@@ -6,7 +6,9 @@ use vulkano::{
     command_buffer::{
         AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
     },
-    image::ImageViewAccess,
+    format::R8G8B8A8Unorm,
+    image::{ImageAccess, ImageViewAccess, ImmutableImage},
+    sampler::Sampler,
 };
 use vulkano::{
     descriptor::descriptor_set::UnsafeDescriptorSetLayout, device::Queue,
@@ -14,7 +16,8 @@ use vulkano::{
 use vulkano::{
     descriptor::descriptor_set::{
         DescriptorSet, DescriptorSetsCollection, PersistentDescriptorSet,
-        PersistentDescriptorSetBuf,
+        PersistentDescriptorSetBuf, PersistentDescriptorSetImg,
+        PersistentDescriptorSetSampler,
     },
     framebuffer::{RenderPassAbstract, Subpass},
 };
@@ -31,6 +34,8 @@ use nalgebra_glm as glm;
 use crate::geometry::*;
 use crate::view;
 use crate::view::{ScreenDims, View};
+
+use crate::app::theme::*;
 
 use super::Vertex;
 
@@ -55,7 +60,7 @@ mod fs {
     }
 }
 
-type NodeDescSet = PersistentDescriptorSet<(
+type SelectionDataDescSet = PersistentDescriptorSet<(
     (
         (),
         PersistentDescriptorSetBuf<Arc<CpuAccessibleBuffer<[u32]>>>,
@@ -69,7 +74,7 @@ struct NodeDrawCache {
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
     node_selection_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
 
-    descriptor_set: Option<Arc<NodeDescSet>>,
+    descriptor_set: Option<Arc<SelectionDataDescSet>>,
 }
 
 impl std::default::Default for NodeDrawCache {
@@ -89,7 +94,7 @@ impl NodeDrawCache {
     fn build_descriptor_set(
         &mut self,
         layout: &Arc<UnsafeDescriptorSetLayout>,
-    ) -> Result<&Arc<NodeDescSet>> {
+    ) -> Result<&Arc<SelectionDataDescSet>> {
         let node_id_buf = self.node_id_color_buffer.as_ref().unwrap().clone();
         let select_buf = self.node_selection_buffer.as_ref().unwrap().clone();
 
@@ -104,7 +109,7 @@ impl NodeDrawCache {
         Ok(&self.descriptor_set.as_ref().unwrap())
     }
 
-    fn descriptor_set(&self) -> Option<&Arc<NodeDescSet>> {
+    fn descriptor_set(&self) -> Option<&Arc<SelectionDataDescSet>> {
         self.descriptor_set.as_ref()
     }
 
@@ -141,6 +146,103 @@ impl NodeDrawCache {
     }
 }
 
+type ThemeDescSet = PersistentDescriptorSet<(
+    (
+        (
+            (),
+            PersistentDescriptorSetBuf<Arc<CpuAccessibleBuffer<i32>>>,
+        ),
+        PersistentDescriptorSetImg<Arc<ImmutableImage<R8G8B8A8Unorm>>>,
+    ),
+    PersistentDescriptorSetSampler,
+)>;
+
+struct CachedTheme {
+    theme_id: ThemeId,
+    width_buf: Arc<CpuAccessibleBuffer<i32>>,
+    descriptor_set: Arc<ThemeDescSet>,
+}
+
+impl CachedTheme {
+    fn build_descriptor_set(
+        queue: &Arc<Queue>,
+        layout: &Arc<UnsafeDescriptorSetLayout>,
+        sampler: Arc<Sampler>,
+        theme_id: ThemeId,
+        theme: &Theme,
+    ) -> Result<Self> {
+        let width = theme.width();
+
+        let width_buf = CpuAccessibleBuffer::from_data(
+            queue.device().clone(),
+            BufferUsage::uniform_buffer(),
+            false,
+            width as i32,
+        )?;
+
+        let set: ThemeDescSet = PersistentDescriptorSet::start(layout.clone())
+            .add_buffer(width_buf.clone())?
+            .add_sampled_image(theme.texture().clone(), sampler)?
+            .build()?;
+
+        Ok(Self {
+            theme_id,
+            width_buf,
+            descriptor_set: Arc::new(set),
+        })
+    }
+
+    fn get_set(&self) -> &Arc<ThemeDescSet> {
+        &self.descriptor_set
+    }
+}
+
+#[derive(Default)]
+struct ThemeCache {
+    light: Option<CachedTheme>,
+    dark: Option<CachedTheme>,
+    // custom: rustc_hash::FxHashMap<ThemeId, CachedTheme>,
+}
+
+impl ThemeCache {
+    fn get_theme_set(&self, id: ThemeId) -> Option<&Arc<ThemeDescSet>> {
+        match id {
+            ThemeId::Light => self.light.as_ref().map(|t| t.get_set()),
+            ThemeId::Dark => self.dark.as_ref().map(|t| t.get_set()),
+            ThemeId::Custom(_) => None,
+        }
+    }
+
+    fn fill(
+        &mut self,
+        queue: &Arc<Queue>,
+        layout: &Arc<UnsafeDescriptorSetLayout>,
+        sampler: &Arc<Sampler>,
+        light: &Theme,
+        dark: &Theme,
+    ) -> Result<()> {
+        let light = CachedTheme::build_descriptor_set(
+            queue,
+            layout,
+            sampler.clone(),
+            ThemeId::Light,
+            light,
+        )?;
+        let dark = CachedTheme::build_descriptor_set(
+            queue,
+            layout,
+            sampler.clone(),
+            ThemeId::Dark,
+            dark,
+        )?;
+
+        self.light = Some(light);
+        self.dark = Some(dark);
+
+        Ok(())
+    }
+}
+
 pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
@@ -148,6 +250,8 @@ pub struct NodeDrawSystem {
     line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
 
     caches: Mutex<NodeDrawCache>,
+
+    theme_cache: Mutex<ThemeCache>,
 }
 
 impl NodeDrawSystem {
@@ -219,7 +323,23 @@ impl NodeDrawSystem {
             rect_pipeline,
             line_pipeline,
             caches: Mutex::new(Default::default()),
+            theme_cache: Mutex::new(Default::default()),
         }
+    }
+
+    pub fn prepare_themes(
+        &self,
+        sampler: &Arc<Sampler>,
+        light: &Theme,
+        dark: &Theme,
+    ) -> Result<()> {
+        let mut theme_cache = self.theme_cache.lock();
+
+        let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+
+        theme_cache.fill(&self.gfx_queue, &layout, sampler, light, dark)?;
+
+        Ok(())
     }
 
     pub fn read_node_id_at<Dims: Into<ScreenDims>>(
@@ -302,15 +422,16 @@ impl NodeDrawSystem {
         view: View,
         offset: Point,
         node_width: f32,
-        use_lines: bool,
+        theme: ThemeId,
+        // use_lines: bool,
     ) -> Result<&'a mut AutoCommandBufferBuilder>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
         let min_node_width = 2.0;
-        let use_rect_pipeline = !use_lines
-            || (use_lines && view.scale < (node_width / min_node_width));
+        // let use_rect_pipeline = !use_lines
+        //     || (use_lines && view.scale < (node_width / min_node_width));
 
         let viewport_dims = {
             let viewport = dynamic_state
@@ -425,13 +546,25 @@ impl NodeDrawSystem {
             cache_lock.node_selection_buffer.as_ref().unwrap().clone()
         };
 
-        let layout = if use_rect_pipeline {
-            self.rect_pipeline.descriptor_set_layout(0).unwrap()
-        } else {
-            self.line_pipeline.descriptor_set_layout(0).unwrap()
+        let layout = self.rect_pipeline.descriptor_set_layout(1).unwrap();
+
+        // let layout = if use_rect_pipeline {
+        //     self.rect_pipeline.descriptor_set_layout(1).unwrap()
+        // } else {
+        //     self.line_pipeline.descriptor_set_layout(1).unwrap()
+        // };
+
+        let set_0 = {
+            let theme_cache = self.theme_cache.lock();
+
+            if let Some(set) = theme_cache.get_theme_set(theme) {
+                set.clone()
+            } else {
+                panic!("Tried to draw nodes using unavailable theme");
+            }
         };
 
-        let set = {
+        let set_1 = {
             let mut cache_lock = self.caches.lock();
             if recreate_desc_set {
                 cache_lock.build_descriptor_set(layout)?;
@@ -440,14 +573,15 @@ impl NodeDrawSystem {
             cache_lock.descriptor_set().unwrap().clone()
         };
 
-        if use_rect_pipeline {
-            builder.draw(
-                self.rect_pipeline.clone(),
-                &dynamic_state,
-                vec![vertex_buffer],
-                set.clone(),
-                view_pc,
-            )?;
+        // if use_rect_pipeline {
+        builder.draw(
+            self.rect_pipeline.clone(),
+            &dynamic_state,
+            vec![vertex_buffer],
+            (set_0.clone(), set_1.clone()),
+            view_pc,
+        )?;
+        /*
         } else {
             let line_width = (50.0 / view.scale).max(min_node_width);
             let mut dynamic_state = dynamic_state.clone();
@@ -461,6 +595,7 @@ impl NodeDrawSystem {
                 view_pc,
             )?;
         }
+        */
 
         Ok(builder)
     }
@@ -472,29 +607,31 @@ impl NodeDrawSystem {
         view: View,
         offset: Point,
         node_width: f32,
-        use_lines: bool,
+        theme: ThemeId,
+        // use_lines: bool,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
         let min_node_width = 2.0;
-        let use_rect_pipeline = !use_lines
-            || (use_lines && view.scale < (node_width / min_node_width));
+        // let use_rect_pipeline = !use_lines
+        //     || (use_lines && view.scale < (node_width / min_node_width));
 
-        let mut builder: AutoCommandBufferBuilder = if use_rect_pipeline {
+        // let mut builder: AutoCommandBufferBuilder = if use_rect_pipeline {
+        let mut builder: AutoCommandBufferBuilder =
             AutoCommandBufferBuilder::secondary_graphics(
                 self.gfx_queue.device().clone(),
                 self.gfx_queue.family(),
                 self.rect_pipeline.clone().subpass(),
-            )
-        } else {
-            AutoCommandBufferBuilder::secondary_graphics(
-                self.gfx_queue.device().clone(),
-                self.gfx_queue.family(),
-                self.line_pipeline.clone().subpass(),
-            )
-        }?;
+            )?;
+        // } else {
+        //     AutoCommandBufferBuilder::secondary_graphics(
+        //         self.gfx_queue.device().clone(),
+        //         self.gfx_queue.family(),
+        //         self.line_pipeline.clone().subpass(),
+        //     )
+        // }?;
 
         self.draw_primary(
             &mut builder,
@@ -503,7 +640,7 @@ impl NodeDrawSystem {
             view,
             offset,
             node_width,
-            use_lines,
+            theme, // use_lines,
         )?;
 
         let builder = builder.build()?;

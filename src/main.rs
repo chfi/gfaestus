@@ -348,6 +348,14 @@ fn main() {
         }
     };
 
+    main_view
+        .prepare_themes(
+            app.themes().sampler(),
+            app.themes().light(),
+            app.themes().dark(),
+        )
+        .unwrap();
+
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
@@ -589,7 +597,7 @@ fn main() {
 
                 unsafe {
                     let secondary_buf = main_view
-                        .draw_nodes(&dynamic_state, universe.offset)
+                        .draw_nodes(&dynamic_state, universe.offset, theme_id)
                         .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }
