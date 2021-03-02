@@ -304,26 +304,6 @@ impl std::default::Default for SystemInputBindings<AppInput> {
                 .collect::<FxHashMap<_, _>>();
 
         let mouse_binds = FxHashMap::default();
-        // let mouse_binds: FxHashMap<
-        //     event::MouseButton,
-        //     Vec<MouseButtonBind<Input>>,
-        // > = [
-        //     (
-        //         event::MouseButton::Left,
-        //         vec![MouseButtonBind {
-        //             payload: Input::ButtonLeft,
-        //         }],
-        //     ),
-        //     (
-        //         event::MouseButton::Right,
-        //         vec![MouseButtonBind {
-        //             payload: Input::ButtonRight,
-        //         }],
-        //     ),
-        // ]
-        // .iter()
-        // .cloned()
-        // .collect();
 
         let wheel_bind = None;
 
@@ -342,7 +322,6 @@ impl std::default::Default for SystemInputBindings<GuiInput> {
 
         let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
             [
-                // (Key::Escape, Input::KeyClearSelection),
                 (Key::F1, Input::KeyEguiInspectionUi),
                 (Key::F2, Input::KeyEguiSettingsUi),
                 (Key::F3, Input::KeyEguiMemoryUi),
@@ -414,7 +393,6 @@ impl std::default::Default for SystemInputBindings<MainViewInputs> {
                 (Key::Down, Inputs::KeyPanDown),
                 (Key::Left, Inputs::KeyPanLeft),
                 (Key::Right, Inputs::KeyPanRight),
-                // (Key::Escape, Inputs::KeyClearSelection),
                 (Key::Space, Inputs::KeyResetView),
             ]
             .iter()

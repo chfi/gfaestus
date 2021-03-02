@@ -21,6 +21,10 @@ use vulkano::{
 use crossbeam::channel;
 use parking_lot::Mutex;
 
+pub mod traits;
+
+pub use traits::*;
+
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
@@ -234,14 +238,11 @@ impl GfaestusGui {
             hover_node_id,
             selected_node: NodeSelection::default(),
 
-            // selected_node_id,
-            // selected_node_info: None,
             gui_draw_system,
             graph_stats,
             view_info,
             frame_rate_box,
             render_config_ui: Default::default(),
-            // elements: Vec::new(),
         })
     }
 

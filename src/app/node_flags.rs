@@ -5,8 +5,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use vulkano::buffer::cpu_access::{
     CpuAccessibleBuffer, ReadLock, ReadLockError, WriteLock, WriteLockError,
 };
-//     BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer,
-// };
 
 /// Bitflags for controlling display options on a per-node basis
 #[derive(Debug, Clone, Copy, PartialEq)]

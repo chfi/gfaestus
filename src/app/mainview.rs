@@ -36,16 +36,14 @@ pub struct NodeData {
 
 pub struct MainView {
     node_draw_system: NodeDrawSystem,
-    node_data: NodeData,
     base_node_width: f32,
-    // vertices: Vec<Vertex>,
-    // node_flags: LayoutFlags,
+    node_data: NodeData,
+
     line_draw_system: LineDrawSystem,
     pub draw_grid: bool,
 
     view: Arc<AtomicCell<View>>,
     anim_handler_thread: AnimHandlerThread,
-    // mouse_pos: MousePos,
 }
 
 impl MainView {
@@ -65,8 +63,6 @@ impl MainView {
         let line_draw_system =
             LineDrawSystem::new(gfx_queue.clone(), line_subpass);
 
-        // let vertices: Vec<Vertex> = Vec::new();
-
         let draw_grid = false;
 
         let view = View::default();
@@ -81,16 +77,14 @@ impl MainView {
 
         let main_view = Self {
             node_draw_system,
-            node_data: Default::default(),
-            // vertices,
             base_node_width,
+            node_data: Default::default(),
 
             line_draw_system,
             draw_grid,
 
             view,
             anim_handler_thread,
-            // mouse_pos,
         };
 
         Ok(main_view)

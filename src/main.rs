@@ -218,13 +218,6 @@ fn main() {
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     );
 
-    // let post_draw_system = PostDrawSystem::new(
-    //     queue.clone(),
-    //     Subpass::from(render_pipeline.post_processing_pass().clone(), 0)
-    //         .unwrap(),
-    //     Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
-    // );
-
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -581,7 +574,6 @@ fn main() {
                 unsafe {
                     let secondary_buf = main_view
                         .draw_nodes(&dynamic_state, universe.offset)
-                        // .draw_nodes(&dynamic_state, universe.offset, node)
                         .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }

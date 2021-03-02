@@ -2,7 +2,6 @@
 use vulkano::buffer::{
     BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer,
 };
-use vulkano::device::Queue;
 use vulkano::{
     command_buffer::{
         AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
@@ -10,7 +9,13 @@ use vulkano::{
     image::ImageViewAccess,
 };
 use vulkano::{
-    descriptor::descriptor_set::PersistentDescriptorSet,
+    descriptor::descriptor_set::UnsafeDescriptorSetLayout, device::Queue,
+};
+use vulkano::{
+    descriptor::descriptor_set::{
+        DescriptorSet, DescriptorSetsCollection, PersistentDescriptorSet,
+        PersistentDescriptorSetBuf,
+    },
     framebuffer::{RenderPassAbstract, Subpass},
 };
 
@@ -50,23 +55,59 @@ mod fs {
     }
 }
 
+type NodeDescSet = PersistentDescriptorSet<(
+    (
+        (),
+        PersistentDescriptorSetBuf<Arc<CpuAccessibleBuffer<[u32]>>>,
+    ),
+    PersistentDescriptorSetBuf<Arc<CpuAccessibleBuffer<[u32]>>>,
+)>;
+
 struct NodeDrawCache {
     cached_vertex_buffer: Option<Arc<super::PoolChunk<Vertex>>>,
+
     node_id_color_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
     node_selection_buffer: Option<Arc<CpuAccessibleBuffer<[u32]>>>,
+
+    descriptor_set: Option<Arc<NodeDescSet>>,
 }
 
 impl std::default::Default for NodeDrawCache {
     fn default() -> Self {
         Self {
             cached_vertex_buffer: None,
+
             node_id_color_buffer: None,
             node_selection_buffer: None,
+
+            descriptor_set: None,
         }
     }
 }
 
 impl NodeDrawCache {
+    fn build_descriptor_set(
+        &mut self,
+        layout: &Arc<UnsafeDescriptorSetLayout>,
+    ) -> Result<&Arc<NodeDescSet>> {
+        let node_id_buf = self.node_id_color_buffer.as_ref().unwrap().clone();
+        let select_buf = self.node_selection_buffer.as_ref().unwrap().clone();
+
+        let set = PersistentDescriptorSet::start(layout.clone())
+            .add_buffer(node_id_buf)?
+            .add_buffer(select_buf)?;
+
+        let set = set.build()?;
+
+        self.descriptor_set = Some(Arc::new(set));
+
+        Ok(&self.descriptor_set.as_ref().unwrap())
+    }
+
+    fn descriptor_set(&self) -> Option<&Arc<NodeDescSet>> {
+        self.descriptor_set.as_ref()
+    }
+
     fn allocate_selection_buffer(
         &mut self,
         queue: &Queue,
@@ -309,6 +350,8 @@ impl NodeDrawSystem {
             }
         };
 
+        let mut recreate_desc_set = false;
+
         let data_buffer = {
             let mut cache_lock = self.caches.lock();
 
@@ -342,6 +385,7 @@ impl NodeDrawSystem {
                     data_iter,
                 )?;
 
+                recreate_desc_set = true;
                 cache_lock.node_id_color_buffer = Some(buffer.clone());
 
                 cleared = true;
@@ -360,12 +404,8 @@ impl NodeDrawSystem {
             buffer.clone()
         };
 
-        // let data_buffer =
-
         let vertex_buffer = {
             let mut cache_lock = self.caches.lock();
-
-            // cache_lock.node_id_color_buffer = Some(data_buffer.clone());
 
             let inner_buf = if let Some(vertices) = vertices {
                 println!("replacing vertex cache");
@@ -392,26 +432,15 @@ impl NodeDrawSystem {
         };
 
         let set = {
-            let set = PersistentDescriptorSet::start(layout.clone())
-                .add_buffer(data_buffer.clone())?
-                .add_buffer(selection_buffer)?;
+            let mut cache_lock = self.caches.lock();
+            if recreate_desc_set {
+                cache_lock.build_descriptor_set(layout)?;
+            }
 
-            let set = set.build()?;
-
-            Arc::new(set)
+            cache_lock.descriptor_set().unwrap().clone()
         };
 
         if use_rect_pipeline {
-            /*
-            let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
-            let set = {
-                let set = PersistentDescriptorSet::start(layout.clone())
-                    .add_buffer(data_buffer.clone())?;
-                let set = set.build()?;
-                Arc::new(set)
-            };
-            */
-
             builder.draw(
                 self.rect_pipeline.clone(),
                 &dynamic_state,
@@ -420,17 +449,6 @@ impl NodeDrawSystem {
                 view_pc,
             )?;
         } else {
-            /*
-            let layout = self.line_pipeline.descriptor_set_layout(0).unwrap();
-            let set = {
-                let set = PersistentDescriptorSet::start(layout.clone())
-                    .add_buffer(data_buffer.clone())?;
-                let set = set.build()?;
-                Arc::new(set)
-            };
-            */
-
-            // let line_width = (50.0 / view.scale).max(2.0);
             let line_width = (50.0 / view.scale).max(min_node_width);
             let mut dynamic_state = dynamic_state.clone();
             dynamic_state.line_width = Some(line_width);

@@ -22,7 +22,6 @@ pub struct App {
     hover_node: Option<NodeId>,
     selected_nodes: FxHashSet<NodeId>,
 
-    // selection: NodeSelection,
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
     pub selection_edge: bool,
@@ -73,10 +72,10 @@ impl App {
         Self {
             mouse_pos,
             screen_dims: screen_dims.into(),
+
             hover_node: None,
-            // selected_node: None,
             selected_nodes: FxHashSet::default(),
-            // selection: NodeSelection::None,
+
             selection_edge_detect: true,
             selection_edge_blur: true,
             selection_edge: true,
