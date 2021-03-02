@@ -51,6 +51,9 @@ pub struct InputManager {
 
     winit_rx: channel::Receiver<event::WindowEvent<'static>>,
 
+    app_bindings: SystemInputBindings<AppInput>,
+    app_channels: InputChannels<AppInput>,
+
     main_view_bindings: SystemInputBindings<MainViewInputs>,
     main_view_channels: InputChannels<MainViewInputs>,
 
@@ -59,6 +62,10 @@ pub struct InputManager {
 }
 
 impl InputManager {
+    pub fn clone_app_rx(&self) -> channel::Receiver<SystemInput<AppInput>> {
+        self.app_channels.rx.clone()
+    }
+
     pub fn clone_main_view_rx(
         &self,
     ) -> channel::Receiver<SystemInput<MainViewInputs>> {
@@ -92,6 +99,14 @@ impl InputManager {
 
             let mouse_pos = self.mouse_screen_pos.read();
 
+            if let Some(app_inputs) =
+                self.app_bindings.apply(&winit_ev, mouse_pos)
+            {
+                for input in app_inputs {
+                    self.app_channels.tx.send(input).unwrap();
+                }
+            }
+
             if let Some(gui_inputs) =
                 self.gui_bindings.apply(&winit_ev, mouse_pos)
             {
@@ -121,14 +136,24 @@ impl InputManager {
         let mouse_screen_pos = MousePos::new(Point::ZERO);
         let mouse_over_gui = Arc::new(AtomicCell::new(false));
 
+        let app_bindings: SystemInputBindings<AppInput> = Default::default();
+
         let main_view_bindings: SystemInputBindings<MainViewInputs> =
             Default::default();
 
         let gui_bindings: SystemInputBindings<GuiInput> = Default::default();
 
+        let (app_tx, app_rx) = channel::unbounded::<SystemInput<AppInput>>();
+
         let (main_view_tx, main_view_rx) =
             channel::unbounded::<SystemInput<MainViewInputs>>();
+
         let (gui_tx, gui_rx) = channel::unbounded::<SystemInput<GuiInput>>();
+
+        let app_channels = InputChannels {
+            tx: app_tx.clone(),
+            rx: app_rx.clone(),
+        };
 
         let main_view_channels = InputChannels {
             tx: main_view_tx.clone(),
@@ -144,6 +169,8 @@ impl InputManager {
             mouse_screen_pos,
             mouse_over_gui,
             winit_rx,
+            app_bindings,
+            app_channels,
             main_view_bindings,
             main_view_channels,
             gui_bindings,

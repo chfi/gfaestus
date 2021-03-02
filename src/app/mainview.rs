@@ -343,11 +343,6 @@ impl MainView {
                 };
 
                 match payload {
-                    In::KeyClearSelection => {
-                        app_msg_tx
-                            .send(crate::app::AppMsg::SelectNode(None))
-                            .unwrap();
-                    }
                     In::KeyPanUp => {
                         self.pan_const(None, Some(pan_delta(true)));
                     }

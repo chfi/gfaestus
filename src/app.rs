@@ -6,9 +6,12 @@ use node_flags::*;
 
 use crossbeam::channel;
 
+use rustc_hash::FxHashSet;
+
 use handlegraph::handle::NodeId;
 
 use crate::geometry::*;
+use crate::input::binds::*;
 use crate::input::MousePos;
 use crate::view::*;
 
@@ -20,24 +23,12 @@ pub struct App {
     selected_node: Option<NodeId>,
 
     selection: NodeSelection,
+    selected_nodes: FxHashSet<NodeId>,
 
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
     pub selection_edge: bool,
     pub nodes_color: bool,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum NodeSelection {
-    None,
-    One(NodeId),
-    Many(Vec<NodeId>),
-}
-
-impl std::default::Default for NodeSelection {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 // impl NodeFlags {
@@ -82,6 +73,7 @@ impl App {
 
             selection: NodeSelection::None,
 
+            selected_nodes: FxHashSet::default(),
             selection_edge_detect: true,
             selection_edge_blur: true,
             selection_edge: true,
@@ -95,6 +87,12 @@ impl App {
 
     pub fn selected_node(&self) -> Option<NodeId> {
         self.selected_node
+    pub fn selected_nodes(&self) -> Option<&FxHashSet<NodeId>> {
+        if self.selected_nodes.is_empty() {
+            None
+        } else {
+            Some(&self.selected_nodes)
+        }
     }
 
     pub fn selection(&self) -> &NodeSelection {
@@ -141,6 +139,16 @@ impl App {
             }
             AppConfigMsg::ToggleNodesColor => {
                 self.nodes_color = !self.nodes_color
+            }
+        }
+    }
+
+    pub fn apply_input(&mut self, input: SystemInput<AppInput>) {
+        if let SystemInput::Keyboard { state, payload } = input {
+            if let AppInput::KeyClearSelection = payload {
+                if state.pressed() {
+                    self.selected_nodes.clear();
+                }
             }
         }
     }

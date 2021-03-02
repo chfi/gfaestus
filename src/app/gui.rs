@@ -547,11 +547,6 @@ impl GfaestusGui {
             SystemInput::Keyboard { state, .. } => {
                 if state.pressed() {
                     match payload {
-                        GuiInput::KeyClearSelection => {
-                            app_msg_tx
-                                .send(crate::app::AppMsg::SelectNode(None))
-                                .unwrap();
-                        }
                         GuiInput::KeyEguiInspectionUi => {
                             self.toggle_egui_inspection_ui();
                         }

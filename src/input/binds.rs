@@ -169,10 +169,14 @@ impl<T: InputPayload> InputState<T> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AppInput {
+    KeyClearSelection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MainViewInputs {
     ButtonMousePan,
     ButtonSelect,
-    KeyClearSelection,
     KeyPanUp,
     KeyPanRight,
     KeyPanDown,
@@ -185,7 +189,6 @@ use crate::app::RenderConfigOpts;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GuiInput {
-    KeyClearSelection,
     KeyEguiInspectionUi,
     KeyEguiSettingsUi,
     KeyEguiMemoryUi,
@@ -202,7 +205,7 @@ where
 {
     key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Inputs>>>,
     mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Inputs>>>,
-    wheel_bind: WheelBind<Inputs>,
+    wheel_bind: Option<WheelBind<Inputs>>,
 }
 
 impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
@@ -262,22 +265,72 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                 phase: _phase,
                 ..
             } => {
-                let mut mult = self.wheel_bind.mult;
-                if self.wheel_bind.invert {
-                    mult *= -1.0;
+                if let Some(bind) = self.wheel_bind {
+                    let mut mult = bind.mult;
+                    if bind.invert {
+                        mult *= -1.0;
+                    }
+
+                    let delta = match delta {
+                        event::MouseScrollDelta::LineDelta(_, y) => *y,
+                        event::MouseScrollDelta::PixelDelta(pos) => {
+                            pos.y as f32
+                        }
+                    };
+
+                    Some(vec![SystemInput::Wheel {
+                        delta: delta * mult,
+                        payload: bind.payload,
+                    }])
+                } else {
+                    None
                 }
-
-                let delta = match delta {
-                    event::MouseScrollDelta::LineDelta(_, y) => *y,
-                    event::MouseScrollDelta::PixelDelta(pos) => pos.y as f32,
-                };
-
-                Some(vec![SystemInput::Wheel {
-                    delta: delta * mult,
-                    payload: self.wheel_bind.payload,
-                }])
             }
             _ => None,
+        }
+    }
+}
+
+impl std::default::Default for SystemInputBindings<AppInput> {
+    fn default() -> Self {
+        use event::VirtualKeyCode as Key;
+        use AppInput as Input;
+
+        let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
+            [(Key::Escape, Input::KeyClearSelection)]
+                .iter()
+                .copied()
+                .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
+                .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds = FxHashMap::default();
+        // let mouse_binds: FxHashMap<
+        //     event::MouseButton,
+        //     Vec<MouseButtonBind<Input>>,
+        // > = [
+        //     (
+        //         event::MouseButton::Left,
+        //         vec![MouseButtonBind {
+        //             payload: Input::ButtonLeft,
+        //         }],
+        //     ),
+        //     (
+        //         event::MouseButton::Right,
+        //         vec![MouseButtonBind {
+        //             payload: Input::ButtonRight,
+        //         }],
+        //     ),
+        // ]
+        // .iter()
+        // .cloned()
+        // .collect();
+
+        let wheel_bind = None;
+
+        Self {
+            key_binds,
+            mouse_binds,
+            wheel_bind,
         }
     }
 }
@@ -289,7 +342,7 @@ impl std::default::Default for SystemInputBindings<GuiInput> {
 
         let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
             [
-                (Key::Escape, Input::KeyClearSelection),
+                // (Key::Escape, Input::KeyClearSelection),
                 (Key::F1, Input::KeyEguiInspectionUi),
                 (Key::F2, Input::KeyEguiSettingsUi),
                 (Key::F3, Input::KeyEguiMemoryUi),
@@ -336,11 +389,11 @@ impl std::default::Default for SystemInputBindings<GuiInput> {
         .cloned()
         .collect();
 
-        let wheel_bind = WheelBind {
+        let wheel_bind = Some(WheelBind {
             invert: false,
             mult: 1.0,
             payload: Input::WheelScroll,
-        };
+        });
 
         Self {
             key_binds,
@@ -361,7 +414,7 @@ impl std::default::Default for SystemInputBindings<MainViewInputs> {
                 (Key::Down, Inputs::KeyPanDown),
                 (Key::Left, Inputs::KeyPanLeft),
                 (Key::Right, Inputs::KeyPanRight),
-                (Key::Escape, Inputs::KeyClearSelection),
+                // (Key::Escape, Inputs::KeyClearSelection),
                 (Key::Space, Inputs::KeyResetView),
             ]
             .iter()
@@ -387,11 +440,11 @@ impl std::default::Default for SystemInputBindings<MainViewInputs> {
         .cloned()
         .collect();
 
-        let wheel_bind = WheelBind {
+        let wheel_bind = Some(WheelBind {
             invert: true,
             mult: 0.45,
             payload: Inputs::WheelZoom,
-        };
+        });
 
         Self {
             key_binds,

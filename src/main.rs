@@ -236,6 +236,7 @@ fn main() {
     //     std::thread::spawn(move || input_manager.handle_events())
     // };
 
+    let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
@@ -383,6 +384,10 @@ fn main() {
             .map(|nid| NodeId::from(nid as u64));
 
         app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+
+        while let Ok(app_in) = app_rx.try_recv() {
+            app.apply_input(app_in);
+        }
 
         while let Ok(gui_in) = gui_rx.try_recv() {
             gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
