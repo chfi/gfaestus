@@ -138,6 +138,9 @@ fn main() {
     let instance = Instance::new(None, &extensions, None).unwrap();
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
+    // use this to force using X, to allow window sharing on wayland
+    // let event_loop: EventLoop<()> =
+    //     winit::platform::unix::EventLoopExtUnix::new_x11().unwrap();
     let event_loop = EventLoop::new();
     let surface = WindowBuilder::new()
         .build_vk_surface(&event_loop, instance.clone())

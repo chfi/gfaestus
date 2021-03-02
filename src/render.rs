@@ -13,18 +13,9 @@ pub use shapes::ShapeDrawSystem;
 use std::sync::Arc;
 
 use vulkano::{
-    descriptor::{
-        descriptor_set::{
-            FixedSizeDescriptorSetsPool, PersistentDescriptorSet,
-        },
-        DescriptorSet,
-    },
-    device::{Device, Queue},
+    device::Queue,
     format::Format,
-    framebuffer::{
-        Framebuffer, FramebufferAbstract, RenderPassAbstract, RenderPassDesc,
-        Subpass,
-    },
+    framebuffer::{Framebuffer, FramebufferAbstract, RenderPassAbstract},
     image::{AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess},
     instance::PhysicalDevice,
 };
@@ -42,7 +33,7 @@ pub type SubPoolChunk<T> = vulkano::buffer::cpu_pool::CpuBufferPoolSubbuffer<
     std::sync::Arc<vulkano::memory::pool::StdMemoryPool>,
 >;
 
-use crate::util::*;
+// use crate::util::*;
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Vertex {
@@ -284,45 +275,10 @@ impl RenderPipeline {
         Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
     }
 
-    /*
-    pub fn nodes_color_framebuffer(
-        &self,
-    ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        let img_dims = ImageAccess::dimensions(self.nodes_color.image())
-            .width_height();
-
-        let intermediary = AttachmentImage::transient_multisampled(
-            self.gfx_queue.device().clone(),
-            img_dims,
-            self.samples,
-            Format::R8G8B8A8Unorm,
-        )?;
-
-        let framebuffer = Framebuffer::start(self.offscreen_msaa_pass.clone())
-            .add(intermediary.clone())?
-            .add(self.nodes_color.image().clone())?
-            .build()?;
-
-        Ok(Arc::new(framebuffer) as Arc<dyn FramebufferAbstract + Send + Sync>)
-    }
-    */
-
     pub fn selection_edge_color_framebuffer(
         &self,
     ) -> Result<Arc<dyn FramebufferAbstract + Send + Sync>> {
-        // let img_dims =
-        //     ImageAccess::dimensions(self.selection_edge_color.image())
-        //         .width_height();
-
-        // let intermediary = AttachmentImage::transient_multisampled(
-        //     self.gfx_queue.device().clone(),
-        //     img_dims,
-        //     self.samples,
-        //     Format::R8G8B8A8Unorm,
-        // )?;
-
         let framebuffer = Framebuffer::start(self.offscreen_pass.clone())
-            // .add(intermediary.clone())?
             .add(self.selection_edge_color.image().clone())?
             .build()?;
 

@@ -232,36 +232,4 @@ impl PostDrawSystem {
 
         Ok(builder)
     }
-
-    /*
-    pub fn draw<C>(
-        &self,
-        color_input: C,
-        sampler: Arc<Sampler>,
-        dynamic_state: &DynamicState,
-        enabled: bool,
-    ) -> Result<AutoCommandBuffer>
-    where
-        C: ImageViewAccess + Send + Sync + 'static,
-    {
-        let mut builder: AutoCommandBufferBuilder =
-            AutoCommandBufferBuilder::secondary_graphics(
-                self.gfx_queue.device().clone(),
-                self.gfx_queue.family(),
-                self.pipeline.clone().subpass(),
-            )?;
-
-        self.draw_primary(
-            &mut builder,
-            color_input,
-            sampler,
-            dynamic_state,
-            enabled,
-        )?;
-
-        let builder = builder.build()?;
-
-        Ok(builder)
-    }
-    */
 }

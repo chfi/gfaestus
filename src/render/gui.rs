@@ -78,11 +78,13 @@ struct GuiTexture {
 
 pub struct GuiDrawSystem {
     gfx_queue: Arc<Queue>,
-    sampler: Arc<Sampler>,
-    cached_texture: Mutex<Option<GuiTexture>>,
     pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
+
     vertex_buffer_pool: CpuBufferPool<GuiVertex>,
     index_buffer_pool: CpuBufferPool<u32>,
+
+    sampler: Arc<Sampler>,
+    cached_texture: Mutex<Option<GuiTexture>>,
 }
 
 impl GuiDrawSystem {
