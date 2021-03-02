@@ -1,6 +1,7 @@
 pub mod gui;
 pub mod mainview;
 pub mod node_flags;
+pub mod theme;
 
 use node_flags::*;
 
