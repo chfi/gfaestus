@@ -194,32 +194,80 @@ after that i need to handle loops, and probably a whole lot more
 
 * stuff
 
+updated 02/03/21
+
+- [ ] options system
+  - [ ] start with color schemes and/or toggling rendering stages
+  - [ ] define OptionsSet and related types/traits
+  - [ ] (mostly) generic GUI for OptionsSets
+  - [ ] centralized storage & distribution to systems
+  - [ ] save and load options
+
+- [-] configurable keybinds
+  - [X] generic type mapping winit input events to system-specific inputs
+  - [ ] automate codegen of `impl Default for SystemInputBindings<_system_input_>`
+  - [ ] save and load custom keybinds to/from file
+  - [ ] GUI for modifying keybinds in the app
+
+- [ ] customizable colors
+  - [ ] use textures as color schemes instead of hardcoded on node ID
+  - [ ] store background color in App & add variant to AppMsg or
+    AppConfigMsg for changing it
+  - [ ] make selection outline color configurable (either by changing
+    the mask color, or the fragment color in the edge filter)
+
+- [ ] semantic overlays/visualizations (depends on part of custom colors)
+  - [ ] define "Overlay" to track the color scheme & maybe predicate
+  - [ ] store all overlays in App or MainView, with one texture per overlay
+  - [ ] track activated overlay (maybe allow 1-3 or so active?)
+  - [ ] pass activated/relevant overlays to shaders per-node as part of node bitflags
+  - [ ] pass activated/relevant overlay textures to frag shader & index on node via bitflag
+  - [ ] GUI for defining and toggling overlays
+
+- [ ] interaction with PackedGraph
+  - [ ] overlays defined using PackedGraph iterators that take
+    callbacks returning some overlay-specific type per node/path/etc.
+  - [ ] live/concurrent overlay updates via graph iterators using
+    crossbeam channels
+
+- [ ] post-processing effects (selection outlines)
+  - [ ] make edge detection parameters configurable
+  - [ ] make gaussian blur parameters configurable
+
+- [ ] rendering system structure
+  - [ ] encapsulate entire rendering system so it can run on a separate thread from event_loop
+  - [ ] modularize/clean up shader code
+  - [ ] dynamically configurable post-processing w/ any number of effect pipelines
+  - [ ] runtime shader hot-reloading
+  - [ ] triple buffering w/ one thread per framebuffer
+
+- [ ] implement fast approximate anti-aliasing (FXAA)
+
+- [ ] multithreading
+  - [ ] use tokio or another async runtime?
+  - [ ] run inputmanager, each system, and each system's input
+    handler, on separate threads/tasks
+  - [ ] parallel rendering (see rendering system above)
+
 
 - [ ] export PNG
   - [ ] start with exporting a screenshot of the current view
   - [ ] then export a larger view of the graph, using a separate framebuffer
 
-- [ ] improve mapping from mouse (screen) to world coordinates
-
-- [X] separate color buffer & individual segment colors
-- [ ] text rendering/GUI
-- [X] load & render paths -- each with separate color, maybe?
-
-- [ ] proper rendering system that maps a laid out GFA (or subset
-  thereof) to vertices & colors ready to be rendered
-
-- [X] MVP matrix transform for scaling & translation
-- [X] GFA segments w/ length based on seq length
-- [ ] extremely simple linear & greedy layout
-- [X] render GFA segments
+- [ ] render node sequences (needs a text renderer, maybe SDF-based)
 - [ ] render links as lines between segments
 
+- [ ] support moving nodes (both click & drag by user, and later, real-time layout algo)
+- [ ] graph layout
 
-- [ ] more rigorous viewport logic & management
+- [X] improve mapping from mouse (screen) to world coordinates
+- [X] separate color buffer & individual segment colors
+- [X] GUI via egui
+- [X] load & render paths -- each with separate color, maybe?
+- [X] MVP matrix transform for scaling & translation
+- [X] GFA segments w/ length based on seq length
+- [X] render GFA segments
 - [X] antialiasing
-
-
-- [ ] proper layouts
 
 * user actions
 
