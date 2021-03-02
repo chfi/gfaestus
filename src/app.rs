@@ -5,11 +5,18 @@ pub mod theme;
 
 use node_flags::*;
 
+use vulkano::device::Queue;
+use vulkano::sync::GpuFuture;
+
+use std::sync::Arc;
+
 use crossbeam::channel;
 
 use rustc_hash::FxHashSet;
 
 use handlegraph::handle::NodeId;
+
+use anyhow::Result;
 
 use crate::geometry::*;
 use crate::input::binds::*;
@@ -19,6 +26,8 @@ use crate::view::*;
 use theme::*;
 
 pub struct App {
+    themes: Themes,
+
     mouse_pos: MousePos,
     screen_dims: ScreenDims,
 
@@ -57,6 +66,7 @@ pub enum AppConfigMsg {
     ToggleSelectionOutline,
     ToggleNodesColor,
     // Toggle(RenderConfigOpts),
+    ToggleLightDarkTheme,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -69,10 +79,19 @@ pub enum RenderConfigOpts {
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(
+        queue: Arc<Queue>,
         mouse_pos: MousePos,
         screen_dims: Dims,
-    ) -> Self {
-        Self {
+    ) -> Result<Self> {
+        let themes = Themes::new_from_light_and_dark(
+            queue.clone(),
+            &light_default(),
+            &dark_default(),
+        )?;
+
+        Ok(Self {
+            themes,
+
             mouse_pos,
             screen_dims: screen_dims.into(),
 
@@ -83,7 +102,19 @@ impl App {
             selection_edge_blur: true,
             selection_edge: true,
             nodes_color: true,
-        }
+        })
+    }
+
+    pub fn themes(&self) -> &Themes {
+        &self.themes
+    }
+
+    pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
+        self.themes.active_theme()
+    }
+
+    pub fn theme_upload_future(&mut self) -> Option<Box<dyn GpuFuture>> {
+        self.themes.take_future()
     }
 
     pub fn hover_node(&self) -> Option<NodeId> {
@@ -147,14 +178,24 @@ impl App {
             AppConfigMsg::ToggleNodesColor => {
                 self.nodes_color = !self.nodes_color
             }
+            AppConfigMsg::ToggleLightDarkTheme => {
+                self.themes.toggle_light_dark();
+            }
         }
     }
 
     pub fn apply_input(&mut self, input: SystemInput<AppInput>) {
         if let SystemInput::Keyboard { state, payload } = input {
-            if let AppInput::KeyClearSelection = payload {
-                if state.pressed() {
-                    self.selected_nodes.clear();
+            match payload {
+                AppInput::KeyClearSelection => {
+                    if state.pressed() {
+                        self.selected_nodes.clear();
+                    }
+                }
+                AppInput::KeyToggleTheme => {
+                    if state.pressed() {
+                        self.themes.toggle_light_dark();
+                    }
                 }
             }
         }

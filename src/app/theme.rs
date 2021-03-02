@@ -34,6 +34,7 @@ pub enum ThemeId {
 }
 
 /// A theme definition that can be transformed into theme data usable by the GPU
+#[derive(Debug, Clone, PartialEq)]
 pub struct ThemeDef {
     background: RGB<f32>,
     node_colors: Vec<RGB<f32>>,
@@ -42,6 +43,7 @@ pub struct ThemeDef {
 /// A theme represented as a clear value-compatible background color,
 /// and an immutable image that can be indexed by node ID in the
 /// fragment shader
+#[derive(Debug)]
 pub struct Theme {
     background: [f32; 4],
     node_colors: Arc<ImmutableImage<R8G8B8A8Unorm>>,
@@ -132,9 +134,13 @@ pub fn light_default() -> ThemeDef {
 pub fn dark_default() -> ThemeDef {
     let background = RGB::new(0.0, 0.0, 0.05);
 
-    // use rainbow theme for node colors in both light and dark themes for now
-    let node_colors =
-        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
+    // use rainbow theme for node colors in both light and dark themes for now, but flip dir
+    let node_colors = RAINBOW
+        .iter()
+        .rev()
+        .copied()
+        .map(RGB::from)
+        .collect::<Vec<_>>();
 
     ThemeDef {
         background,
@@ -229,6 +235,50 @@ impl Themes {
         })
     }
 
+    pub fn sampler(&self) -> &Arc<Sampler> {
+        &self.sampler
+    }
+
+    pub fn light(&self) -> &Theme {
+        &self.light
+    }
+
+    pub fn dark(&self) -> &Theme {
+        &self.dark
+    }
+
+    pub fn set_theme(&mut self, theme_id: ThemeId) -> ThemeId {
+        let new_theme = match theme_id {
+            ThemeId::Light => ThemeId::Light,
+            ThemeId::Dark => ThemeId::Dark,
+            ThemeId::Custom(id) => {
+                if self.custom.contains_key(&id) {
+                    ThemeId::Custom(id)
+                } else {
+                    self.active
+                }
+            }
+        };
+
+        if new_theme != self.active {
+            self.active = new_theme;
+        }
+
+        new_theme
+    }
+
+    pub fn toggle_light_dark(&mut self) -> ThemeId {
+        let new_theme = match self.active {
+            ThemeId::Light => ThemeId::Dark,
+            ThemeId::Dark => ThemeId::Light,
+            ThemeId::Custom(_) => ThemeId::Light,
+        };
+
+        self.active = new_theme;
+
+        new_theme
+    }
+
     /// Take the future signifying all theme texture uploads, and tag
     /// all themes as being uploaded. The future *must* be synced
     /// before any texture theme is used!
@@ -245,13 +295,15 @@ impl Themes {
     }
 
     /// Returns the active theme if it's ready to use
-    pub fn active_theme(&self) -> Option<&Theme> {
-        let theme = match self.active {
-            ThemeId::Light => &self.light,
-            ThemeId::Dark => &self.dark,
-            ThemeId::Custom(id) => self.custom.get(&id)?,
+    pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
+        let (id, theme) = match self.active {
+            i @ ThemeId::Light => (i, &self.light),
+            i @ ThemeId::Dark => (i, &self.dark),
+            ThemeId::Custom(id) => {
+                self.custom.get(&id).map(|t| (ThemeId::Custom(id), t))?
+            }
         };
 
-        theme.is_uploaded.take().then(|| theme)
+        theme.is_uploaded.load().then(|| (id, theme))
     }
 }

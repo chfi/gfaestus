@@ -236,7 +236,12 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0));
+    let mut app = App::new(
+        queue.clone(),
+        input_manager.clone_mouse_pos(),
+        (100.0, 100.0),
+    )
+    .expect("error when creating App");
 
     let mut main_view = MainView::new(
         queue.clone(),
@@ -336,7 +341,11 @@ fn main() {
 
     let mut previous_frame_end = {
         let fut = sync::now(device.clone()).join(line_future);
-        Some(fut.boxed())
+        if let Some(theme_fut) = app.theme_upload_future() {
+            Some(fut.join(theme_fut).boxed())
+        } else {
+            Some(fut.boxed())
+        }
     };
 
     const FRAME_HISTORY_LEN: usize = 10;
@@ -526,7 +535,11 @@ fn main() {
                 let nodes_framebuffer =
                     render_pipeline.nodes_framebuffer().unwrap();
 
-                let clear = [0.0, 0.0, 0.05, 1.0];
+                let (theme_id, theme) =
+                    app.active_theme().expect("Active theme not ready for use");
+
+                let clear = theme.clear();
+
                 let nodes_clear_values = vec![
                     clear.into(),
                     [0.0, 0.0, 0.0, 0.0].into(),

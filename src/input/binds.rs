@@ -171,6 +171,7 @@ impl<T: InputPayload> InputState<T> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
     KeyClearSelection,
+    KeyToggleTheme,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -297,11 +298,14 @@ impl std::default::Default for SystemInputBindings<AppInput> {
         use AppInput as Input;
 
         let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
-            [(Key::Escape, Input::KeyClearSelection)]
-                .iter()
-                .copied()
-                .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
-                .collect::<FxHashMap<_, _>>();
+            [
+                (Key::Escape, Input::KeyClearSelection),
+                (Key::F9, Input::KeyToggleTheme),
+            ]
+            .iter()
+            .copied()
+            .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
+            .collect::<FxHashMap<_, _>>();
 
         let mouse_binds = FxHashMap::default();
 
