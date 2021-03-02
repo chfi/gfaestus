@@ -35,14 +35,36 @@ pub struct GfaestusGui {
     gui_draw_system: GuiDrawSystem,
 
     hover_node_id: Option<NodeId>,
-    selected_node_id: Option<NodeId>,
-    selected_node_info: Option<NodeInfo>,
+    selected_node: NodeSelection,
 
     graph_stats: GraphStatsUi,
     view_info: ViewInfoUi,
     frame_rate_box: FrameRateBox,
 
     render_config_ui: RenderConfigUi,
+}
+
+#[derive(Debug, Clone)]
+enum NodeSelection {
+    None,
+    One { info: NodeInfo },
+    Many { count: usize },
+}
+
+impl NodeSelection {
+    fn some_selection(&self) -> bool {
+        match self {
+            NodeSelection::None => false,
+            NodeSelection::One { .. } => true,
+            NodeSelection::Many { .. } => true,
+        }
+    }
+}
+
+impl std::default::Default for NodeSelection {
+    fn default() -> Self {
+        NodeSelection::None
+    }
 }
 
 #[derive(Debug, Default, Clone)]
@@ -187,7 +209,6 @@ impl GfaestusGui {
         ctx.set_fonts(font_defs);
 
         let hover_node_id = None;
-        let selected_node_id = None;
 
         let graph_stats = GraphStatsUi {
             position: Point { x: 12.0, y: 20.0 },
@@ -209,14 +230,18 @@ impl GfaestusGui {
             ctx,
             frame_input: FrameInput::default(),
             enabled_ui_elements: EnabledUiElements::default(),
+
             hover_node_id,
-            selected_node_id,
-            selected_node_info: None,
+            selected_node: NodeSelection::default(),
+
+            // selected_node_id,
+            // selected_node_info: None,
             gui_draw_system,
             graph_stats,
             view_info,
             frame_rate_box,
             render_config_ui: Default::default(),
+            // elements: Vec::new(),
         })
     }
 
@@ -247,34 +272,37 @@ impl GfaestusGui {
         self.hover_node_id = node;
     }
 
-    pub fn set_selected_node(&mut self, node: Option<NodeId>) {
-        self.selected_node_id = node;
-        if node.is_none() {
-            self.selected_node_info = None;
-        }
+    pub fn no_selection(&mut self) {
+        self.selected_node = NodeSelection::None;
     }
 
-    pub fn selected_node(&self) -> Option<NodeId> {
-        self.selected_node_id
-    }
-
-    pub fn selected_node_info_id(&self) -> Option<NodeId> {
-        self.selected_node_info.map(|i| i.node_id)
-    }
-
-    pub fn set_selected_node_info(
+    pub fn one_selection(
         &mut self,
         node_id: NodeId,
         len: usize,
         degree: (usize, usize),
         coverage: usize,
     ) {
-        self.selected_node_info = Some(NodeInfo {
+        let info = NodeInfo {
             node_id,
             len,
             degree,
             coverage,
-        });
+        };
+
+        self.selected_node = NodeSelection::One { info };
+    }
+
+    pub fn many_selection(&mut self, count: usize) {
+        self.selected_node = NodeSelection::Many { count };
+    }
+
+    pub fn selected_node(&self) -> Option<NodeId> {
+        match self.selected_node {
+            NodeSelection::None => None,
+            NodeSelection::One { info } => Some(info.node_id),
+            NodeSelection::Many { count } => None,
+        }
     }
 
     fn graph_stats(&self, pos: Point) {
@@ -370,7 +398,7 @@ impl GfaestusGui {
             )
         }
 
-        if let Some(node_id) = self.selected_node_id {
+        if self.selected_node.some_selection() {
             let top_left = Point {
                 x: 0.0,
                 y: 0.80 * scr.max.y,
@@ -390,20 +418,32 @@ impl GfaestusGui {
                 .title_bar(false)
                 .show(&self.ctx, |ui| {
                     ui.expand_to_include_rect(rect);
-                    let label = format!("Selected node: {}", node_id.0);
-                    ui.label(label);
-                    if let Some(node_info) = self.selected_node_info {
-                        let lb_len = format!("Length: {}", node_info.len);
-                        let lb_deg = format!(
-                            "Degree: ({}, {})",
-                            node_info.degree.0, node_info.degree.1
-                        );
-                        let lb_cov =
-                            format!("Coverage: {}", node_info.coverage);
 
-                        ui.label(lb_len);
-                        ui.label(lb_deg);
-                        ui.label(lb_cov);
+                    match &self.selected_node {
+                        NodeSelection::None => (),
+                        NodeSelection::One { info } => {
+                            let node_info = info;
+
+                            let label = format!(
+                                "Selected node: {}",
+                                node_info.node_id.0
+                            );
+                            ui.label(label);
+                            let lb_len = format!("Length: {}", node_info.len);
+                            let lb_deg = format!(
+                                "Degree: ({}, {})",
+                                node_info.degree.0, node_info.degree.1
+                            );
+                            let lb_cov =
+                                format!("Coverage: {}", node_info.coverage);
+
+                            ui.label(lb_len);
+                            ui.label(lb_deg);
+                            ui.label(lb_cov);
+                        }
+                        NodeSelection::Many { count } => {
+                            ui.label(format!("Selected {} nodes", count));
+                        }
                     }
                 });
         }
@@ -516,22 +556,6 @@ impl GfaestusGui {
         }
 
         Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
-    }
-
-    pub fn apply_app_msg(&mut self, app_msg: crate::app::AppMsg) {
-        use crate::app::AppMsg;
-        match app_msg {
-            AppMsg::SelectNode(id) => {
-                if self.selected_node_id != id {
-                    self.set_selected_node(id);
-                }
-            }
-            AppMsg::HoverNode(id) => {
-                if self.hover_node_id != id {
-                    self.set_hover_node(id);
-                }
-            }
-        }
     }
 
     pub fn apply_input(

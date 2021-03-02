@@ -413,47 +413,39 @@ fn main() {
         );
 
         gui.set_hover_node(app.hover_node());
-        gui.set_selected_node(app.selected_node());
 
-        let node_selection = if let Some(n) = app.selected_node() {
-            let mut v = vec![n];
-            if n.0 > 1 {
-                v.push(NodeId::from(n.0 - 1));
+        if let Some(selected) = app.selected_nodes() {
+            if selected.len() == 1 {
+                let node_id = selected.iter().next().copied().unwrap();
+
+                if gui.selected_node() != Some(node_id) {
+                    let request = GraphQueryRequest::NodeStats(node_id);
+                    let resp = graph_query.query_request_blocking(request);
+                    if let GraphQueryResp::NodeStats {
+                        node_id,
+                        len,
+                        degree,
+                        coverage,
+                    } = resp
+                    {
+                        gui.one_selection(node_id, len, degree, coverage);
+                    }
+                }
+            } else {
+                gui.many_selection(selected.len());
             }
-            if n.0 > 5 {
-                v.push(NodeId::from(n.0 - 2));
-                v.push(NodeId::from(n.0 - 3));
-                v.push(NodeId::from(n.0 - 4));
-                v.push(NodeId::from(n.0 - 5));
-            }
-            v
+
+            main_view.update_node_selection(selected).unwrap();
         } else {
-            vec![]
-        };
-
-        main_view.update_node_selection(&node_selection).unwrap();
+            gui.no_selection();
+            main_view.clear_node_selection().unwrap();
+        }
 
         let world_point = main_view
             .view()
             .screen_point_to_world(screen_dims, mouse_pos);
 
         gui.set_view_info_mouse(mouse_pos, world_point);
-
-        if let Some(node_id) = gui.selected_node() {
-            if gui.selected_node_info_id() != Some(node_id) {
-                let request = GraphQueryRequest::NodeStats(node_id);
-                let resp = graph_query.query_request_blocking(request);
-                if let GraphQueryResp::NodeStats {
-                    node_id,
-                    len,
-                    degree,
-                    coverage,
-                } = resp
-                {
-                    gui.set_selected_node_info(node_id, len, degree, coverage);
-                }
-            }
-        }
 
         match event {
             Event::WindowEvent {

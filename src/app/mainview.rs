@@ -131,27 +131,13 @@ impl MainView {
 
     pub fn update_node_selection(
         &mut self,
-        new_selection: &[NodeId],
+        new_selection: &FxHashSet<NodeId>,
     ) -> Result<()> {
-        let sel_set = new_selection.iter().copied().collect::<FxHashSet<_>>();
-
-        /*
-        let node_count = self.node_data.vertices.len() / 2;
-
-        if !self
-            .node_draw_system
-            .is_node_selection_buffer_alloc(node_count)?
-        {
-            self.node_draw_system
-                .allocate_node_selection_buffer(node_count)?;
-        }
-        */
-
         let draw_sys = &self.node_draw_system;
         let flags = &mut self.node_data.flags;
 
         draw_sys.update_node_selection(|buffer| {
-            let _result = flags.update_selection(&sel_set, buffer)?;
+            let _result = flags.update_selection(new_selection, buffer)?;
             Ok(())
         })
     }
@@ -374,13 +360,21 @@ impl MainView {
                         }
                     }
                     In::ButtonSelect => {
+                        use crate::app::AppMsg;
+                        use crate::app::Select;
+
                         let selected_node = self
                             .read_node_id_at(screen_dims, pos)
                             .map(|nid| NodeId::from(nid as u64));
 
-                        app_msg_tx
-                            .send(crate::app::AppMsg::SelectNode(selected_node))
-                            .unwrap();
+                        if let Some(node) = selected_node {
+                            app_msg_tx
+                                .send(AppMsg::Selection(Select::One {
+                                    node,
+                                    clear: false,
+                                }))
+                                .unwrap();
+                        }
                     }
                     _ => (),
                 }

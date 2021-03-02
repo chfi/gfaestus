@@ -20,26 +20,31 @@ pub struct App {
     screen_dims: ScreenDims,
 
     hover_node: Option<NodeId>,
-    selected_node: Option<NodeId>,
-
-    selection: NodeSelection,
     selected_nodes: FxHashSet<NodeId>,
 
+    // selection: NodeSelection,
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
     pub selection_edge: bool,
     pub nodes_color: bool,
 }
 
-// impl NodeFlags {
+#[derive(Debug, Clone, PartialEq)]
+pub enum Select {
+    Clear,
+    One {
+        node: NodeId,
+        clear: bool,
+    },
+    Many {
+        nodes: FxHashSet<NodeId>,
+        clear: bool,
+    },
+}
 
-// }
-
-// pub struct NodeSele
-
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AppMsg {
-    SelectNode(Option<NodeId>),
+    Selection(Select),
     HoverNode(Option<NodeId>),
 }
 
@@ -69,11 +74,9 @@ impl App {
             mouse_pos,
             screen_dims: screen_dims.into(),
             hover_node: None,
-            selected_node: None,
-
-            selection: NodeSelection::None,
-
+            // selected_node: None,
             selected_nodes: FxHashSet::default(),
+            // selection: NodeSelection::None,
             selection_edge_detect: true,
             selection_edge_blur: true,
             selection_edge: true,
@@ -85,25 +88,11 @@ impl App {
         self.hover_node
     }
 
-    pub fn selected_node(&self) -> Option<NodeId> {
-        self.selected_node
     pub fn selected_nodes(&self) -> Option<&FxHashSet<NodeId>> {
         if self.selected_nodes.is_empty() {
             None
         } else {
             Some(&self.selected_nodes)
-        }
-    }
-
-    pub fn selection(&self) -> &NodeSelection {
-        &self.selection
-    }
-
-    pub fn single_selection(&self) -> Option<NodeId> {
-        if let NodeSelection::One(n) = &self.selection {
-            Some(*n)
-        } else {
-            None
         }
     }
 
@@ -121,8 +110,24 @@ impl App {
 
     pub fn apply_app_msg(&mut self, msg: &AppMsg) {
         match msg {
-            AppMsg::SelectNode(id) => self.selected_node = *id,
             AppMsg::HoverNode(id) => self.hover_node = *id,
+            AppMsg::Selection(sel) => match sel {
+                Select::Clear => {
+                    self.selected_nodes.clear();
+                }
+                Select::One { node, clear } => {
+                    if *clear {
+                        self.selected_nodes.clear();
+                    }
+                    self.selected_nodes.insert(*node);
+                }
+                Select::Many { nodes, clear } => {
+                    if *clear {
+                        self.selected_nodes.clear();
+                    }
+                    self.selected_nodes.extend(nodes.iter().copied());
+                }
+            },
         }
     }
 
