@@ -62,6 +62,18 @@ impl Theme {
         self.color_hash
     }
 
+    pub fn bg_luma(&self) -> f32 {
+        let [r, g, b, _] = self.background;
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        luminance
+    }
+
+    pub fn is_dark(&self) -> bool {
+        let [r, g, b, _] = self.background;
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        luminance < 0.5
+    }
+
     fn from_theme_def(
         queue: &Arc<Queue>,
         theme_def: &ThemeDef,
@@ -345,5 +357,17 @@ impl Themes {
         };
 
         theme.is_uploaded.load().then(|| (id, theme))
+    }
+
+    pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
+        match self.active {
+            i @ ThemeId::Light => (i, &self.light),
+            i @ ThemeId::Dark => (i, &self.dark),
+            ThemeId::Custom(id) => {
+                let theme =
+                    self.custom.get(&id).expect("Active theme does not exist");
+                (ThemeId::Custom(id), theme)
+            }
+        }
     }
 }

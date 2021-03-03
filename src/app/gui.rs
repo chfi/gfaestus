@@ -246,6 +246,18 @@ impl GfaestusGui {
         })
     }
 
+    pub fn set_dark_mode(&self) {
+        let mut style: egui::Style = (*self.ctx.style()).clone();
+        style.visuals = egui::style::Visuals::dark();
+        self.ctx.set_style(style);
+    }
+
+    pub fn set_light_mode(&self) {
+        let mut style: egui::Style = (*self.ctx.style()).clone();
+        style.visuals = egui::style::Visuals::light();
+        self.ctx.set_style(style);
+    }
+
     pub fn set_frame_rate(&mut self, frame: usize, fps: f32, frame_time: f32) {
         self.frame_rate_box.frame = frame;
         self.frame_rate_box.fps = fps;

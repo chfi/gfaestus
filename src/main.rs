@@ -341,11 +341,7 @@ fn main() {
 
     let mut previous_frame_end = {
         let fut = sync::now(device.clone()).join(line_future);
-        if let Some(theme_fut) = app.theme_upload_future() {
-            Some(fut.join(theme_fut).boxed())
-        } else {
-            Some(fut.boxed())
-        }
+        Some(fut.boxed())
     };
 
     main_view
@@ -416,6 +412,12 @@ fn main() {
 
         while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
             app.apply_app_config_msg(&cfg_msg);
+        }
+
+        if app.dark_active_theme() {
+            gui.set_dark_mode();
+        } else {
+            gui.set_light_mode();
         }
 
         gui.set_render_config(

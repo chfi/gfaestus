@@ -113,6 +113,20 @@ impl App {
         self.themes.active_theme()
     }
 
+    pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
+        self.themes.active_theme_ignore_cache()
+    }
+
+    pub fn active_theme_luma(&self) -> f32 {
+        let (_, theme) = self.active_theme_ignore_cache();
+        theme.bg_luma()
+    }
+
+    pub fn dark_active_theme(&self) -> bool {
+        let (_, theme) = self.active_theme_ignore_cache();
+        theme.is_dark()
+    }
+
     pub fn theme_upload_future(&mut self) -> Option<Box<dyn GpuFuture>> {
         self.themes.take_future()
     }
@@ -194,7 +208,13 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        self.themes.toggle_light_dark();
+                        let new_theme = self.themes.toggle_light_dark();
+                        let is_dark = self.dark_active_theme();
+                        let luma = self.active_theme_luma();
+                        println!(
+                            "{:?}\tdark? {}\tluma: {}",
+                            new_theme, is_dark, luma
+                        );
                     }
                 }
             }
