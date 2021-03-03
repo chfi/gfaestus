@@ -7,7 +7,7 @@ use vulkano::{
         AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
     },
     format::R8G8B8A8Unorm,
-    image::{ImageAccess, ImageViewAccess, ImmutableImage},
+    image::ImmutableImage,
     sampler::Sampler,
 };
 use vulkano::{
@@ -15,9 +15,8 @@ use vulkano::{
 };
 use vulkano::{
     descriptor::descriptor_set::{
-        DescriptorSet, DescriptorSetsCollection, PersistentDescriptorSet,
-        PersistentDescriptorSetBuf, PersistentDescriptorSetImg,
-        PersistentDescriptorSetSampler,
+        PersistentDescriptorSet, PersistentDescriptorSetBuf,
+        PersistentDescriptorSetImg, PersistentDescriptorSetSampler,
     },
     framebuffer::{RenderPassAbstract, Subpass},
 };
@@ -158,9 +157,8 @@ type ThemeDescSet = PersistentDescriptorSet<(
 )>;
 
 struct CachedTheme {
-    theme_id: ThemeId,
     color_hash: u64,
-    width_buf: Arc<CpuAccessibleBuffer<i32>>,
+    _width_buf: Arc<CpuAccessibleBuffer<i32>>,
     descriptor_set: Arc<ThemeDescSet>,
 }
 
@@ -169,7 +167,6 @@ impl CachedTheme {
         queue: &Arc<Queue>,
         layout: &Arc<UnsafeDescriptorSetLayout>,
         sampler: Arc<Sampler>,
-        theme_id: ThemeId,
         theme: &Theme,
     ) -> Result<Self> {
         let width = theme.width();
@@ -189,9 +186,8 @@ impl CachedTheme {
         let color_hash = theme.color_hash();
 
         Ok(Self {
-            theme_id,
             color_hash,
-            width_buf,
+            _width_buf: width_buf,
             descriptor_set: Arc::new(set),
         })
     }
@@ -239,7 +235,6 @@ impl ThemeCache {
             queue,
             layout,
             sampler.clone(),
-            theme_id,
             theme,
         )?;
 
@@ -266,14 +261,12 @@ impl ThemeCache {
             queue,
             layout,
             sampler.clone(),
-            ThemeId::Light,
             light,
         )?;
         let dark = CachedTheme::build_descriptor_set(
             queue,
             layout,
             sampler.clone(),
-            ThemeId::Dark,
             dark,
         )?;
 
@@ -496,7 +489,7 @@ impl NodeDrawSystem {
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        let min_node_width = 2.0;
+        // let min_node_width = 2.0;
         // let use_rect_pipeline = !use_lines
         //     || (use_lines && view.scale < (node_width / min_node_width));
 
@@ -540,7 +533,7 @@ impl NodeDrawSystem {
 
         let mut recreate_desc_set = false;
 
-        let data_buffer = {
+        {
             let mut cache_lock = self.caches.lock();
 
             let cache_buf_len = if let Some(buffer) =
@@ -588,8 +581,6 @@ impl NodeDrawSystem {
                     buf[ix] = 0;
                 }
             }
-
-            buffer.clone()
         };
 
         let vertex_buffer = {
@@ -606,11 +597,6 @@ impl NodeDrawSystem {
             };
 
             inner_buf
-        };
-
-        let selection_buffer = {
-            let cache_lock = self.caches.lock();
-            cache_lock.node_selection_buffer.as_ref().unwrap().clone()
         };
 
         let layout = self.rect_pipeline.descriptor_set_layout(1).unwrap();

@@ -69,9 +69,7 @@ impl Theme {
     }
 
     pub fn is_dark(&self) -> bool {
-        let [r, g, b, _] = self.background;
-        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        luminance < 0.5
+        self.bg_luma() < 0.5
     }
 
     fn from_theme_def(
@@ -171,7 +169,7 @@ pub fn dark_default() -> ThemeDef {
     let background = RGB::new(0.0, 0.0, 0.05);
 
     let node_colors =
-        RGB_NODES.iter().copied().map(RGB::from).collect::<Vec<_>>();
+        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,
@@ -192,16 +190,9 @@ pub struct Themes {
 
     sampler: Arc<Sampler>,
 
-    queue: Arc<Queue>,
-
     /// if this is Some(future), the future must be joined before the
     /// active theme is used in the renderer
     future: Option<Box<dyn GpuFuture>>,
-
-    need_rebuild: AtomicCell<bool>,
-
-    descriptor_set_count: AtomicCell<usize>,
-    need_new_descriptor_set: AtomicCell<bool>,
 }
 
 impl Themes {
@@ -237,15 +228,6 @@ impl Themes {
             1.0,
         )?;
 
-        // let sampler = Sampler::unnormalized(queue.device().clone(),
-        //                                     Filter::Nearest,
-        //                                     UnnormalizedSamplerAddressMode::ClampToEdge,
-        //                                     UnnormalizedSamplerAddressMode::ClampToEdge)?;
-
-        let need_rebuild = AtomicCell::new(false);
-        let descriptor_set_count = AtomicCell::new(0);
-        let need_new_descriptor_set = AtomicCell::new(true);
-
         Ok(Themes {
             active,
 
@@ -255,14 +237,7 @@ impl Themes {
 
             sampler,
 
-            queue,
-
             future,
-
-            need_rebuild,
-
-            descriptor_set_count,
-            need_new_descriptor_set,
         })
     }
 
@@ -325,7 +300,6 @@ impl Themes {
         std::mem::take(&mut self.future)
     }
 
-    // pub fn themes_to_upload(&self) -> impl Iterator<Item = (ThemeId, &Theme)> + '_ {
     pub fn themes_to_upload(&self) -> Vec<(ThemeId, &Theme)> {
         let mut res = Vec::new();
 
