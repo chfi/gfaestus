@@ -96,10 +96,11 @@ impl MainView {
     pub fn prepare_themes(
         &self,
         sampler: &Arc<Sampler>,
-        light: &Theme,
-        dark: &Theme,
+        primary: &Theme,
+        secondary: &Theme,
     ) -> Result<()> {
-        self.node_draw_system.prepare_themes(sampler, light, dark)
+        self.node_draw_system
+            .prepare_themes(sampler, primary, secondary)
     }
 
     pub fn cache_theme(

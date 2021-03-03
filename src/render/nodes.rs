@@ -199,25 +199,22 @@ impl CachedTheme {
 
 #[derive(Default)]
 struct ThemeCache {
-    light: Option<CachedTheme>,
-    dark: Option<CachedTheme>,
-    custom: rustc_hash::FxHashMap<u32, CachedTheme>,
+    primary: Option<CachedTheme>,
+    secondary: Option<CachedTheme>,
 }
 
 impl ThemeCache {
     fn get_theme_set(&self, id: ThemeId) -> Option<&Arc<ThemeDescSet>> {
         match id {
-            ThemeId::Light => self.light.as_ref().map(|t| t.get_set()),
-            ThemeId::Dark => self.dark.as_ref().map(|t| t.get_set()),
-            ThemeId::Custom(id) => self.custom.get(&id).map(|t| t.get_set()),
+            ThemeId::Primary => self.primary.as_ref().map(|t| t.get_set()),
+            ThemeId::Secondary => self.secondary.as_ref().map(|t| t.get_set()),
         }
     }
 
     fn theme_hash(&self, id: ThemeId) -> Option<u64> {
         let theme = match id {
-            ThemeId::Light => self.light.as_ref(),
-            ThemeId::Dark => self.dark.as_ref(),
-            ThemeId::Custom(id) => self.custom.get(&id),
+            ThemeId::Primary => self.primary.as_ref(),
+            ThemeId::Secondary => self.secondary.as_ref(),
         };
 
         theme.map(|t| t.color_hash)
@@ -239,11 +236,8 @@ impl ThemeCache {
         )?;
 
         match theme_id {
-            ThemeId::Light => self.light = Some(theme),
-            ThemeId::Dark => self.dark = Some(theme),
-            ThemeId::Custom(id) => {
-                self.custom.insert(id, theme);
-            }
+            ThemeId::Primary => self.primary = Some(theme),
+            ThemeId::Secondary => self.secondary = Some(theme),
         }
 
         Ok(())
@@ -254,24 +248,24 @@ impl ThemeCache {
         queue: &Arc<Queue>,
         layout: &Arc<UnsafeDescriptorSetLayout>,
         sampler: &Arc<Sampler>,
-        light: &Theme,
-        dark: &Theme,
+        primary: &Theme,
+        secondary: &Theme,
     ) -> Result<()> {
-        let light = CachedTheme::build_descriptor_set(
+        let primary = CachedTheme::build_descriptor_set(
             queue,
             layout,
             sampler.clone(),
-            light,
+            primary,
         )?;
-        let dark = CachedTheme::build_descriptor_set(
+        let secondary = CachedTheme::build_descriptor_set(
             queue,
             layout,
             sampler.clone(),
-            dark,
+            secondary,
         )?;
 
-        self.light = Some(light);
-        self.dark = Some(dark);
+        self.primary = Some(primary);
+        self.secondary = Some(secondary);
 
         Ok(())
     }
@@ -364,14 +358,20 @@ impl NodeDrawSystem {
     pub fn prepare_themes(
         &self,
         sampler: &Arc<Sampler>,
-        light: &Theme,
-        dark: &Theme,
+        primary: &Theme,
+        secondary: &Theme,
     ) -> Result<()> {
         let mut theme_cache = self.theme_cache.lock();
 
         let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
 
-        theme_cache.fill(&self.gfx_queue, &layout, sampler, light, dark)?;
+        theme_cache.fill(
+            &self.gfx_queue,
+            &layout,
+            sampler,
+            primary,
+            secondary,
+        )?;
 
         Ok(())
     }

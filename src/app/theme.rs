@@ -18,9 +18,8 @@ use crossbeam::atomic::AtomicCell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum ThemeId {
-    Light,
-    Dark,
-    Custom(u32),
+    Primary,
+    Secondary,
 }
 
 /// A theme definition that can be transformed into theme data usable by the GPU
@@ -184,8 +183,8 @@ pub fn dark_default() -> ThemeDef {
 pub struct Themes {
     active: ThemeId,
 
-    light: Theme,
-    dark: Theme,
+    primary: Theme,
+    secondary: Theme,
     custom: FxHashMap<u32, Theme>,
 
     sampler: Arc<Sampler>,
@@ -196,19 +195,20 @@ pub struct Themes {
 }
 
 impl Themes {
-    pub fn new_from_light_and_dark(
+    pub fn new_from_primary_and_secondary(
         queue: Arc<Queue>,
-        light: &ThemeDef,
-        dark: &ThemeDef,
+        primary: &ThemeDef,
+        secondary: &ThemeDef,
     ) -> Result<Themes> {
-        let active = ThemeId::Light;
+        let active = ThemeId::Primary;
 
-        let (light, light_fut) = Theme::from_theme_def(&queue, light)?;
-        let (dark, dark_fut) = Theme::from_theme_def(&queue, dark)?;
+        let (primary, primary_fut) = Theme::from_theme_def(&queue, primary)?;
+        let (secondary, secondary_fut) =
+            Theme::from_theme_def(&queue, secondary)?;
 
         let custom: FxHashMap<u32, Theme> = FxHashMap::default();
 
-        let future = Some(light_fut.join(dark_fut).boxed());
+        let future = Some(primary_fut.join(secondary_fut).boxed());
 
         // NB the theme's period will have to be provided to the
         // shader if the sampler is normalized or not, unless we make
@@ -231,8 +231,8 @@ impl Themes {
         Ok(Themes {
             active,
 
-            light,
-            dark,
+            primary,
+            secondary,
             custom,
 
             sampler,
@@ -245,25 +245,18 @@ impl Themes {
         &self.sampler
     }
 
-    pub fn light(&self) -> &Theme {
-        &self.light
+    pub fn primary(&self) -> &Theme {
+        &self.primary
     }
 
-    pub fn dark(&self) -> &Theme {
-        &self.dark
+    pub fn secondary(&self) -> &Theme {
+        &self.secondary
     }
 
     pub fn set_theme(&mut self, theme_id: ThemeId) -> ThemeId {
         let new_theme = match theme_id {
-            ThemeId::Light => ThemeId::Light,
-            ThemeId::Dark => ThemeId::Dark,
-            ThemeId::Custom(id) => {
-                if self.custom.contains_key(&id) {
-                    ThemeId::Custom(id)
-                } else {
-                    self.active
-                }
-            }
+            ThemeId::Primary => ThemeId::Primary,
+            ThemeId::Secondary => ThemeId::Secondary,
         };
 
         if new_theme != self.active {
@@ -273,11 +266,10 @@ impl Themes {
         new_theme
     }
 
-    pub fn toggle_light_dark(&mut self) -> ThemeId {
+    pub fn toggle_theme(&mut self) -> ThemeId {
         let new_theme = match self.active {
-            ThemeId::Light => ThemeId::Dark,
-            ThemeId::Dark => ThemeId::Light,
-            ThemeId::Custom(_) => ThemeId::Light,
+            ThemeId::Primary => ThemeId::Secondary,
+            ThemeId::Secondary => ThemeId::Primary,
         };
 
         self.active = new_theme;
@@ -290,8 +282,8 @@ impl Themes {
     /// before any texture theme is used!
     #[must_use = "taking the Themes future assumes that the future will be joined before the theme is used"]
     pub fn take_future(&mut self) -> Option<Box<dyn GpuFuture>> {
-        self.light.is_uploaded.store(true);
-        self.dark.is_uploaded.store(true);
+        self.primary.is_uploaded.store(true);
+        self.secondary.is_uploaded.store(true);
 
         self.custom
             .values_mut()
@@ -303,18 +295,12 @@ impl Themes {
     pub fn themes_to_upload(&self) -> Vec<(ThemeId, &Theme)> {
         let mut res = Vec::new();
 
-        if !self.light.is_uploaded.load() {
-            res.push((ThemeId::Light, &self.light));
+        if !self.primary.is_uploaded.load() {
+            res.push((ThemeId::Primary, &self.primary));
         }
 
-        if !self.dark.is_uploaded.load() {
-            res.push((ThemeId::Light, &self.dark));
-        }
-
-        for (&theme_id, theme) in self.custom.iter() {
-            if !theme.is_uploaded.load() {
-                res.push((ThemeId::Custom(theme_id), theme));
-            }
+        if !self.secondary.is_uploaded.load() {
+            res.push((ThemeId::Secondary, &self.secondary));
         }
 
         res
@@ -323,11 +309,11 @@ impl Themes {
     /// Returns the active theme if it's ready to use
     pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
         let (id, theme) = match self.active {
-            i @ ThemeId::Light => (i, &self.light),
-            i @ ThemeId::Dark => (i, &self.dark),
-            ThemeId::Custom(id) => {
-                self.custom.get(&id).map(|t| (ThemeId::Custom(id), t))?
-            }
+            i @ ThemeId::Primary => (i, &self.primary),
+            i @ ThemeId::Secondary => (i, &self.secondary),
+            // ThemeId::Custom(id) => {
+            //     self.custom.get(&id).map(|t| (ThemeId::Custom(id), t))?
+            // }
         };
 
         theme.is_uploaded.load().then(|| (id, theme))
@@ -335,13 +321,8 @@ impl Themes {
 
     pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
         match self.active {
-            i @ ThemeId::Light => (i, &self.light),
-            i @ ThemeId::Dark => (i, &self.dark),
-            ThemeId::Custom(id) => {
-                let theme =
-                    self.custom.get(&id).expect("Active theme does not exist");
-                (ThemeId::Custom(id), theme)
-            }
+            i @ ThemeId::Primary => (i, &self.primary),
+            i @ ThemeId::Secondary => (i, &self.secondary),
         }
     }
 }

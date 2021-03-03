@@ -347,8 +347,8 @@ fn main() {
     main_view
         .prepare_themes(
             app.themes().sampler(),
-            app.themes().light(),
-            app.themes().dark(),
+            app.themes().primary(),
+            app.themes().secondary(),
         )
         .unwrap();
 
@@ -550,9 +550,7 @@ fn main() {
                     }
                 };
 
-                let mut theme_future = None;
-
-                if theme_cache_invalid {
+                let theme_future = if theme_cache_invalid {
                     let to_upload = app.themes().themes_to_upload();
                     let sampler = app.themes().sampler();
 
@@ -560,8 +558,10 @@ fn main() {
                         main_view.cache_theme(sampler, id, theme).unwrap();
                     }
 
-                    theme_future = app.theme_upload_future();
-                }
+                    app.theme_upload_future()
+                } else {
+                    None
+                };
 
                 let (theme_id, theme) = app.active_theme().unwrap();
 

@@ -66,7 +66,7 @@ pub enum AppConfigMsg {
     ToggleSelectionOutline,
     ToggleNodesColor,
     // Toggle(RenderConfigOpts),
-    ToggleLightDarkTheme,
+    ToggleTheme,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -83,10 +83,10 @@ impl App {
         mouse_pos: MousePos,
         screen_dims: Dims,
     ) -> Result<Self> {
-        let themes = Themes::new_from_light_and_dark(
+        let themes = Themes::new_from_primary_and_secondary(
             queue.clone(),
-            &light_default(),
             &dark_default(),
+            &light_default(),
         )?;
 
         Ok(Self {
@@ -192,8 +192,8 @@ impl App {
             AppConfigMsg::ToggleNodesColor => {
                 self.nodes_color = !self.nodes_color
             }
-            AppConfigMsg::ToggleLightDarkTheme => {
-                self.themes.toggle_light_dark();
+            AppConfigMsg::ToggleTheme => {
+                self.themes.toggle_theme();
             }
         }
     }
@@ -208,7 +208,7 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        let new_theme = self.themes.toggle_light_dark();
+                        let new_theme = self.themes.toggle_theme();
                         let is_dark = self.dark_active_theme();
                         let luma = self.active_theme_luma();
                         println!(
