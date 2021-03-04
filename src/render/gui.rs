@@ -291,8 +291,8 @@ impl GuiDrawSystem {
                     .draw_indexed(
                         self.pipeline.clone(),
                         &dynamic_state,
-                        vec![Arc::new(vertex_buffer.clone())],
-                        index_buffer.clone(),
+                        vec![Arc::new(vertex_buffer)],
+                        index_buffer,
                         set.clone(),
                         screen_size_pc,
                     )
