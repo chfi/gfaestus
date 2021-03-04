@@ -25,8 +25,8 @@ pub enum ThemeId {
 /// A theme definition that can be transformed into theme data usable by the GPU
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThemeDef {
-    background: RGB<f32>,
-    node_colors: Vec<RGB<f32>>,
+    pub background: RGB<f32>,
+    pub node_colors: Vec<RGB<f32>>,
 }
 
 /// A theme represented as a clear value-compatible background color,

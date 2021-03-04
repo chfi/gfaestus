@@ -31,8 +31,8 @@ use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
 
-use gfaestus::app::gui::*;
 use gfaestus::app::mainview::*;
+use gfaestus::app::{gui::*, AppConfigState};
 use gfaestus::app::{App, AppConfigMsg, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -362,6 +362,11 @@ fn main() {
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
     let (cfg_msg_tx, cfg_msg_rx) =
         crossbeam::channel::unbounded::<AppConfigMsg>();
+
+    let (opts_to_app, opts_from_app) =
+        crossbeam::channel::unbounded::<AppConfigState>();
+    let (opts_to_gui, opts_from_gui) =
+        crossbeam::channel::unbounded::<AppConfigState>();
 
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event

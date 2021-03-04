@@ -21,15 +21,21 @@ use vulkano::{
 use crossbeam::channel;
 use parking_lot::Mutex;
 
-pub mod traits;
+mod themes;
 
-pub use traits::*;
+use themes::*;
+
+// pub mod traits;
+
+// pub use traits::*;
 
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
 
 use crate::input::binds::*;
+
+use super::theme::{ThemeDef, ThemeId};
 
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
@@ -46,6 +52,8 @@ pub struct GfaestusGui {
     frame_rate_box: FrameRateBox,
 
     render_config_ui: RenderConfigUi,
+
+    theme_editor: ThemeEditor,
 }
 
 #[derive(Debug, Clone)]
@@ -243,7 +251,17 @@ impl GfaestusGui {
             view_info,
             frame_rate_box,
             render_config_ui: Default::default(),
+
+            theme_editor: ThemeEditor::new(
+                rgb::RGB::new(0.7f32, 0.0, 0.8),
+                &[],
+            ),
         })
+    }
+
+    pub fn update_theme_editor(&mut self, id: ThemeId, theme: &ThemeDef) {
+        self.theme_editor.set_theme_id(id);
+        self.theme_editor.update_from_themedef(theme);
     }
 
     pub fn set_dark_mode(&self) {
