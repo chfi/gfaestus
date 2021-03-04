@@ -1,7 +1,7 @@
 pub mod gui;
 pub mod mainview;
 pub mod node_flags;
-pub mod options;
+pub mod settings;
 pub mod theme;
 
 use node_flags::*;
@@ -26,7 +26,7 @@ use crate::view::*;
 
 use theme::*;
 
-pub use options::*;
+pub use settings::*;
 
 pub struct App {
     themes: Themes,
@@ -224,12 +224,12 @@ impl App {
         }
     }
 
-    pub fn active_theme_config_state(&self) -> options::AppConfigState {
+    pub fn active_theme_config_state(&self) -> settings::AppConfigState {
         let (id, _) = self.themes.active_theme_ignore_cache();
 
         let def = self.themes.get_theme_def(id).clone();
 
-        options::AppConfigState::Theme { id, def }
+        settings::AppConfigState::Theme { id, def }
     }
 
     pub fn apply_app_config_state(&mut self, app_cfg: AppConfigState) {

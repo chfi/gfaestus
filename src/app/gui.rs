@@ -37,7 +37,7 @@ use crate::input::binds::*;
 
 use super::theme::{ThemeDef, ThemeId};
 
-use crate::app::options::AppConfigState;
+use crate::app::settings::AppConfigState;
 
 pub struct GfaestusGui {
     ctx: egui::CtxRef,

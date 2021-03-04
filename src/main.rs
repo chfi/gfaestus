@@ -408,6 +408,10 @@ fn main() {
             gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
         }
 
+        while let Ok(opt_in) = opts_from_gui.try_recv() {
+            app.apply_app_config_state(opt_in);
+        }
+
         while let Ok(main_view_in) = main_view_rx.try_recv() {
             main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
         }
