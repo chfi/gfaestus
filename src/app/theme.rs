@@ -42,6 +42,12 @@ pub struct ThemeDef {
     pub node_colors: Vec<RGB<f32>>,
 }
 
+impl std::default::Default for ThemeDef {
+    fn default() -> Self {
+        light_default()
+    }
+}
+
 /// A theme represented as a clear value-compatible background color,
 /// and an immutable image that can be indexed by node ID in the
 /// fragment shader
@@ -197,11 +203,11 @@ pub struct Themes {
     queue: Arc<Queue>,
     active: ThemeId,
 
-    primary: Theme,
-    secondary: Theme,
+    pub(super) primary: Theme,
+    pub(super) secondary: Theme,
 
-    primary_def: ThemeDef,
-    secondary_def: ThemeDef,
+    pub(super) primary_def: ThemeDef,
+    pub(super) secondary_def: ThemeDef,
 
     custom: FxHashMap<u32, Theme>,
 

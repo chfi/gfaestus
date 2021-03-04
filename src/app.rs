@@ -124,6 +124,13 @@ impl App {
         (id, def)
     }
 
+    pub fn all_theme_defs(&self) -> Vec<(ThemeId, &ThemeDef)> {
+        let mut res = Vec::new();
+        res.push((ThemeId::Primary, &self.themes.primary_def));
+        res.push((ThemeId::Secondary, &self.themes.secondary_def));
+        res
+    }
+
     pub fn active_theme_luma(&self) -> f32 {
         let (_, theme) = self.active_theme_ignore_cache();
         theme.bg_luma()

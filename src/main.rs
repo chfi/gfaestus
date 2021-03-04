@@ -366,13 +366,9 @@ fn main() {
     let (opts_to_gui, opts_from_app) =
         crossbeam::channel::unbounded::<AppConfigState>();
 
-    {
-        let (id, def) = app.active_theme_def();
-        gui.update_theme_editor(id, def)
+    for (id, def) in app.all_theme_defs() {
+        gui.update_theme_editor(id, def);
     }
-
-    // let (opts_to_gui, opts_from_gui) =
-    //     crossbeam::channel::unbounded::<AppConfigState>();
 
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event
@@ -410,12 +406,12 @@ fn main() {
             app.apply_input(app_in);
         }
 
-        {
-            let (id, def) = app.active_theme_def();
-            if id != cur_theme_id {
-                gui.update_theme_editor(id, def)
-            }
-        }
+        // {
+        //     let (id, def) = app.active_theme_def();
+        //     if id != cur_theme_id {
+        //         gui.update_theme_editor(id, def)
+        //     }
+        // }
 
         while let Ok(gui_in) = gui_rx.try_recv() {
             gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);

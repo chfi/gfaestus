@@ -55,7 +55,7 @@ pub struct GfaestusGui {
 
     render_config_ui: RenderConfigUi,
 
-    theme_editor: ThemeEditor,
+    theme_editor: ThemeEditorWindow,
 
     app_cfg_tx: channel::Sender<AppConfigState>,
 }
@@ -122,7 +122,7 @@ impl std::default::Default for EnabledUiElements {
             egui_memory_ui: false,
             frame_rate: true,
             graph_stats: true,
-            view_info: true,
+            view_info: false,
             selected_node: true,
         }
     }
@@ -259,11 +259,7 @@ impl GfaestusGui {
                 frame_rate_box,
                 render_config_ui: Default::default(),
 
-                theme_editor: ThemeEditor::new(
-                    app_cfg_tx.clone(),
-                    rgb::RGB::new(0.7f32, 0.0, 0.8),
-                    &[],
-                ),
+                theme_editor: ThemeEditorWindow::new(app_cfg_tx.clone()),
 
                 app_cfg_tx,
             },
@@ -272,15 +268,14 @@ impl GfaestusGui {
     }
 
     pub fn update_theme_editor(&mut self, id: ThemeId, theme: &ThemeDef) {
-        self.theme_editor.set_theme_id(id);
-        self.theme_editor.update_from_themedef(theme);
+        self.theme_editor.update_theme(id, theme);
     }
 
-    pub fn apply_theme(&self) -> AppConfigState {
-        let id = self.theme_editor.theme_id();
-        let def = self.theme_editor.state_to_themedef();
-        AppConfigState::Theme { id, def }
-    }
+    // pub fn apply_theme(&self) -> AppConfigState {
+    //     let id = self.theme_editor.theme_id();
+    //     let def = self.theme_editor.state_to_themedef();
+    //     AppConfigState::Theme { id, def }
+    // }
 
     pub fn set_dark_mode(&self) {
         let mut style: egui::Style = (*self.ctx.style()).clone();
@@ -532,10 +527,12 @@ impl GfaestusGui {
         }
 
         // if self.enabled_ui_elements.render_config {
+        /*
         self.render_config_info(Point {
             x: 0.8 * scr.max.x,
             y: 0.8 * scr.max.y,
         });
+        */
         // }
 
         if self.enabled_ui_elements.egui_inspection_ui {
