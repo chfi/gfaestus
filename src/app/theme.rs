@@ -297,29 +297,20 @@ impl Themes {
         theme_id: ThemeId,
         theme_def: ThemeDef,
     ) -> Result<()> {
-        // let (theme, future) = Theme::from_theme_def(&self.queue, &theme_def)?;
-
-        let background = {
-            let bg = theme_def.background;
-            [bg.r, bg.g, bg.b, 1.0]
-        };
+        let (theme, future) = Theme::from_theme_def(&self.queue, &theme_def)?;
 
         match theme_id {
             ThemeId::Primary => {
-                // self.primary_def = theme_def;
-                // self.primary = theme;
-                self.primary_def.background = theme_def.background;
-                self.primary.background = background;
+                self.primary_def = theme_def;
+                self.primary = theme;
             }
             ThemeId::Secondary => {
-                // self.secondary_def = theme_def;
-                // self.secondary = theme;
-                self.secondary_def.background = theme_def.background;
-                self.secondary.background = background;
+                self.secondary_def = theme_def;
+                self.secondary = theme;
             }
         }
 
-        // self.future = Some(future);
+        self.future = Some(future);
 
         Ok(())
     }

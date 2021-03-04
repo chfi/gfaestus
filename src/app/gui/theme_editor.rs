@@ -131,14 +131,9 @@ impl ThemeEditorWindow {
 
 /// The widget for editing a specific theme
 pub struct ThemeEditor {
-    // background: RGB<f32>,
     id: ThemeId,
-    // open: bool,
     background: egui::Color32,
     node_colors: Vec<egui::Color32>,
-    // node_colors: Vec<RGB<f32>>,
-    // tx_theme: channel::Sender<AppConfigState>,
-    // rx_theme: channel::Receiver<AppConfigState>,
 }
 
 impl ThemeEditor {
@@ -146,24 +141,16 @@ impl ThemeEditor {
         ThemeEditor::new(def.background, &def.node_colors)
     }
 
-    pub fn new(
-        // tx_theme: channel::Sender<AppConfigState>,
-        // rx_theme: channel::Receiver<AppConfigState>,
-        background: RGB<f32>,
-        node_colors: &[RGB<f32>],
-    ) -> Self {
+    pub fn new(background: RGB<f32>, node_colors: &[RGB<f32>]) -> Self {
         let node_colors = node_colors
             .iter()
             .map(|&c| rgb_to_color32(c))
             .collect::<Vec<_>>();
 
         Self {
-            // open: true,
             id: ThemeId::Primary,
             background: rgb_to_color32(background),
             node_colors,
-            // tx_theme,
-            // rx_theme,
         }
     }
 
@@ -172,22 +159,22 @@ impl ThemeEditor {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
+        ui.heading(format!("Theme: {}", self.id));
         ui.horizontal(|ui| {
-            ui.label(format!("Theme: {}", self.id));
-
-            ui.colored_label(self.background, "select a color");
+            ui.label("Background color");
             ui.color_edit_button_srgba(&mut self.background);
-
-            // if ui.button("Apply").clicked() {
-            //     let def = self.state_to_themedef();
-            //     let id = self.id;
-
-            //     self.tx_theme
-            //         .send(AppConfigState::Theme { id, def })
-            //         .unwrap();
-            //     println!("Sent new theme");
-            // }
         });
+
+        egui::ScrollArea::auto_sized().show(ui, |ui| {
+            for (ix, color) in self.node_colors.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(ix.to_string());
+                    ui.color_edit_button_srgba(color);
+                });
+            }
+        });
+
+        // ui.
     }
 
     pub fn show(&mut self, ctx: &egui::CtxRef) {
