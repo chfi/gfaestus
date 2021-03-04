@@ -37,6 +37,8 @@ use crate::input::binds::*;
 
 use super::theme::{ThemeDef, ThemeId};
 
+use crate::app::options::AppConfigState;
+
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
@@ -54,6 +56,8 @@ pub struct GfaestusGui {
     render_config_ui: RenderConfigUi,
 
     theme_editor: ThemeEditor,
+
+    app_cfg_tx: channel::Sender<AppConfigState>,
 }
 
 #[derive(Debug, Clone)]
@@ -193,7 +197,7 @@ impl GfaestusGui {
     pub fn new<R>(
         gfx_queue: Arc<Queue>,
         subpass: Subpass<R>,
-    ) -> Result<GfaestusGui>
+    ) -> Result<(GfaestusGui, channel::Receiver<AppConfigState>)>
     where
         R: RenderPassAbstract + Send + Sync + 'static,
     {
@@ -238,30 +242,44 @@ impl GfaestusGui {
             frame: 0,
         };
 
-        Ok(Self {
-            ctx,
-            frame_input: FrameInput::default(),
-            enabled_ui_elements: EnabledUiElements::default(),
+        let (app_cfg_tx, app_cfg_rx) = channel::unbounded::<AppConfigState>();
 
-            hover_node_id,
-            selected_node: NodeSelection::default(),
+        Ok((
+            Self {
+                ctx,
+                frame_input: FrameInput::default(),
+                enabled_ui_elements: EnabledUiElements::default(),
 
-            gui_draw_system,
-            graph_stats,
-            view_info,
-            frame_rate_box,
-            render_config_ui: Default::default(),
+                hover_node_id,
+                selected_node: NodeSelection::default(),
 
-            theme_editor: ThemeEditor::new(
-                rgb::RGB::new(0.7f32, 0.0, 0.8),
-                &[],
-            ),
-        })
+                gui_draw_system,
+                graph_stats,
+                view_info,
+                frame_rate_box,
+                render_config_ui: Default::default(),
+
+                theme_editor: ThemeEditor::new(
+                    app_cfg_tx.clone(),
+                    rgb::RGB::new(0.7f32, 0.0, 0.8),
+                    &[],
+                ),
+
+                app_cfg_tx,
+            },
+            app_cfg_rx,
+        ))
     }
 
     pub fn update_theme_editor(&mut self, id: ThemeId, theme: &ThemeDef) {
         self.theme_editor.set_theme_id(id);
         self.theme_editor.update_from_themedef(theme);
+    }
+
+    pub fn apply_theme(&self) -> AppConfigState {
+        let id = self.theme_editor.theme_id();
+        let def = self.theme_editor.state_to_themedef();
+        AppConfigState::Theme { id, def }
     }
 
     pub fn set_dark_mode(&self) {
@@ -534,6 +552,11 @@ impl GfaestusGui {
             egui::Window::new("egui_memory_ui_window")
                 .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
+
+        self.theme_editor.show(&self.ctx);
+        // let mut theme_editor = self.theme_editor.window();
+        // theme_editor.show(&self.ctx, |ui| self.theme_editor.ui(ui));
+        // self.theme_editor.ui(&mut ui)
     }
 
     pub fn toggle_egui_inspection_ui(&mut self) {

@@ -223,4 +223,20 @@ impl App {
             }
         }
     }
+
+    pub fn active_theme_config_state(&self) -> options::AppConfigState {
+        let (id, _) = self.themes.active_theme_ignore_cache();
+
+        let def = self.themes.get_theme_def(id).clone();
+
+        options::AppConfigState::Theme { id, def }
+    }
+
+    pub fn apply_app_config_state(&mut self, app_cfg: AppConfigState) {
+        match app_cfg {
+            AppConfigState::Theme { id, def } => {
+                self.themes.replace_theme_def(id, def).unwrap();
+            }
+        }
+    }
 }

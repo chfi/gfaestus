@@ -250,7 +250,7 @@ fn main() {
     )
     .unwrap();
 
-    let mut gui = GfaestusGui::new(
+    let (mut gui, opts_from_gui) = GfaestusGui::new(
         queue.clone(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
     )
@@ -363,10 +363,11 @@ fn main() {
     let (cfg_msg_tx, cfg_msg_rx) =
         crossbeam::channel::unbounded::<AppConfigMsg>();
 
-    let (opts_to_app, opts_from_app) =
+    let (opts_to_gui, opts_from_app) =
         crossbeam::channel::unbounded::<AppConfigState>();
-    let (opts_to_gui, opts_from_gui) =
-        crossbeam::channel::unbounded::<AppConfigState>();
+
+    // let (opts_to_gui, opts_from_gui) =
+    //     crossbeam::channel::unbounded::<AppConfigState>();
 
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event

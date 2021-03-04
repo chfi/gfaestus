@@ -3,6 +3,8 @@ use egui::widgets::color_picker;
 
 use rgb::*;
 
+use crossbeam::channel;
+
 use crate::app::options::AppConfigState;
 use crate::app::theme::{Theme, ThemeDef, ThemeId};
 
@@ -27,10 +29,17 @@ pub struct ThemeEditor {
     background: egui::Color32,
     node_colors: Vec<egui::Color32>,
     // node_colors: Vec<RGB<f32>>,
+    tx_theme: channel::Sender<AppConfigState>,
+    // rx_theme: channel::Receiver<AppConfigState>,
 }
 
 impl ThemeEditor {
-    pub fn new(background: RGB<f32>, node_colors: &[RGB<f32>]) -> Self {
+    pub fn new(
+        tx_theme: channel::Sender<AppConfigState>,
+        // rx_theme: channel::Receiver<AppConfigState>,
+        background: RGB<f32>,
+        node_colors: &[RGB<f32>],
+    ) -> Self {
         let node_colors = node_colors
             .iter()
             .map(|&c| rgb_to_color32(c))
@@ -41,10 +50,13 @@ impl ThemeEditor {
             id: ThemeId::Primary,
             background: rgb_to_color32(background),
             node_colors,
+
+            tx_theme,
+            // rx_theme,
         }
     }
 
-    pub fn window(&mut self) -> egui::Window {
+    pub fn window(&self) -> egui::Window {
         egui::Window::new("Theme Editor").title_bar(true)
     }
 
@@ -52,7 +64,21 @@ impl ThemeEditor {
         ui.horizontal(|ui| {
             ui.colored_label(self.background, "select a color");
             ui.color_edit_button_srgba(&mut self.background);
+            if ui.button("Apply").clicked() {
+                let def = self.state_to_themedef();
+                let id = self.id;
+
+                self.tx_theme
+                    .send(AppConfigState::Theme { id, def })
+                    .unwrap();
+                println!("Sent new theme");
+            }
         });
+    }
+
+    pub fn show(&mut self, ctx: &egui::CtxRef) {
+        let window = egui::Window::new("Theme Editor").title_bar(true);
+        window.show(ctx, |ui| self.ui(ui));
     }
 
     pub fn set_theme_id(&mut self, id: ThemeId) {
