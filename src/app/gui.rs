@@ -25,10 +25,6 @@ mod theme_editor;
 
 use theme_editor::*;
 
-// pub mod traits;
-
-// pub use traits::*;
-
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
@@ -276,12 +272,6 @@ impl GfaestusGui {
     pub fn update_theme_editor(&mut self, id: ThemeId, theme: &ThemeDef) {
         self.theme_editor.update_theme(id, theme);
     }
-
-    // pub fn apply_theme(&self) -> AppConfigState {
-    //     let id = self.theme_editor.theme_id();
-    //     let def = self.theme_editor.state_to_themedef();
-    //     AppConfigState::Theme { id, def }
-    // }
 
     pub fn set_dark_mode(&self) {
         let mut style: egui::Style = (*self.ctx.style()).clone();
@@ -582,9 +572,6 @@ impl GfaestusGui {
 
         self.theme_editor
             .show(&self.ctx, &mut self.enabled_ui_elements.theme_editor);
-        // let mut theme_editor = self.theme_editor.window();
-        // theme_editor.show(&self.ctx, |ui| self.theme_editor.ui(ui));
-        // self.theme_editor.ui(&mut ui)
     }
 
     pub fn toggle_egui_inspection_ui(&mut self) {

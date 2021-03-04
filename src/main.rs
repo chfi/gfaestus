@@ -401,17 +401,9 @@ fn main() {
 
         app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
 
-        let (cur_theme_id, _) = app.active_theme_def();
         while let Ok(app_in) = app_rx.try_recv() {
             app.apply_input(app_in);
         }
-
-        // {
-        //     let (id, def) = app.active_theme_def();
-        //     if id != cur_theme_id {
-        //         gui.update_theme_editor(id, def)
-        //     }
-        // }
 
         while let Ok(gui_in) = gui_rx.try_recv() {
             gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);

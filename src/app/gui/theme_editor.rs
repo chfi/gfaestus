@@ -1,6 +1,3 @@
-use egui::widgets;
-use egui::widgets::color_picker;
-
 use egui::vec2;
 
 use rgb::*;
@@ -8,7 +5,7 @@ use rgb::*;
 use crossbeam::channel;
 
 use crate::app::settings::AppConfigState;
-use crate::app::theme::{Theme, ThemeDef, ThemeId};
+use crate::app::theme::{ThemeDef, ThemeId};
 
 fn rgb_to_color32(color: RGB<f32>) -> egui::Color32 {
     let r = (255.0 * color.r).floor();
@@ -67,10 +64,6 @@ impl ThemeEditorWindow {
         editor.update_from_themedef(theme);
     }
 
-    // pub fn apply_theme(&self) -> AppConfigState {
-    // }
-
-    // pub fn show(&mut self, ctx: &egui::CtxRef, open: &mut bool) {
     pub fn show(&mut self, ctx: &egui::CtxRef, open: &mut bool) {
         egui::Window::new("Theme Editor")
             .open(open)
@@ -158,10 +151,6 @@ impl ThemeEditor {
         }
     }
 
-    pub fn window(&self) -> egui::Window {
-        egui::Window::new("Theme Editor").title_bar(true)
-    }
-
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.heading(format!("Theme: {}", self.id));
         ui.horizontal(|ui| {
@@ -177,8 +166,6 @@ impl ThemeEditor {
                 });
             }
         });
-
-        // ui.
     }
 
     pub fn show(&mut self, ctx: &egui::CtxRef) {
@@ -195,10 +182,6 @@ impl ThemeEditor {
         self.node_colors.clear();
         self.node_colors
             .extend(theme.node_colors.iter().map(|&c| rgb_to_color32(c)));
-    }
-
-    pub fn theme_id(&self) -> ThemeId {
-        self.id
     }
 
     pub fn state_to_themedef(&self) -> ThemeDef {
