@@ -108,10 +108,13 @@ struct EnabledUiElements {
     egui_inspection_ui: bool,
     egui_settings_ui: bool,
     egui_memory_ui: bool,
+
     frame_rate: bool,
     graph_stats: bool,
     view_info: bool,
     selected_node: bool,
+
+    theme_editor: bool,
 }
 
 impl std::default::Default for EnabledUiElements {
@@ -120,10 +123,13 @@ impl std::default::Default for EnabledUiElements {
             egui_inspection_ui: false,
             egui_settings_ui: false,
             egui_memory_ui: false,
+
             frame_rate: true,
             graph_stats: true,
             view_info: false,
             selected_node: true,
+
+            theme_editor: false,
         }
     }
 }
@@ -227,7 +233,7 @@ impl GfaestusGui {
         let hover_node_id = None;
 
         let graph_stats = GraphStatsUi {
-            position: Point { x: 12.0, y: 20.0 },
+            position: Point { x: 12.0, y: 40.0 },
             ..GraphStatsUi::default()
         };
 
@@ -280,12 +286,14 @@ impl GfaestusGui {
     pub fn set_dark_mode(&self) {
         let mut style: egui::Style = (*self.ctx.style()).clone();
         style.visuals = egui::style::Visuals::dark();
+        style.visuals.window_corner_radius = 0.0;
         self.ctx.set_style(style);
     }
 
     pub fn set_light_mode(&self) {
         let mut style: egui::Style = (*self.ctx.style()).clone();
         style.visuals = egui::style::Visuals::light();
+        style.visuals.window_corner_radius = 0.0;
         self.ctx.set_style(style);
     }
 
@@ -423,6 +431,26 @@ impl GfaestusGui {
             });
     }
 
+    pub fn menu_bar(&mut self) {
+        let ctx = &self.ctx;
+        let enabled = &mut self.enabled_ui_elements;
+
+        egui::TopPanel::top("gfaestus_top_menu_bar").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(enabled.theme_editor, "Theme Editor")
+                    .clicked()
+                {
+                    enabled.theme_editor = !enabled.theme_editor;
+                }
+
+                if ui.selectable_label(enabled.frame_rate, "FPS").clicked() {
+                    enabled.frame_rate = !enabled.frame_rate;
+                }
+            });
+        });
+    }
+
     pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
         let mut raw_input = self.frame_input.into_raw_input();
         let screen_rect = screen_rect.map(|p| egui::Rect {
@@ -434,6 +462,8 @@ impl GfaestusGui {
         self.ctx.begin_frame(raw_input);
 
         let scr = self.ctx.input().screen_rect();
+
+        self.menu_bar();
 
         if let Some(node_id) = self.hover_node_id {
             egui::containers::popup::show_tooltip_text(
@@ -503,12 +533,12 @@ impl GfaestusGui {
         if self.enabled_ui_elements.frame_rate {
             let p0 = Point {
                 x: 0.8 * scr.max.x,
-                y: 0.0,
+                y: 30.0,
             };
 
             let p1 = Point {
                 x: scr.max.x,
-                y: 80.0,
+                y: 100.0,
             };
 
             egui::Window::new("mouse_over_egui")
@@ -550,7 +580,8 @@ impl GfaestusGui {
                 .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
 
-        self.theme_editor.show(&self.ctx);
+        self.theme_editor
+            .show(&self.ctx, &mut self.enabled_ui_elements.theme_editor);
         // let mut theme_editor = self.theme_editor.window();
         // theme_editor.show(&self.ctx, |ui| self.theme_editor.ui(ui));
         // self.theme_editor.ui(&mut ui)

@@ -27,7 +27,6 @@ fn color32_to_rgb(color: egui::Color32) -> RGB<f32> {
 /// The window that contains the theme editor widget, and lets the
 /// user choose which theme to edit
 pub struct ThemeEditorWindow {
-    open: bool,
     tx_theme: channel::Sender<AppConfigState>,
 
     editing_theme: ThemeId,
@@ -48,7 +47,6 @@ impl ThemeEditorWindow {
         secondary.id = ThemeId::Secondary;
 
         Self {
-            open: true,
             tx_theme,
 
             editing_theme,
@@ -73,9 +71,9 @@ impl ThemeEditorWindow {
     // }
 
     // pub fn show(&mut self, ctx: &egui::CtxRef, open: &mut bool) {
-    pub fn show(&mut self, ctx: &egui::CtxRef) {
+    pub fn show(&mut self, ctx: &egui::CtxRef, open: &mut bool) {
         egui::Window::new("Theme Editor")
-            // .open(open)
+            .open(open)
             .default_size(vec2(512.0, 512.0))
             .scroll(true)
             .show(ctx, |ui| {
