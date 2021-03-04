@@ -1,6 +1,7 @@
 pub mod gui;
 pub mod mainview;
 pub mod node_flags;
+pub mod options;
 pub mod theme;
 
 use node_flags::*;
@@ -24,6 +25,8 @@ use crate::input::MousePos;
 use crate::view::*;
 
 use theme::*;
+
+pub use options::*;
 
 pub struct App {
     themes: Themes,

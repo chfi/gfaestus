@@ -181,10 +181,15 @@ pub fn dark_default() -> ThemeDef {
 /// and whether draw systems using the active texture needs to recreate
 /// its descriptor sets due to new texture uploads.
 pub struct Themes {
+    queue: Arc<Queue>,
     active: ThemeId,
 
     primary: Theme,
     secondary: Theme,
+
+    primary_def: ThemeDef,
+    secondary_def: ThemeDef,
+
     custom: FxHashMap<u32, Theme>,
 
     sampler: Arc<Sampler>,
@@ -201,6 +206,9 @@ impl Themes {
         secondary: &ThemeDef,
     ) -> Result<Themes> {
         let active = ThemeId::Primary;
+
+        let primary_def = primary.clone();
+        let secondary_def = secondary.clone();
 
         let (primary, primary_fut) = Theme::from_theme_def(&queue, primary)?;
         let (secondary, secondary_fut) =
@@ -229,10 +237,15 @@ impl Themes {
         )?;
 
         Ok(Themes {
+            queue,
             active,
 
             primary,
             secondary,
+
+            primary_def,
+            secondary_def,
+
             custom,
 
             sampler,
@@ -251,6 +264,36 @@ impl Themes {
 
     pub fn secondary(&self) -> &Theme {
         &self.secondary
+    }
+
+    pub fn get_theme_def(&self, theme_id: ThemeId) -> &ThemeDef {
+        match theme_id {
+            ThemeId::Primary => &self.primary_def,
+            ThemeId::Secondary => &self.secondary_def,
+        }
+    }
+
+    pub fn replace_theme_def(
+        &mut self,
+        theme_id: ThemeId,
+        theme_def: ThemeDef,
+    ) -> Result<()> {
+        let (theme, future) = Theme::from_theme_def(&self.queue, &theme_def)?;
+
+        match theme_id {
+            ThemeId::Primary => {
+                self.primary_def = theme_def;
+                self.primary = theme;
+            }
+            ThemeId::Secondary => {
+                self.secondary_def = theme_def;
+                self.secondary = theme;
+            }
+        }
+
+        self.future = Some(future);
+
+        Ok(())
     }
 
     pub fn set_theme(&mut self, theme_id: ThemeId) -> ThemeId {
