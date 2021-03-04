@@ -139,7 +139,7 @@ impl GuiDrawSystem {
                     .vertex_input_single_buffer::<GuiVertex>()
                     .vertex_shader(vs.main_entry_point(), ())
                     .triangle_list()
-                    .viewports_dynamic_scissors_irrelevant(1)
+                    .viewports_scissors_dynamic(1)
                     .fragment_shader(fs.main_entry_point(), ())
                     .render_pass(subpass)
                     .cull_mode_disabled()
@@ -256,7 +256,7 @@ impl GuiDrawSystem {
                     )
                     .unwrap();
 
-                let _rect = &clipped.0;
+                let rect = &clipped.0;
                 let mesh = &clipped.1;
 
                 let indices = mesh.indices.iter().copied().collect::<Vec<_>>();
@@ -286,6 +286,18 @@ impl GuiDrawSystem {
                     .index_buffer_pool
                     .chunk(indices.iter().copied())
                     .unwrap();
+
+                let scissor = {
+                    let origin = [rect.min.x as i32, rect.min.y as i32];
+                    let dimensions = [
+                        (rect.max.x - rect.min.x) as u32,
+                        (rect.max.y - rect.min.y) as u32,
+                    ];
+                    vulkano::pipeline::viewport::Scissor { origin, dimensions }
+                };
+
+                let mut dynamic_state = dynamic_state.to_owned();
+                dynamic_state.scissors = Some(vec![scissor]);
 
                 builder
                     .draw_indexed(
