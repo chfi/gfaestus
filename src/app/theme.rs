@@ -22,6 +22,19 @@ pub enum ThemeId {
     Secondary,
 }
 
+impl std::fmt::Display for ThemeId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ThemeId::Primary => {
+                write!(f, "Primary")
+            }
+            ThemeId::Secondary => {
+                write!(f, "Secondary")
+            }
+        }
+    }
+}
+
 /// A theme definition that can be transformed into theme data usable by the GPU
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThemeDef {
@@ -289,11 +302,13 @@ impl Themes {
             ThemeId::Primary => {
                 // self.primary_def = theme_def;
                 // self.primary = theme;
+                self.primary_def.background = theme_def.background;
                 self.primary.background = background;
             }
             ThemeId::Secondary => {
                 // self.secondary_def = theme_def;
                 // self.secondary = theme;
+                self.secondary_def.background = theme_def.background;
                 self.secondary.background = background;
             }
         }

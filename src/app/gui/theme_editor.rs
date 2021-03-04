@@ -62,8 +62,11 @@ impl ThemeEditor {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
+            ui.label(format!("Theme: {}", self.id));
+
             ui.colored_label(self.background, "select a color");
             ui.color_edit_button_srgba(&mut self.background);
+
             if ui.button("Apply").clicked() {
                 let def = self.state_to_themedef();
                 let id = self.id;

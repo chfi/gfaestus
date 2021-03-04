@@ -68,8 +68,6 @@ pub enum AppConfigMsg {
     ToggleSelectionEdgeBlur,
     ToggleSelectionOutline,
     ToggleNodesColor,
-    // Toggle(RenderConfigOpts),
-    ToggleTheme,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -118,6 +116,12 @@ impl App {
 
     pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
         self.themes.active_theme_ignore_cache()
+    }
+
+    pub fn active_theme_def(&self) -> (ThemeId, &ThemeDef) {
+        let (id, _) = self.themes.active_theme_ignore_cache();
+        let def = self.themes.get_theme_def(id);
+        (id, def)
     }
 
     pub fn active_theme_luma(&self) -> f32 {
@@ -194,9 +198,6 @@ impl App {
             }
             AppConfigMsg::ToggleNodesColor => {
                 self.nodes_color = !self.nodes_color
-            }
-            AppConfigMsg::ToggleTheme => {
-                self.themes.toggle_theme();
             }
         }
     }

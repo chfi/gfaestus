@@ -366,6 +366,11 @@ fn main() {
     let (opts_to_gui, opts_from_app) =
         crossbeam::channel::unbounded::<AppConfigState>();
 
+    {
+        let (id, def) = app.active_theme_def();
+        gui.update_theme_editor(id, def)
+    }
+
     // let (opts_to_gui, opts_from_gui) =
     //     crossbeam::channel::unbounded::<AppConfigState>();
 
@@ -400,8 +405,16 @@ fn main() {
 
         app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
 
+        let (cur_theme_id, _) = app.active_theme_def();
         while let Ok(app_in) = app_rx.try_recv() {
             app.apply_input(app_in);
+        }
+
+        {
+            let (id, def) = app.active_theme_def();
+            if id != cur_theme_id {
+                gui.update_theme_editor(id, def)
+            }
         }
 
         while let Ok(gui_in) = gui_rx.try_recv() {

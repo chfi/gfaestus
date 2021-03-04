@@ -21,9 +21,9 @@ use vulkano::{
 use crossbeam::channel;
 use parking_lot::Mutex;
 
-mod themes;
+mod theme_editor;
 
-use themes::*;
+use theme_editor::*;
 
 // pub mod traits;
 
