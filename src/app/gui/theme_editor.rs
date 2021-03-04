@@ -79,23 +79,29 @@ impl ThemeEditorWindow {
             .default_size(vec2(512.0, 512.0))
             .scroll(true)
             .show(ctx, |ui| {
-                let mut primary_btn = widgets::Button::new("Primary");
-                let mut secondary_btn = widgets::Button::new("Secondary");
+                ui.horizontal(|ui| {
+                    if ui
+                        .selectable_label(
+                            self.editing_theme == ThemeId::Primary,
+                            "Primary",
+                        )
+                        .clicked()
+                    {
+                        self.editing_theme = ThemeId::Primary;
+                    }
 
-                if self.editing_theme == ThemeId::Primary {
-                    primary_btn = primary_btn.enabled(false);
-                    secondary_btn = secondary_btn.enabled(true);
-                } else {
-                    primary_btn = primary_btn.enabled(true);
-                    secondary_btn = secondary_btn.enabled(false);
-                }
+                    if ui
+                        .selectable_label(
+                            self.editing_theme == ThemeId::Secondary,
+                            "Secondary",
+                        )
+                        .clicked()
+                    {
+                        self.editing_theme = ThemeId::Secondary;
+                    }
+                });
 
-                if ui.add(primary_btn).clicked() {
-                    self.editing_theme = ThemeId::Primary;
-                }
-                if ui.add(secondary_btn).clicked() {
-                    self.editing_theme = ThemeId::Secondary;
-                }
+                ui.separator();
 
                 match self.editing_theme {
                     ThemeId::Primary => {
@@ -207,20 +213,4 @@ impl ThemeEditor {
                 .collect(),
         }
     }
-}
-
-pub(super) fn theme_editor(
-    ctx: &egui::CtxRef,
-    background: &mut RGB<f32>,
-    // node_colors: &mut Vec<RGB<f32>>,
-) -> Option<egui::Response> {
-    let mut bg32 = rgb_to_color32(*background);
-
-    egui::Window::new("Theme Editor")
-        // .id("theme_editor")
-        .title_bar(true)
-        .show(ctx, |ui| {
-            ui.label("Background color");
-            // color_picker(ui,
-        })
 }
