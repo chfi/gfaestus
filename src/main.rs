@@ -374,6 +374,44 @@ fn main() {
     let mut cached_overlay: Option<OverlayCache> = None;
     let mut overlay_future: Option<Box<dyn GpuFuture>> = None;
 
+    {
+        let graph = graph_query.graph();
+
+        let mut min_nonzero_coverage = std::usize::MAX;
+        let mut max_coverage = 0;
+
+        for handle in graph.handles() {
+            let coverage = graph
+                .steps_on_handle(handle)
+                .map(|s| s.count())
+                .unwrap_or(0usize);
+
+            min_nonzero_coverage = min_nonzero_coverage.min(coverage);
+            max_coverage = max_coverage.max(coverage);
+        }
+
+        let colors = graph_query.build_overlay_colors(|graph, handle| {
+            let coverage = graph
+                .steps_on_handle(handle)
+                .map(|s| s.count())
+                .unwrap_or(0usize);
+
+            if coverage >= min_nonzero_coverage {
+                let norm = (coverage as f32) / (max_coverage as f32);
+                let norm = 0.8 * norm;
+                RGB::new(0.2 + norm, 0.1, 0.1)
+            } else {
+                RGB::new(0.05, 0.05, 0.05)
+            }
+        });
+
+        let (overlay, future) =
+            main_view.build_overlay_cache(colors.into_iter()).unwrap();
+
+        cached_overlay = Some(overlay);
+        overlay_future = Some(future);
+    }
+
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event
 
