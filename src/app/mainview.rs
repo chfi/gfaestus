@@ -15,7 +15,7 @@ use anyhow::Result;
 
 use handlegraph::handle::NodeId;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
 use crate::render::nodes::OverlayCache;
@@ -23,7 +23,11 @@ use crate::render::*;
 use crate::view::{ScreenDims, View};
 use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 
-use crate::input::binds::*;
+// use crate::input::binds::*;
+use crate::input::binds::{
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
+    SystemInputBindings, WheelBind,
+};
 use crate::input::MousePos;
 
 use super::{
@@ -346,9 +350,9 @@ impl MainView {
         &self,
         screen_dims: Dims,
         app_msg_tx: &channel::Sender<crate::app::AppMsg>,
-        input: SystemInput<MainViewInputs>,
+        input: SystemInput<MainViewInput>,
     ) {
-        use MainViewInputs as In;
+        use MainViewInput as In;
         let payload = input.payload();
 
         match input {
@@ -688,5 +692,55 @@ impl std::default::Default for AnimSettings {
             mouse_pan_mult: 1.0,
             wheel_zoom_base_speed: 0.45,
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum MainViewInput {
+    ButtonMousePan,
+    ButtonSelect,
+    KeyPanUp,
+    KeyPanRight,
+    KeyPanDown,
+    KeyPanLeft,
+    KeyResetView,
+    WheelZoom,
+}
+
+impl BindableInput for MainViewInput {
+    fn default_binds() -> SystemInputBindings<Self> {
+        use winit::event;
+        use winit::event::VirtualKeyCode as Key;
+        use MainViewInput as Input;
+
+        let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
+            (Key::Up, Input::KeyPanUp),
+            (Key::Down, Input::KeyPanDown),
+            (Key::Left, Input::KeyPanLeft),
+            (Key::Right, Input::KeyPanRight),
+            (Key::Space, Input::KeyResetView),
+        ]
+        .iter()
+        .copied()
+        .map(|(k, i)| (k, vec![KeyBind::new(i)]))
+        .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [(
+            event::MouseButton::Left,
+            vec![
+                MouseButtonBind::new(Input::ButtonMousePan),
+                MouseButtonBind::new(Input::ButtonSelect),
+            ],
+        )]
+        .iter()
+        .cloned()
+        .collect();
+
+        let wheel_bind = Some(WheelBind::new(true, 0.45, Input::WheelZoom));
+
+        SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
     }
 }

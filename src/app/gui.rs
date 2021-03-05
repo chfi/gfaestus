@@ -11,6 +11,7 @@ use handlegraph::{
 
 use anyhow::Result;
 
+use rustc_hash::FxHashMap;
 use vulkano::{
     command_buffer::{AutoCommandBuffer, DynamicState},
     device::Queue,
@@ -25,11 +26,16 @@ mod theme_editor;
 
 use theme_editor::*;
 
+use crate::app::RenderConfigOpts;
 use crate::geometry::*;
 use crate::render::GuiDrawSystem;
 use crate::view::View;
 
-use crate::input::binds::*;
+use crate::input::binds::{
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
+    SystemInputBindings, WheelBind,
+};
+use crate::input::MousePos;
 
 use super::theme::{ThemeDef, ThemeId};
 
@@ -699,5 +705,71 @@ impl GfaestusGui {
                 }
             }
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GuiInput {
+    KeyEguiInspectionUi,
+    KeyEguiSettingsUi,
+    KeyEguiMemoryUi,
+    ButtonLeft,
+    ButtonRight,
+    WheelScroll,
+    KeyToggleRender(RenderConfigOpts),
+}
+
+impl BindableInput for GuiInput {
+    fn default_binds() -> SystemInputBindings<Self> {
+        use winit::event;
+        use winit::event::VirtualKeyCode as Key;
+        use GuiInput as Input;
+
+        let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
+            (Key::F1, Input::KeyEguiInspectionUi),
+            (Key::F2, Input::KeyEguiSettingsUi),
+            (Key::F3, Input::KeyEguiMemoryUi),
+            (
+                Key::Key1,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
+            ),
+            (
+                Key::Key2,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
+            ),
+            (
+                Key::Key3,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutline),
+            ),
+            (
+                Key::Key4,
+                Input::KeyToggleRender(RenderConfigOpts::NodesColor),
+            ),
+        ]
+        .iter()
+        .copied()
+        .map(|(k, i)| (k, vec![KeyBind::new(i)]))
+        .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [
+            (
+                event::MouseButton::Left,
+                vec![MouseButtonBind::new(Input::ButtonLeft)],
+            ),
+            (
+                event::MouseButton::Right,
+                vec![MouseButtonBind::new(Input::ButtonRight)],
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let wheel_bind = Some(WheelBind::new(false, 1.0, Input::WheelScroll));
+
+        SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
     }
 }

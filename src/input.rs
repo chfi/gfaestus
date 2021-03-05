@@ -8,6 +8,8 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
+use crate::app::gui::GuiInput;
+use crate::app::mainview::MainViewInput;
 use crate::app::AppInput;
 use crate::geometry::*;
 
@@ -55,8 +57,8 @@ pub struct InputManager {
     app_bindings: SystemInputBindings<AppInput>,
     app_channels: InputChannels<AppInput>,
 
-    main_view_bindings: SystemInputBindings<MainViewInputs>,
-    main_view_channels: InputChannels<MainViewInputs>,
+    main_view_bindings: SystemInputBindings<MainViewInput>,
+    main_view_channels: InputChannels<MainViewInput>,
 
     gui_bindings: SystemInputBindings<GuiInput>,
     gui_channels: InputChannels<GuiInput>,
@@ -69,7 +71,7 @@ impl InputManager {
 
     pub fn clone_main_view_rx(
         &self,
-    ) -> channel::Receiver<SystemInput<MainViewInputs>> {
+    ) -> channel::Receiver<SystemInput<MainViewInput>> {
         self.main_view_channels.rx.clone()
     }
 
@@ -140,15 +142,16 @@ impl InputManager {
         let app_bindings: SystemInputBindings<AppInput> =
             AppInput::default_binds();
 
-        let main_view_bindings: SystemInputBindings<MainViewInputs> =
-            Default::default();
+        let main_view_bindings: SystemInputBindings<MainViewInput> =
+            MainViewInput::default_binds();
 
-        let gui_bindings: SystemInputBindings<GuiInput> = Default::default();
+        let gui_bindings: SystemInputBindings<GuiInput> =
+            GuiInput::default_binds();
 
         let (app_tx, app_rx) = channel::unbounded::<SystemInput<AppInput>>();
 
         let (main_view_tx, main_view_rx) =
-            channel::unbounded::<SystemInput<MainViewInputs>>();
+            channel::unbounded::<SystemInput<MainViewInput>>();
 
         let (gui_tx, gui_rx) = channel::unbounded::<SystemInput<GuiInput>>();
 

@@ -6,6 +6,7 @@ use winit::{
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::app::mainview::MainViewInput;
 use crate::app::AppInput;
 
 use crate::geometry::*;
@@ -18,6 +19,11 @@ pub trait InputPayload:
 impl<T> InputPayload for T where
     T: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash
 {
+}
+
+/// Trait for app subsystem inputs that can be bound to keys and other user input
+pub trait BindableInput: InputPayload {
+    fn default_binds() -> SystemInputBindings<Self>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -76,12 +82,28 @@ pub struct MouseButtonBind<T: Copy + PartialEq> {
     payload: T,
 }
 
+impl<T: Copy + PartialEq> MouseButtonBind<T> {
+    pub fn new(payload: T) -> Self {
+        Self { payload }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct WheelBind<T: Copy + PartialEq> {
     invert: bool,
     mult: f32,
     // modifiers: event::ModifiersState,
     payload: T,
+}
+
+impl<T: Copy + PartialEq> WheelBind<T> {
+    pub fn new(invert: bool, mult: f32, payload: T) -> Self {
+        Self {
+            invert,
+            mult,
+            payload,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -174,35 +196,6 @@ impl<T: InputPayload> InputState<T> {
             _ => (),
         }
     }
-}
-
-pub trait BindableInput: InputPayload {
-    fn default_binds() -> SystemInputBindings<Self>;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum MainViewInputs {
-    ButtonMousePan,
-    ButtonSelect,
-    KeyPanUp,
-    KeyPanRight,
-    KeyPanDown,
-    KeyPanLeft,
-    KeyResetView,
-    WheelZoom,
-}
-
-use crate::app::RenderConfigOpts;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum GuiInput {
-    KeyEguiInspectionUi,
-    KeyEguiSettingsUi,
-    KeyEguiMemoryUi,
-    ButtonLeft,
-    ButtonRight,
-    WheelScroll,
-    KeyToggleRender(RenderConfigOpts),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -309,123 +302,6 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                 }
             }
             _ => None,
-        }
-    }
-}
-
-impl std::default::Default for SystemInputBindings<GuiInput> {
-    fn default() -> Self {
-        use event::VirtualKeyCode as Key;
-        use GuiInput as Input;
-
-        let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
-            [
-                (Key::F1, Input::KeyEguiInspectionUi),
-                (Key::F2, Input::KeyEguiSettingsUi),
-                (Key::F3, Input::KeyEguiMemoryUi),
-                (
-                    Key::Key1,
-                    Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
-                ),
-                (
-                    Key::Key2,
-                    Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
-                ),
-                (
-                    Key::Key3,
-                    Input::KeyToggleRender(RenderConfigOpts::SelOutline),
-                ),
-                (
-                    Key::Key4,
-                    Input::KeyToggleRender(RenderConfigOpts::NodesColor),
-                ),
-            ]
-            .iter()
-            .copied()
-            .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
-            .collect::<FxHashMap<_, _>>();
-
-        let mouse_binds: FxHashMap<
-            event::MouseButton,
-            Vec<MouseButtonBind<Input>>,
-        > = [
-            (
-                event::MouseButton::Left,
-                vec![MouseButtonBind {
-                    payload: Input::ButtonLeft,
-                }],
-            ),
-            (
-                event::MouseButton::Right,
-                vec![MouseButtonBind {
-                    payload: Input::ButtonRight,
-                }],
-            ),
-        ]
-        .iter()
-        .cloned()
-        .collect();
-
-        let wheel_bind = Some(WheelBind {
-            invert: false,
-            mult: 1.0,
-            payload: Input::WheelScroll,
-        });
-
-        Self {
-            key_binds,
-            mouse_binds,
-            wheel_bind,
-        }
-    }
-}
-
-impl std::default::Default for SystemInputBindings<MainViewInputs> {
-    fn default() -> Self {
-        use event::VirtualKeyCode as Key;
-        use MainViewInputs as Inputs;
-
-        let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Inputs>>> =
-            [
-                (Key::Up, Inputs::KeyPanUp),
-                (Key::Down, Inputs::KeyPanDown),
-                (Key::Left, Inputs::KeyPanLeft),
-                (Key::Right, Inputs::KeyPanRight),
-                (Key::Space, Inputs::KeyResetView),
-            ]
-            .iter()
-            .copied()
-            .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
-            .collect::<FxHashMap<_, _>>();
-
-        let mouse_binds: FxHashMap<
-            event::MouseButton,
-            Vec<MouseButtonBind<Inputs>>,
-        > = [(
-            event::MouseButton::Left,
-            vec![
-                MouseButtonBind {
-                    payload: Inputs::ButtonMousePan,
-                },
-                MouseButtonBind {
-                    payload: Inputs::ButtonSelect,
-                },
-            ],
-        )]
-        .iter()
-        .cloned()
-        .collect();
-
-        let wheel_bind = Some(WheelBind {
-            invert: true,
-            mult: 0.45,
-            payload: Inputs::WheelZoom,
-        });
-
-        Self {
-            key_binds,
-            mouse_binds,
-            wheel_bind,
         }
     }
 }
