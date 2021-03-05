@@ -480,6 +480,18 @@ impl NodeDrawSystem {
         Ok(())
     }
 
+    pub fn build_overlay_cache<I>(
+        &self,
+        colors: I,
+    ) -> Result<(OverlayCache, Box<dyn GpuFuture>)>
+    where
+        I: Iterator<Item = rgb::RGB<f32>>,
+    {
+        let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+
+        OverlayCache::from_node_colors(&self.gfx_queue, &layout, colors)
+    }
+
     pub fn read_node_id_at<Dims: Into<ScreenDims>>(
         &self,
         screen_dims: Dims,

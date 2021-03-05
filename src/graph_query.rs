@@ -46,6 +46,23 @@ impl GraphQuery {
     pub fn graph(&self) -> &PackedGraph {
         &self.graph
     }
+
+    pub fn build_overlay_colors<F>(&self, mut f: F) -> Vec<rgb::RGB<f32>>
+    where
+        F: FnMut(&PackedGraph, NodeId) -> rgb::RGB<f32>,
+    {
+        let mut result = Vec::with_capacity(self.graph.node_count());
+
+        let mut ids = self.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+        ids.sort();
+
+        for node_id in ids {
+            let color = f(&self.graph, node_id);
+            result.push(color);
+        }
+
+        result
+    }
 }
 
 struct QueryThread {

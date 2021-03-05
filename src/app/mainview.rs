@@ -126,6 +126,16 @@ impl MainView {
         }
     }
 
+    pub fn build_overlay_cache<I>(
+        &self,
+        colors: I,
+    ) -> Result<(OverlayCache, Box<dyn GpuFuture>)>
+    where
+        I: Iterator<Item = rgb::RGB<f32>>,
+    {
+        self.node_draw_system.build_overlay_cache(colors)
+    }
+
     pub fn view(&self) -> View {
         self.view.load()
     }
