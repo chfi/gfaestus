@@ -6,6 +6,8 @@ use winit::{
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::app::AppInput;
+
 use crate::geometry::*;
 
 pub trait InputPayload:
@@ -89,6 +91,12 @@ pub struct KeyBind<T: Copy + PartialEq> {
     payload: T,
 }
 
+impl<T: Copy + PartialEq> KeyBind<T> {
+    pub fn new(payload: T) -> Self {
+        Self { payload }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub enum SystemInput<T: InputPayload> {
     Keyboard {
@@ -168,10 +176,8 @@ impl<T: InputPayload> InputState<T> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum AppInput {
-    KeyClearSelection,
-    KeyToggleTheme,
+pub trait BindableInput: InputPayload {
+    fn default_binds() -> SystemInputBindings<Self>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -210,6 +216,21 @@ where
 }
 
 impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
+    pub fn new(
+        key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Inputs>>>,
+        mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Inputs>>,
+        >,
+        wheel_bind: Option<WheelBind<Inputs>>,
+    ) -> Self {
+        Self {
+            key_binds,
+            mouse_binds,
+            wheel_bind,
+        }
+    }
+
     pub fn apply(
         &self,
         // input_state: &mut InputState<Inputs>,
@@ -288,33 +309,6 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                 }
             }
             _ => None,
-        }
-    }
-}
-
-impl std::default::Default for SystemInputBindings<AppInput> {
-    fn default() -> Self {
-        use event::VirtualKeyCode as Key;
-        use AppInput as Input;
-
-        let key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Input>>> =
-            [
-                (Key::Escape, Input::KeyClearSelection),
-                (Key::F9, Input::KeyToggleTheme),
-            ]
-            .iter()
-            .copied()
-            .map(|(k, i)| (k, vec![KeyBind { payload: i }]))
-            .collect::<FxHashMap<_, _>>();
-
-        let mouse_binds = FxHashMap::default();
-
-        let wheel_bind = None;
-
-        Self {
-            key_binds,
-            mouse_binds,
-            wheel_bind,
         }
     }
 }

@@ -8,11 +8,12 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
+use crate::app::AppInput;
 use crate::geometry::*;
 
 pub mod binds;
 
-pub use binds::DigitalState;
+pub use binds::{BindableInput, DigitalState, SystemInputBindings};
 
 use binds::*;
 
@@ -136,7 +137,8 @@ impl InputManager {
         let mouse_screen_pos = MousePos::new(Point::ZERO);
         let mouse_over_gui = Arc::new(AtomicCell::new(false));
 
-        let app_bindings: SystemInputBindings<AppInput> = Default::default();
+        let app_bindings: SystemInputBindings<AppInput> =
+            AppInput::default_binds();
 
         let main_view_bindings: SystemInputBindings<MainViewInputs> =
             Default::default();

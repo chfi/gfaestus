@@ -13,16 +13,16 @@ use std::sync::Arc;
 
 use crossbeam::channel;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
-use crate::geometry::*;
-use crate::input::binds::*;
+use crate::input::binds::{BindableInput, InputPayload, KeyBind, SystemInput};
 use crate::input::MousePos;
 use crate::view::*;
+use crate::{geometry::*, input::binds::SystemInputBindings};
 
 use theme::*;
 
@@ -43,6 +43,36 @@ pub struct App {
     pub nodes_color: bool,
 
     pub use_overlay: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AppInput {
+    KeyClearSelection,
+    KeyToggleTheme,
+    KeyToggleOverlay,
+}
+
+impl BindableInput for AppInput {
+    fn default_binds() -> SystemInputBindings<Self> {
+        use winit::event::VirtualKeyCode as Key;
+        use AppInput as Input;
+
+        let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
+            (Key::Escape, Input::KeyClearSelection),
+            (Key::F9, Input::KeyToggleTheme),
+            (Key::F10, Input::KeyToggleOverlay),
+        ]
+        .iter()
+        .copied()
+        .map(|(k, i)| (k, vec![KeyBind::new(i)]))
+        .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds = FxHashMap::default();
+
+        let wheel_bind = None;
+
+        SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -230,6 +260,11 @@ impl App {
                             "{:?}\tdark? {}\tluma: {}",
                             new_theme, is_dark, luma
                         );
+                    }
+                }
+                AppInput::KeyToggleOverlay => {
+                    if state.pressed() {
+                        self.use_overlay = !self.use_overlay;
                     }
                 }
             }
