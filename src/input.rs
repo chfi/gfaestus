@@ -43,9 +43,25 @@ impl MousePos {
     }
 }
 
-struct InputChannels<T: InputPayload> {
+struct SubsystemInput<T: InputPayload + BindableInput> {
+    bindings: SystemInputBindings<T>,
+
     tx: channel::Sender<SystemInput<T>>,
     rx: channel::Receiver<SystemInput<T>>,
+}
+
+impl<T: InputPayload + BindableInput> SubsystemInput<T> {
+    fn from_default_binds() -> Self {
+        let bindings = T::default_binds();
+
+        let (tx, rx) = channel::unbounded::<SystemInput<T>>();
+
+        Self { bindings, tx, rx }
+    }
+
+    pub fn clone_rx(&self) -> channel::Receiver<SystemInput<T>> {
+        self.rx.clone()
+    }
 }
 
 pub struct InputManager {
@@ -54,29 +70,24 @@ pub struct InputManager {
 
     winit_rx: channel::Receiver<event::WindowEvent<'static>>,
 
-    app_bindings: SystemInputBindings<AppInput>,
-    app_channels: InputChannels<AppInput>,
-
-    main_view_bindings: SystemInputBindings<MainViewInput>,
-    main_view_channels: InputChannels<MainViewInput>,
-
-    gui_bindings: SystemInputBindings<GuiInput>,
-    gui_channels: InputChannels<GuiInput>,
+    app: SubsystemInput<AppInput>,
+    main_view: SubsystemInput<MainViewInput>,
+    gui: SubsystemInput<GuiInput>,
 }
 
 impl InputManager {
     pub fn clone_app_rx(&self) -> channel::Receiver<SystemInput<AppInput>> {
-        self.app_channels.rx.clone()
+        self.app.clone_rx()
     }
 
     pub fn clone_main_view_rx(
         &self,
     ) -> channel::Receiver<SystemInput<MainViewInput>> {
-        self.main_view_channels.rx.clone()
+        self.main_view.clone_rx()
     }
 
     pub fn clone_gui_rx(&self) -> channel::Receiver<SystemInput<GuiInput>> {
-        self.gui_channels.rx.clone()
+        self.gui.clone_rx()
     }
 
     pub fn set_mouse_over_gui(&self, is_over: bool) {
@@ -103,30 +114,30 @@ impl InputManager {
             let mouse_pos = self.mouse_screen_pos.read();
 
             if let Some(app_inputs) =
-                self.app_bindings.apply(&winit_ev, mouse_pos)
+                self.app.bindings.apply(&winit_ev, mouse_pos)
             {
                 for input in app_inputs {
-                    self.app_channels.tx.send(input).unwrap();
+                    self.app.tx.send(input).unwrap();
                 }
             }
 
             if let Some(gui_inputs) =
-                self.gui_bindings.apply(&winit_ev, mouse_pos)
+                self.gui.bindings.apply(&winit_ev, mouse_pos)
             {
                 for input in gui_inputs {
-                    self.gui_channels.tx.send(input).unwrap();
+                    self.gui.tx.send(input).unwrap();
                 }
             }
 
             if let Some(main_view_inputs) =
-                self.main_view_bindings.apply(&winit_ev, mouse_pos)
+                self.main_view.bindings.apply(&winit_ev, mouse_pos)
             {
                 let mouse_over_gui = self.mouse_over_gui.load();
                 for input in main_view_inputs {
                     if input.is_keyboard()
                         || (input.is_mouse() && !mouse_over_gui)
                     {
-                        self.main_view_channels.tx.send(input).unwrap();
+                        self.main_view.tx.send(input).unwrap();
                     }
                 }
             }
@@ -139,47 +150,18 @@ impl InputManager {
         let mouse_screen_pos = MousePos::new(Point::ZERO);
         let mouse_over_gui = Arc::new(AtomicCell::new(false));
 
-        let app_bindings: SystemInputBindings<AppInput> =
-            AppInput::default_binds();
-
-        let main_view_bindings: SystemInputBindings<MainViewInput> =
-            MainViewInput::default_binds();
-
-        let gui_bindings: SystemInputBindings<GuiInput> =
-            GuiInput::default_binds();
-
-        let (app_tx, app_rx) = channel::unbounded::<SystemInput<AppInput>>();
-
-        let (main_view_tx, main_view_rx) =
-            channel::unbounded::<SystemInput<MainViewInput>>();
-
-        let (gui_tx, gui_rx) = channel::unbounded::<SystemInput<GuiInput>>();
-
-        let app_channels = InputChannels {
-            tx: app_tx.clone(),
-            rx: app_rx.clone(),
-        };
-
-        let main_view_channels = InputChannels {
-            tx: main_view_tx.clone(),
-            rx: main_view_rx.clone(),
-        };
-
-        let gui_channels = InputChannels {
-            tx: gui_tx.clone(),
-            rx: gui_rx.clone(),
-        };
+        let app = SubsystemInput::<AppInput>::from_default_binds();
+        let main_view = SubsystemInput::<MainViewInput>::from_default_binds();
+        let gui = SubsystemInput::<GuiInput>::from_default_binds();
 
         Self {
             mouse_screen_pos,
             mouse_over_gui,
             winit_rx,
-            app_bindings,
-            app_channels,
-            main_view_bindings,
-            main_view_channels,
-            gui_bindings,
-            gui_channels,
+
+            app,
+            main_view,
+            gui,
         }
     }
 }

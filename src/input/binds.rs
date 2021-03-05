@@ -6,9 +6,6 @@ use winit::{
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::app::mainview::MainViewInput;
-use crate::app::AppInput;
-
 use crate::geometry::*;
 
 pub trait InputPayload:
