@@ -371,6 +371,9 @@ fn main() {
         gui.update_theme_editor(id, def);
     }
 
+    let mut cached_overlay: Option<OverlayCache> = None;
+    let mut overlay_future: Option<Box<dyn GpuFuture>> = None;
+
     event_loop.run(move |event, _, control_flow| {
         // TODO handle scale factor change before calling to_static() on event
 
@@ -631,14 +634,27 @@ fn main() {
                     .unwrap();
 
                 unsafe {
-                    let secondary_buf = main_view
-                        .draw_nodes(
-                            &dynamic_state,
-                            universe.offset,
-                            theme_id,
-                            None,
-                        )
-                        .unwrap();
+                    let secondary_buf =
+                        if cached_overlay.is_some() && app.use_overlay {
+                            main_view
+                                .draw_nodes(
+                                    &dynamic_state,
+                                    universe.offset,
+                                    theme_id,
+                                    cached_overlay.as_ref(),
+                                )
+                                .unwrap()
+                        } else {
+                            main_view
+                                .draw_nodes(
+                                    &dynamic_state,
+                                    universe.offset,
+                                    theme_id,
+                                    None,
+                                )
+                                .unwrap()
+                        };
+
                     builder.execute_commands(secondary_buf).unwrap();
                 }
 
@@ -647,24 +663,23 @@ fn main() {
                 let command_buffer = builder.build().unwrap();
 
                 let first_pass_future = {
-                    if let Some(theme_future) = theme_future {
-                        previous_frame_end
-                            .take()
-                            .unwrap()
-                            .join(acquire_future)
-                            .join(theme_future)
-                            .then_execute(queue.clone(), command_buffer)
-                            .unwrap()
-                            .boxed()
-                    } else {
-                        previous_frame_end
-                            .take()
-                            .unwrap()
-                            .join(acquire_future)
-                            .then_execute(queue.clone(), command_buffer)
-                            .unwrap()
-                            .boxed()
+                    let mut prev = previous_frame_end
+                        .take()
+                        .unwrap()
+                        .join(acquire_future)
+                        .boxed();
+
+                    if let Some(future) = overlay_future.take() {
+                        prev = prev.join(future).boxed();
                     }
+
+                    if let Some(future) = theme_future {
+                        prev = prev.join(future).boxed();
+                    }
+
+                    prev.then_execute(queue.clone(), command_buffer)
+                        .unwrap()
+                        .boxed()
                 };
 
                 let mut builder =

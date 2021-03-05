@@ -41,6 +41,8 @@ pub struct App {
     pub selection_edge_blur: bool,
     pub selection_edge: bool,
     pub nodes_color: bool,
+
+    pub use_overlay: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -103,6 +105,8 @@ impl App {
             selection_edge_blur: true,
             selection_edge: true,
             nodes_color: true,
+
+            use_overlay: false,
         })
     }
 
