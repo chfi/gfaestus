@@ -7,8 +7,9 @@ use vulkano::{
         AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
     },
     format::R8G8B8A8Unorm,
-    image::ImmutableImage,
-    sampler::Sampler,
+    image::{Dimensions, ImmutableImage, MipmapsCount},
+    sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode},
+    sync::GpuFuture,
 };
 use vulkano::{
     descriptor::descriptor_set::UnsafeDescriptorSetLayout, device::Queue,
@@ -268,6 +269,84 @@ impl ThemeCache {
         self.secondary = Some(secondary);
 
         Ok(())
+    }
+}
+
+pub struct OverlayCache {
+    sampler: Arc<Sampler>,
+    overlay_img: Arc<ImmutableImage<R8G8B8A8Unorm>>,
+    _width_buf: Arc<CpuAccessibleBuffer<i32>>,
+    descriptor_set: Arc<ThemeDescSet>,
+}
+
+impl OverlayCache {
+    pub fn from_node_colors<I>(
+        queue: &Arc<Queue>,
+        layout: &Arc<UnsafeDescriptorSetLayout>,
+        colors: I,
+    ) -> Result<(Self, Box<dyn GpuFuture>)>
+    where
+        I: Iterator<Item = rgb::RGB<f32>>,
+    {
+        let sampler = Sampler::new(
+            queue.device().clone(),
+            Filter::Nearest,
+            Filter::Nearest,
+            MipmapMode::Linear,
+            SamplerAddressMode::Repeat,
+            SamplerAddressMode::Repeat,
+            SamplerAddressMode::Repeat,
+            0.0,
+            1.0,
+            0.0,
+            1.0,
+        )?;
+
+        let mut img_colors = Vec::new();
+
+        for color in colors {
+            let r = (255.0 * color.r).floor();
+            let g = (255.0 * color.g).floor();
+            let b = (255.0 * color.b).floor();
+            let a = 255u8;
+
+            img_colors.push(r as u8);
+            img_colors.push(g as u8);
+            img_colors.push(b as u8);
+            img_colors.push(a);
+        }
+
+        let width = (img_colors.len() / 4) as u32;
+
+        let width_buf = CpuAccessibleBuffer::from_data(
+            queue.device().clone(),
+            BufferUsage::uniform_buffer(),
+            false,
+            width as i32,
+        )?;
+
+        let (overlay_img, future) = ImmutableImage::from_iter(
+            img_colors.into_iter(),
+            Dimensions::Dim1d { width },
+            MipmapsCount::One,
+            R8G8B8A8Unorm,
+            queue.clone(),
+        )?;
+
+        let set: ThemeDescSet = PersistentDescriptorSet::start(layout.clone())
+            .add_buffer(width_buf.clone())?
+            .add_sampled_image(overlay_img.clone(), sampler.clone())?
+            .build()?;
+
+        Ok((
+            Self {
+                sampler,
+                overlay_img,
+                _width_buf: width_buf,
+                descriptor_set: Arc::new(set),
+            },
+            future.boxed(),
+        ))
     }
 }
 
