@@ -354,8 +354,7 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     rect_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-
+    // line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     caches: Mutex<NodeDrawCache>,
 
     theme_cache: Mutex<ThemeCache>,
@@ -406,29 +405,29 @@ impl NodeDrawSystem {
             ) as Arc<_>
         };
 
-        let line_pipeline = {
-            Arc::new(
-                GraphicsPipeline::start()
-                    .vertex_input_single_buffer::<Vertex>()
-                    .vertex_shader(vs.main_entry_point(), ())
-                    .line_list()
-                    .viewports_dynamic_scissors_irrelevant(1)
-                    .line_width_dynamic()
-                    .fragment_shader(fs.main_entry_point(), ())
-                    .depth_stencil(depth_stencil.clone())
-                    .render_pass(subpass)
-                    .blend_alpha_blending()
-                    .build(gfx_queue.device().clone())
-                    .unwrap(),
-            ) as Arc<_>
-        };
+        // let line_pipeline = {
+        //     Arc::new(
+        //         GraphicsPipeline::start()
+        //             .vertex_input_single_buffer::<Vertex>()
+        //             .vertex_shader(vs.main_entry_point(), ())
+        //             .line_list()
+        //             .viewports_dynamic_scissors_irrelevant(1)
+        //             .line_width_dynamic()
+        //             .fragment_shader(fs.main_entry_point(), ())
+        //             .depth_stencil(depth_stencil.clone())
+        //             .render_pass(subpass)
+        //             .blend_alpha_blending()
+        //             .build(gfx_queue.device().clone())
+        //             .unwrap(),
+        //     ) as Arc<_>
+        // };
 
         NodeDrawSystem {
             gfx_queue,
             // pipeline,
             vertex_buffer_pool,
             rect_pipeline,
-            line_pipeline,
+            // line_pipeline,
             caches: Mutex::new(Default::default()),
             theme_cache: Mutex::new(Default::default()),
         }
@@ -562,16 +561,12 @@ impl NodeDrawSystem {
         offset: Point,
         node_width: f32,
         theme: ThemeId,
-        // use_lines: bool,
+        overlay: Option<&OverlayCache>,
     ) -> Result<&'a mut AutoCommandBufferBuilder>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        // let min_node_width = 2.0;
-        // let use_rect_pipeline = !use_lines
-        //     || (use_lines && view.scale < (node_width / min_node_width));
-
         let viewport_dims = {
             let viewport = dynamic_state
                 .viewports
@@ -680,13 +675,9 @@ impl NodeDrawSystem {
 
         let layout = self.rect_pipeline.descriptor_set_layout(1).unwrap();
 
-        // let layout = if use_rect_pipeline {
-        //     self.rect_pipeline.descriptor_set_layout(1).unwrap()
-        // } else {
-        //     self.line_pipeline.descriptor_set_layout(1).unwrap()
-        // };
-
-        let set_0 = {
+        let set_0 = if let Some(overlay_cache) = overlay {
+            overlay_cache.descriptor_set.clone()
+        } else {
             let theme_cache = self.theme_cache.lock();
 
             if let Some(set) = theme_cache.get_theme_set(theme) {
@@ -713,21 +704,6 @@ impl NodeDrawSystem {
             (set_0.clone(), set_1.clone()),
             view_pc,
         )?;
-        /*
-        } else {
-            let line_width = (50.0 / view.scale).max(min_node_width);
-            let mut dynamic_state = dynamic_state.clone();
-            dynamic_state.line_width = Some(line_width);
-
-            builder.draw(
-                self.line_pipeline.clone(),
-                &dynamic_state,
-                vec![vertex_buffer],
-                set.clone(),
-                view_pc,
-            )?;
-        }
-        */
 
         Ok(builder)
     }
@@ -740,30 +716,19 @@ impl NodeDrawSystem {
         offset: Point,
         node_width: f32,
         theme: ThemeId,
+        overlay: Option<&OverlayCache>,
         // use_lines: bool,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
         VI::IntoIter: ExactSizeIterator,
     {
-        let min_node_width = 2.0;
-        // let use_rect_pipeline = !use_lines
-        //     || (use_lines && view.scale < (node_width / min_node_width));
-
-        // let mut builder: AutoCommandBufferBuilder = if use_rect_pipeline {
         let mut builder: AutoCommandBufferBuilder =
             AutoCommandBufferBuilder::secondary_graphics(
                 self.gfx_queue.device().clone(),
                 self.gfx_queue.family(),
                 self.rect_pipeline.clone().subpass(),
             )?;
-        // } else {
-        //     AutoCommandBufferBuilder::secondary_graphics(
-        //         self.gfx_queue.device().clone(),
-        //         self.gfx_queue.family(),
-        //         self.line_pipeline.clone().subpass(),
-        //     )
-        // }?;
 
         self.draw_primary(
             &mut builder,
@@ -773,6 +738,7 @@ impl NodeDrawSystem {
             offset,
             node_width,
             theme, // use_lines,
+            overlay,
         )?;
 
         let builder = builder.build()?;

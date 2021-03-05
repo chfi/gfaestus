@@ -37,6 +37,7 @@ use gfaestus::app::{App, AppConfigMsg, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
+use gfaestus::render::nodes::OverlayCache;
 use gfaestus::render::*;
 use gfaestus::universe::*;
 use gfaestus::util::*;
@@ -631,7 +632,12 @@ fn main() {
 
                 unsafe {
                     let secondary_buf = main_view
-                        .draw_nodes(&dynamic_state, universe.offset, theme_id)
+                        .draw_nodes(
+                            &dynamic_state,
+                            universe.offset,
+                            theme_id,
+                            None,
+                        )
                         .unwrap();
                     builder.execute_commands(secondary_buf).unwrap();
                 }

@@ -18,6 +18,7 @@ use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 
 use crate::geometry::*;
+use crate::render::nodes::OverlayCache;
 use crate::render::*;
 use crate::view::{ScreenDims, View};
 use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
@@ -191,6 +192,7 @@ impl MainView {
         dynamic_state: &DynamicState,
         offset: Point,
         theme: ThemeId,
+        overlay: Option<&OverlayCache>,
     ) -> Result<&'a mut AutoCommandBufferBuilder> {
         let view = self.view.load();
         let node_width = {
@@ -215,6 +217,7 @@ impl MainView {
             offset,
             node_width,
             theme,
+            overlay,
         )
     }
 
@@ -223,6 +226,7 @@ impl MainView {
         dynamic_state: &DynamicState,
         offset: Point,
         theme: ThemeId,
+        overlay: Option<&OverlayCache>,
     ) -> Result<AutoCommandBuffer> {
         let view = self.view.load();
         let node_width = {
@@ -247,6 +251,7 @@ impl MainView {
             node_width,
             // false,
             theme,
+            overlay,
         )
     }
 
@@ -256,6 +261,7 @@ impl MainView {
         vertices: VI,
         offset: Point,
         theme: ThemeId,
+        overlay: Option<&OverlayCache>,
     ) -> Result<AutoCommandBuffer>
     where
         VI: IntoIterator<Item = Vertex>,
@@ -276,6 +282,7 @@ impl MainView {
             offset,
             node_width,
             theme, // false,
+            overlay,
         )
     }
 
