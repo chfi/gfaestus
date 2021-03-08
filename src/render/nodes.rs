@@ -3,9 +3,11 @@ use vulkano::buffer::{
     BufferUsage, CpuAccessibleBuffer, CpuBufferPool, ImmutableBuffer,
 };
 use vulkano::{
+    buffer::BufferView,
     command_buffer::{
         AutoCommandBuffer, AutoCommandBufferBuilder, DynamicState,
     },
+    descriptor::descriptor_set::PersistentDescriptorSetBufView,
     format::R8G8B8A8Unorm,
     image::{Dimensions, ImmutableImage, MipmapsCount},
     sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode},
@@ -157,6 +159,13 @@ type ThemeDescSet = PersistentDescriptorSet<(
     PersistentDescriptorSetSampler,
 )>;
 
+type OverlayDescSet = PersistentDescriptorSet<(
+    (),
+    PersistentDescriptorSetBufView<
+        Arc<BufferView<R8G8B8A8Unorm, Arc<ImmutableBuffer<[[u8; 4]]>>>>,
+    >,
+)>;
+
 struct CachedTheme {
     color_hash: u64,
     _width_buf: Arc<CpuAccessibleBuffer<i32>>,
@@ -273,76 +282,63 @@ impl ThemeCache {
 }
 
 pub struct OverlayCache {
-    sampler: Arc<Sampler>,
-    overlay_img: Arc<ImmutableImage<R8G8B8A8Unorm>>,
-    _width_buf: Arc<CpuAccessibleBuffer<i32>>,
-    descriptor_set: Arc<ThemeDescSet>,
+    overlay_buf: Arc<ImmutableBuffer<[[u8; 4]]>>,
+    overlay_buf_view:
+        Arc<BufferView<R8G8B8A8Unorm, Arc<ImmutableBuffer<[[u8; 4]]>>>>,
+    descriptor_set: Arc<OverlayDescSet>,
 }
 
 impl OverlayCache {
-    pub fn from_node_colors<I>(
+    pub fn from_node_colors<C>(
         queue: &Arc<Queue>,
         layout: &Arc<UnsafeDescriptorSetLayout>,
-        colors: I,
+        colors: C,
     ) -> Result<(Self, Box<dyn GpuFuture>)>
     where
-        I: Iterator<Item = rgb::RGB<f32>>,
+        C: Iterator<Item = rgb::RGB<f32>>,
     {
-        let sampler = Sampler::new(
-            queue.device().clone(),
-            Filter::Nearest,
-            Filter::Nearest,
-            MipmapMode::Linear,
-            SamplerAddressMode::Repeat,
-            SamplerAddressMode::Repeat,
-            SamplerAddressMode::Repeat,
-            0.0,
-            1.0,
-            0.0,
-            1.0,
-        )?;
-
         let mut img_colors = Vec::new();
 
         for color in colors {
-            let r = (255.0 * color.r).floor();
-            let g = (255.0 * color.g).floor();
-            let b = (255.0 * color.b).floor();
+            let r = (255.0 * color.r).floor() as u8;
+            let g = (255.0 * color.g).floor() as u8;
+            let b = (255.0 * color.b).floor() as u8;
             let a = 255u8;
 
-            img_colors.push(r as u8);
-            img_colors.push(g as u8);
-            img_colors.push(b as u8);
-            img_colors.push(a);
+            img_colors.push([r, g, b, a]);
         }
 
-        let width = (img_colors.len() / 4) as u32;
+        let buffer_usage = BufferUsage {
+            transfer_source: false,
+            transfer_destination: false,
+            uniform_texel_buffer: true,
+            storage_texel_buffer: false,
+            uniform_buffer: false,
+            storage_buffer: false,
+            index_buffer: false,
+            vertex_buffer: false,
+            indirect_buffer: false,
+            device_address: false,
+        };
 
-        let width_buf = CpuAccessibleBuffer::from_data(
-            queue.device().clone(),
-            BufferUsage::uniform_buffer(),
-            false,
-            width as i32,
-        )?;
-
-        let (overlay_img, future) = ImmutableImage::from_iter(
+        let (overlay_buf, future) = ImmutableBuffer::from_iter(
             img_colors.into_iter(),
-            Dimensions::Dim1d { width },
-            MipmapsCount::One,
-            R8G8B8A8Unorm,
+            buffer_usage,
             queue.clone(),
         )?;
 
-        let set: ThemeDescSet = PersistentDescriptorSet::start(layout.clone())
-            .add_buffer(width_buf.clone())?
-            .add_sampled_image(overlay_img.clone(), sampler.clone())?
-            .build()?;
+        let overlay_buf_view =
+            Arc::new(BufferView::new(overlay_buf.clone(), R8G8B8A8Unorm)?);
+
+        let set: OverlayDescSet =
+            PersistentDescriptorSet::start(layout.clone())
+                .add_buffer_view(overlay_buf_view.clone())?
+                .build()?;
 
         Ok((
             Self {
-                sampler,
-                overlay_img,
-                _width_buf: width_buf,
+                overlay_buf,
+                overlay_buf_view,
                 descriptor_set: Arc::new(set),
             },
             future.boxed(),
