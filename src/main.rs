@@ -76,6 +76,19 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
+fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
+    main_view: &MainView,
+    graph_query: &GraphQuery,
+    f: F,
+) -> Result<(OverlayCache, Box<dyn GpuFuture>)> {
+    let colors = graph_query.build_overlay_colors(f);
+
+    let (overlay, future) =
+        main_view.build_overlay_cache(colors.into_iter())?;
+
+    Ok((overlay, future))
+}
+
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
 
@@ -390,23 +403,22 @@ fn main() {
             max_coverage = max_coverage.max(coverage);
         }
 
-        let colors = graph_query.build_overlay_colors(|graph, handle| {
-            let coverage = graph
-                .steps_on_handle(handle)
-                .map(|s| s.count())
-                .unwrap_or(0usize);
-
-            if coverage >= min_nonzero_coverage {
-                let norm = (coverage as f32) / (max_coverage as f32);
-                let norm = 0.8 * norm;
-                RGB::new(0.2 + norm, 0.1, 0.1)
-            } else {
-                RGB::new(0.05, 0.05, 0.05)
-            }
-        });
-
         let (overlay, future) =
-            main_view.build_overlay_cache(colors.into_iter()).unwrap();
+            construct_overlay(&main_view, &graph_query, |graph, handle| {
+                let coverage = graph
+                    .steps_on_handle(handle)
+                    .map(|s| s.count())
+                    .unwrap_or(0usize);
+
+                if coverage >= min_nonzero_coverage {
+                    let norm = (coverage as f32) / (max_coverage as f32);
+                    let norm = 0.8 * norm;
+                    RGB::new(0.2 + norm, 0.1, 0.1)
+                } else {
+                    RGB::new(0.05, 0.05, 0.05)
+                }
+            })
+            .unwrap();
 
         cached_overlay = Some(overlay);
         overlay_future = Some(future);
