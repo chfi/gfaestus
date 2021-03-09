@@ -579,6 +579,8 @@ impl NodeDrawSystem {
             viewport.dimensions
         };
 
+        let flags = if overlay.is_some() { 1u32 } else { 0u32 };
+
         #[rustfmt::skip]
         let view_pc = {
             // is this correct?
@@ -605,6 +607,7 @@ impl NodeDrawSystem {
                 viewport_dims,
                 view: view_data,
                 scale: view.scale,
+                flags,
             }
         };
 
@@ -703,7 +706,6 @@ impl NodeDrawSystem {
             self.empty_overlay.descriptor_set.clone()
         };
 
-        // if use_rect_pipeline {
         builder.draw(
             self.rect_pipeline.clone(),
             &dynamic_state,

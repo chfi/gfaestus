@@ -10,6 +10,7 @@ layout (push_constant) uniform View {
   float scale;
   vec2 viewport_dims;
   mat4 view;
+  uint flags;
 } vo;
 
 void main() {

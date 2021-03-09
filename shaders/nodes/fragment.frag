@@ -30,6 +30,7 @@ layout (push_constant) uniform View {
   float scale;
   vec2 viewport_dims;
   mat4 view;
+  uint flags;
 } vo;
 
 void main() {
@@ -48,10 +49,14 @@ void main() {
   float x = floor(gl_FragCoord.x);
   float y = floor(gl_FragCoord.y);
 
-  uint ix = uint((y * vo.viewport_dims.x) + x);
-  data.data[ix] = uint(node_id);
+  if ((vo.flags & 1) == 1) {
+    int color_u = node_id - 1;
+    f_color = texelFetch(overlay, color_u);
+  } else {
+    uint ix = uint((y * vo.viewport_dims.x) + x);
+    data.data[ix] = uint(node_id);
 
-  float color_u = float((node_id - 1) % tex_width.width) / tex_width.width;
-
-  f_color = texture(theme_sampler, color_u);
+    float color_u = float((node_id - 1) % tex_width.width) / tex_width.width;
+    f_color = texture(theme_sampler, color_u);
+  }
 }
