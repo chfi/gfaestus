@@ -60,6 +60,8 @@ pub struct GfaestusGui {
     theme_editor: ThemeEditorWindow,
 
     app_cfg_tx: channel::Sender<AppConfigState>,
+
+    overlay_enabled: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -270,6 +272,8 @@ impl GfaestusGui {
                 theme_editor: ThemeEditorWindow::new(app_cfg_tx.clone()),
 
                 app_cfg_tx,
+
+                overlay_enabled: false,
             },
             app_cfg_rx,
         ))
@@ -305,6 +309,10 @@ impl GfaestusGui {
 
     pub fn set_view_info_view(&mut self, view: View) {
         self.view_info.view = view;
+    }
+
+    pub fn set_overlay_state(&mut self, to: bool) {
+        self.overlay_enabled = to;
     }
 
     pub fn set_view_info_mouse(
@@ -429,6 +437,8 @@ impl GfaestusGui {
 
     pub fn menu_bar(&mut self) {
         let ctx = &self.ctx;
+        let app_chn = &self.app_cfg_tx;
+        let overlay_enabled = &self.overlay_enabled;
         let enabled = &mut self.enabled_ui_elements;
 
         egui::TopPanel::top("gfaestus_top_menu_bar").show(ctx, |ui| {
@@ -442,6 +452,10 @@ impl GfaestusGui {
 
                 if ui.selectable_label(enabled.frame_rate, "FPS").clicked() {
                     enabled.frame_rate = !enabled.frame_rate;
+                }
+
+                if ui.selectable_label(*overlay_enabled, "Overlay").clicked() {
+                    app_chn.send(AppConfigState::ToggleOverlay).unwrap();
                 }
             });
         });

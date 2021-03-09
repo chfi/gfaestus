@@ -473,6 +473,8 @@ fn main() {
             gui.set_light_mode();
         }
 
+        gui.set_overlay_state(app.use_overlay);
+
         gui.set_render_config(
             app.nodes_color,
             app.selection_edge,

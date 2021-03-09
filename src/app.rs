@@ -284,6 +284,9 @@ impl App {
             AppConfigState::Theme { id, def } => {
                 self.themes.replace_theme_def(id, def).unwrap();
             }
+            AppConfigState::ToggleOverlay => {
+                self.use_overlay = !self.use_overlay;
+            }
         }
     }
 }
