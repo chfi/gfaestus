@@ -60,13 +60,13 @@ impl MainView {
         gfx_queue: Arc<Queue>,
         node_subpass: Subpass<Rn>,
         line_subpass: Subpass<Rl>,
-    ) -> Result<MainView>
+    ) -> Result<(MainView, Box<dyn GpuFuture>)>
     where
         Rn: RenderPassAbstract + Send + Sync + Clone + 'static,
         Rl: RenderPassAbstract + Send + Sync + Clone + 'static,
     {
-        let node_draw_system =
-            NodeDrawSystem::new(gfx_queue.clone(), node_subpass);
+        let (node_draw_system, future) =
+            NodeDrawSystem::new(gfx_queue.clone(), node_subpass)?;
 
         let line_draw_system =
             LineDrawSystem::new(gfx_queue.clone(), line_subpass);
@@ -95,7 +95,7 @@ impl MainView {
             anim_handler_thread,
         };
 
-        Ok(main_view)
+        Ok((main_view, future))
     }
 
     pub fn prepare_themes(

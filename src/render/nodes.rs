@@ -350,14 +350,17 @@ pub struct NodeDrawSystem {
     gfx_queue: Arc<Queue>,
     vertex_buffer_pool: CpuBufferPool<Vertex>,
     rect_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
-    // line_pipeline: Arc<dyn GraphicsPipelineAbstract + Send + Sync>,
     caches: Mutex<NodeDrawCache>,
 
     theme_cache: Mutex<ThemeCache>,
+    empty_overlay: OverlayCache,
 }
 
 impl NodeDrawSystem {
-    pub fn new<R>(gfx_queue: Arc<Queue>, subpass: Subpass<R>) -> NodeDrawSystem
+    pub fn new<R>(
+        gfx_queue: Arc<Queue>,
+        subpass: Subpass<R>,
+    ) -> Result<(NodeDrawSystem, Box<dyn GpuFuture>)>
     where
         R: RenderPassAbstract + Clone + Send + Sync + 'static,
     {
@@ -365,9 +368,9 @@ impl NodeDrawSystem {
         let _ = include_str!("../../shaders/nodes/geometry.geom");
         let _ = include_str!("../../shaders/nodes/fragment.frag");
 
-        let vs = vs::Shader::load(gfx_queue.device().clone()).unwrap();
-        let fs = fs::Shader::load(gfx_queue.device().clone()).unwrap();
-        let gs = gs::Shader::load(gfx_queue.device().clone()).unwrap();
+        let vs = vs::Shader::load(gfx_queue.device().clone())?;
+        let fs = fs::Shader::load(gfx_queue.device().clone())?;
+        let gs = gs::Shader::load(gfx_queue.device().clone())?;
 
         let vertex_buffer_pool: CpuBufferPool<Vertex> =
             CpuBufferPool::vertex_buffer(gfx_queue.device().clone());
@@ -396,37 +399,29 @@ impl NodeDrawSystem {
                     .depth_stencil(depth_stencil.clone())
                     .render_pass(subpass.clone())
                     .blend_alpha_blending()
-                    .build(gfx_queue.device().clone())
-                    .unwrap(),
-            ) as Arc<_>
+                    .build(gfx_queue.device().clone())?,
+            ) as Arc<dyn GraphicsPipelineAbstract + Send + Sync>
         };
 
-        // let line_pipeline = {
-        //     Arc::new(
-        //         GraphicsPipeline::start()
-        //             .vertex_input_single_buffer::<Vertex>()
-        //             .vertex_shader(vs.main_entry_point(), ())
-        //             .line_list()
-        //             .viewports_dynamic_scissors_irrelevant(1)
-        //             .line_width_dynamic()
-        //             .fragment_shader(fs.main_entry_point(), ())
-        //             .depth_stencil(depth_stencil.clone())
-        //             .render_pass(subpass)
-        //             .blend_alpha_blending()
-        //             .build(gfx_queue.device().clone())
-        //             .unwrap(),
-        //     ) as Arc<_>
-        // };
+        let layout = rect_pipeline.descriptor_set_layout(2).unwrap();
 
-        NodeDrawSystem {
-            gfx_queue,
-            // pipeline,
-            vertex_buffer_pool,
-            rect_pipeline,
-            // line_pipeline,
-            caches: Mutex::new(Default::default()),
-            theme_cache: Mutex::new(Default::default()),
-        }
+        let (empty_overlay, future) = OverlayCache::from_node_colors(
+            &gfx_queue,
+            layout,
+            std::iter::empty(),
+        )?;
+
+        Ok((
+            NodeDrawSystem {
+                gfx_queue,
+                vertex_buffer_pool,
+                rect_pipeline,
+                caches: Mutex::new(Default::default()),
+                theme_cache: Mutex::new(Default::default()),
+                empty_overlay,
+            },
+            future,
+        ))
     }
 
     pub fn prepare_themes(
@@ -483,7 +478,7 @@ impl NodeDrawSystem {
     where
         I: Iterator<Item = rgb::RGB<f32>>,
     {
-        let layout = self.rect_pipeline.descriptor_set_layout(0).unwrap();
+        let layout = self.rect_pipeline.descriptor_set_layout(2).unwrap();
 
         OverlayCache::from_node_colors(&self.gfx_queue, &layout, colors)
     }
@@ -683,9 +678,7 @@ impl NodeDrawSystem {
 
         let layout = self.rect_pipeline.descriptor_set_layout(1).unwrap();
 
-        let set_0 = if let Some(overlay_cache) = overlay {
-            overlay_cache.descriptor_set.clone()
-        } else {
+        let set_0 = {
             let theme_cache = self.theme_cache.lock();
 
             if let Some(set) = theme_cache.get_theme_set(theme) {
@@ -704,12 +697,18 @@ impl NodeDrawSystem {
             cache_lock.descriptor_set().unwrap().clone()
         };
 
+        let set_2 = if let Some(overlay_cache) = overlay {
+            overlay_cache.descriptor_set.clone()
+        } else {
+            self.empty_overlay.descriptor_set.clone()
+        };
+
         // if use_rect_pipeline {
         builder.draw(
             self.rect_pipeline.clone(),
             &dynamic_state,
             vec![vertex_buffer],
-            (set_0.clone(), set_1.clone()),
+            (set_0.clone(), set_1.clone(), set_2.clone()),
             view_pc,
         )?;
 

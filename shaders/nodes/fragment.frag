@@ -23,6 +23,8 @@ layout (set = 1, binding = 1) readonly buffer Selection {
   int flag[];
 } selection;
 
+layout (set = 2, binding = 0) uniform samplerBuffer overlay;
+
 layout (push_constant) uniform View {
   float node_width;
   float scale;

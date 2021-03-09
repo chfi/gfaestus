@@ -244,7 +244,7 @@ fn main() {
     )
     .expect("error when creating App");
 
-    let mut main_view = MainView::new(
+    let (mut main_view, mv_future) = MainView::new(
         queue.clone(),
         Subpass::from(render_pipeline.nodes_pass().clone(), 0).unwrap(),
         Subpass::from(render_pipeline.final_pass().clone(), 0).unwrap(),
@@ -341,7 +341,7 @@ fn main() {
     let mut recreate_swapchain = false;
 
     let mut previous_frame_end = {
-        let fut = sync::now(device.clone()).join(line_future);
+        let fut = sync::now(device.clone()).join(line_future).join(mv_future);
         Some(fut.boxed())
     };
 
