@@ -139,10 +139,23 @@ fn main() {
 
     let extensions = vulkano_win::required_extensions();
 
+    /*
+    let layers = vec![
+        "VK_LAYER_MESA_device_select",
+        "VK_LAYER_RENDERDOC_Capture",
+        "VK_LAYER_KHRONOS_validation",
+    ];
+
+    let instance = Instance::new(None, &extensions, layers).unwrap();
+    */
+
     let instance = Instance::new(None, &extensions, None).unwrap();
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
-    let event_loop = EventLoop::new();
+    // use this to force using X, to allow window sharing on wayland
+    let event_loop: EventLoop<()> =
+        winit::platform::unix::EventLoopExtUnix::new_x11().unwrap();
+    // let event_loop = EventLoop::new();
     let surface = WindowBuilder::new()
         .build_vk_surface(&event_loop, instance.clone())
         .unwrap();
@@ -161,6 +174,10 @@ fn main() {
     };
 
     let features = physical.supported_features().clone();
+
+    // this has to be false for renderdoc capture replays to work, but
+    // the application doesn't work outside renderdoc if it's false..
+    // features.buffer_device_address = false;
 
     let (device, mut queues) = Device::new(
         physical,
@@ -222,6 +239,12 @@ fn main() {
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let input_manager = InputManager::new(winit_rx);
+
+    // let input_manager = Arc::new(InputManager::new(winit_rx));
+    // let input_manager_loop = {
+    //     let input_manager = input_manager.clone();
+    //     std::thread::spawn(move || input_manager.handle_events())
+    // };
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
@@ -926,3 +949,110 @@ fn update_viewport(
     };
     dynamic_state.viewports = Some(vec![viewport]);
 }
+
+/* vulkano debug stuff (for future reference)
+
+let shader_non_semantic_info_ext = {
+    // let ext_str = std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+    // let ext_bstr = b"VK_KHR_shader_non_semantic_info";
+    // let ext_bstr_vec: Vec<u8> = ext_bstr[..].into();
+    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    let ext_str_2 = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    // let ext_str =
+    //     std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
+    let raw_ext = vulkano::instance::RawInstanceExtensions::new(vec![ext_str]);
+
+    // vulkano::instance::InstanceExtensions::from(&raw_ext)
+    raw_ext
+};
+
+let raw_exts_core = vulkano::instance::RawInstanceExtensions::supported_by_core().unwrap();
+// let raw_extensions = raw_extensions.union(&shader_non_semantic_info_ext);
+
+println!("raw_exts_core: {:?}", raw_exts_core);
+
+let raw_exts = vulkano::instance::RawInstanceExtensions::from(&extensions);
+
+let extensions = raw_exts;
+// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
+// enable vulkan debugging
+// extensions.
+
+// println!();
+// println!("raw_exts_2: {:?}", raw_exts_2);
+// let extensions = extensions.union(&shader_non_semantic_info_ext);
+// println!();
+
+// extensions.ext_debug_utils = true;
+
+println!("extensions: {:?}", extensions);
+println!();
+
+println!("List of Vulkan debugging layers available to use:");
+let mut layers = vulkano::instance::layers_list().unwrap();
+while let Some(l) = layers.next() {
+    println!("\t{}", l.name());
+}
+let layers = vec!["VK_LAYER_KHRONOS_validation"];
+let instance = Instance::new(None, &extensions, layers).unwrap();
+
+
+
+let raw_dev_ext = RawDeviceExtensions::from(&device_ext);
+let debug_dev_ext = {
+    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
+    let raw_ext = RawDeviceExtensions::new(vec![ext_str]);
+
+    raw_ext
+};
+
+let device_ext = raw_dev_ext.union(&debug_dev_ext);
+
+println!("device extensions: {:?}", device_ext);
+
+println!("features: {:?}", physical.supported_features());
+
+
+
+let severity = MessageSeverity {
+    error: true,
+    warning: true,
+    information: true,
+    verbose: true,
+};
+
+let ty = MessageType::all();
+
+let _debug_callback = DebugCallback::new(&instance, severity, ty, |msg| {
+    let severity = if msg.severity.error {
+        "error"
+    } else if msg.severity.warning {
+        "warning"
+    } else if msg.severity.information {
+        "information"
+    } else if msg.severity.verbose {
+        "verbose"
+    } else {
+        panic!("no-impl");
+    };
+
+    let ty = if msg.ty.general {
+        "general"
+    } else if msg.ty.validation {
+        "validation"
+    } else if msg.ty.performance {
+        "performance"
+    } else {
+        panic!("no-impl");
+    };
+
+    println!(
+        "{} {} {}: {}",
+        msg.layer_prefix, ty, severity, msg.description
+    );
+})
+.ok();
+
+
+*/

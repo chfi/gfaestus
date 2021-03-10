@@ -7,3 +7,4 @@ pub mod render;
 pub mod universe;
 pub mod util;
 pub mod view;
+pub mod vulkan;
