@@ -129,14 +129,11 @@ fn find_queue_families(
     Ok((graphics_ix, present_ix))
 }
 
-// fn required_device_extensions
-
 fn device_supports_extensions(
     instance: &Instance,
     device: vk::PhysicalDevice,
 ) -> Result<bool> {
-    // may be expanded in the future
-    let required_exts = [Swapchain::name()];
+    let required_exts = required_device_extensions();
 
     let extension_props =
         unsafe { instance.enumerate_device_extension_properties(device) }?;
@@ -153,6 +150,11 @@ fn device_supports_extensions(
     }
 
     Ok(true)
+}
+
+// may be expanded in the future
+fn required_device_extensions() -> [&'static CStr; 1] {
+    [Swapchain::name()]
 }
 
 fn device_is_suitable(
@@ -217,6 +219,101 @@ fn choose_physical_device(
         find_queue_families(instance, surface, surface_khr, device)?;
 
     Ok((device, graphics_ix.unwrap(), present_ix.unwrap()))
+}
+
+fn create_swapchain_and_images(
+    vk_context: &VkContext,
+    graphics_ix: u32,
+    present_ix: u32,
+    dimensions: [u32; 2],
+) -> Result<(
+    Swapchain,
+    vk::SwapchainKHR,
+    SwapchainProperties,
+    Vec<vk::Image>,
+)> {
+    let details = SwapchainSupportDetails::new(
+        vk_context.physical_device(),
+        vk_context.surface(),
+        vk_context.surface_khr(),
+    )?;
+
+    let props = details.get_ideal_swapchain_properties(dimensions);
+
+    let image_count = {
+        let max = details.capabilities.max_image_count;
+        let mut preferred = details.capabilities.min_image_count + 1;
+        if max > 0 && preferred > max {
+            preferred = max;
+        }
+        preferred
+    };
+
+    eprintln!(
+            "Creating swapchain.\n\tFormat: {:?}\n\tColorSpace: {:?}\n\tPresentMode: {:?}\n\tExtent: {:?}\n\tImageCount: {:?}",
+            props.format.format,
+            props.format.color_space,
+            props.present_mode,
+            props.extent,
+            image_count,
+        );
+
+    let family_indices = [graphics_ix, present_ix];
+
+    let create_info = {
+        let mut builder = vk::SwapchainCreateInfoKHR::builder()
+            .surface(vk_context.surface_khr())
+            .min_image_count(image_count)
+            .image_format(props.format.format)
+            .image_color_space(props.format.color_space)
+            .image_extent(props.extent)
+            .image_array_layers(1)
+            .image_usage(vk::ImageUsageFlags::COLOR_ATTACHMENT);
+
+        builder = if graphics_ix != present_ix {
+            builder
+                .image_sharing_mode(vk::SharingMode::CONCURRENT)
+                .queue_family_indices(&family_indices)
+        } else {
+            builder.image_sharing_mode(vk::SharingMode::EXCLUSIVE)
+        };
+
+        builder
+            .pre_transform(details.capabilities.current_transform)
+            .composite_alpha(vk::CompositeAlphaFlagsKHR::OPAQUE)
+            .present_mode(props.present_mode)
+            .clipped(true)
+            .build()
+    };
+
+    let swapchain = Swapchain::new(vk_context.instance(), vk_context.device());
+    let swapchain_khr =
+        unsafe { swapchain.create_swapchain(&create_info, None) }?;
+    let images = unsafe { swapchain.get_swapchain_images(swapchain_khr) }?;
+
+    Ok((swapchain, swapchain_khr, props, images))
+}
+
+fn create_swapchain_image_views(
+    device: &Device,
+    swapchain_images: &[vk::Image],
+    swapchain_properties: SwapchainProperties,
+) -> Result<Vec<vk::ImageView>> {
+    let mut img_views = Vec::with_capacity(swapchain_images.len());
+
+    for image in swapchain_images.iter() {
+        let view = GfaestusVk::create_image_view(
+            device,
+            *image,
+            1,
+            swapchain_properties.format.format,
+            vk::ImageAspectFlags::COLOR,
+        )?;
+
+        img_views.push(view);
+    }
+
+    Ok(img_views)
 }
 
 fn create_logical_device(
