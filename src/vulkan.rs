@@ -386,13 +386,121 @@ impl GfaestusVk {
         let debug_report_callback =
             debug::setup_debug_messenger(&entry, &instance);
 
-        let (phys_device, graphics_ix, present_ix) =
+        let (physical_device, graphics_ix, present_ix) =
             choose_physical_device(&instance, &surface, surface_khr)?;
 
-        unimplemented!();
+        let (device, graphics_queue, present_queue) = create_logical_device(
+            &instance,
+            physical_device,
+            graphics_ix,
+            present_ix,
+        )?;
+
+        let vk_context = VkContext::new(
+            entry,
+            instance,
+            debug_report_callback,
+            surface,
+            surface_khr,
+            physical_device,
+            device,
+        );
+
+        let width = 800u32;
+        let height = 600u32;
+
+        let (swapchain, swapchain_khr, swapchain_props, images) =
+            create_swapchain_and_images(
+                &vk_context,
+                graphics_ix,
+                present_ix,
+                [width, height],
+            )?;
+        let swapchain_image_views = create_swapchain_image_views(
+            vk_context.device(),
+            &images,
+            swapchain_props,
+        )?;
+
+        let msaa_samples = vk_context.get_max_usable_sample_count();
+
+        let command_pool = Self::create_command_pool(
+            vk_context.device(),
+            graphics_ix,
+            vk::CommandPoolCreateFlags::empty(),
+        )?;
+        let transient_command_pool = Self::create_command_pool(
+            vk_context.device(),
+            graphics_ix,
+            vk::CommandPoolCreateFlags::TRANSIENT,
+        )?;
+
+        Ok(Self {
+            vk_context,
+
+            graphics_queue,
+            present_queue,
+
+            graphics_family_index: graphics_ix,
+            present_family_index: present_ix,
+
+            msaa_samples,
+
+            swapchain,
+            swapchain_khr,
+            swapchain_props,
+
+            swapchain_images: images,
+            swapchain_image_views,
+
+            command_pool,
+            transient_command_pool,
+        })
+    }
+
+    pub fn create_image_view(
+        device: &Device,
+        image: vk::Image,
+        mip_levels: u32,
+        format: vk::Format,
+        aspect_mask: vk::ImageAspectFlags,
+    ) -> Result<vk::ImageView> {
+        let create_info = vk::ImageViewCreateInfo::builder()
+            .image(image)
+            .view_type(vk::ImageViewType::TYPE_2D)
+            .format(format)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask,
+                base_mip_level: 0,
+                level_count: mip_levels,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .build();
+
+        let img_view = unsafe { device.create_image_view(&create_info, None) }?;
+
+        Ok(img_view)
+    }
+
+    fn create_command_pool(
+        device: &Device,
+        graphics_ix: u32,
+        create_flags: vk::CommandPoolCreateFlags,
+    ) -> Result<vk::CommandPool> {
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(graphics_ix)
+            .flags(create_flags)
+            .build();
+
+        let command_pool =
+            unsafe { device.create_command_pool(&command_pool_info, None) }?;
+
+        Ok(command_pool)
     }
 }
 
+#[derive(Clone, Copy, Debug)]
 struct SwapchainProperties {
     extent: vk::Extent2D,
     present_mode: vk::PresentModeKHR,
