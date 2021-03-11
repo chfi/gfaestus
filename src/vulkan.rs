@@ -188,7 +188,66 @@ fn device_is_suitable(
     Ok(features.sampler_anisotropy == vk::TRUE)
 }
 
+fn choose_physical_device(
+    instance: &Instance,
+    surface: &Surface,
+    surface_khr: vk::SurfaceKHR,
+) -> Result<(vk::PhysicalDevice, u32, u32)> {
+    let device = {
+        let devices = unsafe { instance.enumerate_physical_devices() }?;
 
+        devices
+            .into_iter()
+            .find(|&dev| {
+                device_is_suitable(instance, surface, surface_khr, dev).unwrap()
+            })
+            .unwrap()
+    };
+
+    let properties = unsafe { instance.get_physical_device_properties(device) };
+
+    unsafe {
+        eprintln!(
+            "Selected physical device: {:?}",
+            CStr::from_ptr(properties.device_name.as_ptr())
+        );
+    }
+
+    let (graphics_ix, present_ix) =
+        find_queue_families(instance, surface, surface_khr, device)?;
+
+    Ok((device, graphics_ix.unwrap(), present_ix.unwrap()))
+}
+
+fn create_logical_device(
+    instance: &Instance,
+    device: vk::PhysicalDevice,
+    graphics_ix: u32,
+    present_ix: u32,
+) -> Result<(Device, vk::Queue, vk::Queue)> {
+    let queue_priorities = [1.0f32];
+
+    let queue_create_info = {};
+}
+
+impl GfaestusVk {
+    fn new(window: &Window) -> Result<Self> {
+        let entry = Entry::new()?;
+        let instance = create_instance(&entry, window)?;
+
+        let surface = Surface::new(&entry, &instance);
+        let surface_khr = unsafe {
+            ash_window::create_surface(&entry, &instance, window, None)
+        }?;
+
+        let debug_report_callback =
+            debug::setup_debug_messenger(&entry, &instance);
+
+        let (phys_device, graphics_ix, present_ix) =
+            choose_physical_device(&instance, &surface, surface_khr)?;
+
+        unimplemented!();
+    }
 }
 
 struct SwapchainProperties {
