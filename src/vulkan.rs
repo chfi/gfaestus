@@ -45,12 +45,10 @@ pub struct GfaestusVk {
 
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
-    swapchain_framebuffers: Vec<vk::Framebuffer>,
-
+    // swapchain_framebuffers: Vec<vk::Framebuffer>,
     command_pool: vk::CommandPool,
     transient_command_pool: vk::CommandPool,
-
-    command_buffers: Vec<vk::CommandBuffer>,
+    // command_buffers: Vec<vk::CommandBuffer>,
 }
 
 fn create_instance(entry: &Entry, window: &Window) -> Result<Instance> {
@@ -324,7 +322,55 @@ fn create_logical_device(
 ) -> Result<(Device, vk::Queue, vk::Queue)> {
     let queue_priorities = [1.0f32];
 
-    let queue_create_info = {};
+    let queue_infos = {
+        use rustc_hash::FxHashSet;
+        let indices = [graphics_ix, present_ix]
+            .iter()
+            .copied()
+            .collect::<FxHashSet<_>>();
+
+        indices
+            .iter()
+            .map(|&ix| {
+                vk::DeviceQueueCreateInfo::builder()
+                    .queue_family_index(ix)
+                    .queue_priorities(&queue_priorities)
+                    .build()
+            })
+            .collect::<Vec<_>>()
+    };
+
+    let device_extensions = required_device_extensions();
+    let device_extensions_ptrs = device_extensions
+        .iter()
+        .map(|ext| ext.as_ptr())
+        .collect::<Vec<_>>();
+
+    let device_features = vk::PhysicalDeviceFeatures::builder()
+        .sampler_anisotropy(true)
+        .build();
+
+    let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
+
+    let mut device_create_info_builder = vk::DeviceCreateInfo::builder()
+        .queue_create_infos(&queue_infos)
+        .enabled_extension_names(&device_extensions_ptrs)
+        .enabled_features(&device_features);
+
+    if debug::ENABLE_VALIDATION_LAYERS {
+        device_create_info_builder =
+            device_create_info_builder.enabled_layer_names(&layer_names_ptrs);
+    }
+
+    let device_create_info = device_create_info_builder.build();
+
+    let device =
+        unsafe { instance.create_device(device, &device_create_info, None) }?;
+
+    let graphics_queue = unsafe { device.get_device_queue(graphics_ix, 0) };
+    let present_queue = unsafe { device.get_device_queue(present_ix, 0) };
+
+    Ok((device, graphics_queue, present_queue))
 }
 
 impl GfaestusVk {
