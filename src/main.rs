@@ -123,8 +123,9 @@ fn main() {
                 if dirty_swapchain {
                     let size = window.inner_size();
                     if size.width > 0 && size.height > 0 {
-                        // TODO recreate swapchain
-                        unimplemented!();
+                        gfaestus
+                            .recreate_swapchain(Some([size.width, size.height]))
+                            .unwrap();
                     } else {
                         return;
                     }

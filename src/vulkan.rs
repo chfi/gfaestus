@@ -467,6 +467,55 @@ impl GfaestusVk {
         Ok(res)
     }
 
+    pub fn recreate_swapchain(
+        &mut self,
+        dimensions: Option<[u32; 2]>,
+    ) -> Result<()> {
+        self.wait_gpu_idle()?;
+
+        self.cleanup_swapchain();
+
+        let device = self.vk_context.device();
+
+        let dimensions = dimensions.unwrap_or([
+            self.swapchain_props.extent.width,
+            self.swapchain_props.extent.height,
+        ]);
+
+        let (swapchain, swapchain_khr, properties, images) =
+            create_swapchain_and_images(
+                &self.vk_context,
+                self.graphics_family_index,
+                self.present_family_index,
+                dimensions,
+            )?;
+
+        let swapchain_image_views =
+            create_swapchain_image_views(device, &images, properties)?;
+
+        // TODO recreate render pass, framebuffers, etc.
+
+        self.swapchain = swapchain;
+        self.swapchain_khr = swapchain_khr;
+        self.swapchain_props = properties;
+        self.swapchain_images = images;
+        self.swapchain_image_views = swapchain_image_views;
+
+        Ok(())
+    }
+
+    fn cleanup_swapchain(&mut self) {
+        let device = self.vk_context.device();
+
+        unsafe {
+            // TODO handle framebuffers, pipelines, etc.
+            self.swapchain_image_views
+                .iter()
+                .for_each(|v| device.destroy_image_view(*v, None));
+            self.swapchain.destroy_swapchain(self.swapchain_khr, None);
+        }
+    }
+
     pub fn create_image_view(
         device: &Device,
         image: vk::Image,
