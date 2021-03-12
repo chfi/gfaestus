@@ -467,6 +467,77 @@ impl GfaestusVk {
         })
     }
 
+    pub fn draw_frame(&mut self) -> Result<bool> {
+        let sync_objects = self.in_flight_frames.next().unwrap();
+
+        let img_available = sync_objects.image_available_semaphore;
+        let render_finished = sync_objects.render_finished_semaphore;
+        let in_flight_fence = sync_objects.fence;
+        let wait_fences = [in_flight_fence];
+
+        unsafe {
+            self.vk_context.device().wait_for_fences(
+                &wait_fences,
+                true,
+                std::u64::MAX,
+            )
+        }?;
+
+        let result = unsafe {
+            self.swapchain.acquire_next_image(
+                self.swapchain_khr,
+                std::u64::MAX,
+                img_available,
+                vk::Fence::null(),
+            )
+        };
+
+        let img_index = match result {
+            Ok((img_index, _)) => img_index,
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                return Ok(true);
+            }
+            Err(error) => panic!("Error while acquiring next image: {}", error),
+        };
+
+        unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
+
+        // TODO update uniforms
+
+        let device = self.vk_context.device();
+        let wait_semaphores = [img_available];
+        let signal_semaphores = [render_finished];
+
+        // TODO submit command buffers
+        {}
+
+        let swapchains = [self.swapchain_khr];
+        let img_indices = [img_index];
+
+        {
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&img_indices)
+                .build();
+
+            let result = unsafe {
+                self.swapchain
+                    .queue_present(self.present_queue, &present_info)
+            };
+
+            match result {
+                Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return Ok(true);
+                }
+                Err(error) => panic!("Failed to present queue: {}", error),
+                _ => {}
+            }
+        }
+
+        Ok(false)
+    }
+
     fn create_sync_objects(device: &Device) -> InFlightFrames {
         let mut sync_objects_vec = Vec::new();
         // for _ in 0..MAX_FRAMES_IN_FLIGHT {

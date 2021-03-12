@@ -131,8 +131,7 @@ fn main() {
                     }
                 }
 
-                // TODO
-                // dirty_swapchain = app.draw_frame();
+                dirty_swapchain = gfaestus.draw_frame().unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
