@@ -49,6 +49,7 @@ pub struct GfaestusVk {
     command_pool: vk::CommandPool,
     transient_command_pool: vk::CommandPool,
     // command_buffers: Vec<vk::CommandBuffer>,
+    in_flight_frames: InFlightFrames,
 }
 
 fn create_instance(entry: &Entry, window: &Window) -> Result<Instance> {
@@ -439,6 +440,8 @@ impl GfaestusVk {
             vk::CommandPoolCreateFlags::TRANSIENT,
         )?;
 
+        let in_flight_frames = Self::create_sync_objects(vk_context.device());
+
         Ok(Self {
             vk_context,
 
@@ -459,7 +462,45 @@ impl GfaestusVk {
 
             command_pool,
             transient_command_pool,
+
+            in_flight_frames,
         })
+    }
+
+    fn create_sync_objects(device: &Device) -> InFlightFrames {
+        let mut sync_objects_vec = Vec::new();
+        // for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        for _ in 0..2 {
+            let image_available_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let render_finished_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let in_flight_fence = {
+                let fence_info = vk::FenceCreateInfo::builder()
+                    .flags(vk::FenceCreateFlags::SIGNALED)
+                    .build();
+                unsafe { device.create_fence(&fence_info, None).unwrap() }
+            };
+
+            let sync_objects = SyncObjects {
+                image_available_semaphore,
+                render_finished_semaphore,
+                fence: in_flight_fence,
+            };
+            sync_objects_vec.push(sync_objects)
+        }
+
+        InFlightFrames::new(sync_objects_vec)
     }
 
     pub fn wait_gpu_idle(&self) -> Result<()> {
@@ -678,5 +719,52 @@ impl SwapchainSupportDetails {
         let width = preferred_dimensions[0].min(max.width).max(min.width);
         let height = preferred_dimensions[1].min(max.height).max(min.height);
         vk::Extent2D { width, height }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct SyncObjects {
+    image_available_semaphore: vk::Semaphore,
+    render_finished_semaphore: vk::Semaphore,
+    fence: vk::Fence,
+}
+
+impl SyncObjects {
+    fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_semaphore(self.image_available_semaphore, None);
+            device.destroy_semaphore(self.render_finished_semaphore, None);
+            device.destroy_fence(self.fence, None);
+        }
+    }
+}
+
+struct InFlightFrames {
+    sync_objects: Vec<SyncObjects>,
+    current_frame: usize,
+}
+
+impl InFlightFrames {
+    fn new(sync_objects: Vec<SyncObjects>) -> Self {
+        Self {
+            sync_objects,
+            current_frame: 0,
+        }
+    }
+
+    fn destroy(&self, device: &Device) {
+        self.sync_objects.iter().for_each(|o| o.destroy(&device));
+    }
+}
+
+impl Iterator for InFlightFrames {
+    type Item = SyncObjects;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.sync_objects[self.current_frame];
+
+        self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
+
+        Some(next)
     }
 }
