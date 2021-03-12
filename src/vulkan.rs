@@ -1,8 +1,10 @@
 pub mod context;
 pub mod debug;
+pub mod render_pass;
 
 use context::*;
 use debug::*;
+use render_pass::*;
 
 use ash::{
     extensions::{
@@ -508,8 +510,9 @@ impl GfaestusVk {
         let wait_semaphores = [img_available];
         let signal_semaphores = [render_finished];
 
-        // TODO submit command buffers
-        {}
+        {
+            // TODO submit command buffers
+        }
 
         let swapchains = [self.swapchain_khr];
         let img_indices = [img_index];
@@ -671,7 +674,7 @@ impl GfaestusVk {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct SwapchainProperties {
+pub struct SwapchainProperties {
     extent: vk::Extent2D,
     present_mode: vk::PresentModeKHR,
     format: vk::SurfaceFormatKHR,
