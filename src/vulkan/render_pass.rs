@@ -1,6 +1,7 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
+use super::texture::*;
 use super::SwapchainProperties;
 
 use anyhow::Result;
@@ -70,4 +71,31 @@ pub fn create_swapchain_render_pass(
         unsafe { device.create_render_pass(&render_pass_info, None) }?;
 
     Ok(render_pass)
+}
+
+pub fn create_swapchain_framebuffers(
+    device: &Device,
+    image_views: &[vk::ImageView],
+    color_texture: Texture,
+    render_pass: vk::RenderPass,
+    swapchain_props: SwapchainProperties,
+) -> Vec<vk::Framebuffer> {
+    image_views
+        .iter()
+        .map(|view| {
+            let attachments = [color_texture.view, *view];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(render_pass)
+                .attachments(&attachments)
+                .width(swapchain_props.extent.width)
+                .height(swapchain_props.extent.height)
+                .layers(1)
+                .build();
+
+            unsafe {
+                device.create_framebuffer(&framebuffer_info, None).unwrap()
+            }
+        })
+        .collect()
 }

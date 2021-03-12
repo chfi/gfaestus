@@ -1,10 +1,12 @@
 pub mod context;
 pub mod debug;
 pub mod render_pass;
+pub mod texture;
 
 use context::*;
 use debug::*;
 use render_pass::*;
+use texture::*;
 
 use ash::{
     extensions::{
