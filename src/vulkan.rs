@@ -53,7 +53,8 @@ pub struct GfaestusVk {
 
 fn create_instance(entry: &Entry, window: &Window) -> Result<Instance> {
     let app_name = CString::new("Gfaestus")?;
-    let info = vk::ApplicationInfo::builder()
+
+    let app_info = vk::ApplicationInfo::builder()
         .application_name(app_name.as_c_str())
         .application_version(vk::make_version(0, 1, 0))
         .engine_name(app_name.as_c_str())
@@ -61,27 +62,30 @@ fn create_instance(entry: &Entry, window: &Window) -> Result<Instance> {
         .api_version(vk::make_version(1, 0, 0))
         .build();
 
-    let mut extensions = ash_window::enumerate_required_extensions(window)?
+    let extension_names =
+        ash_window::enumerate_required_extensions(window).unwrap();
+    let mut extension_names = extension_names
         .iter()
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
 
     if debug::ENABLE_VALIDATION_LAYERS {
-        extensions.push(DebugReport::name().as_ptr());
+        extension_names.push(DebugReport::name().as_ptr());
     }
 
-    let mut instance_info = vk::InstanceCreateInfo::builder()
-        .application_info(&info)
-        .enabled_extension_names(&extensions);
+    let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
-    let (_, layer_name_ptrs) = get_layer_names_and_pointers();
-
+    let mut instance_create_info = vk::InstanceCreateInfo::builder()
+        .application_info(&app_info)
+        .enabled_extension_names(&extension_names);
     if debug::ENABLE_VALIDATION_LAYERS {
         check_validation_layer_support(&entry);
-        instance_info = instance_info.enabled_layer_names(&layer_name_ptrs);
+        instance_create_info =
+            instance_create_info.enabled_layer_names(&layer_names_ptrs);
     }
 
-    let instance = unsafe { entry.create_instance(&instance_info, None) }?;
+    let instance =
+        unsafe { entry.create_instance(&instance_create_info, None) }?;
 
     Ok(instance)
 }
@@ -374,7 +378,7 @@ fn create_logical_device(
 }
 
 impl GfaestusVk {
-    fn new(window: &Window) -> Result<Self> {
+    pub fn new(window: &Window) -> Result<Self> {
         let entry = Entry::new()?;
         let instance = create_instance(&entry, window)?;
 
