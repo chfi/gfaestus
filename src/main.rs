@@ -89,7 +89,73 @@ fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
     Ok((overlay, future))
 }
 
+use gfaestus::vulkan::*;
+
 fn main() {
+    let event_loop = EventLoop::new();
+    let window = WindowBuilder::new()
+        .with_title("Gfaestus")
+        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+        .build(&event_loop)
+        .unwrap();
+
+    // let mut gfaestus = GfaestusVk::new(&window).unwrap();
+    let gfaestus = GfaestusVk::new(&window);
+
+    if let Err(err) = &gfaestus {
+        println!("{:?}", err.root_cause());
+    }
+
+    let mut gfaestus = gfaestus.unwrap();
+
+    let mut dirty_swapchain = false;
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::NewEvents(_) => {
+                // TODO
+            }
+            Event::MainEventsCleared => {
+                // TODO update state etc.
+
+                if dirty_swapchain {
+                    let size = window.inner_size();
+                    if size.width > 0 && size.height > 0 {
+                        // TODO recreate swapchain
+                        unimplemented!();
+                    } else {
+                        return;
+                    }
+                }
+
+                // TODO
+                // dirty_swapchain = app.draw_frame();
+            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    *control_flow = ControlFlow::Exit
+                }
+                WindowEvent::Resized { .. } => dirty_swapchain = true,
+                WindowEvent::MouseInput { button, state, .. } => {
+                    // TODO
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    // TODO
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    // TODO
+                }
+                _ => (),
+            },
+            Event::LoopDestroyed => gfaestus.wait_gpu_idle().unwrap(),
+            _ => (),
+        }
+    });
+}
+
+fn main_old() {
     let args = std::env::args().collect::<Vec<_>>();
 
     let gfa_file = if let Some(name) = args.get(1) {

@@ -462,6 +462,11 @@ impl GfaestusVk {
         })
     }
 
+    pub fn wait_gpu_idle(&self) -> Result<()> {
+        let res = unsafe { self.vk_context.device().device_wait_idle() }?;
+        Ok(res)
+    }
+
     pub fn create_image_view(
         device: &Device,
         image: vk::Image,
