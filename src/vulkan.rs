@@ -1,10 +1,12 @@
 pub mod context;
 pub mod debug;
+pub mod draw_system;
 pub mod render_pass;
 pub mod texture;
 
 use context::*;
 use debug::*;
+use draw_system::*;
 use render_pass::*;
 use texture::*;
 
@@ -672,6 +674,24 @@ impl GfaestusVk {
             unsafe { device.create_command_pool(&command_pool_info, None) }?;
 
         Ok(command_pool)
+    }
+}
+
+impl Drop for GfaestusVk {
+    fn drop(&mut self) {
+        self.cleanup_swapchain();
+
+        let device = self.vk_context.device();
+        self.in_flight_frames.destroy(device);
+
+        unsafe {
+            // TODO handle descriptor pool
+            // TODO handle descriptor set layouts
+            // TODO handle buffer memory
+
+            device.destroy_command_pool(self.transient_command_pool, None);
+            device.destroy_command_pool(self.command_pool, None);
+        }
     }
 }
 

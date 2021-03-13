@@ -92,6 +92,53 @@ fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
 use gfaestus::vulkan::*;
 
 fn main() {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    let gfa_file = if let Some(name) = args.get(1) {
+        name
+    } else {
+        eprintln!("must provide path to a GFA file");
+        std::process::exit(1);
+    };
+
+    let layout_file = if let Some(name) = args.get(2) {
+        name
+    } else {
+        eprintln!("must provide path to a layout file");
+        std::process::exit(1);
+    };
+
+    eprintln!("loading GFA");
+    let t = std::time::Instant::now();
+    let init_t = std::time::Instant::now();
+
+    let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
+
+    let (universe, stats) =
+        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
+
+    let (top_left, bottom_right) = universe.layout().bounding_box();
+
+    eprintln!(
+        "layout bounding box\t({:.2}, {:.2})\t({:.2}, {:.2})",
+        top_left.x, top_left.y, bottom_right.x, bottom_right.y
+    );
+    eprintln!(
+        "layout width: {:.2}\theight: {:.2}",
+        bottom_right.x - top_left.x,
+        bottom_right.y - top_left.y
+    );
+
+    // let init_layout = layout.clone();
+
+    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    eprintln!(
+        "Loaded {} nodes\t{} points",
+        universe.layout().nodes().len(),
+        universe.layout().nodes().len() * 2
+    );
+
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
