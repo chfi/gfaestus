@@ -45,6 +45,7 @@ pub struct GfaestusVk {
 
     msaa_samples: vk::SampleCountFlags,
     render_pass: vk::RenderPass,
+    transient_color: Texture,
 
     swapchain: Swapchain,
     swapchain_khr: vk::SwapchainKHR,
@@ -130,9 +131,21 @@ impl GfaestusVk {
             msaa_samples,
         )?;
 
-        // let color_texture = Self::create_color_texture(&vk_context, transient_command_pool, graphics_queue, properties, msaa_samples);
+        let transient_color = Texture::create_transient_color(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
 
-        // let swapchain_framebuffers = create_swapchain_framebuffers(vk_context.device(), &swapchain_image_views,
+        let swapchain_framebuffers = create_swapchain_framebuffers(
+            vk_context.device(),
+            &swapchain_image_views,
+            transient_color,
+            render_pass,
+            swapchain_props,
+        );
 
         Ok(Self {
             vk_context,
@@ -144,6 +157,8 @@ impl GfaestusVk {
             present_family_index: present_ix,
 
             msaa_samples,
+            render_pass,
+            transient_color,
 
             swapchain,
             swapchain_khr,
@@ -151,6 +166,7 @@ impl GfaestusVk {
 
             swapchain_images: images,
             swapchain_image_views,
+            swapchain_framebuffers,
 
             command_pool,
             transient_command_pool,
@@ -439,7 +455,7 @@ impl GfaestusVk {
             self.swapchain_props.extent.height,
         ]);
 
-        let (swapchain, swapchain_khr, properties, images) =
+        let (swapchain, swapchain_khr, swapchain_props, images) =
             create_swapchain_and_images(
                 &self.vk_context,
                 self.graphics_family_index,
@@ -448,15 +464,40 @@ impl GfaestusVk {
             )?;
 
         let swapchain_image_views =
-            create_swapchain_image_views(device, &images, properties)?;
+            create_swapchain_image_views(device, &images, swapchain_props)?;
+
+        let render_pass = create_swapchain_render_pass(
+            device,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let transient_color = Texture::create_transient_color(
+            &self.vk_context,
+            self.transient_command_pool,
+            self.graphics_queue,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let swapchain_framebuffers = create_swapchain_framebuffers(
+            device,
+            &swapchain_image_views,
+            transient_color,
+            render_pass,
+            swapchain_props,
+        );
 
         // TODO recreate render pass, framebuffers, etc.
 
         self.swapchain = swapchain;
         self.swapchain_khr = swapchain_khr;
-        self.swapchain_props = properties;
+        self.swapchain_props = swapchain_props;
         self.swapchain_images = images;
         self.swapchain_image_views = swapchain_image_views;
+        self.swapchain_framebuffers = swapchain_framebuffers;
+        self.transient_color = transient_color;
+        self.render_pass = render_pass;
 
         Ok(())
     }
@@ -466,9 +507,16 @@ impl GfaestusVk {
 
         unsafe {
             // TODO handle framebuffers, pipelines, etc.
+            self.transient_color.destroy(device);
+
+            self.swapchain_framebuffers
+                .iter()
+                .for_each(|f| device.destroy_framebuffer(*f, None));
             self.swapchain_image_views
                 .iter()
                 .for_each(|v| device.destroy_image_view(*v, None));
+            device.destroy_render_pass(self.render_pass, None);
+
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
         }
     }

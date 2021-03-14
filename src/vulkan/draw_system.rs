@@ -94,7 +94,7 @@ impl GfaestusCmdBuf {
             unsafe { device.end_command_buffer(buf) }?;
         }
 
-        Ok(buffers)
+        Ok(buffers[0])
     }
 }
 
