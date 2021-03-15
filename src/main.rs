@@ -182,7 +182,8 @@ fn main() {
 
                 // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
 
-                // dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
+                gfaestus.wait_gpu_idle().unwrap();
+                dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

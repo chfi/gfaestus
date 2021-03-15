@@ -179,6 +179,60 @@ impl GfaestusVk {
         &self.vk_context
     }
 
+    pub fn execute_one_time_commands_semaphores<F>(
+        device: &Device,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        wait_semaphores: &[vk::Semaphore],
+        wait_stages: &[vk::PipelineStageFlags],
+        fence: vk::Fence,
+        commands: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(vk::CommandBuffer),
+    {
+        let cmd_buf = {
+            let alloc_info = vk::CommandBufferAllocateInfo::builder()
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_pool(command_pool)
+                .command_buffer_count(1)
+                .build();
+
+            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
+            bufs[0]
+        };
+
+        {
+            let begin_info = vk::CommandBufferBeginInfo::builder()
+                // .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                .build();
+
+            unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
+        }
+
+        commands(cmd_buf);
+
+        unsafe { device.end_command_buffer(cmd_buf) }?;
+
+        {
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(wait_semaphores)
+                .wait_dst_stage_mask(wait_stages)
+                .command_buffers(&[cmd_buf])
+                .build();
+
+            unsafe {
+                device.queue_submit(queue, &[submit_info], fence)?;
+                device.queue_wait_idle(queue)?;
+            }
+        }
+
+        unsafe { device.free_command_buffers(command_pool, &[cmd_buf]) };
+
+        Ok(())
+    }
+
     pub fn execute_one_time_commands<F>(
         device: &Device,
         command_pool: vk::CommandPool,
@@ -371,93 +425,69 @@ impl GfaestusVk {
         let wait_semaphores = [img_available];
         let signal_semaphores = [render_finished];
 
-        let cmd_buf = {
-            let alloc_info = vk::CommandBufferAllocateInfo::builder()
-                .level(vk::CommandBufferLevel::PRIMARY)
-                .command_pool(self.command_pool)
-                .command_buffer_count(1)
-                .build();
-
-            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
-            bufs[0]
-        };
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
 
         let queue = self.graphics_queue;
 
         let framebuffer = self.swapchain_framebuffers[img_index as usize];
 
-        {
-            // TODO submit command buffers
-            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+        dbg!();
 
-            {
-                let begin_info = vk::CommandBufferBeginInfo::builder()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+        Self::execute_one_time_commands_semaphores(
+            device,
+            self.transient_command_pool,
+            queue,
+            &wait_semaphores,
+            &wait_stages,
+            in_flight_fence,
+            |cmd_buf| {
+                dbg!();
+                let clear_values = [
+                    vk::ClearValue {
+                        color: vk::ClearColorValue {
+                            float32: [0.0, 0.0, 0.0, 1.0],
+                        },
+                    },
+                    vk::ClearValue {
+                        depth_stencil: vk::ClearDepthStencilValue {
+                            depth: 1.0,
+                            stencil: 0,
+                        },
+                    },
+                ];
+
+                dbg!();
+                let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                    .render_pass(self.render_pass)
+                    .framebuffer(framebuffer)
+                    .render_area(vk::Rect2D {
+                        offset: vk::Offset2D { x: 0, y: 0 },
+                        extent: self.swapchain_props.extent,
+                    })
+                    .clear_values(&clear_values)
                     .build();
+                dbg!();
 
-                unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
-            }
+                unsafe {
+                    device.cmd_begin_render_pass(
+                        cmd_buf,
+                        &render_pass_begin_info,
+                        vk::SubpassContents::INLINE,
+                    )
+                };
 
-            let clear_values = [
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-                vk::ClearValue {
-                    depth_stencil: vk::ClearDepthStencilValue {
-                        depth: 1.0,
-                        stencil: 0,
-                    },
-                },
-            ];
+                dbg!();
+                // commands(cmd_buf);
 
-            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                .render_pass(self.render_pass)
-                .framebuffer(framebuffer)
-                .render_area(vk::Rect2D {
-                    offset: vk::Offset2D { x: 0, y: 0 },
-                    extent: self.swapchain_props.extent,
-                })
-                .clear_values(&clear_values)
-                .build();
-
-            unsafe {
-                device.cmd_begin_render_pass(
-                    cmd_buf,
-                    &render_pass_begin_info,
-                    vk::SubpassContents::INLINE,
-                )
-            };
-
-            // commands(cmd_buf);
-
-            unsafe { device.cmd_end_render_pass(cmd_buf) };
-
-            unsafe { device.end_command_buffer(cmd_buf) }?;
-
-            let cmd_bufs = [cmd_buf];
-
-            let submit_info = vk::SubmitInfo::builder()
-                .wait_semaphores(&wait_semaphores)
-                .wait_dst_stage_mask(&wait_stages)
-                .command_buffers(&cmd_bufs)
-                .build();
-
-            unsafe {
-                device.queue_submit(queue, &[submit_info], in_flight_fence)?;
-
-                device.queue_wait_idle(queue)?;
-            };
-
-            // unsafe {
-            //     device.free_command_buffers(self.command_pool, &[cmd_buf])
-            // };
-        }
+                unsafe { device.cmd_end_render_pass(cmd_buf) };
+                dbg!();
+            },
+        )?;
 
         let swapchains = [self.swapchain_khr];
         let img_indices = [img_index];
 
+        dbg!();
         {
             let present_info = vk::PresentInfoKHR::builder()
                 .wait_semaphores(&signal_semaphores)
@@ -465,11 +495,13 @@ impl GfaestusVk {
                 .image_indices(&img_indices)
                 .build();
 
+            dbg!();
             let result = unsafe {
                 self.swapchain
                     .queue_present(self.present_queue, &present_info)
             };
 
+            dbg!();
             match result {
                 Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                     return Ok(true);
