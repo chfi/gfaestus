@@ -157,6 +157,8 @@ fn main() {
 
     let mut dirty_swapchain = false;
 
+    // let mut command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -178,7 +180,9 @@ fn main() {
                     }
                 }
 
-                dirty_swapchain = gfaestus.draw_frame().unwrap();
+                // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
+
+                // dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

@@ -327,7 +327,168 @@ impl GfaestusVk {
         Ok(())
     }
 
-    pub fn draw_frame(&mut self) -> Result<bool> {
+    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
+    where
+        F: FnOnce(vk::CommandBuffer),
+    {
+        let sync_objects = self.in_flight_frames.next().unwrap();
+
+        let img_available = sync_objects.image_available_semaphore;
+        let render_finished = sync_objects.render_finished_semaphore;
+        let in_flight_fence = sync_objects.fence;
+        let wait_fences = [in_flight_fence];
+
+        unsafe {
+            self.vk_context.device().wait_for_fences(
+                &wait_fences,
+                true,
+                std::u64::MAX,
+            )
+        }?;
+
+        let result = unsafe {
+            self.swapchain.acquire_next_image(
+                self.swapchain_khr,
+                std::u64::MAX,
+                img_available,
+                vk::Fence::null(),
+            )
+        };
+
+        let img_index = match result {
+            Ok((img_index, _)) => img_index,
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                return Ok(true);
+            }
+            Err(error) => panic!("Error while acquiring next image: {}", error),
+        };
+
+        unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
+
+        // TODO update uniforms
+
+        let device = self.vk_context.device();
+        let wait_semaphores = [img_available];
+        let signal_semaphores = [render_finished];
+
+        let cmd_buf = {
+            let alloc_info = vk::CommandBufferAllocateInfo::builder()
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_pool(self.command_pool)
+                .command_buffer_count(1)
+                .build();
+
+            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
+            bufs[0]
+        };
+
+        let queue = self.graphics_queue;
+
+        let framebuffer = self.swapchain_framebuffers[img_index as usize];
+
+        {
+            // TODO submit command buffers
+            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+
+            {
+                let begin_info = vk::CommandBufferBeginInfo::builder()
+                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                    .build();
+
+                unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
+            }
+
+            let clear_values = [
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+                vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: 1.0,
+                        stencil: 0,
+                    },
+                },
+            ];
+
+            let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+                .render_pass(self.render_pass)
+                .framebuffer(framebuffer)
+                .render_area(vk::Rect2D {
+                    offset: vk::Offset2D { x: 0, y: 0 },
+                    extent: self.swapchain_props.extent,
+                })
+                .clear_values(&clear_values)
+                .build();
+
+            unsafe {
+                device.cmd_begin_render_pass(
+                    cmd_buf,
+                    &render_pass_begin_info,
+                    vk::SubpassContents::INLINE,
+                )
+            };
+
+            // commands(cmd_buf);
+
+            unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+            unsafe { device.end_command_buffer(cmd_buf) }?;
+
+            let cmd_bufs = [cmd_buf];
+
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(&wait_semaphores)
+                .wait_dst_stage_mask(&wait_stages)
+                .command_buffers(&cmd_bufs)
+                .build();
+
+            unsafe {
+                device.queue_submit(queue, &[submit_info], in_flight_fence)?;
+
+                device.queue_wait_idle(queue)?;
+            };
+
+            // unsafe {
+            //     device.free_command_buffers(self.command_pool, &[cmd_buf])
+            // };
+        }
+
+        let swapchains = [self.swapchain_khr];
+        let img_indices = [img_index];
+
+        {
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&img_indices)
+                .build();
+
+            let result = unsafe {
+                self.swapchain
+                    .queue_present(self.present_queue, &present_info)
+            };
+
+            match result {
+                Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return Ok(true);
+                }
+                Err(error) => panic!("Failed to present queue: {}", error),
+                _ => {}
+            }
+        }
+
+        unsafe {
+            device.queue_wait_idle(queue)?;
+        };
+
+        // unsafe { device.free_command_buffers(self.command_pool, &[cmd_buf]) };
+
+        Ok(false)
+    }
+
+    pub fn draw_frame(&mut self, cmd_buf: vk::CommandBuffer) -> Result<bool> {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
         let img_available = sync_objects.image_available_semaphore;
@@ -370,6 +531,23 @@ impl GfaestusVk {
 
         {
             // TODO submit command buffers
+            let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+
+            let cmd_bufs = [cmd_buf];
+
+            let submit_info = vk::SubmitInfo::builder()
+                .wait_semaphores(&wait_semaphores)
+                .wait_dst_stage_mask(&wait_stages)
+                .command_buffers(&cmd_bufs)
+                .build();
+
+            unsafe {
+                device.queue_submit(
+                    self.graphics_queue,
+                    &[submit_info],
+                    in_flight_fence,
+                )
+            }?;
         }
 
         let swapchains = [self.swapchain_khr];
