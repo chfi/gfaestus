@@ -552,7 +552,11 @@ impl GfaestusVk {
 
         let image = unsafe { device.create_image(&img_info, None) }?;
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
-        let mem_type_ix = todo!();
+        let mem_type_ix = find_memory_type(
+            mem_reqs,
+            vk_context.get_mem_properties(),
+            mem_props,
+        );
 
         let alloc_info = vk::MemoryAllocateInfo::builder()
             .allocation_size(mem_reqs.size)
@@ -1122,4 +1126,22 @@ fn create_logical_device(
     let present_queue = unsafe { device.get_device_queue(present_ix, 0) };
 
     Ok((device, graphics_queue, present_queue))
+}
+
+fn find_memory_type(
+    reqs: vk::MemoryRequirements,
+    mem_props: vk::PhysicalDeviceMemoryProperties,
+    req_props: vk::MemoryPropertyFlags,
+) -> u32 {
+    for i in 0..mem_props.memory_type_count {
+        if reqs.memory_type_bits & (1 << i) != 0
+            && mem_props.memory_types[i as usize]
+                .property_flags
+                .contains(req_props)
+        {
+            return i;
+        }
+    }
+
+    panic!("Failed to find suitable memory type");
 }
