@@ -25,8 +25,6 @@ pub fn create_swapchain_render_pass(
         .samples(vk::SampleCountFlags::TYPE_1)
         .load_op(vk::AttachmentLoadOp::DONT_CARE)
         .store_op(vk::AttachmentStoreOp::STORE)
-        .stencil_load_op(vk::AttachmentLoadOp::DONT_CARE)
-        .stencil_store_op(vk::AttachmentStoreOp::DONT_CARE)
         .initial_layout(vk::ImageLayout::UNDEFINED)
         .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
         .build();
@@ -43,11 +41,16 @@ pub fn create_swapchain_render_pass(
         .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
         .build();
 
+    let color_attchs = [color_attch_ref];
+    let resolve_attchs = [resolve_attch_ref];
+
     let subpass_desc = vk::SubpassDescription::builder()
         .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(&[color_attch_ref])
-        .resolve_attachments(&[resolve_attch_ref])
+        .color_attachments(&color_attchs)
+        .resolve_attachments(&resolve_attchs)
         .build();
+
+    let subpass_descs = [subpass_desc];
 
     let subpass_dep = vk::SubpassDependency::builder()
         .src_subpass(vk::SUBPASS_EXTERNAL)
@@ -61,10 +64,12 @@ pub fn create_swapchain_render_pass(
         )
         .build();
 
+    let subpass_deps = [subpass_dep];
+
     let render_pass_info = vk::RenderPassCreateInfo::builder()
         .attachments(&attch_descs)
-        .subpasses(&[subpass_desc])
-        .dependencies(&[subpass_dep])
+        .subpasses(&subpass_descs)
+        .dependencies(&subpass_deps)
         .build();
 
     let render_pass =

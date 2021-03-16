@@ -112,6 +112,12 @@ impl GfaestusVk {
 
         let msaa_samples = vk_context.get_max_usable_sample_count();
 
+        let render_pass = create_swapchain_render_pass(
+            vk_context.device(),
+            swapchain_props,
+            msaa_samples,
+        )?;
+
         let command_pool = Self::create_command_pool(
             vk_context.device(),
             graphics_ix,
@@ -121,14 +127,6 @@ impl GfaestusVk {
             vk_context.device(),
             graphics_ix,
             vk::CommandPoolCreateFlags::TRANSIENT,
-        )?;
-
-        let in_flight_frames = Self::create_sync_objects(vk_context.device());
-
-        let render_pass = create_swapchain_render_pass(
-            vk_context.device(),
-            swapchain_props,
-            msaa_samples,
         )?;
 
         let transient_color = Texture::create_transient_color(
@@ -146,6 +144,8 @@ impl GfaestusVk {
             render_pass,
             swapchain_props,
         );
+
+        let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         Ok(Self {
             vk_context,
@@ -204,8 +204,7 @@ impl GfaestusVk {
 
         {
             let begin_info = vk::CommandBufferBeginInfo::builder()
-                // .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .flags(vk::CommandBufferUsageFlags::SIMULTANEOUS_USE)
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
                 .build();
 
             unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
@@ -442,19 +441,11 @@ impl GfaestusVk {
             in_flight_fence,
             |cmd_buf| {
                 dbg!();
-                let clear_values = [
-                    vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
+                let clear_values = [vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
                     },
-                    vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                ];
+                }];
 
                 dbg!();
                 let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
@@ -703,9 +694,11 @@ impl GfaestusVk {
         self.swapchain = swapchain;
         self.swapchain_khr = swapchain_khr;
         self.swapchain_props = swapchain_props;
+
         self.swapchain_images = images;
         self.swapchain_image_views = swapchain_image_views;
         self.swapchain_framebuffers = swapchain_framebuffers;
+
         self.transient_color = transient_color;
         self.render_pass = render_pass;
 
@@ -722,10 +715,11 @@ impl GfaestusVk {
             self.swapchain_framebuffers
                 .iter()
                 .for_each(|f| device.destroy_framebuffer(*f, None));
+            device.destroy_render_pass(self.render_pass, None);
+
             self.swapchain_image_views
                 .iter()
                 .for_each(|v| device.destroy_image_view(*v, None));
-            device.destroy_render_pass(self.render_pass, None);
 
             self.swapchain.destroy_swapchain(self.swapchain_khr, None);
         }
