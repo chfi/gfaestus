@@ -146,7 +146,6 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    // let mut gfaestus = GfaestusVk::new(&window).unwrap();
     let gfaestus = GfaestusVk::new(&window);
 
     if let Err(err) = &gfaestus {
@@ -166,7 +165,9 @@ fn main() {
             Event::NewEvents(_) => {
                 // TODO
             }
-            Event::MainEventsCleared => {
+            // Event::MainEventsCleared => {
+            // }
+            Event::RedrawEventsCleared => {
                 // TODO update state etc.
 
                 if dirty_swapchain {
@@ -182,14 +183,17 @@ fn main() {
 
                 // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
 
-                gfaestus.wait_gpu_idle().unwrap();
-                dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
+                // dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
+                dirty_swapchain = gfaestus.draw_frame_().unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
                     *control_flow = ControlFlow::Exit
                 }
-                WindowEvent::Resized { .. } => dirty_swapchain = true,
+                WindowEvent::Resized { .. } => {
+                    println!("resized");
+                    dirty_swapchain = true;
+                }
                 WindowEvent::MouseInput { button, state, .. } => {
                     // TODO
                 }
