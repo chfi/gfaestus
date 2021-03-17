@@ -7,11 +7,34 @@ use ash::{
 };
 use ash::{vk, Device, Entry, Instance};
 
+use std::ffi::CString;
+
 use nalgebra_glm as glm;
 
 use anyhow::Result;
 
 use super::SwapchainProperties;
+
+fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
+where
+    P: AsRef<std::path::Path>,
+{
+    use std::{fs::File, io::Read};
+
+    let mut buf = Vec::new();
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut buf)?;
+
+    let mut cursor = std::io::Cursor::new(buf);
+
+    let spv = ash::util::read_spv(&mut cursor)?;
+    Ok(spv)
+}
+
+fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
+    let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
+    unsafe { device.create_shader_module(&create_info, None).unwrap() }
+}
 
 pub struct GfaestusCmdBuf {
     command_buffer: vk::CommandBuffer,
@@ -101,14 +124,16 @@ impl GfaestusCmdBuf {
 pub struct NodeDrawAsh {
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
+
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
 
-    // uniform_buffer: vk::Buffer,
-    // uniform_buffer_memory: vk::DeviceMemory,
+    uniform_buffer: vk::Buffer,
+    uniform_buffer_memory: vk::DeviceMemory,
+
     descriptor_set: vk::DescriptorSet,
 }
 
@@ -116,7 +141,72 @@ pub struct NodeDrawAsh {
 //     matrix: glm::Mat4,
 // }
 
+pub struct NodeUniform {
+    view_transform: glm::Mat4,
+}
+
+impl NodeUniform {
+    fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::VERTEX | Stages::FRAGMENT)
+            .build()
+    }
+}
+
 impl NodeDrawAsh {
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> vk::DescriptorSetLayout {
+        let ubo_binding = NodeUniform::get_descriptor_set_layout_binding();
+        let bindings = [ubo_binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        unsafe {
+            device
+                .create_descriptor_set_layout(&layout_info, None)
+                .unwrap()
+        }
+    }
+
+    fn create_pipeline(
+        device: &Device,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        let vert_src =
+            read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
+        let frag_src =
+            read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
+
+        let vert_module = create_shader_module(device, &vert_src);
+        let frag_module = create_shader_module(device, &frag_src);
+
+        let entry_point = CString::new("main").unwrap();
+
+        let vert_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::VERTEX)
+            .module(vert_module)
+            .name(&entry_point)
+            .build();
+
+        let frag_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::FRAGMENT)
+            .module(frag_module)
+            .name(&entry_point)
+            .build();
+
+        let shader_state_infos = [vert_state_info, frag_state_info];
+    }
+
     pub fn new(
         desc_pool: vk::DescriptorPool,
         render_pass: vk::RenderPass,
