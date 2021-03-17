@@ -205,6 +205,130 @@ impl NodeDrawAsh {
             .build();
 
         let shader_state_infos = [vert_state_info, frag_state_info];
+
+        let vert_binding_descs = [Vertex::get_binding_desc()];
+        let vert_attr_descs = Vertex::get_attribute_descs();
+        let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+            .vertex_binding_descriptions(&vert_binding_descs)
+            .vertex_attribute_descriptions(&vert_attr_descs)
+            .build();
+
+        let input_assembly_info =
+            vk::PipelineInputAssemblyStateCreateInfo::builder()
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                .primitive_restart_enable(false)
+                .build();
+
+        let viewport = vk::Viewport {
+            x: 0.0,
+            y: 0.0,
+            width: swapchain_props.extent.width as f32,
+            height: swapchain_props.extent.height as f32,
+            min_depth: 0.0,
+            max_depth: 0.0,
+        };
+        let viewports = [viewport];
+
+        let scissor = vk::Rect2D {
+            offset: vk::Offset2D { x: 0, y: 0 },
+            extent: swapchain_props.extent,
+        };
+        let scissors = [scissor];
+
+        let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
+            .viewports(&viewports)
+            .scissors(&scissors)
+            .build();
+
+        let rasterizer_info =
+            vk::PipelineRasterizationStateCreateInfo::builder()
+                .depth_clamp_enable(false)
+                .rasterizer_discard_enable(false)
+                .polygon_mode(vk::PolygonMode::FILL)
+                .line_width(1.0)
+                .cull_mode(vk::CullModeFlags::NONE)
+                .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+                .depth_bias_enable(false)
+                .depth_bias_constant_factor(0.0)
+                .depth_bias_clamp(0.0)
+                .depth_bias_slope_factor(0.0)
+                .build();
+
+        // let depth_stencil_info = todo!();
+
+        let multisampling_info =
+            vk::PipelineMultisampleStateCreateInfo::builder()
+                .sample_shading_enable(false)
+                .rasterization_samples(msaa_samples)
+                .min_sample_shading(1.0)
+                .alpha_to_coverage_enable(false)
+                .alpha_to_one_enable(false)
+                .build();
+
+        let color_blend_attachment =
+            vk::PipelineColorBlendAttachmentState::builder()
+                .color_write_mask(vk::ColorComponentFlags::all())
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::ONE)
+                .dst_color_blend_factor(vk::BlendFactor::ZERO)
+                .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .alpha_blend_op(vk::BlendOp::ADD)
+                .build();
+        let color_blend_attachments = [color_blend_attachment];
+
+        let color_blending_info =
+            vk::PipelineColorBlendStateCreateInfo::builder()
+                .logic_op_enable(false)
+                .logic_op(vk::LogicOp::COPY)
+                .attachments(&color_blend_attachments)
+                .blend_constants([0.0, 0.0, 0.0, 0.0])
+                .build();
+
+        let descriptor_set_layout = Self::create_descriptor_set_layout(device);
+        let layout = {
+            let layouts = [descriptor_set_layout];
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe {
+                device.create_pipeline_layout(&layout_info, None).unwrap()
+            }
+        };
+
+        let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+            .stages(&shader_state_infos)
+            .vertex_input_state(&vert_input_info)
+            .input_assembly_state(&input_assembly_info)
+            .viewport_state(&viewport_info)
+            .rasterization_state(&rasterizer_info)
+            .multisample_state(&multisampling_info)
+            .color_blend_state(&color_blending_info)
+            .layout(layout)
+            .render_pass(render_pass)
+            .subpass(0)
+            .build();
+
+        let pipeline_infos = [pipeline_info];
+
+        let pipeline = unsafe {
+            device
+                .create_graphics_pipelines(
+                    vk::PipelineCache::null(),
+                    &pipeline_infos,
+                    None,
+                )
+                .unwrap()[0]
+        };
+
+        unsafe {
+            device.destroy_shader_module(vert_module, None);
+            device.destroy_shader_module(frag_module, None);
+        }
+
+        (pipeline, layout)
     }
 
     pub fn new(
@@ -226,5 +350,31 @@ impl NodeDrawAsh {
                 .create_descriptor_set_layout(&layout_info, None)
                 .unwrap()
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Vertex {
+    position: [f32; 2],
+}
+
+impl Vertex {
+    fn get_binding_desc() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attribute_descs() -> [vk::VertexInputAttributeDescription; 1] {
+        let pos_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+
+        [pos_desc]
     }
 }
