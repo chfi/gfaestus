@@ -979,6 +979,72 @@ impl GfaestusVk {
 
         Ok(command_pool)
     }
+
+    fn copy_buffer(
+        device: &Device,
+        command_pool: vk::CommandPool,
+        transfer_queue: vk::Queue,
+        src: vk::Buffer,
+        dst: vk::Buffer,
+        size: vk::DeviceSize,
+    ) {
+        Self::execute_one_time_commands(
+            &device,
+            command_pool,
+            transfer_queue,
+            |buffer| {
+                let region = vk::BufferCopy {
+                    src_offset: 0,
+                    dst_offset: 0,
+                    size,
+                };
+                let regions = [region];
+
+                unsafe { device.cmd_copy_buffer(buffer, src, dst, &regions) };
+            },
+        )
+    }
+
+    pub fn create_buffer(
+        &self,
+        size: vk::DeviceSize,
+        usage: vk::BufferUsageFlags,
+        mem_props: vk::MemoryPropertyFlags,
+    ) -> Result<(vk::Buffer, vk::DeviceMemory, vk::DeviceSize)> {
+        let vk_context = self.vk_context();
+        let device = vk_context.device();
+
+        let buffer = {
+            let info = vk::BufferCreateInfo::builder()
+                .size(size)
+                .usage(usage)
+                .sharing_mode(vk::SharingMode::EXCLUSIVE)
+                .build();
+
+            unsafe { device.create_buffer(&info, None) }
+        }?;
+
+        let mem_reqs = unsafe { device.get_buffer_memory_requirements(buffer) };
+
+        let mem = {
+            let mem_type = find_memory_type(
+                mem_reqs,
+                vk_context.get_mem_properties(),
+                mem_props,
+            );
+
+            let info = vk::MemoryAllocateInfo::builder()
+                .allocation_size(mem_reqs.size)
+                .memory_type_index(mem_type)
+                .build();
+
+            unsafe { device.allocate_memory(&info, None) }
+        }?;
+
+        unsafe { device.bind_buffer_memory(buffer, mem, 0) }?;
+
+        Ok((buffer, mem, mem_reqs.size))
+    }
 }
 
 impl Drop for GfaestusVk {
