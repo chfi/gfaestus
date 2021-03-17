@@ -1003,6 +1003,7 @@ impl GfaestusVk {
                 unsafe { device.cmd_copy_buffer(buffer, src, dst, &regions) };
             },
         )
+        .unwrap();
     }
 
     pub fn create_buffer(
@@ -1044,6 +1045,71 @@ impl GfaestusVk {
         unsafe { device.bind_buffer_memory(buffer, mem, 0) }?;
 
         Ok((buffer, mem, mem_reqs.size))
+    }
+
+    pub fn create_device_local_buffer_with_data<A, T>(
+        &self,
+        // vk_context: &VkContext,
+        // command_pool: vk::CommandPool,
+        // transfer_queue: vk::Queue,
+        usage: vk::BufferUsageFlags,
+        data: &[T],
+    ) -> Result<(vk::Buffer, vk::DeviceMemory)>
+    where
+        T: Copy,
+    {
+        use vk::BufferUsageFlags as Usage;
+        use vk::MemoryPropertyFlags as MemPropFlags;
+
+        let vk_context = &self.vk_context;
+        let device = vk_context.device();
+        let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
+
+        let (staging_buf, staging_mem, staging_mem_size) = self.create_buffer(
+            size,
+            Usage::TRANSFER_SRC,
+            MemPropFlags::HOST_VISIBLE | MemPropFlags::HOST_COHERENT,
+        )?;
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                staging_mem,
+                0,
+                size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let mut align = ash::util::Align::new(
+                data_ptr,
+                std::mem::align_of::<A>() as u64,
+                staging_mem_size,
+            );
+
+            align.copy_from_slice(data);
+            device.unmap_memory(staging_mem);
+        }
+
+        let (buffer, memory, _) = self.create_buffer(
+            size,
+            Usage::TRANSFER_DST | usage,
+            MemPropFlags::DEVICE_LOCAL,
+        )?;
+
+        Self::copy_buffer(
+            device,
+            self.transient_command_pool,
+            self.graphics_queue,
+            staging_buf,
+            buffer,
+            size,
+        );
+
+        unsafe {
+            device.destroy_buffer(staging_buf, None);
+            device.free_memory(staging_mem, None);
+        }
+
+        Ok((buffer, memory))
     }
 }
 
