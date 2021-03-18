@@ -143,16 +143,29 @@ pub struct NodeDrawAsh {
     // descriptor_set: vk::DescriptorSet,
 }
 
-/*
 impl Drop for NodeDrawAsh {
     fn drop(&mut self) {
-        let device =
+        let ctx = self.vk_context.upgrade().unwrap();
+        let device = ctx.device();
+
         unsafe {
-            device.destroy_
+            device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+            device.destroy_pipeline(self.pipeline, None);
+
+            if self.has_vertices {
+                device.destroy_buffer(self.vertex_buffer, None);
+                device.free_memory(self.vertex_buffer_memory, None);
+            }
+
+            // device.destroy_buffer(self.uniform_buffer, None);
+            // device.free_memory(self.uniform_buffer_memory, None);
         }
     }
 }
-*/
 
 // pub struct NodesUBO {
 //     matrix: glm::Mat4,
