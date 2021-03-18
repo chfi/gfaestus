@@ -30,12 +30,14 @@ use winit::{
 use std::{
     ffi::{CStr, CString},
     mem::{align_of, size_of},
+    sync::Arc,
 };
 
 use anyhow::Result;
 
 pub struct GfaestusVk {
-    vk_context: VkContext,
+    vk_context: Arc<VkContext>,
+    descriptor_pool: Arc<vk::DescriptorPool>,
 
     graphics_queue: vk::Queue,
     present_queue: vk::Queue,
@@ -147,8 +149,10 @@ impl GfaestusVk {
 
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
+        let descriptor_pool = create_descriptor_pool(vk_context.device(), 1)?;
+
         Ok(Self {
-            vk_context,
+            vk_context: Arc::new(vk_context),
 
             graphics_queue,
             present_queue,
@@ -170,6 +174,7 @@ impl GfaestusVk {
 
             command_pool,
             transient_command_pool,
+            descriptor_pool: Arc::new(descriptor_pool),
 
             in_flight_frames,
         })
@@ -1122,6 +1127,7 @@ impl Drop for GfaestusVk {
 
         unsafe {
             // TODO handle descriptor pool
+            device.destroy_descriptor_pool(*self.descriptor_pool, None);
             // TODO handle descriptor set layouts
             // TODO handle buffer memory
 
@@ -1643,4 +1649,29 @@ fn find_memory_type(
     }
 
     panic!("Failed to find suitable memory type");
+}
+
+fn create_descriptor_pool(
+    device: &Device,
+    size: u32,
+) -> Result<vk::DescriptorPool> {
+    let ubo_pool_size = vk::DescriptorPoolSize {
+        ty: vk::DescriptorType::UNIFORM_BUFFER,
+        descriptor_count: size,
+    };
+    let sampler_pool_size = vk::DescriptorPoolSize {
+        ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+        descriptor_count: size,
+    };
+
+    let pool_sizes = [ubo_pool_size, sampler_pool_size];
+
+    let pool_info = vk::DescriptorPoolCreateInfo::builder()
+        .pool_sizes(&pool_sizes)
+        .max_sets(size)
+        .build();
+
+    let pool = unsafe { device.create_descriptor_pool(&pool_info, None) }?;
+
+    Ok(pool)
 }

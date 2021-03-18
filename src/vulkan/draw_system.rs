@@ -9,6 +9,8 @@ use ash::{vk, Device, Entry, Instance};
 
 use std::ffi::CString;
 
+use std::sync::{Arc, Weak};
+
 use nalgebra_glm as glm;
 
 use anyhow::Result;
@@ -122,6 +124,9 @@ impl GfaestusCmdBuf {
 }
 
 pub struct NodeDrawAsh {
+    vk_context: Weak<super::VkContext>,
+    descriptor_set_pool: Weak<vk::DescriptorPool>,
+
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
 
@@ -136,6 +141,17 @@ pub struct NodeDrawAsh {
 
     descriptor_set: vk::DescriptorSet,
 }
+
+/*
+impl Drop for NodeDrawAsh {
+    fn drop(&mut self) {
+        let device =
+        unsafe {
+            device.destroy_
+        }
+    }
+}
+*/
 
 // pub struct NodesUBO {
 //     matrix: glm::Mat4,
@@ -332,9 +348,13 @@ impl NodeDrawAsh {
     }
 
     pub fn new(
-        desc_pool: vk::DescriptorPool,
+        vk_context: &Arc<super::VkContext>,
+        desc_pool: &Arc<vk::DescriptorPool>,
+
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
+        let vk_context = Arc::downgrade(vk_context);
+        let descriptor_pool = Arc::downgrade(desc_pool);
         unimplemented!();
     }
 
