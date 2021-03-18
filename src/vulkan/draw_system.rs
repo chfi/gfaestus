@@ -133,13 +133,14 @@ pub struct NodeDrawAsh {
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
+    has_vertices: bool,
+
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
+    // uniform_buffer: vk::Buffer,
+    // uniform_buffer_memory: vk::DeviceMemory,
 
-    uniform_buffer: vk::Buffer,
-    uniform_buffer_memory: vk::DeviceMemory,
-
-    descriptor_set: vk::DescriptorSet,
+    // descriptor_set: vk::DescriptorSet,
 }
 
 /*
@@ -351,11 +352,43 @@ impl NodeDrawAsh {
         vk_context: &Arc<super::VkContext>,
         desc_pool: &Arc<vk::DescriptorPool>,
 
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
+        let device = vk_context.device();
+
+        let descriptor_set_layout = Self::descriptor_set_layout(device);
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            swapchain_props,
+            msaa_samples,
+            render_pass,
+        );
+
         let vk_context = Arc::downgrade(vk_context);
         let descriptor_pool = Arc::downgrade(desc_pool);
-        unimplemented!();
+
+        let vertex_buffer = vk::Buffer::null();
+        let vertex_buffer_memory = vk::DeviceMemory::null();
+
+        Ok(Self {
+            vk_context,
+            descriptor_set_pool: descriptor_pool,
+
+            render_pass,
+            descriptor_set_layout,
+
+            pipeline_layout,
+            pipeline,
+
+            has_vertices: false,
+
+            vertex_buffer,
+            vertex_buffer_memory,
+        })
     }
 
     fn descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
