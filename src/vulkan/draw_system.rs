@@ -17,6 +17,9 @@ use anyhow::Result;
 
 use super::SwapchainProperties;
 
+use crate::geometry::Point;
+use crate::view::View;
+
 fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
 where
     P: AsRef<std::path::Path>,
@@ -50,12 +53,92 @@ pub struct NodeDrawAsh {
 
     has_vertices: bool,
 
+    vertex_count: usize,
+
     vertex_buffer: vk::Buffer,
     vertex_buffer_memory: vk::DeviceMemory,
     // uniform_buffer: vk::Buffer,
     // uniform_buffer_memory: vk::DeviceMemory,
 
     // descriptor_set: vk::DescriptorSet,
+}
+
+pub struct NodePC {
+    view_transform: glm::Mat4,
+    node_width: f32,
+    scale: f32,
+    viewport_dims: [f32; 2],
+}
+
+impl NodePC {
+    pub fn new(
+        offset: [f32; 2],
+        viewport_dims: [f32; 2],
+        view: crate::view::View,
+        node_width: f32,
+    ) -> Self {
+        use crate::view;
+
+        let model_mat = glm::mat4(
+            1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0,
+            0.0, 0.0, 0.0, 0.0, 1.0,
+        );
+
+        let view_mat = view.to_scaled_matrix();
+
+        let width = viewport_dims[0];
+        let height = viewport_dims[1];
+
+        let viewport_mat = view::viewport_scale(width, height);
+
+        let matrix = viewport_mat * view_mat * model_mat;
+
+        // let view_data = view::mat4_to_array(&matrix);
+
+        Self {
+            view_transform: matrix,
+            node_width,
+            viewport_dims,
+            scale: view.scale,
+        }
+    }
+
+    pub fn bytes(&self) -> [u8; 80] {
+        use crate::view;
+
+        let mut bytes = [0u8; 80];
+
+        // let view_transform_
+        let view_transform_array = view::mat4_to_array(&self.view_transform);
+
+        {
+            let mut offset = 0;
+
+            let mut add_float = |f: f32| {
+                let f_bytes = f.to_ne_bytes();
+                for i in 0..4 {
+                    bytes[offset] = f_bytes[i];
+                    offset += 1;
+                }
+            };
+
+            for i in 0..4 {
+                let row = view_transform_array[i];
+                for j in 0..4 {
+                    let val = row[j];
+                    add_float(val);
+                }
+            }
+
+            add_float(self.node_width);
+            add_float(self.scale);
+
+            add_float(self.viewport_dims[0]);
+            add_float(self.viewport_dims[1]);
+        }
+
+        bytes
+    }
 }
 
 impl Drop for NodeDrawAsh {
@@ -128,10 +211,13 @@ impl NodeDrawAsh {
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src =
             read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
+        let geom_src =
+            read_shader_from_file("shaders/nodes_simple.geom.spv").unwrap();
         let frag_src =
             read_shader_from_file("shaders/nodes_simple.frag.spv").unwrap();
 
         let vert_module = create_shader_module(device, &vert_src);
+        let geom_module = create_shader_module(device, &geom_src);
         let frag_module = create_shader_module(device, &frag_src);
 
         let entry_point = CString::new("main").unwrap();
@@ -142,13 +228,20 @@ impl NodeDrawAsh {
             .name(&entry_point)
             .build();
 
+        let geom_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::GEOMETRY)
+            .module(geom_module)
+            .name(&entry_point)
+            .build();
+
         let frag_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(frag_module)
             .name(&entry_point)
             .build();
 
-        let shader_state_infos = [vert_state_info, frag_state_info];
+        let shader_state_infos =
+            [vert_state_info, geom_state_info, frag_state_info];
 
         let vert_binding_descs = [Vertex::get_binding_desc()];
         let vert_attr_descs = Vertex::get_attribute_descs();
@@ -159,7 +252,7 @@ impl NodeDrawAsh {
 
         let input_assembly_info =
             vk::PipelineInputAssemblyStateCreateInfo::builder()
-                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
+                .topology(vk::PrimitiveTopology::LINE_LIST)
                 .primitive_restart_enable(false)
                 .build();
 
@@ -232,9 +325,21 @@ impl NodeDrawAsh {
 
         let descriptor_set_layout = Self::create_descriptor_set_layout(device);
         let layout = {
+            use vk::ShaderStageFlags as Flags;
+
             let layouts = [descriptor_set_layout];
+
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT)
+                .offset(0)
+                .size(80)
+                .build();
+
+            let pc_ranges = [pc_range];
+
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
                 .build();
 
             unsafe {
@@ -310,6 +415,8 @@ impl NodeDrawAsh {
             pipeline_layout,
             pipeline,
 
+            vertex_count: 0,
+
             has_vertices: false,
 
             vertex_buffer,
@@ -327,6 +434,8 @@ impl NodeDrawAsh {
         }
 
         let (buf, mem) = app.create_vertex_buffer(vertices)?;
+
+        self.vertex_count = vertices.len();
 
         self.vertex_buffer = buf;
         self.vertex_buffer_memory = mem;
