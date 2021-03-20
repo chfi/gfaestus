@@ -38,95 +38,10 @@ fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
     unsafe { device.create_shader_module(&create_info, None).unwrap() }
 }
 
-pub struct GfaestusCmdBuf {
-    command_buffer: vk::CommandBuffer,
-}
-
-impl GfaestusCmdBuf {
-    pub fn frame(
-        device: &Device,
-        pool: vk::CommandPool,
-        render_pass: vk::RenderPass,
-        framebuffer: &vk::Framebuffer,
-        swapchain_props: SwapchainProperties,
-        // vertex_buffer: vk::Buffer,
-        // pipeline_layout: vk::PipelineLayout,
-        // descriptor_sets: &[vk::DescriptorSet],
-        // graphics_pipeline: vk::Pipeline,
-    ) -> Result<vk::CommandBuffer> {
-        let alloc_info = vk::CommandBufferAllocateInfo::builder()
-            .command_pool(pool)
-            .level(vk::CommandBufferLevel::PRIMARY)
-            .command_buffer_count(1)
-            .build();
-
-        let buffers = unsafe { device.allocate_command_buffers(&alloc_info) }?;
-
-        for (i, buf) in buffers.iter().enumerate() {
-            let buf = *buf;
-            // let framebuffer = framebuffers[i];
-
-            {
-                let cmd_buf_begin_info = vk::CommandBufferBeginInfo::builder()
-                    .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                    .build();
-
-                unsafe {
-                    device.begin_command_buffer(buf, &cmd_buf_begin_info)
-                }?;
-            }
-
-            {
-                let clear_values = [
-                    vk::ClearValue {
-                        color: vk::ClearColorValue {
-                            float32: [0.0, 0.0, 0.0, 1.0],
-                        },
-                    },
-                    vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: 1.0,
-                            stencil: 0,
-                        },
-                    },
-                ];
-
-                let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                    .render_pass(render_pass)
-                    .framebuffer(*framebuffer)
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: swapchain_props.extent,
-                    })
-                    .clear_values(&clear_values)
-                    .build();
-
-                unsafe {
-                    device.cmd_begin_render_pass(
-                        buf,
-                        &render_pass_begin_info,
-                        vk::SubpassContents::INLINE,
-                    )
-                };
-            }
-
-            // TODO bind pipeline
-            // TODO bind buffers
-            // TODO draw
-
-            unsafe { device.cmd_end_render_pass(buf) };
-
-            unsafe { device.end_command_buffer(buf) }?;
-        }
-
-        Ok(buffers[0])
-    }
-}
-
 pub struct NodeDrawAsh {
-    vk_context: Weak<super::VkContext>,
-    descriptor_set_pool: Weak<vk::DescriptorPool>,
-
+    device: Device,
+    // vk_context: Weak<super::VkContext>,
+    // descriptor_set_pool: Weak<vk::DescriptorPool>,
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
 
@@ -145,8 +60,7 @@ pub struct NodeDrawAsh {
 
 impl Drop for NodeDrawAsh {
     fn drop(&mut self) {
-        let ctx = self.vk_context.upgrade().unwrap();
-        let device = ctx.device();
+        let device = &self.device;
 
         unsafe {
             device.destroy_descriptor_set_layout(
@@ -215,7 +129,7 @@ impl NodeDrawAsh {
         let vert_src =
             read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
         let frag_src =
-            read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
+            read_shader_from_file("shaders/nodes_simple.frag.spv").unwrap();
 
         let vert_module = create_shader_module(device, &vert_src);
         let frag_module = create_shader_module(device, &frag_src);
@@ -362,9 +276,8 @@ impl NodeDrawAsh {
     }
 
     pub fn new(
-        vk_context: &Arc<super::VkContext>,
-        desc_pool: &Arc<vk::DescriptorPool>,
-
+        vk_context: &super::VkContext,
+        // desc_pool: &vk::DescriptorPool,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
 
@@ -381,16 +294,16 @@ impl NodeDrawAsh {
             render_pass,
         );
 
-        let vk_context = Arc::downgrade(vk_context);
-        let descriptor_pool = Arc::downgrade(desc_pool);
+        // let vk_context = Arc::downgrade(vk_context);
+        // let descriptor_pool = Arc::downgrade(desc_pool);
 
         let vertex_buffer = vk::Buffer::null();
         let vertex_buffer_memory = vk::DeviceMemory::null();
 
         Ok(Self {
-            vk_context,
-            descriptor_set_pool: descriptor_pool,
-
+            device: device.clone(),
+            // vk_context,
+            // descriptor_set_pool: descriptor_pool,
             render_pass,
             descriptor_set_layout,
 
@@ -402,6 +315,25 @@ impl NodeDrawAsh {
             vertex_buffer,
             vertex_buffer_memory,
         })
+    }
+
+    pub fn upload_vertices(
+        &mut self,
+        app: &super::GfaestusVk,
+        vertices: &[Vertex],
+    ) -> Result<()> {
+        if self.has_vertices {
+            panic!("replacing node vertices not supported yet");
+        }
+
+        let (buf, mem) = app.create_vertex_buffer(vertices)?;
+
+        self.vertex_buffer = buf;
+        self.vertex_buffer_memory = mem;
+
+        self.has_vertices = true;
+
+        Ok(())
     }
 
     fn descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
@@ -420,8 +352,8 @@ impl NodeDrawAsh {
 }
 
 #[derive(Clone, Copy)]
-struct Vertex {
-    position: [f32; 2],
+pub struct Vertex {
+    pub position: [f32; 2],
 }
 
 impl Vertex {

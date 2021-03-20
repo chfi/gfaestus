@@ -154,6 +154,18 @@ fn main() {
 
     let mut gfaestus = gfaestus.unwrap();
 
+    let mut node_sys = gfaestus::vulkan::draw_system::NodeDrawAsh::new(
+        gfaestus.vk_context(),
+        gfaestus.swapchain_props,
+        gfaestus.msaa_samples,
+        gfaestus.render_pass,
+    )
+    .unwrap();
+
+    let node_vertices = universe.new_vertices();
+
+    node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
+
     let mut dirty_swapchain = false;
 
     // let mut command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf
