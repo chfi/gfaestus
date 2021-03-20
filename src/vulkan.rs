@@ -37,21 +37,21 @@ use anyhow::Result;
 
 pub struct GfaestusVk {
     vk_context: Arc<VkContext>,
-    descriptor_pool: Arc<vk::DescriptorPool>,
+    pub descriptor_pool: Arc<vk::DescriptorPool>,
 
-    graphics_queue: vk::Queue,
-    present_queue: vk::Queue,
+    pub graphics_queue: vk::Queue,
+    pub present_queue: vk::Queue,
 
     graphics_family_index: u32,
     present_family_index: u32,
 
-    msaa_samples: vk::SampleCountFlags,
-    render_pass: vk::RenderPass,
+    pub msaa_samples: vk::SampleCountFlags,
+    pub render_pass: vk::RenderPass,
     transient_color: Texture,
 
-    swapchain: Swapchain,
-    swapchain_khr: vk::SwapchainKHR,
-    swapchain_props: SwapchainProperties,
+    pub swapchain: Swapchain,
+    pub swapchain_khr: vk::SwapchainKHR,
+    pub swapchain_props: SwapchainProperties,
 
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
@@ -1050,6 +1050,19 @@ impl GfaestusVk {
         unsafe { device.bind_buffer_memory(buffer, mem, 0) }?;
 
         Ok((buffer, mem, mem_reqs.size))
+    }
+
+    pub fn create_vertex_buffer(
+        &self,
+        vertices: &[draw_system::Vertex],
+    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
+        use vk::BufferUsageFlags as Usage;
+        let usage = Usage::VERTEX_BUFFER;
+
+        let (buf, mem) = self
+            .create_device_local_buffer_with_data::<u32, _>(usage, vertices)?;
+
+        Ok((buf, mem))
     }
 
     pub fn create_device_local_buffer_with_data<A, T>(

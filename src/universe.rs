@@ -95,6 +95,25 @@ impl Universe<FlatLayout> {
             angle,
         })
     }
+
+    pub fn new_vertices(&self) -> Vec<crate::vulkan::draw_system::Vertex> {
+        use crate::vulkan::draw_system::Vertex as NewVertex;
+
+        let mut vertices = Vec::new();
+
+        for node in self.graph_layout.nodes().iter() {
+            let v0 = NewVertex {
+                position: [node.p0.x, node.p0.y],
+            };
+            let v1 = NewVertex {
+                position: [node.p1.x, node.p1.y],
+            };
+            vertices.push(v0);
+            vertices.push(v1);
+        }
+
+        vertices
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
