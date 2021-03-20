@@ -5,15 +5,22 @@
 layout (location = 0) in vec2 position;
 // layout (location = 0) out int node_id;
 
-layout (set = 0, binding = 0) uniform NodeUniform {
+// layout (set = 0, binding = 0) uniform NodeUniform {
+//   mat4 view_transform;
+//   // float node_width;
+//   // float scale;
+//   // vec2 viewport_dims;
+//   // uint flags;
+// } node_uniform;
+
+layout (push_constant) uniform NodePC {
   mat4 view_transform;
-  // float node_width;
-  // float scale;
-  // vec2 viewport_dims;
+  float node_width;
+  float scale;
+  vec2 viewport_dims;
   // uint flags;
 } node_uniform;
 
-// layout (push_constant) uniform View {
 //   float node_width;
 //   float scale;
 //   vec2 viewport_dims;
