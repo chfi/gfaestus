@@ -41,10 +41,17 @@ use gfaestus::render::nodes::OverlayCache;
 use gfaestus::render::*;
 use gfaestus::universe::*;
 use gfaestus::util::*;
+use gfaestus::view::View;
 
 use rgb::*;
 
 use anyhow::Result;
+
+use ash::{
+    extensions::{ext::DebugReport, khr::Surface},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+};
+use ash::{vk, Entry};
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -195,8 +202,31 @@ fn main() {
 
                 // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
 
-                // dirty_swapchain = gfaestus.draw_frame_from(|_| {}).unwrap();
-                dirty_swapchain = gfaestus.draw_frame_().unwrap();
+                let render_pass = gfaestus.render_pass;
+                let extent = gfaestus.swapchain_props.extent;
+
+                let draw =
+                    |cmd_buf: vk::CommandBuffer,
+                     framebuffer: vk::Framebuffer| {
+                        let size = window.inner_size();
+
+                        node_sys
+                            .draw(
+                                cmd_buf,
+                                render_pass,
+                                framebuffer,
+                                extent,
+                                View::default(),
+                                Point::ZERO,
+                                [size.width as f32, size.height as f32],
+                                100.0,
+                            )
+                            .unwrap();
+                    };
+
+                dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
+
+                // dirty_swapchain = gfaestus.draw_frame_().unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

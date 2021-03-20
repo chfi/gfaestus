@@ -424,6 +424,81 @@ impl NodeDrawAsh {
         })
     }
 
+    pub fn draw(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        extent: vk::Extent2D,
+        view: View,
+        offset: Point,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+    ) -> Result<()> {
+        let device = &self.device;
+
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        }];
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertex_buffer];
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets)
+        };
+
+        let push_constants =
+            NodePC::new([offset.x, offset.y], viewport_dims, view, node_width);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, self.vertex_count as u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
     pub fn upload_vertices(
         &mut self,
         app: &super::GfaestusVk,

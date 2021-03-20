@@ -190,6 +190,7 @@ impl GfaestusVk {
         queue: vk::Queue,
         wait_semaphores: &[vk::Semaphore],
         wait_stages: &[vk::PipelineStageFlags],
+        signal_semaphores: &[vk::Semaphore],
         fence: vk::Fence,
         commands: F,
     ) -> Result<()>
@@ -224,6 +225,7 @@ impl GfaestusVk {
                 .wait_semaphores(wait_semaphores)
                 .wait_dst_stage_mask(wait_stages)
                 .command_buffers(&[cmd_buf])
+                .signal_semaphores(&signal_semaphores)
                 .build();
 
             unsafe {
@@ -387,7 +389,7 @@ impl GfaestusVk {
 
     pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
     where
-        F: FnOnce(vk::CommandBuffer),
+        F: FnOnce(vk::CommandBuffer, vk::Framebuffer),
     {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
@@ -435,55 +437,22 @@ impl GfaestusVk {
 
         let framebuffer = self.swapchain_framebuffers[img_index as usize];
 
-        dbg!();
-
         Self::execute_one_time_commands_semaphores(
             device,
             self.transient_command_pool,
             queue,
             &wait_semaphores,
             &wait_stages,
+            &signal_semaphores,
             in_flight_fence,
             |cmd_buf| {
-                dbg!();
-                let clear_values = [vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                }];
-
-                dbg!();
-                let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-                    .render_pass(self.render_pass)
-                    .framebuffer(framebuffer)
-                    .render_area(vk::Rect2D {
-                        offset: vk::Offset2D { x: 0, y: 0 },
-                        extent: self.swapchain_props.extent,
-                    })
-                    .clear_values(&clear_values)
-                    .build();
-                dbg!();
-
-                unsafe {
-                    device.cmd_begin_render_pass(
-                        cmd_buf,
-                        &render_pass_begin_info,
-                        vk::SubpassContents::INLINE,
-                    )
-                };
-
-                dbg!();
-                // commands(cmd_buf);
-
-                unsafe { device.cmd_end_render_pass(cmd_buf) };
-                dbg!();
+                commands(cmd_buf, framebuffer);
             },
         )?;
 
         let swapchains = [self.swapchain_khr];
         let img_indices = [img_index];
 
-        dbg!();
         {
             let present_info = vk::PresentInfoKHR::builder()
                 .wait_semaphores(&signal_semaphores)
@@ -491,13 +460,11 @@ impl GfaestusVk {
                 .image_indices(&img_indices)
                 .build();
 
-            dbg!();
             let result = unsafe {
                 self.swapchain
                     .queue_present(self.present_queue, &present_info)
             };
 
-            dbg!();
             match result {
                 Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                     return Ok(true);
@@ -1152,9 +1119,9 @@ impl Drop for GfaestusVk {
 
 #[derive(Clone, Copy, Debug)]
 pub struct SwapchainProperties {
-    extent: vk::Extent2D,
-    present_mode: vk::PresentModeKHR,
-    format: vk::SurfaceFormatKHR,
+    pub extent: vk::Extent2D,
+    pub present_mode: vk::PresentModeKHR,
+    pub format: vk::SurfaceFormatKHR,
 }
 
 struct SwapchainSupportDetails {
