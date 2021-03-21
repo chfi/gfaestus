@@ -169,7 +169,24 @@ fn main() {
     )
     .unwrap();
 
+    let (winit_tx, winit_rx) =
+        crossbeam::channel::unbounded::<WindowEvent<'static>>();
+
+    let input_manager = InputManager::new(winit_rx);
+
+    let app_rx = input_manager.clone_app_rx();
+    let main_view_rx = input_manager.clone_main_view_rx();
+    let gui_rx = input_manager.clone_gui_rx();
+
     let node_vertices = universe.new_vertices();
+
+    let main_view = MainViewAsh::new(
+        gfaestus.vk_context(),
+        gfaestus.swapchain_props,
+        gfaestus.msaa_samples,
+        gfaestus.render_pass,
+    )
+    .unwrap();
 
     node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
 

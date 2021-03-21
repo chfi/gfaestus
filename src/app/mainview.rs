@@ -754,3 +754,218 @@ impl BindableInput for MainViewInput {
         SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
     }
 }
+
+use crate::vulkan::{
+    context::VkContext, draw_system::NodeDrawAsh, SwapchainProperties,
+};
+
+use ash::{
+    extensions::{ext::DebugReport, khr::Surface},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+};
+use ash::{vk, Entry};
+
+pub struct MainViewAsh {
+    node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
+
+    base_node_width: f32,
+
+    view: Arc<AtomicCell<View>>,
+    anim_handler_thread: AnimHandlerThread,
+}
+
+impl MainViewAsh {
+    pub fn new(
+        vk_context: &VkContext,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> Result<Self> {
+        let node_draw_system = NodeDrawAsh::new(
+            vk_context,
+            swapchain_props,
+            msaa_samples,
+            render_pass,
+        )?;
+
+        let base_node_width = 100.0;
+
+        let view = View::default();
+
+        let anim_handler = AnimHandler::default();
+        let view = Arc::new(AtomicCell::new(view));
+
+        let anim_handler_thread =
+            anim_handler_thread(anim_handler, view.clone());
+
+        let main_view = Self {
+            node_draw_system,
+            base_node_width,
+
+            view,
+            anim_handler_thread,
+        };
+
+        Ok(main_view)
+    }
+
+    pub fn view(&self) -> View {
+        self.view.load()
+    }
+
+    pub fn set_initial_view(&self, center: Option<Point>, scale: Option<f32>) {
+        let old_init_view = self.anim_handler_thread.initial_view.load();
+        let center = center.unwrap_or(old_init_view.center);
+        let scale = scale.unwrap_or(old_init_view.scale);
+        self.anim_handler_thread
+            .initial_view
+            .store(View { center, scale });
+    }
+
+    pub fn reset_view(&self) {
+        self.view
+            .store(self.anim_handler_thread.initial_view.load());
+    }
+
+    pub fn draw_nodes(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        screen_dims: [f32; 2],
+        offset: Point,
+    ) -> Result<()> {
+        let extent = vk::Extent2D {
+            width: screen_dims[0] as u32,
+            height: screen_dims[1] as u32,
+        };
+
+        let view = self.view.load();
+
+        self.node_draw_system.draw(
+            cmd_buf,
+            render_pass,
+            framebuffer,
+            extent,
+            view,
+            offset,
+            screen_dims,
+            self.base_node_width,
+        )
+    }
+
+    pub fn set_view_center(&self, center: Point) {
+        let mut view = self.view.load();
+        view.center = center;
+        self.view.store(view);
+    }
+
+    pub fn set_view_scale(&self, scale: f32) {
+        let mut view = self.view.load();
+        view.scale = scale;
+        self.view.store(view);
+    }
+
+    pub fn set_mouse_pos(&self, pos: Option<Point>) {
+        self.anim_handler_thread.mouse_pos.store(pos);
+    }
+
+    pub fn set_mouse_pan(&self, origin: Option<Point>) {
+        self.anim_handler_thread.set_mouse_pan(origin);
+    }
+
+    pub fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
+        self.anim_handler_thread.pan_const(dx, dy);
+    }
+
+    pub fn pan_delta(&self, dxy: Point) {
+        self.anim_handler_thread.pan_delta(dxy);
+    }
+
+    pub fn zoom_delta(&self, dz: f32) {
+        self.anim_handler_thread.zoom_delta(dz)
+    }
+
+    pub fn apply_input<Dims: Into<ScreenDims>>(
+        &self,
+        screen_dims: Dims,
+        app_msg_tx: &channel::Sender<crate::app::AppMsg>,
+        input: SystemInput<MainViewInput>,
+    ) {
+        use MainViewInput as In;
+        let payload = input.payload();
+
+        match input {
+            SystemInput::Keyboard { state, .. } => {
+                let pressed = state.pressed();
+
+                let pan_delta = |invert: bool| {
+                    let delta = if pressed { 1.0 } else { 0.0 };
+                    if invert {
+                        -delta
+                    } else {
+                        delta
+                    }
+                };
+
+                match payload {
+                    In::KeyPanUp => {
+                        self.pan_const(None, Some(pan_delta(true)));
+                    }
+                    In::KeyPanRight => {
+                        self.pan_const(Some(pan_delta(false)), None);
+                    }
+                    In::KeyPanDown => {
+                        self.pan_const(None, Some(pan_delta(false)));
+                    }
+                    In::KeyPanLeft => {
+                        self.pan_const(Some(pan_delta(true)), None);
+                    }
+                    In::KeyResetView => {
+                        if pressed {
+                            self.reset_view();
+                        }
+                    }
+                    _ => (),
+                }
+            }
+            SystemInput::MouseButton { pos, state, .. } => {
+                let pressed = state.pressed();
+                match payload {
+                    In::ButtonMousePan => {
+                        if pressed {
+                            self.set_mouse_pan(Some(pos));
+                        } else {
+                            self.set_mouse_pan(None);
+                        }
+                    }
+                    In::ButtonSelect => {
+                        use crate::app::AppMsg;
+                        use crate::app::Select;
+
+                        /*
+                        let selected_node = self
+                            .read_node_id_at(screen_dims, pos)
+                            .map(|nid| NodeId::from(nid as u64));
+
+                        if let Some(node) = selected_node {
+                            app_msg_tx
+                                .send(AppMsg::Selection(Select::One {
+                                    node,
+                                    clear: false,
+                                }))
+                                .unwrap();
+                        }
+                        */
+                    }
+                    _ => (),
+                }
+            }
+            SystemInput::Wheel { delta, .. } => {
+                if let In::WheelZoom = payload {
+                    self.zoom_delta(delta);
+                }
+            }
+        }
+    }
+}
