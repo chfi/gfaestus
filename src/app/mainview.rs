@@ -766,7 +766,7 @@ use ash::{
 use ash::{vk, Entry};
 
 pub struct MainViewAsh {
-    node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
+    pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
 
     base_node_width: f32,
 

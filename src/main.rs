@@ -178,9 +178,16 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
+    // let mut app = App::new(
+    //     queue.clone(),
+    //     input_manager.clone_mouse_pos(),
+    //     (100.0, 100.0),
+    // )
+    // .expect("error when creating App");
+
     let node_vertices = universe.new_vertices();
 
-    let main_view = MainViewAsh::new(
+    let mut main_view = MainViewAsh::new(
         gfaestus.vk_context(),
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
@@ -188,7 +195,23 @@ fn main() {
     )
     .unwrap();
 
-    node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
+    main_view
+        .node_draw_system
+        .upload_vertices(&gfaestus, &node_vertices)
+        .unwrap();
+
+    // node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
+
+    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) =
+        crossbeam::channel::unbounded::<AppConfigMsg>();
+
+    let (opts_to_gui, opts_from_app) =
+        crossbeam::channel::unbounded::<AppConfigState>();
+
+    // for (id, def) in app.all_theme_defs() {
+    //     gui.update_theme_editor(id, def);
+    // }
 
     let mut dirty_swapchain = false;
 
@@ -196,6 +219,64 @@ fn main() {
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
+
+        let event = if let Some(ev) = event.to_static() {
+            ev
+        } else {
+            return;
+        };
+
+        if let Event::WindowEvent { event, .. } = &event {
+            let ev = event.clone();
+            winit_tx.send(ev).unwrap();
+        }
+
+        // hacky -- this should take place after mouse pos is updated
+        // in egui but before input is sent to mainview
+        // input_manager.set_mouse_over_gui(gui.pointer_over_gui());
+        input_manager.handle_events();
+
+        let screen_dims = {
+            let extent = gfaestus.swapchain_props.extent;
+
+            [extent.width, extent.height]
+        };
+
+        // let screen_dims = app.dims();
+        // let mouse_pos = app.mouse_pos();
+
+        // gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
+        // main_view.set_mouse_pos(Some(mouse_pos));
+
+        // let hover_node = main_view
+        //     .read_node_id_at(screen_dims, mouse_pos)
+        //     .map(|nid| NodeId::from(nid as u64));
+
+        // app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+
+        // while let Ok(app_in) = app_rx.try_recv() {
+        //     app.apply_input(app_in);
+        // }
+
+        // while let Ok(gui_in) = gui_rx.try_recv() {
+        //     gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
+        // }
+
+        // while let Ok(opt_in) = opts_from_gui.try_recv() {
+        //     app.apply_app_config_state(opt_in);
+        // }
+
+        while let Ok(main_view_in) = main_view_rx.try_recv() {
+            main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
+        }
+
+        // while let Ok(app_msg) = app_msg_rx.try_recv() {
+        //     app.apply_app_msg(&app_msg);
+        // }
+
+        // while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
+        //     app.apply_app_config_msg(&cfg_msg);
+        // }
 
         match event {
             Event::NewEvents(_) => {
@@ -227,18 +308,28 @@ fn main() {
                      framebuffer: vk::Framebuffer| {
                         let size = window.inner_size();
 
-                        node_sys
-                            .draw(
+                        main_view
+                            .draw_nodes(
                                 cmd_buf,
                                 render_pass,
                                 framebuffer,
-                                extent,
-                                View::default(),
-                                Point::ZERO,
                                 [size.width as f32, size.height as f32],
-                                100.0,
+                                Point::ZERO,
                             )
                             .unwrap();
+
+                        // node_sys
+                        //     .draw(
+                        //         cmd_buf,
+                        //         render_pass,
+                        //         framebuffer,
+                        //         extent,
+                        //         View::default(),
+                        //         Point::ZERO,
+                        //         [size.width as f32, size.height as f32],
+                        //         100.0,
+                        //     )
+                        //     .unwrap();
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
