@@ -331,6 +331,7 @@ pub(super) fn create_logical_device(
 
     let device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
+        .geometry_shader(true)
         .build();
 
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();

@@ -874,18 +874,23 @@ impl GfaestusVk {
 
 impl Drop for GfaestusVk {
     fn drop(&mut self) {
+        println!("GfaestusVk - cleanup swapchain");
         self.cleanup_swapchain();
 
         let device = self.vk_context.device();
+        println!("GfaestusVk - in flight frames");
         self.in_flight_frames.destroy(device);
 
         unsafe {
             // TODO handle descriptor pool
+            println!("GfaestusVk - desc pool");
             device.destroy_descriptor_pool(*self.descriptor_pool, None);
             // TODO handle descriptor set layouts
             // TODO handle buffer memory
 
+            println!("GfaestusVk - transient cmd pool");
             device.destroy_command_pool(self.transient_command_pool, None);
+            println!("GfaestusVk - primary cmd pool");
             device.destroy_command_pool(self.command_pool, None);
         }
     }
