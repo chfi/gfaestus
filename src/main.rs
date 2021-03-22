@@ -161,14 +161,6 @@ fn main() {
 
     let mut gfaestus = gfaestus.unwrap();
 
-    let mut node_sys = gfaestus::vulkan::draw_system::NodeDrawAsh::new(
-        gfaestus.vk_context(),
-        gfaestus.swapchain_props,
-        gfaestus.msaa_samples,
-        gfaestus.render_pass,
-    )
-    .unwrap();
-
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -317,19 +309,6 @@ fn main() {
                                 Point::ZERO,
                             )
                             .unwrap();
-
-                        // node_sys
-                        //     .draw(
-                        //         cmd_buf,
-                        //         render_pass,
-                        //         framebuffer,
-                        //         extent,
-                        //         View::default(),
-                        //         Point::ZERO,
-                        //         [size.width as f32, size.height as f32],
-                        //         100.0,
-                        //     )
-                        //     .unwrap();
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
@@ -338,10 +317,9 @@ fn main() {
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit
+                    *control_flow = ControlFlow::Exit;
                 }
                 WindowEvent::Resized { .. } => {
-                    println!("resized");
                     dirty_swapchain = true;
                 }
                 WindowEvent::MouseInput { button, state, .. } => {
@@ -355,7 +333,10 @@ fn main() {
                 }
                 _ => (),
             },
-            Event::LoopDestroyed => gfaestus.wait_gpu_idle().unwrap(),
+            Event::LoopDestroyed => {
+                gfaestus.wait_gpu_idle().unwrap();
+                main_view.node_draw_system.destroy();
+            }
             _ => (),
         }
     });

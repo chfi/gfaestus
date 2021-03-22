@@ -42,7 +42,6 @@ fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
 }
 
 pub struct NodeDrawAsh {
-    device: Device,
     // vk_context: Weak<super::VkContext>,
     // descriptor_set_pool: Weak<vk::DescriptorPool>,
     render_pass: vk::RenderPass,
@@ -61,6 +60,7 @@ pub struct NodeDrawAsh {
     // uniform_buffer_memory: vk::DeviceMemory,
 
     // descriptor_set: vk::DescriptorSet,
+    device: Device,
 }
 
 pub struct NodePC {
@@ -141,25 +141,27 @@ impl NodePC {
     }
 }
 
-impl Drop for NodeDrawAsh {
-    fn drop(&mut self) {
+impl NodeDrawAsh {
+    pub fn destroy(&self) {
         let device = &self.device;
 
         unsafe {
+            println!("NodeDrawAsh - desc set layout");
             device.destroy_descriptor_set_layout(
                 self.descriptor_set_layout,
                 None,
             );
+            println!("NodeDrawAsh - pipeline layout");
             device.destroy_pipeline_layout(self.pipeline_layout, None);
+            println!("NodeDrawAsh - pipeline");
             device.destroy_pipeline(self.pipeline, None);
 
             if self.has_vertices {
+                println!("NodeDrawAsh - vertex buffer");
                 device.destroy_buffer(self.vertex_buffer, None);
+                println!("NodeDrawAsh - vertex memory");
                 device.free_memory(self.vertex_buffer_memory, None);
             }
-
-            // device.destroy_buffer(self.uniform_buffer, None);
-            // device.free_memory(self.uniform_buffer_memory, None);
         }
     }
 }
@@ -208,6 +210,7 @@ impl NodeDrawAsh {
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src =
             read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
@@ -316,7 +319,6 @@ impl NodeDrawAsh {
                 .blend_constants([0.0, 0.0, 0.0, 0.0])
                 .build();
 
-        let descriptor_set_layout = Self::create_descriptor_set_layout(device);
         let layout = {
             use vk::ShaderStageFlags as Flags;
 
@@ -368,6 +370,7 @@ impl NodeDrawAsh {
 
         unsafe {
             device.destroy_shader_module(vert_module, None);
+            device.destroy_shader_module(geom_module, None);
             device.destroy_shader_module(frag_module, None);
         }
 
@@ -384,25 +387,24 @@ impl NodeDrawAsh {
     ) -> Result<Self> {
         let device = vk_context.device();
 
-        let descriptor_set_layout = Self::descriptor_set_layout(device);
+        let descriptor_set_layout = Self::create_descriptor_set_layout(device);
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
             device,
             swapchain_props,
             msaa_samples,
             render_pass,
+            descriptor_set_layout,
         );
-
-        // let vk_context = Arc::downgrade(vk_context);
-        // let descriptor_pool = Arc::downgrade(desc_pool);
 
         let vertex_buffer = vk::Buffer::null();
         let vertex_buffer_memory = vk::DeviceMemory::null();
 
+        let device = vk_context.device().clone();
+
         Ok(Self {
-            device: device.clone(),
-            // vk_context,
-            // descriptor_set_pool: descriptor_pool,
+            device,
+
             render_pass,
             descriptor_set_layout,
 
@@ -514,19 +516,19 @@ impl NodeDrawAsh {
         Ok(())
     }
 
-    fn descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
-        // let ubo_binding = Unif
+    // fn descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
+    //     // let ubo_binding = Unif
 
-        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&[])
-            .build();
+    //     let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+    //         .bindings(&[])
+    //         .build();
 
-        unsafe {
-            device
-                .create_descriptor_set_layout(&layout_info, None)
-                .unwrap()
-        }
-    }
+    //     unsafe {
+    //         device
+    //             .create_descriptor_set_layout(&layout_info, None)
+    //             .unwrap()
+    //     }
+    // }
 }
 
 #[derive(Clone, Copy)]

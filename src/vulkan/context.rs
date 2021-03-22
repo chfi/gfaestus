@@ -37,6 +37,31 @@ impl VkContext {
 }
 
 impl VkContext {
+    pub fn new(
+        entry: Entry,
+        instance: Instance,
+        debug_report_callback: Option<(
+            DebugReport,
+            vk::DebugReportCallbackEXT,
+        )>,
+        surface: Surface,
+        surface_khr: vk::SurfaceKHR,
+        physical_device: vk::PhysicalDevice,
+        device: Device,
+    ) -> Self {
+        VkContext {
+            _entry: entry,
+            instance,
+            debug_report_callback,
+            surface,
+            surface_khr,
+            physical_device,
+            device,
+        }
+    }
+}
+
+impl VkContext {
     pub fn get_mem_properties(&self) -> vk::PhysicalDeviceMemoryProperties {
         unsafe {
             self.instance
@@ -89,31 +114,6 @@ impl VkContext {
             vk::SampleCountFlags::TYPE_2
         } else {
             vk::SampleCountFlags::TYPE_1
-        }
-    }
-}
-
-impl VkContext {
-    pub fn new(
-        entry: Entry,
-        instance: Instance,
-        debug_report_callback: Option<(
-            DebugReport,
-            vk::DebugReportCallbackEXT,
-        )>,
-        surface: Surface,
-        surface_khr: vk::SurfaceKHR,
-        physical_device: vk::PhysicalDevice,
-        device: Device,
-    ) -> Self {
-        VkContext {
-            _entry: entry,
-            instance,
-            debug_report_callback,
-            surface,
-            surface_khr,
-            physical_device,
-            device,
         }
     }
 }

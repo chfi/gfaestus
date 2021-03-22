@@ -35,9 +35,6 @@ use std::{
 use anyhow::Result;
 
 pub struct GfaestusVk {
-    vk_context: Arc<VkContext>,
-    pub descriptor_pool: Arc<vk::DescriptorPool>,
-
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
 
@@ -60,6 +57,10 @@ pub struct GfaestusVk {
     transient_command_pool: vk::CommandPool,
     // command_buffers: Vec<vk::CommandBuffer>,
     in_flight_frames: InFlightFrames,
+
+    pub descriptor_pool: Arc<vk::DescriptorPool>,
+
+    vk_context: VkContext,
 }
 
 impl GfaestusVk {
@@ -151,7 +152,7 @@ impl GfaestusVk {
         let descriptor_pool = create_descriptor_pool(vk_context.device(), 1)?;
 
         Ok(Self {
-            vk_context: Arc::new(vk_context),
+            vk_context,
 
             graphics_queue,
             present_queue,
