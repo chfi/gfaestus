@@ -55,13 +55,15 @@ pub struct MainView {
 }
 
 impl MainView {
-    pub fn new<Rn, Rl>(
+    pub fn new<D, Rn, Rl>(
         // mouse_pos: MousePos,
+        screen_dims: D,
         gfx_queue: Arc<Queue>,
         node_subpass: Subpass<Rn>,
         line_subpass: Subpass<Rl>,
     ) -> Result<(MainView, Box<dyn GpuFuture>)>
     where
+        D: Into<ScreenDims>,
         Rn: RenderPassAbstract + Send + Sync + Clone + 'static,
         Rl: RenderPassAbstract + Send + Sync + Clone + 'static,
     {
@@ -81,7 +83,7 @@ impl MainView {
         let base_node_width = 100.0;
 
         let anim_handler_thread =
-            anim_handler_thread(anim_handler, view.clone());
+            anim_handler_thread(anim_handler, screen_dims, view.clone());
 
         let main_view = Self {
             node_draw_system,
@@ -453,6 +455,7 @@ enum AnimMsg {
 
 pub struct AnimHandlerThread {
     settings: Arc<AtomicCell<AnimSettings>>,
+    screen_dims: Arc<AtomicCell<ScreenDims>>,
     initial_view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Option<Point>>>,
     _join_handle: std::thread::JoinHandle<()>,
@@ -495,8 +498,9 @@ impl AnimHandlerThread {
     }
 }
 
-fn anim_handler_thread(
+fn anim_handler_thread<D: Into<ScreenDims>>(
     anim_handler: AnimHandler,
+    screen_dims: D,
     view: Arc<AtomicCell<View>>,
 ) -> AnimHandlerThread {
     let mouse_pos = Arc::new(AtomicCell::new(None));
@@ -506,9 +510,12 @@ fn anim_handler_thread(
     let initial_view = view.load();
     let initial_view = Arc::new(AtomicCell::new(initial_view));
 
+    let screen_dims = Arc::new(AtomicCell::new(screen_dims.into()));
+
     let inner_settings = settings.clone();
     let inner_view = view;
     let inner_mouse_pos = mouse_pos.clone();
+    let inner_dims = screen_dims.clone();
 
     let (msg_tx, msg_rx) = channel::unbounded::<AnimMsg>();
 
@@ -519,6 +526,8 @@ fn anim_handler_thread(
         let settings = inner_settings;
         let view = inner_view;
         let mouse_pos = inner_mouse_pos;
+        let screen_dims = inner_dims;
+
         let mut anim = anim_handler;
 
         let mut last_update = std::time::Instant::now();
@@ -561,12 +570,14 @@ fn anim_handler_thread(
         mouse_pos,
         msg_tx,
         settings,
+        screen_dims,
         initial_view,
     }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct AnimHandler {
+    // screen_dims: ScreenDims,
     mouse_pan_screen_origin: Option<Point>,
     view_anim_target: Option<View>,
     view_pan_const: Point,
@@ -575,6 +586,10 @@ pub struct AnimHandler {
 }
 
 impl AnimHandler {
+    // fn set_screen_dims<D: Into<ScreenDims>>(&mut self, dims: D) {
+    //     self.screen_dims = dims.into();
+    // }
+
     fn update_cell(
         &mut self,
         settings: &AnimSettings,
@@ -594,6 +609,8 @@ impl AnimHandler {
         mouse_pos: Option<Point>,
         dt: f32,
     ) -> View {
+        let pre_scale = view.scale;
+
         view.scale += view.scale * dt * self.view_scale_delta;
 
         if let Some(min_scale) = settings.min_view_scale {
@@ -795,8 +812,16 @@ impl MainViewAsh {
         let anim_handler = AnimHandler::default();
         let view = Arc::new(AtomicCell::new(view));
 
+        let screen_dims = {
+            let extent = swapchain_props.extent;
+            ScreenDims {
+                width: extent.width as f32,
+                height: extent.height as f32,
+            }
+        };
+
         let anim_handler_thread =
-            anim_handler_thread(anim_handler, view.clone());
+            anim_handler_thread(anim_handler, screen_dims, view.clone());
 
         let main_view = Self {
             node_draw_system,
@@ -864,6 +889,10 @@ impl MainViewAsh {
         let mut view = self.view.load();
         view.scale = scale;
         self.view.store(view);
+    }
+
+    pub fn set_screen_dims<D: Into<ScreenDims>>(&self, dims: D) {
+        self.anim_handler_thread.screen_dims.store(dims.into());
     }
 
     pub fn set_mouse_pos(&self, pos: Option<Point>) {

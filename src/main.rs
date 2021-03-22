@@ -224,17 +224,12 @@ fn main() {
         // input_manager.set_mouse_over_gui(gui.pointer_over_gui());
         input_manager.handle_events();
 
-        let screen_dims = {
-            let extent = gfaestus.swapchain_props.extent;
-
-            [extent.width, extent.height]
-        };
-
         let screen_dims = app.dims();
         let mouse_pos = app.mouse_pos();
 
         // gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
         main_view.set_mouse_pos(Some(mouse_pos));
+        main_view.set_screen_dims(screen_dims);
 
         // let hover_node = main_view
         //     .read_node_id_at(screen_dims, mouse_pos)

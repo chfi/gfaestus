@@ -13,7 +13,7 @@ pub fn viewport_scale(width: f32, height: f32) -> glm::Mat4 {
               0.0,     0.0,     0.0, 1.0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct ScreenDims {
     pub width: f32,
     pub height: f32,
