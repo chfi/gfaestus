@@ -557,7 +557,8 @@ fn anim_handler_thread<D: Into<ScreenDims>>(
                 let dt = last_update.elapsed().as_secs_f32();
                 let settings = settings.load();
                 let pos = mouse_pos.load();
-                anim.update_cell(&settings, &view, pos, dt);
+                let dims = screen_dims.load();
+                anim.update_cell(&settings, &view, dims, pos, dt);
                 last_update = std::time::Instant::now();
             } else {
                 std::thread::sleep(sleep_delay);
@@ -594,11 +595,12 @@ impl AnimHandler {
         &mut self,
         settings: &AnimSettings,
         view: &AtomicCell<View>,
+        screen_dims: ScreenDims,
         mouse_pos: Option<Point>,
         dt: f32,
     ) {
         let before = view.load();
-        let new = self.update(settings, before, mouse_pos, dt);
+        let new = self.update(settings, before, screen_dims, mouse_pos, dt);
         view.store(new);
     }
 
@@ -606,10 +608,12 @@ impl AnimHandler {
         &mut self,
         settings: &AnimSettings,
         mut view: View,
+        screen_dims: ScreenDims,
         mouse_pos: Option<Point>,
         dt: f32,
     ) -> View {
         let pre_scale = view.scale;
+        let pre_view = view;
 
         view.scale += view.scale * dt * self.view_scale_delta;
 
@@ -628,7 +632,39 @@ impl AnimHandler {
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
-        view.center += dxy * view.scale;
+        if let Some(mouse) = mouse_pos {
+            view.center += dxy * view.scale;
+
+            // let mouse = mouse
+            //     + Point {
+            //         x: screen_dims.width / 2.0,
+            //         y: screen_dims.height / 2.0,
+            //     };
+
+            // let mouse = mouse / 2.0;
+
+            let mouse = Point {
+                x: mouse.x,
+                y: -mouse.y,
+            };
+
+            let mouse_world_pre =
+                pre_view.screen_point_to_world(screen_dims, mouse);
+
+            let mouse_world_post =
+                view.screen_point_to_world(screen_dims, mouse);
+
+            let delta = mouse_world_post - mouse_world_pre;
+
+            // let delta = Point {
+            //     x: delta.x * screen_dims.width,
+            //     y: delta.y * screen_dims.height,
+            // };
+
+            view.center -= delta;
+        } else {
+            view.center += dxy * view.scale;
+        }
 
         // let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
         // let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
