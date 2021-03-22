@@ -256,25 +256,18 @@ impl NodeDrawAsh {
                 .primitive_restart_enable(false)
                 .build();
 
-        let viewport = vk::Viewport {
-            x: 0.0,
-            y: 0.0,
-            width: swapchain_props.extent.width as f32,
-            height: swapchain_props.extent.height as f32,
-            min_depth: 0.0,
-            max_depth: 0.0,
-        };
-        let viewports = [viewport];
-
-        let scissor = vk::Rect2D {
-            offset: vk::Offset2D { x: 0, y: 0 },
-            extent: swapchain_props.extent,
-        };
-        let scissors = [scissor];
-
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
-            .viewports(&viewports)
-            .scissors(&scissors)
+            .viewport_count(1)
+            .scissor_count(1)
+            .build();
+
+        let dynamic_states = {
+            use vk::DynamicState as DS;
+            [DS::VIEWPORT, DS::SCISSOR]
+        };
+
+        let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
+            .dynamic_states(&dynamic_states)
             .build();
 
         let rasterizer_info =
@@ -352,6 +345,7 @@ impl NodeDrawAsh {
             .vertex_input_state(&vert_input_info)
             .input_assembly_state(&input_assembly_info)
             .viewport_state(&viewport_info)
+            .dynamic_state(&dynamic_state_info)
             .rasterization_state(&rasterizer_info)
             .multisample_state(&multisampling_info)
             .color_blend_state(&color_blending_info)

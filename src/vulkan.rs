@@ -183,7 +183,107 @@ impl GfaestusVk {
         &self.vk_context
     }
 
+    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
+    where
+        F: FnOnce(vk::CommandBuffer, vk::Framebuffer),
+    {
+        let sync_objects = self.in_flight_frames.next().unwrap();
+
+        let img_available = sync_objects.image_available_semaphore;
+        let render_finished = sync_objects.render_finished_semaphore;
+        let in_flight_fence = sync_objects.fence;
+        let wait_fences = [in_flight_fence];
+
+        unsafe {
+            self.vk_context.device().wait_for_fences(
+                &wait_fences,
+                true,
+                std::u64::MAX,
+            )
+        }?;
+
+        let result = unsafe {
+            self.swapchain.acquire_next_image(
+                self.swapchain_khr,
+                std::u64::MAX,
+                img_available,
+                vk::Fence::null(),
+            )
+        };
+
+        let img_index = match result {
+            Ok((img_index, _)) => img_index,
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                return Ok(true);
+            }
+            Err(error) => panic!("Error while acquiring next image: {}", error),
+        };
+
+        unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
+
+        // TODO update uniforms
+
+        let device = self.vk_context.device();
+        let wait_semaphores = [img_available];
+        let signal_semaphores = [render_finished];
+
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+
+        let queue = self.graphics_queue;
+
+        let framebuffer = self.swapchain_framebuffers[img_index as usize];
+
+        self.execute_one_time_commands_semaphores(
+            device,
+            self.transient_command_pool,
+            queue,
+            &wait_semaphores,
+            &wait_stages,
+            &signal_semaphores,
+            in_flight_fence,
+            |cmd_buf| {
+                commands(cmd_buf, framebuffer);
+            },
+        )?;
+
+        let swapchains = [self.swapchain_khr];
+        let img_indices = [img_index];
+
+        {
+            let present_info = vk::PresentInfoKHR::builder()
+                .wait_semaphores(&signal_semaphores)
+                .swapchains(&swapchains)
+                .image_indices(&img_indices)
+                .build();
+
+            let result = unsafe {
+                self.swapchain
+                    .queue_present(self.present_queue, &present_info)
+            };
+
+            match result {
+                Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+                    return Ok(true);
+                }
+                Err(error) => panic!("Failed to present queue: {}", error),
+                _ => {}
+            }
+        }
+
+        unsafe {
+            device.queue_wait_idle(queue)?;
+        };
+
+        Ok(false)
+    }
+
+    pub fn wait_gpu_idle(&self) -> Result<()> {
+        let res = unsafe { self.vk_context.device().device_wait_idle() }?;
+        Ok(res)
+    }
+
     pub fn execute_one_time_commands_semaphores<F>(
+        &self,
         device: &Device,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
@@ -214,6 +314,29 @@ impl GfaestusVk {
 
             unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
         }
+
+        unsafe {
+            let viewport = vk::Viewport {
+                x: 0.0,
+                y: 0.0,
+                width: self.swapchain_props.extent.width as f32,
+                height: self.swapchain_props.extent.height as f32,
+                min_depth: 0.0,
+                max_depth: 0.0,
+            };
+
+            let viewports = [viewport];
+
+            device.cmd_set_viewport(cmd_buf, 0, &viewports);
+
+            let scissor = vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent: self.swapchain_props.extent,
+            };
+            let scissors = [scissor];
+
+            device.cmd_set_scissor(cmd_buf, 0, &scissors);
+        };
 
         commands(cmd_buf);
 
@@ -384,105 +507,6 @@ impl GfaestusVk {
         )?;
 
         Ok(())
-    }
-
-    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
-    where
-        F: FnOnce(vk::CommandBuffer, vk::Framebuffer),
-    {
-        let sync_objects = self.in_flight_frames.next().unwrap();
-
-        let img_available = sync_objects.image_available_semaphore;
-        let render_finished = sync_objects.render_finished_semaphore;
-        let in_flight_fence = sync_objects.fence;
-        let wait_fences = [in_flight_fence];
-
-        unsafe {
-            self.vk_context.device().wait_for_fences(
-                &wait_fences,
-                true,
-                std::u64::MAX,
-            )
-        }?;
-
-        let result = unsafe {
-            self.swapchain.acquire_next_image(
-                self.swapchain_khr,
-                std::u64::MAX,
-                img_available,
-                vk::Fence::null(),
-            )
-        };
-
-        let img_index = match result {
-            Ok((img_index, _)) => img_index,
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                return Ok(true);
-            }
-            Err(error) => panic!("Error while acquiring next image: {}", error),
-        };
-
-        unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
-
-        // TODO update uniforms
-
-        let device = self.vk_context.device();
-        let wait_semaphores = [img_available];
-        let signal_semaphores = [render_finished];
-
-        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-
-        let queue = self.graphics_queue;
-
-        let framebuffer = self.swapchain_framebuffers[img_index as usize];
-
-        Self::execute_one_time_commands_semaphores(
-            device,
-            self.transient_command_pool,
-            queue,
-            &wait_semaphores,
-            &wait_stages,
-            &signal_semaphores,
-            in_flight_fence,
-            |cmd_buf| {
-                commands(cmd_buf, framebuffer);
-            },
-        )?;
-
-        let swapchains = [self.swapchain_khr];
-        let img_indices = [img_index];
-
-        {
-            let present_info = vk::PresentInfoKHR::builder()
-                .wait_semaphores(&signal_semaphores)
-                .swapchains(&swapchains)
-                .image_indices(&img_indices)
-                .build();
-
-            let result = unsafe {
-                self.swapchain
-                    .queue_present(self.present_queue, &present_info)
-            };
-
-            match result {
-                Ok(true) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                    return Ok(true);
-                }
-                Err(error) => panic!("Failed to present queue: {}", error),
-                _ => {}
-            }
-        }
-
-        unsafe {
-            device.queue_wait_idle(queue)?;
-        };
-
-        Ok(false)
-    }
-
-    pub fn wait_gpu_idle(&self) -> Result<()> {
-        let res = unsafe { self.vk_context.device().device_wait_idle() }?;
-        Ok(res)
     }
 
     pub fn create_image(
@@ -705,45 +729,6 @@ impl GfaestusVk {
 
         Ok((buffer, memory))
     }
-}
-
-impl GfaestusVk {
-    fn create_sync_objects(device: &Device) -> InFlightFrames {
-        let mut sync_objects_vec = Vec::new();
-
-        // for _ in 0..MAX_FRAMES_IN_FLIGHT {
-        for _ in 0..2 {
-            let image_available_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe {
-                    device.create_semaphore(&semaphore_info, None).unwrap()
-                }
-            };
-
-            let render_finished_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe {
-                    device.create_semaphore(&semaphore_info, None).unwrap()
-                }
-            };
-
-            let in_flight_fence = {
-                let fence_info = vk::FenceCreateInfo::builder()
-                    .flags(vk::FenceCreateFlags::SIGNALED)
-                    .build();
-                unsafe { device.create_fence(&fence_info, None).unwrap() }
-            };
-
-            let sync_objects = SyncObjects {
-                image_available_semaphore,
-                render_finished_semaphore,
-                fence: in_flight_fence,
-            };
-            sync_objects_vec.push(sync_objects)
-        }
-
-        InFlightFrames::new(sync_objects_vec)
-    }
 
     pub fn recreate_swapchain(
         &mut self,
@@ -808,6 +793,45 @@ impl GfaestusVk {
         self.render_pass = render_pass;
 
         Ok(())
+    }
+}
+
+impl GfaestusVk {
+    fn create_sync_objects(device: &Device) -> InFlightFrames {
+        let mut sync_objects_vec = Vec::new();
+
+        // for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        for _ in 0..2 {
+            let image_available_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let render_finished_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let in_flight_fence = {
+                let fence_info = vk::FenceCreateInfo::builder()
+                    .flags(vk::FenceCreateFlags::SIGNALED)
+                    .build();
+                unsafe { device.create_fence(&fence_info, None).unwrap() }
+            };
+
+            let sync_objects = SyncObjects {
+                image_available_semaphore,
+                render_finished_semaphore,
+                fence: in_flight_fence,
+            };
+            sync_objects_vec.push(sync_objects)
+        }
+
+        InFlightFrames::new(sync_objects_vec)
     }
 
     fn cleanup_swapchain(&mut self) {
