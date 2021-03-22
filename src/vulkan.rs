@@ -24,12 +24,7 @@ use ash::{
 };
 use ash::{vk, Device, Entry, Instance};
 
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
-};
+use winit::window::Window;
 
 use std::{
     ffi::{CStr, CString},
@@ -485,131 +480,9 @@ impl GfaestusVk {
         Ok(false)
     }
 
-    fn create_sync_objects(device: &Device) -> InFlightFrames {
-        let mut sync_objects_vec = Vec::new();
-
-        // for _ in 0..MAX_FRAMES_IN_FLIGHT {
-        for _ in 0..2 {
-            let image_available_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe {
-                    device.create_semaphore(&semaphore_info, None).unwrap()
-                }
-            };
-
-            let render_finished_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe {
-                    device.create_semaphore(&semaphore_info, None).unwrap()
-                }
-            };
-
-            let in_flight_fence = {
-                let fence_info = vk::FenceCreateInfo::builder()
-                    .flags(vk::FenceCreateFlags::SIGNALED)
-                    .build();
-                unsafe { device.create_fence(&fence_info, None).unwrap() }
-            };
-
-            let sync_objects = SyncObjects {
-                image_available_semaphore,
-                render_finished_semaphore,
-                fence: in_flight_fence,
-            };
-            sync_objects_vec.push(sync_objects)
-        }
-
-        InFlightFrames::new(sync_objects_vec)
-    }
-
     pub fn wait_gpu_idle(&self) -> Result<()> {
         let res = unsafe { self.vk_context.device().device_wait_idle() }?;
         Ok(res)
-    }
-
-    pub fn recreate_swapchain(
-        &mut self,
-        dimensions: Option<[u32; 2]>,
-    ) -> Result<()> {
-        self.wait_gpu_idle()?;
-        eprintln!("recreating swapchain");
-
-        self.cleanup_swapchain();
-
-        let device = self.vk_context.device();
-
-        let dimensions = dimensions.unwrap_or([
-            self.swapchain_props.extent.width,
-            self.swapchain_props.extent.height,
-        ]);
-
-        let (swapchain, swapchain_khr, swapchain_props, images) =
-            create_swapchain_and_images(
-                &self.vk_context,
-                self.graphics_family_index,
-                self.present_family_index,
-                dimensions,
-            )?;
-
-        let swapchain_image_views =
-            create_swapchain_image_views(device, &images, swapchain_props)?;
-
-        let render_pass = create_swapchain_render_pass(
-            device,
-            swapchain_props,
-            self.msaa_samples,
-        )?;
-
-        let transient_color = Texture::create_transient_color(
-            &self.vk_context,
-            self.transient_command_pool,
-            self.graphics_queue,
-            swapchain_props,
-            self.msaa_samples,
-        )?;
-
-        let swapchain_framebuffers = create_swapchain_framebuffers(
-            device,
-            &swapchain_image_views,
-            transient_color,
-            render_pass,
-            swapchain_props,
-        );
-
-        // TODO recreate render pass, framebuffers, etc.
-
-        self.swapchain = swapchain;
-        self.swapchain_khr = swapchain_khr;
-        self.swapchain_props = swapchain_props;
-
-        self.swapchain_images = images;
-        self.swapchain_image_views = swapchain_image_views;
-        self.swapchain_framebuffers = swapchain_framebuffers;
-
-        self.transient_color = transient_color;
-        self.render_pass = render_pass;
-
-        Ok(())
-    }
-
-    fn cleanup_swapchain(&mut self) {
-        let device = self.vk_context.device();
-
-        unsafe {
-            // TODO handle framebuffers, pipelines, etc.
-            self.transient_color.destroy(device);
-
-            self.swapchain_framebuffers
-                .iter()
-                .for_each(|f| device.destroy_framebuffer(*f, None));
-            device.destroy_render_pass(self.render_pass, None);
-
-            self.swapchain_image_views
-                .iter()
-                .for_each(|v| device.destroy_image_view(*v, None));
-
-            self.swapchain.destroy_swapchain(self.swapchain_khr, None);
-        }
     }
 
     pub fn create_image(
@@ -688,23 +561,7 @@ impl GfaestusVk {
         Ok(img_view)
     }
 
-    fn create_command_pool(
-        device: &Device,
-        graphics_ix: u32,
-        create_flags: vk::CommandPoolCreateFlags,
-    ) -> Result<vk::CommandPool> {
-        let command_pool_info = vk::CommandPoolCreateInfo::builder()
-            .queue_family_index(graphics_ix)
-            .flags(create_flags)
-            .build();
-
-        let command_pool =
-            unsafe { device.create_command_pool(&command_pool_info, None) }?;
-
-        Ok(command_pool)
-    }
-
-    fn copy_buffer(
+    pub fn copy_buffer(
         device: &Device,
         command_pool: vk::CommandPool,
         transfer_queue: vk::Queue,
@@ -847,6 +704,146 @@ impl GfaestusVk {
         }
 
         Ok((buffer, memory))
+    }
+}
+
+impl GfaestusVk {
+    fn create_sync_objects(device: &Device) -> InFlightFrames {
+        let mut sync_objects_vec = Vec::new();
+
+        // for _ in 0..MAX_FRAMES_IN_FLIGHT {
+        for _ in 0..2 {
+            let image_available_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let render_finished_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
+            let in_flight_fence = {
+                let fence_info = vk::FenceCreateInfo::builder()
+                    .flags(vk::FenceCreateFlags::SIGNALED)
+                    .build();
+                unsafe { device.create_fence(&fence_info, None).unwrap() }
+            };
+
+            let sync_objects = SyncObjects {
+                image_available_semaphore,
+                render_finished_semaphore,
+                fence: in_flight_fence,
+            };
+            sync_objects_vec.push(sync_objects)
+        }
+
+        InFlightFrames::new(sync_objects_vec)
+    }
+
+    pub fn recreate_swapchain(
+        &mut self,
+        dimensions: Option<[u32; 2]>,
+    ) -> Result<()> {
+        self.wait_gpu_idle()?;
+        eprintln!("recreating swapchain");
+
+        self.cleanup_swapchain();
+
+        let device = self.vk_context.device();
+
+        let dimensions = dimensions.unwrap_or([
+            self.swapchain_props.extent.width,
+            self.swapchain_props.extent.height,
+        ]);
+
+        let (swapchain, swapchain_khr, swapchain_props, images) =
+            create_swapchain_and_images(
+                &self.vk_context,
+                self.graphics_family_index,
+                self.present_family_index,
+                dimensions,
+            )?;
+
+        let swapchain_image_views =
+            create_swapchain_image_views(device, &images, swapchain_props)?;
+
+        let render_pass = create_swapchain_render_pass(
+            device,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let transient_color = Texture::create_transient_color(
+            &self.vk_context,
+            self.transient_command_pool,
+            self.graphics_queue,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let swapchain_framebuffers = create_swapchain_framebuffers(
+            device,
+            &swapchain_image_views,
+            transient_color,
+            render_pass,
+            swapchain_props,
+        );
+
+        // TODO recreate render pass, framebuffers, etc.
+
+        self.swapchain = swapchain;
+        self.swapchain_khr = swapchain_khr;
+        self.swapchain_props = swapchain_props;
+
+        self.swapchain_images = images;
+        self.swapchain_image_views = swapchain_image_views;
+        self.swapchain_framebuffers = swapchain_framebuffers;
+
+        self.transient_color = transient_color;
+        self.render_pass = render_pass;
+
+        Ok(())
+    }
+
+    fn cleanup_swapchain(&mut self) {
+        let device = self.vk_context.device();
+
+        unsafe {
+            // TODO handle framebuffers, pipelines, etc.
+            self.transient_color.destroy(device);
+
+            self.swapchain_framebuffers
+                .iter()
+                .for_each(|f| device.destroy_framebuffer(*f, None));
+            device.destroy_render_pass(self.render_pass, None);
+
+            self.swapchain_image_views
+                .iter()
+                .for_each(|v| device.destroy_image_view(*v, None));
+
+            self.swapchain.destroy_swapchain(self.swapchain_khr, None);
+        }
+    }
+
+    fn create_command_pool(
+        device: &Device,
+        graphics_ix: u32,
+        create_flags: vk::CommandPoolCreateFlags,
+    ) -> Result<vk::CommandPool> {
+        let command_pool_info = vk::CommandPoolCreateInfo::builder()
+            .queue_family_index(graphics_ix)
+            .flags(create_flags)
+            .build();
+
+        let command_pool =
+            unsafe { device.create_command_pool(&command_pool_info, None) }?;
+
+        Ok(command_pool)
     }
 }
 
