@@ -170,12 +170,8 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    // let mut app = App::new(
-    //     queue.clone(),
-    //     input_manager.clone_mouse_pos(),
-    //     (100.0, 100.0),
-    // )
-    // .expect("error when creating App");
+    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
+        .expect("error when creating App");
 
     let node_vertices = universe.new_vertices();
 
@@ -234,11 +230,11 @@ fn main() {
             [extent.width, extent.height]
         };
 
-        // let screen_dims = app.dims();
-        // let mouse_pos = app.mouse_pos();
+        let screen_dims = app.dims();
+        let mouse_pos = app.mouse_pos();
 
         // gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
-        // main_view.set_mouse_pos(Some(mouse_pos));
+        main_view.set_mouse_pos(Some(mouse_pos));
 
         // let hover_node = main_view
         //     .read_node_id_at(screen_dims, mouse_pos)
@@ -246,9 +242,9 @@ fn main() {
 
         // app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
 
-        // while let Ok(app_in) = app_rx.try_recv() {
-        //     app.apply_input(app_in);
-        // }
+        while let Ok(app_in) = app_rx.try_recv() {
+            app.apply_input(app_in);
+        }
 
         // while let Ok(gui_in) = gui_rx.try_recv() {
         //     gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
@@ -262,13 +258,13 @@ fn main() {
             main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
         }
 
-        // while let Ok(app_msg) = app_msg_rx.try_recv() {
-        //     app.apply_app_msg(&app_msg);
-        // }
+        while let Ok(app_msg) = app_msg_rx.try_recv() {
+            app.apply_app_msg(&app_msg);
+        }
 
-        // while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
-        //     app.apply_app_config_msg(&cfg_msg);
-        // }
+        while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
+            app.apply_app_config_msg(&cfg_msg);
+        }
 
         match event {
             Event::NewEvents(_) => {
@@ -342,6 +338,7 @@ fn main() {
     });
 }
 
+/*
 fn main_old() {
     let args = std::env::args().collect::<Vec<_>>();
 
@@ -1179,3 +1176,4 @@ fn update_viewport(
     };
     dynamic_state.viewports = Some(vec![viewport]);
 }
+*/
