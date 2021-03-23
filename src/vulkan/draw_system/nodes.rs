@@ -19,6 +19,9 @@ use crate::geometry::Point;
 use crate::view::View;
 use crate::vulkan::SwapchainProperties;
 
+use super::Vertex;
+use super::{create_shader_module, read_shader_from_file};
+
 pub struct NodeThemePipeline {
     descriptor_pool: vk::DescriptorPool,
 
@@ -42,6 +45,22 @@ impl NodeThemePipeline {
             .descriptor_count(1)
             .stage_flags(Stages::FRAGMENT)
             .build()
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::theme_layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
     }
 }
 

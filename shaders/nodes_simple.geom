@@ -2,11 +2,11 @@
 
 layout (lines) in;
 
-// layout (location = 0) in int[] vs_node_id;
+layout (location = 0) in int[] vs_node_id;
 
 layout (triangle_strip, max_vertices = 4) out;
 
-// layout (location = 0) out int node_id;
+layout (location = 0) out int node_id;
 
 layout (push_constant) uniform NodePC {
   mat4 view_transform;
@@ -15,15 +15,6 @@ layout (push_constant) uniform NodePC {
   vec2 viewport_dims;
   uint texture_period;
 } node_uniform;
-
-// layout (push_constant) uniform View {
-//   float node_width;
-//   float scale;
-//   vec2 viewport_dims;
-//   mat4 view;
-//   uint flags;
-// } vo;
-
 
 void build_rectangle(int id, vec4 pos0, vec4 pos1) {
   vec2 to_pos1 = vec2(pos1.x - pos0.x, pos1.y - pos0.y);
@@ -55,7 +46,7 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
 
   vec2 to_pos1_orth_op = -to_pos1_orth;
 
-  // node_id = id;
+  node_id = id;
 
   float node_width = node_uniform.node_width / (node_uniform.scale * max(screen_w, screen_h));
 
@@ -75,7 +66,6 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
 }
 
 void main() {
-  // int id = vs_node_id[0];
-  int id = 0;
+  int id = vs_node_id[0];
   build_rectangle(id, gl_in[0].gl_Position, gl_in[1].gl_Position);
 }
