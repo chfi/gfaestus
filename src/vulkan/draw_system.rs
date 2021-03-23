@@ -20,7 +20,9 @@ use super::SwapchainProperties;
 use crate::geometry::Point;
 use crate::view::View;
 
+pub mod nodes;
 
+use nodes::*;
 
 #[derive(Clone, Copy)]
 pub struct Vertex {
