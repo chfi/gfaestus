@@ -83,6 +83,7 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
+/*
 fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
     main_view: &MainView,
     graph_query: &GraphQuery,
@@ -95,6 +96,7 @@ fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
 
     Ok((overlay, future))
 }
+*/
 
 use gfaestus::vulkan::*;
 
@@ -175,7 +177,7 @@ fn main() {
 
     let node_vertices = universe.new_vertices();
 
-    let mut main_view = MainViewAsh::new(
+    let mut main_view = MainView::new(
         gfaestus.vk_context(),
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
