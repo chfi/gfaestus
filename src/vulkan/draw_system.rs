@@ -20,30 +20,35 @@ use super::SwapchainProperties;
 use crate::geometry::Point;
 use crate::view::View;
 
-fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
-where
-    P: AsRef<std::path::Path>,
-{
-    use std::{fs::File, io::Read};
 
-    let mut buf = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
 
-    let mut cursor = std::io::Cursor::new(buf);
-
-    let spv = ash::util::read_spv(&mut cursor)?;
-    Ok(spv)
+#[derive(Clone, Copy)]
+pub struct Vertex {
+    pub position: [f32; 2],
 }
 
-fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
-    let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
-    unsafe { device.create_shader_module(&create_info, None).unwrap() }
+impl Vertex {
+    fn get_binding_desc() -> vk::VertexInputBindingDescription {
+        vk::VertexInputBindingDescription::builder()
+            .binding(0)
+            .stride(std::mem::size_of::<Vertex>() as u32)
+            .input_rate(vk::VertexInputRate::VERTEX)
+            .build()
+    }
+
+    fn get_attribute_descs() -> [vk::VertexInputAttributeDescription; 1] {
+        let pos_desc = vk::VertexInputAttributeDescription::builder()
+            .binding(0)
+            .location(0)
+            .format(vk::Format::R32G32_SFLOAT)
+            .offset(0)
+            .build();
+
+        [pos_desc]
+    }
 }
 
 pub struct NodeDrawAsh {
-    // vk_context: Weak<super::VkContext>,
-    // descriptor_set_pool: Weak<vk::DescriptorPool>,
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
 
@@ -170,24 +175,146 @@ impl NodeDrawAsh {
 //     matrix: glm::Mat4,
 // }
 
-pub struct NodeUniform {
-    view_transform: glm::Mat4,
-}
-
-impl NodeUniform {
-    fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
-        use vk::ShaderStageFlags as Stages;
-
-        vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
-            .descriptor_count(1)
-            .stage_flags(Stages::VERTEX | Stages::FRAGMENT)
-            .build()
-    }
-}
-
 impl NodeDrawAsh {
+    pub fn new(
+        vk_context: &super::VkContext,
+        // desc_pool: &vk::DescriptorPool,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+
+        render_pass: vk::RenderPass,
+    ) -> Result<Self> {
+        let device = vk_context.device();
+
+        let descriptor_set_layout = Self::create_descriptor_set_layout(device);
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            swapchain_props,
+            msaa_samples,
+            render_pass,
+            descriptor_set_layout,
+        );
+
+        let vertex_buffer = vk::Buffer::null();
+        let vertex_buffer_memory = vk::DeviceMemory::null();
+
+        let device = vk_context.device().clone();
+
+        Ok(Self {
+            device,
+
+            render_pass,
+            descriptor_set_layout,
+
+            pipeline_layout,
+            pipeline,
+
+            vertex_count: 0,
+
+            has_vertices: false,
+
+            vertex_buffer,
+            vertex_buffer_memory,
+        })
+    }
+
+    pub fn draw(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        extent: vk::Extent2D,
+        view: View,
+        offset: Point,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+    ) -> Result<()> {
+        let device = &self.device;
+
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        }];
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertex_buffer];
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets)
+        };
+
+        let push_constants =
+            NodePC::new([offset.x, offset.y], viewport_dims, view, node_width);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, self.vertex_count as u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
+    pub fn upload_vertices(
+        &mut self,
+        app: &super::GfaestusVk,
+        vertices: &[Vertex],
+    ) -> Result<()> {
+        if self.has_vertices {
+            panic!("replacing node vertices not supported yet");
+        }
+
+        let (buf, mem) = app.create_vertex_buffer(vertices)?;
+
+        self.vertex_count = vertices.len();
+
+        self.vertex_buffer = buf;
+        self.vertex_buffer_memory = mem;
+
+        self.has_vertices = true;
+
+        Ok(())
+    }
+
     fn create_descriptor_set_layout(
         device: &Device,
     ) -> vk::DescriptorSetLayout {
@@ -377,145 +504,6 @@ impl NodeDrawAsh {
         (pipeline, layout)
     }
 
-    pub fn new(
-        vk_context: &super::VkContext,
-        // desc_pool: &vk::DescriptorPool,
-        swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
-
-        render_pass: vk::RenderPass,
-    ) -> Result<Self> {
-        let device = vk_context.device();
-
-        let descriptor_set_layout = Self::create_descriptor_set_layout(device);
-
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            swapchain_props,
-            msaa_samples,
-            render_pass,
-            descriptor_set_layout,
-        );
-
-        let vertex_buffer = vk::Buffer::null();
-        let vertex_buffer_memory = vk::DeviceMemory::null();
-
-        let device = vk_context.device().clone();
-
-        Ok(Self {
-            device,
-
-            render_pass,
-            descriptor_set_layout,
-
-            pipeline_layout,
-            pipeline,
-
-            vertex_count: 0,
-
-            has_vertices: false,
-
-            vertex_buffer,
-            vertex_buffer_memory,
-        })
-    }
-
-    pub fn draw(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-        extent: vk::Extent2D,
-        view: View,
-        offset: Point,
-        viewport_dims: [f32; 2],
-        node_width: f32,
-    ) -> Result<()> {
-        let device = &self.device;
-
-        let clear_values = [vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        }];
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffer)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values)
-            .build();
-
-        unsafe {
-            device.cmd_begin_render_pass(
-                cmd_buf,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
-        };
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline,
-            )
-        };
-
-        let vx_bufs = [self.vertex_buffer];
-        let offsets = [0];
-        unsafe {
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets)
-        };
-
-        let push_constants =
-            NodePC::new([offset.x, offset.y], viewport_dims, view, node_width);
-
-        let pc_bytes = push_constants.bytes();
-
-        unsafe {
-            use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                self.pipeline_layout,
-                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
-                0,
-                &pc_bytes,
-            )
-        };
-
-        unsafe { device.cmd_draw(cmd_buf, self.vertex_count as u32, 1, 0, 0) };
-
-        // End render pass
-        unsafe { device.cmd_end_render_pass(cmd_buf) };
-
-        Ok(())
-    }
-
-    pub fn upload_vertices(
-        &mut self,
-        app: &super::GfaestusVk,
-        vertices: &[Vertex],
-    ) -> Result<()> {
-        if self.has_vertices {
-            panic!("replacing node vertices not supported yet");
-        }
-
-        let (buf, mem) = app.create_vertex_buffer(vertices)?;
-
-        self.vertex_count = vertices.len();
-
-        self.vertex_buffer = buf;
-        self.vertex_buffer_memory = mem;
-
-        self.has_vertices = true;
-
-        Ok(())
-    }
-
     // fn descriptor_set_layout(device: &Device) -> vk::DescriptorSetLayout {
     //     // let ubo_binding = Unif
 
@@ -531,28 +519,40 @@ impl NodeDrawAsh {
     // }
 }
 
-#[derive(Clone, Copy)]
-pub struct Vertex {
-    pub position: [f32; 2],
+pub struct NodeUniform {
+    view_transform: glm::Mat4,
 }
 
-impl Vertex {
-    fn get_binding_desc() -> vk::VertexInputBindingDescription {
-        vk::VertexInputBindingDescription::builder()
+impl NodeUniform {
+    fn get_descriptor_set_layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
-            .stride(std::mem::size_of::<Vertex>() as u32)
-            .input_rate(vk::VertexInputRate::VERTEX)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::VERTEX | Stages::FRAGMENT)
             .build()
     }
+}
 
-    fn get_attribute_descs() -> [vk::VertexInputAttributeDescription; 1] {
-        let pos_desc = vk::VertexInputAttributeDescription::builder()
-            .binding(0)
-            .location(0)
-            .format(vk::Format::R32G32_SFLOAT)
-            .offset(0)
-            .build();
+fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
+where
+    P: AsRef<std::path::Path>,
+{
+    use std::{fs::File, io::Read};
 
-        [pos_desc]
-    }
+    let mut buf = Vec::new();
+    let mut file = File::open(path)?;
+    file.read_to_end(&mut buf)?;
+
+    let mut cursor = std::io::Cursor::new(buf);
+
+    let spv = ash::util::read_spv(&mut cursor)?;
+    Ok(spv)
+}
+
+fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
+    let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
+    unsafe { device.create_shader_module(&create_info, None).unwrap() }
 }
