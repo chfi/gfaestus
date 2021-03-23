@@ -35,6 +35,25 @@ pub struct NodeThemePipeline {
     device: Device,
 }
 
+impl Drop for NodeThemePipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            self.device.destroy_sampler(self.sampler, None);
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
+    }
+}
+
 impl NodeThemePipeline {
     fn theme_layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
@@ -90,6 +109,25 @@ pub struct NodeOverlayPipeline {
     pipeline: vk::Pipeline,
 
     device: Device,
+}
+
+impl Drop for NodeOverlayPipeline {
+    fn drop(&mut self) {
+        unsafe {
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            self.device.destroy_sampler(self.sampler, None);
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
+    }
 }
 
 impl NodeOverlayPipeline {
