@@ -13,7 +13,7 @@ layout (push_constant) uniform NodePC {
   float node_width;
   float scale;
   vec2 viewport_dims;
-  // uint flags;
+  uint texture_period;
 } node_uniform;
 
 // layout (push_constant) uniform View {

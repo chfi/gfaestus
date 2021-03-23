@@ -24,10 +24,25 @@ pub struct NodeThemePipeline {
 
     descriptor_set_layout: vk::DescriptorSetLayout,
 
+    sampler: vk::Sampler,
+
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
     device: Device,
+}
+
+impl NodeThemePipeline {
+    fn theme_layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build()
+    }
 }
 
 pub struct NodeOverlayPipeline {
@@ -35,17 +50,25 @@ pub struct NodeOverlayPipeline {
 
     descriptor_set_layout: vk::DescriptorSetLayout,
 
+    sampler: vk::Sampler,
+
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
     device: Device,
 }
 
-pub struct NodePushConstants {
-    view_transform: glm::Mat4,
-    node_width: f32,
-    scale: f32,
-    viewport_dims: [f32; 2],
+impl NodeOverlayPipeline {
+    fn overlay_layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build()
+    }
 }
 
 pub struct NodeVertices {
@@ -63,6 +86,14 @@ pub struct NodePipelines {
     vertices: NodeVertices,
 }
 
+pub struct NodePushConstants {
+    view_transform: glm::Mat4,
+    node_width: f32,
+    scale: f32,
+    viewport_dims: [f32; 2],
+    texture_period: u32,
+}
+
 impl NodePushConstants {
     #[inline]
     pub fn new(
@@ -70,6 +101,7 @@ impl NodePushConstants {
         viewport_dims: [f32; 2],
         view: crate::view::View,
         node_width: f32,
+        texture_period: u32,
     ) -> Self {
         use crate::view;
 
@@ -92,14 +124,15 @@ impl NodePushConstants {
             node_width,
             viewport_dims,
             scale: view.scale,
+            texture_period,
         }
     }
 
     #[inline]
-    pub fn bytes(&self) -> [u8; 80] {
+    pub fn bytes(&self) -> [u8; 84] {
         use crate::view;
 
-        let mut bytes = [0u8; 80];
+        let mut bytes = [0u8; 84];
 
         let view_transform_array = view::mat4_to_array(&self.view_transform);
 
@@ -127,6 +160,13 @@ impl NodePushConstants {
 
             add_float(self.viewport_dims[0]);
             add_float(self.viewport_dims[1]);
+        }
+
+        let u_bytes = self.texture_period.to_ne_bytes();
+        let mut offset = 80;
+        for i in 0..4 {
+            bytes[offset] = u_bytes[i];
+            offset += 1;
         }
 
         bytes
