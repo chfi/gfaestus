@@ -62,6 +62,21 @@ impl NodeThemePipeline {
 
         Ok(layout)
     }
+
+    fn create_pipeline(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            descriptor_set_layout,
+            "shaders/nodes_themed.frag.spv",
+        )
+    }
 }
 
 pub struct NodeOverlayPipeline {
@@ -87,6 +102,37 @@ impl NodeOverlayPipeline {
             .descriptor_count(1)
             .stage_flags(Stages::FRAGMENT)
             .build()
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::overlay_layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
+    fn create_pipeline(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            descriptor_set_layout,
+            "shaders/nodes_overlay.frag.spv",
+        )
     }
 }
 
@@ -190,4 +236,170 @@ impl NodePushConstants {
 
         bytes
     }
+}
+
+fn create_pipeline(
+    device: &Device,
+    msaa_samples: vk::SampleCountFlags,
+    render_pass: vk::RenderPass,
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    frag_shader_path: &str,
+) -> (vk::Pipeline, vk::PipelineLayout) {
+    let vert_src =
+        read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
+    let geom_src =
+        read_shader_from_file("shaders/nodes_simple.geom.spv").unwrap();
+    let frag_src = read_shader_from_file(frag_shader_path).unwrap();
+
+    let vert_module = create_shader_module(device, &vert_src);
+    let geom_module = create_shader_module(device, &geom_src);
+    let frag_module = create_shader_module(device, &frag_src);
+
+    let entry_point = CString::new("main").unwrap();
+
+    let vert_state_info = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::VERTEX)
+        .module(vert_module)
+        .name(&entry_point)
+        .build();
+
+    let geom_state_info = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::GEOMETRY)
+        .module(geom_module)
+        .name(&entry_point)
+        .build();
+
+    let frag_state_info = vk::PipelineShaderStageCreateInfo::builder()
+        .stage(vk::ShaderStageFlags::FRAGMENT)
+        .module(frag_module)
+        .name(&entry_point)
+        .build();
+
+    let shader_state_infos =
+        [vert_state_info, geom_state_info, frag_state_info];
+
+    let vert_binding_descs = [Vertex::get_binding_desc()];
+    let vert_attr_descs = Vertex::get_attribute_descs();
+    let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(&vert_binding_descs)
+        .vertex_attribute_descriptions(&vert_attr_descs)
+        .build();
+
+    let input_assembly_info =
+        vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::LINE_LIST)
+            .primitive_restart_enable(false)
+            .build();
+
+    let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
+        .viewport_count(1)
+        .scissor_count(1)
+        .build();
+
+    let dynamic_states = {
+        use vk::DynamicState as DS;
+        [DS::VIEWPORT, DS::SCISSOR]
+    };
+
+    let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(&dynamic_states)
+        .build();
+
+    let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::NONE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false)
+        .depth_bias_constant_factor(0.0)
+        .depth_bias_clamp(0.0)
+        .depth_bias_slope_factor(0.0)
+        .build();
+
+    // let depth_stencil_info = todo!();
+
+    let multisampling_info = vk::PipelineMultisampleStateCreateInfo::builder()
+        .sample_shading_enable(false)
+        .rasterization_samples(msaa_samples)
+        .min_sample_shading(1.0)
+        .alpha_to_coverage_enable(false)
+        .alpha_to_one_enable(false)
+        .build();
+
+    let color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::ONE)
+            .dst_color_blend_factor(vk::BlendFactor::ZERO)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::ONE)
+            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .alpha_blend_op(vk::BlendOp::ADD)
+            .build();
+    let color_blend_attachments = [color_blend_attachment];
+
+    let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .logic_op(vk::LogicOp::COPY)
+        .attachments(&color_blend_attachments)
+        .blend_constants([0.0, 0.0, 0.0, 0.0])
+        .build();
+
+    let layout = {
+        use vk::ShaderStageFlags as Flags;
+
+        let layouts = [descriptor_set_layout];
+
+        let pc_range = vk::PushConstantRange::builder()
+            .stage_flags(Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT)
+            .offset(0)
+            .size(80)
+            .build();
+
+        let pc_ranges = [pc_range];
+
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&layouts)
+            .push_constant_ranges(&pc_ranges)
+            .build();
+
+        unsafe { device.create_pipeline_layout(&layout_info, None).unwrap() }
+    };
+
+    let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+        .stages(&shader_state_infos)
+        .vertex_input_state(&vert_input_info)
+        .input_assembly_state(&input_assembly_info)
+        .viewport_state(&viewport_info)
+        .dynamic_state(&dynamic_state_info)
+        .rasterization_state(&rasterizer_info)
+        .multisample_state(&multisampling_info)
+        .color_blend_state(&color_blending_info)
+        .layout(layout)
+        .render_pass(render_pass)
+        .subpass(0)
+        .build();
+
+    let pipeline_infos = [pipeline_info];
+
+    let pipeline = unsafe {
+        device
+            .create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &pipeline_infos,
+                None,
+            )
+            .unwrap()[0]
+    };
+
+    unsafe {
+        device.destroy_shader_module(vert_module, None);
+        device.destroy_shader_module(geom_module, None);
+        device.destroy_shader_module(frag_module, None);
+    }
+
+    (pipeline, layout)
 }
