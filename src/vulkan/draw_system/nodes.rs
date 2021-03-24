@@ -278,11 +278,178 @@ pub struct NodeVertices {
     device: Device,
 }
 
+impl NodeVertices {
+    fn new(device: &Device) -> Self {
+        let vertex_count = 0;
+        let vertex_buffer = vk::Buffer::null();
+        let vertex_memory = vk::DeviceMemory::null();
+
+        let device = device.clone();
+
+        Self {
+            vertex_count,
+            vertex_buffer,
+            vertex_memory,
+            device,
+        }
+    }
+
+    fn has_vertices(&self) -> bool {
+        self.vertex_count != 0
+    }
+
+    fn destroy(&mut self) {
+        if self.has_vertices() {
+            unsafe {
+                self.device.destroy_buffer(self.vertex_buffer, None);
+                self.device.free_memory(self.vertex_memory, None);
+            }
+
+            self.vertex_buffer = vk::Buffer::null();
+            self.vertex_memory = vk::DeviceMemory::null();
+
+            self.vertex_count = 0;
+        }
+    }
+
+    fn upload_vertices(
+        &mut self,
+        app: &super::super::GfaestusVk,
+        vertices: &[Vertex],
+    ) -> Result<()> {
+        if self.has_vertices() {
+            self.destroy();
+        }
+
+        let (buf, mem) = app.create_vertex_buffer(vertices)?;
+
+        self.vertex_count = vertices.len();
+
+        self.vertex_buffer = buf;
+        self.vertex_memory = mem;
+
+        Ok(())
+    }
+}
+
 pub struct NodePipelines {
     theme_pipeline: NodeThemePipeline,
     overlay_pipeline: NodeOverlayPipeline,
 
     vertices: NodeVertices,
+}
+
+impl NodePipelines {
+    pub fn new(
+        vk_context: &super::super::VkContext,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> Result<Self> {
+        let device = vk_context.device();
+
+        let vertices = NodeVertices::new(device);
+
+        let theme_pipeline =
+            NodeThemePipeline::new(device, msaa_samples, render_pass)?;
+        let overlay_pipeline =
+            NodeOverlayPipeline::new(device, msaa_samples, render_pass)?;
+
+        Ok(Self {
+            theme_pipeline,
+            overlay_pipeline,
+            vertices,
+        })
+    }
+
+    fn draw_themed(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+        view: View,
+        offset: Point,
+        theme_id: usize,
+    ) -> Result<()> {
+        let device = &self.theme_pipeline.device;
+
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 1.0],
+            },
+        }];
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertices.vertex_buffer];
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets)
+        };
+
+        // let uniforms = [self.theme_pipeline
+
+        let push_constants = NodePushConstants::new(
+            [offset.x, offset.y],
+            viewport_dims,
+            view,
+            node_width,
+            7,
+        );
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.theme_pipeline.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe {
+            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
+        };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
 }
 
 pub struct NodePushConstants {
