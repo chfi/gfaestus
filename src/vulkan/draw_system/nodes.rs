@@ -96,6 +96,74 @@ impl NodeThemePipeline {
             "shaders/nodes_themed.frag.spv",
         )
     }
+
+    fn new(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        // image_count: usize,
+    ) -> Result<Self> {
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            desc_set_layout,
+        );
+
+        let sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::REPEAT)
+                .address_mode_v(vk::SamplerAddressMode::REPEAT)
+                .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                .anisotropy_enable(false)
+                // .max_anisotropy(16.0)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { device.create_sampler(&sampler_info, None) }
+        }?;
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let sampler_pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [sampler_pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+
+            sampler,
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
+    }
 }
 
 pub struct NodeOverlayPipeline {
@@ -171,6 +239,74 @@ impl NodeOverlayPipeline {
             descriptor_set_layout,
             "shaders/nodes_overlay.frag.spv",
         )
+    }
+
+    fn new(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        // image_count: usize,
+    ) -> Result<Self> {
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            desc_set_layout,
+        );
+
+        let sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::REPEAT)
+                .address_mode_v(vk::SamplerAddressMode::REPEAT)
+                .address_mode_w(vk::SamplerAddressMode::REPEAT)
+                .anisotropy_enable(false)
+                // .max_anisotropy(16.0)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { device.create_sampler(&sampler_info, None) }
+        }?;
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let sampler_pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [sampler_pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+
+            sampler,
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
     }
 }
 
