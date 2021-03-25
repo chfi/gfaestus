@@ -17,6 +17,7 @@ use anyhow::Result;
 
 use crate::geometry::Point;
 use crate::view::View;
+use crate::vulkan::texture::Texture1D;
 use crate::vulkan::SwapchainProperties;
 
 use super::Vertex;
@@ -32,12 +33,19 @@ pub struct NodeThemePipeline {
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
 
+    themes: Vec<NodeThemeData>,
+
     device: Device,
 }
 
 impl Drop for NodeThemePipeline {
     fn drop(&mut self) {
         unsafe {
+            for theme in self.themes.iter_mut() {
+                theme.destroy(&self.device);
+            }
+            self.themes.clear();
+
             self.device.destroy_descriptor_set_layout(
                 self.descriptor_set_layout,
                 None,
@@ -51,6 +59,88 @@ impl Drop for NodeThemePipeline {
             self.device
                 .destroy_descriptor_pool(self.descriptor_pool, None);
         }
+    }
+}
+
+pub struct NodeThemeData {
+    // device: Device,
+    descriptor_set: vk::DescriptorSet,
+
+    texture: Texture1D,
+}
+
+const RAINBOW: [(f32, f32, f32); 7] = [
+    (1.0, 0.0, 0.0),
+    (1.0, 0.65, 0.0),
+    (1.0, 1.0, 0.0),
+    (0.0, 0.5, 0.0),
+    (0.0, 0.0, 1.0),
+    (0.3, 0.0, 0.51),
+    (0.93, 0.51, 0.93),
+];
+
+impl NodeThemeData {
+    pub fn test_theme(
+        app: &super::super::GfaestusVk,
+        descriptor_pool: vk::DescriptorPool,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        sampler: vk::Sampler,
+    ) -> Result<Self> {
+        let colors = RAINBOW
+            .iter()
+            .copied()
+            .map(rgb::RGB::from)
+            .collect::<Vec<_>>();
+
+        let texture = Texture1D::create_from_colors(
+            app,
+            app.transient_command_pool,
+            app.graphics_queue,
+            &colors,
+        )?;
+
+        let device = app.vk_context().device();
+
+        let descriptor_sets = {
+            let layouts = vec![descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        for set in descriptor_sets.iter() {
+            let image_info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(texture.view)
+                .sampler(sampler)
+                .build();
+            let image_infos = [image_info];
+
+            let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .image_info(&image_infos)
+                .build();
+
+            let descriptor_writes = [sampler_descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        Ok(Self {
+            descriptor_set: descriptor_sets[0],
+            texture,
+        })
+    }
+
+    pub fn destroy(&mut self, device: &Device) {
+        self.texture.destroy(device);
     }
 }
 
@@ -98,11 +188,14 @@ impl NodeThemePipeline {
     }
 
     fn new(
-        device: &Device,
+        app: &super::super::GfaestusVk,
+        // device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         // image_count: usize,
     ) -> Result<Self> {
+        let device = app.vk_context().device();
+
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
@@ -132,6 +225,13 @@ impl NodeThemePipeline {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
+        let theme = NodeThemeData::test_theme(
+            app,
+            descriptor_pool,
+            desc_set_layout,
+            sampler,
+        )?;
+
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
@@ -140,6 +240,8 @@ impl NodeThemePipeline {
 
             pipeline_layout,
             pipeline,
+
+            themes: vec![theme],
 
             device: device.clone(),
         })
@@ -341,17 +443,18 @@ pub struct NodePipelines {
 
 impl NodePipelines {
     pub fn new(
-        vk_context: &super::super::VkContext,
+        app: &super::super::GfaestusVk,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
+        let vk_context = app.vk_context();
         let device = vk_context.device();
 
         let vertices = NodeVertices::new(device);
 
         let theme_pipeline =
-            NodeThemePipeline::new(device, msaa_samples, render_pass)?;
+            NodeThemePipeline::new(app, msaa_samples, render_pass)?;
         let overlay_pipeline =
             NodeOverlayPipeline::new(device, msaa_samples, render_pass)?;
 
@@ -362,7 +465,7 @@ impl NodePipelines {
         })
     }
 
-    fn draw_themed(
+    pub fn draw_themed(
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
@@ -413,9 +516,20 @@ impl NodePipelines {
         };
 
         let vx_bufs = [self.vertices.vertex_buffer];
+        let desc_sets = [self.theme_pipeline.themes[0].descriptor_set];
         let offsets = [0];
         unsafe {
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets)
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
         };
 
         // let uniforms = [self.theme_pipeline
