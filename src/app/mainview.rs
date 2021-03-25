@@ -36,13 +36,19 @@ use super::{
 };
 
 use crate::vulkan::{
-    context::VkContext, draw_system::NodeDrawAsh, SwapchainProperties,
+    context::VkContext,
+    draw_system::{
+        nodes::{NodePipelines, NodeThemePipeline, NodeVertices},
+        NodeDrawAsh,
+    },
+    GfaestusVk, SwapchainProperties,
 };
 
 use ash::vk;
 
 pub struct MainView {
-    pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
+    // pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
+    pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
 
     base_node_width: f32,
 
@@ -59,13 +65,21 @@ pub struct NodeData {
 
 impl MainView {
     pub fn new(
-        vk_context: &VkContext,
+        app: &GfaestusVk,
+        // vk_context: &VkContext,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
-        let node_draw_system = NodeDrawAsh::new(
-            vk_context,
+        // let node_draw_system = NodeDrawAsh::new(
+        //     vk_context,
+        //     swapchain_props,
+        //     msaa_samples,
+        //     render_pass,
+        // )?;
+
+        let node_draw_system = NodePipelines::new(
+            app,
             swapchain_props,
             msaa_samples,
             render_pass,
@@ -126,22 +140,17 @@ impl MainView {
         screen_dims: [f32; 2],
         offset: Point,
     ) -> Result<()> {
-        let extent = vk::Extent2D {
-            width: screen_dims[0] as u32,
-            height: screen_dims[1] as u32,
-        };
-
         let view = self.view.load();
 
-        self.node_draw_system.draw(
+        self.node_draw_system.draw_themed(
             cmd_buf,
             render_pass,
             framebuffer,
-            extent,
-            view,
-            offset,
             screen_dims,
             self.base_node_width,
+            view,
+            offset,
+            0,
         )
     }
 

@@ -38,30 +38,6 @@ pub struct NodeThemePipeline {
     device: Device,
 }
 
-impl Drop for NodeThemePipeline {
-    fn drop(&mut self) {
-        unsafe {
-            for theme in self.themes.iter_mut() {
-                theme.destroy(&self.device);
-            }
-            self.themes.clear();
-
-            self.device.destroy_descriptor_set_layout(
-                self.descriptor_set_layout,
-                None,
-            );
-            self.device.destroy_sampler(self.sampler, None);
-
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_pipeline(self.pipeline, None);
-
-            self.device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
-        }
-    }
-}
-
 pub struct NodeThemeData {
     // device: Device,
     descriptor_set: vk::DescriptorSet,
@@ -246,24 +222,14 @@ impl NodeThemePipeline {
             device: device.clone(),
         })
     }
-}
 
-pub struct NodeOverlayPipeline {
-    descriptor_pool: vk::DescriptorPool,
-
-    descriptor_set_layout: vk::DescriptorSetLayout,
-
-    sampler: vk::Sampler,
-
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
-
-    device: Device,
-}
-
-impl Drop for NodeOverlayPipeline {
-    fn drop(&mut self) {
+    pub fn destroy(&mut self) {
         unsafe {
+            for theme in self.themes.iter_mut() {
+                theme.destroy(&self.device);
+            }
+            self.themes.clear();
+
             self.device.destroy_descriptor_set_layout(
                 self.descriptor_set_layout,
                 None,
@@ -278,6 +244,19 @@ impl Drop for NodeOverlayPipeline {
                 .destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
+}
+
+pub struct NodeOverlayPipeline {
+    descriptor_pool: vk::DescriptorPool,
+
+    descriptor_set_layout: vk::DescriptorSetLayout,
+
+    sampler: vk::Sampler,
+
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+
+    device: Device,
 }
 
 impl NodeOverlayPipeline {
@@ -370,6 +349,23 @@ impl NodeOverlayPipeline {
             device: device.clone(),
         })
     }
+
+    pub fn destroy(&mut self) {
+        unsafe {
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            self.device.destroy_sampler(self.sampler, None);
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
+    }
 }
 
 pub struct NodeVertices {
@@ -381,7 +377,7 @@ pub struct NodeVertices {
 }
 
 impl NodeVertices {
-    fn new(device: &Device) -> Self {
+    pub fn new(device: &Device) -> Self {
         let vertex_count = 0;
         let vertex_buffer = vk::Buffer::null();
         let vertex_memory = vk::DeviceMemory::null();
@@ -396,11 +392,11 @@ impl NodeVertices {
         }
     }
 
-    fn has_vertices(&self) -> bool {
+    pub fn has_vertices(&self) -> bool {
         self.vertex_count != 0
     }
 
-    fn destroy(&mut self) {
+    pub fn destroy(&mut self) {
         if self.has_vertices() {
             unsafe {
                 self.device.destroy_buffer(self.vertex_buffer, None);
@@ -414,7 +410,7 @@ impl NodeVertices {
         }
     }
 
-    fn upload_vertices(
+    pub fn upload_vertices(
         &mut self,
         app: &super::super::GfaestusVk,
         vertices: &[Vertex],
@@ -438,7 +434,7 @@ pub struct NodePipelines {
     theme_pipeline: NodeThemePipeline,
     overlay_pipeline: NodeOverlayPipeline,
 
-    vertices: NodeVertices,
+    pub vertices: NodeVertices,
 }
 
 impl NodePipelines {
@@ -563,6 +559,12 @@ impl NodePipelines {
         unsafe { device.cmd_end_render_pass(cmd_buf) };
 
         Ok(())
+    }
+
+    pub fn destroy(&mut self) {
+        self.vertices.destroy();
+        self.theme_pipeline.destroy();
+        self.overlay_pipeline.destroy();
     }
 }
 

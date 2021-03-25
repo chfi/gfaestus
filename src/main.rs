@@ -178,7 +178,7 @@ fn main() {
     let node_vertices = universe.new_vertices();
 
     let mut main_view = MainView::new(
-        gfaestus.vk_context(),
+        &gfaestus,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_pass,
@@ -187,6 +187,7 @@ fn main() {
 
     main_view
         .node_draw_system
+        .vertices
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
