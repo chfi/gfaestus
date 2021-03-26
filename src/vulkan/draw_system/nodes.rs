@@ -43,6 +43,8 @@ pub struct NodeThemeData {
     descriptor_set: vk::DescriptorSet,
 
     texture: Texture1D,
+
+    background_color: rgb::RGB<f32>,
 }
 
 const RAINBOW: [(f32, f32, f32); 7] = [
@@ -112,6 +114,7 @@ impl NodeThemeData {
         Ok(Self {
             descriptor_set: descriptor_sets[0],
             texture,
+            background_color: rgb::RGB::new(0.05, 0.05, 0.25),
         })
     }
 
@@ -474,11 +477,16 @@ impl NodePipelines {
     ) -> Result<()> {
         let device = &self.theme_pipeline.device;
 
-        let clear_values = [vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 1.0],
-            },
-        }];
+        let theme = &self.theme_pipeline.themes[0];
+
+        let clear_values = {
+            let bg = theme.background_color;
+            [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [bg.r, bg.g, bg.b, 1.0],
+                },
+            }]
+        };
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
