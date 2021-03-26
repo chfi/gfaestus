@@ -20,6 +20,7 @@ use super::SwapchainProperties;
 use crate::geometry::Point;
 use crate::view::View;
 
+pub mod gui;
 pub mod nodes;
 
 use nodes::*;
