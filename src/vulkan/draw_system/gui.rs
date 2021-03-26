@@ -29,6 +29,9 @@ pub struct GuiPipeline {
 
     sampler: vk::Sampler,
     texture: Texture,
+    texture_version: u64,
+
+    vertices: GuiVertices,
 
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
@@ -92,8 +95,8 @@ impl GuiPipeline {
 
         let shader_state_infos = [vert_state_info, frag_state_info];
 
-        let vert_binding_descs = [Vertex::get_binding_desc()];
-        let vert_attr_descs = Vertex::get_attribute_descs();
+        let vert_binding_descs = [GuiVertex::get_binding_desc()];
+        let vert_attr_descs = GuiVertex::get_attribute_descs();
         let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
             .vertex_binding_descriptions(&vert_binding_descs)
             .vertex_attribute_descriptions(&vert_attr_descs)
@@ -207,7 +210,6 @@ impl GuiPipeline {
 
         unsafe {
             device.destroy_shader_module(vert_module, None);
-            device.destroy_shader_module(geom_module, None);
             device.destroy_shader_module(frag_module, None);
         }
 
@@ -215,14 +217,149 @@ impl GuiPipeline {
     }
 }
 
+pub struct GuiVertices {
+    capacity: usize,
+
+    vertex_buffer: vk::Buffer,
+    vertex_memory: vk::DeviceMemory,
+
+    index_buffer: vk::Buffer,
+    index_memory: vk::DeviceMemory,
+
+    ranges: Vec<(u32, u32)>,
+    clips: Vec<egui::Rect>,
+
+    device: Device,
+}
+
+impl GuiVertices {
+    pub fn new(device: &Device) -> Self {
+        let vertex_buffer = vk::Buffer::null();
+        let vertex_memory = vk::DeviceMemory::null();
+
+        let index_buffer = vk::Buffer::null();
+        let index_memory = vk::DeviceMemory::null();
+
+        let ranges = Vec::new();
+        let clips = Vec::new();
+
+        let device = device.clone();
+
+        Self {
+            capacity: 0,
+
+            vertex_buffer,
+            vertex_memory,
+
+            index_buffer,
+            index_memory,
+
+            ranges,
+            clips,
+
+            device,
+        }
+    }
+
+    pub fn has_vertices(&self) -> bool {
+        !self.ranges.is_empty()
+    }
+
+    pub fn upload_meshes(
+        &mut self,
+        app: &super::super::GfaestusVk,
+        meshes: &[egui::ClippedMesh],
+    ) -> Result<()> {
+        // let (clips, meshes): (Vec<_>, Vec<_>) = meshes
+        //     .iter()
+        //     .map(|egui::ClippedMesh(rect, mesh)| (*rect, mesh))
+        //     .unzip();
+
+        // let req_capacity: usize =
+        //     meshes.iter().map(|mesh| mesh.indices.len()).sum();
+
+        if self.vertex_buffer != vk::Buffer::null() {
+            self.destroy();
+        }
+
+        let mut vertices: Vec<GuiVertex> = Vec::new();
+        let mut indices: Vec<u32> = Vec::new();
+
+        let mut ranges: Vec<(u32, u32)> = Vec::new();
+        let mut clips: Vec<egui::Rect> = Vec::new();
+
+        let mut offset = 0u32;
+
+        for egui::ClippedMesh(clip, mesh) in meshes.iter() {
+            let len = indices.len() as u32;
+
+            indices.extend(mesh.indices.iter().copied());
+            vertices.extend(mesh.vertices.iter().map(|vx| GuiVertex {
+                position: [vx.pos.x, vx.pos.y],
+                uv: [vx.uv.x, vx.uv.y],
+                color: vx.color.to_array(),
+            }));
+
+            clips.push(*clip);
+
+            ranges.push((offset, offset + len));
+            offset += len;
+        }
+
+        let (vx_buf, vx_mem) = app
+            .create_device_local_buffer_with_data::<u32, _>(
+                vk::BufferUsageFlags::VERTEX_BUFFER,
+                &vertices,
+            )?;
+
+        let (ix_buf, ix_mem) = app
+            .create_device_local_buffer_with_data::<u32, _>(
+                vk::BufferUsageFlags::INDEX_BUFFER,
+                &indices,
+            )?;
+
+        self.vertex_buffer = vx_buf;
+        self.vertex_memory = vx_mem;
+
+        self.index_buffer = ix_buf;
+        self.index_memory = ix_mem;
+
+        self.ranges.clone_from(&ranges);
+        self.clips.clone_from(&clips);
+
+        Ok(())
+    }
+
+    pub fn destroy(&mut self) {
+        if self.has_vertices() {
+            unsafe {
+                self.device.destroy_buffer(self.vertex_buffer, None);
+                self.device.free_memory(self.vertex_memory, None);
+
+                self.device.destroy_buffer(self.index_buffer, None);
+                self.device.free_memory(self.index_memory, None);
+            }
+
+            self.vertex_buffer = vk::Buffer::null();
+            self.vertex_memory = vk::DeviceMemory::null();
+
+            self.index_buffer = vk::Buffer::null();
+            self.index_memory = vk::DeviceMemory::null();
+
+            self.ranges.clear();
+            self.clips.clear();
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct GuiVertex {
     pub position: [f32; 2],
     pub uv: [f32; 2],
-    pub color: [f32; 4],
+    pub color: [u8; 4],
 }
 
-impl Vertex {
+impl GuiVertex {
     fn get_binding_desc() -> vk::VertexInputBindingDescription {
         vk::VertexInputBindingDescription::builder()
             .binding(0)
@@ -243,14 +380,14 @@ impl Vertex {
             .binding(0)
             .location(1)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset(2)
+            .offset(12)
             .build();
 
         let color_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
-            .format(vk::Format::R32G32B32A32_UINT)
-            .offset(4)
+            .format(vk::Format::R8G8B8A8_UINT)
+            .offset(24)
             .build();
 
         [pos_desc, uv_desc, color_desc]
