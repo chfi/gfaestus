@@ -123,28 +123,29 @@ impl Texture1D {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        let format = vk::Format::R8G8B8_UNORM;
+        let format = vk::Format::R8G8B8A8_UNORM;
 
         let image_size =
-            (colors.len() * 3 * std::mem::size_of::<u8>()) as vk::DeviceSize;
+            (colors.len() * 4 * std::mem::size_of::<u8>()) as vk::DeviceSize;
 
         let (buffer, buf_mem, buf_size) = app.create_buffer(
-            // vk_context,
             image_size,
             BufUsage::TRANSFER_SRC,
             MemProps::HOST_VISIBLE | MemProps::HOST_COHERENT,
         )?;
 
-        let mut pixels: Vec<u8> = Vec::with_capacity(colors.len() * 3);
+        let mut pixels: Vec<u8> = Vec::with_capacity(colors.len() * 4);
 
         for &color in colors {
             let r = (color.r * 255.0).floor() as u8;
             let g = (color.g * 255.0).floor() as u8;
             let b = (color.b * 255.0).floor() as u8;
+            let a = 255u8;
 
             pixels.push(r);
             pixels.push(g);
             pixels.push(b);
+            pixels.push(a);
         }
 
         unsafe {
@@ -180,7 +181,7 @@ impl Texture1D {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(ImgUsage::TRANSFER_SRC | ImgUsage::TRANSFER_DST)
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            // .samples(sample_count)
+            .samples(vk::SampleCountFlags::TYPE_1)
             .flags(vk::ImageCreateFlags::empty())
             .build();
 
@@ -239,13 +240,22 @@ impl Texture1D {
             )?;
         }
 
-        let view = super::GfaestusVk::create_image_view(
-            vk_context.device(),
-            image,
-            1,
-            format,
-            vk::ImageAspectFlags::COLOR,
-        )?;
+        let view = {
+            let create_info = vk::ImageViewCreateInfo::builder()
+                .image(image)
+                .view_type(vk::ImageViewType::TYPE_1D)
+                .format(format)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build();
+
+            unsafe { device.create_image_view(&create_info, None) }
+        }?;
 
         Ok(Self::new(image, memory, view))
     }

@@ -571,6 +571,7 @@ impl AnimHandler {
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
+        /*
         if let Some(mouse) = mouse_pos {
             // view.center += dxy * view.scale;
 
@@ -623,8 +624,9 @@ impl AnimHandler {
             // view.center =
             view.center += delta;
         } else {
-            view.center += dxy * view.scale;
-        }
+            */
+        view.center += dxy * view.scale;
+        // }
 
         // let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
         // let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
