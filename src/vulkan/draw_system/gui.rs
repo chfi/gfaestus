@@ -26,6 +26,7 @@ pub struct GuiPipeline {
     descriptor_pool: vk::DescriptorPool,
 
     descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set: vk::DescriptorSet,
 
     sampler: vk::Sampler,
     texture: Texture,
@@ -96,14 +97,49 @@ impl GuiPipeline {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let texture = Texture::null();
+
+        for set in descriptor_sets.iter() {
+            let image_info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(texture.view)
+                .sampler(sampler)
+                .build();
+            let image_infos = [image_info];
+
+            let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .image_info(&image_infos)
+                .build();
+
+            let descriptor_writes = [sampler_descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
         let vertices = GuiVertices::new(device);
 
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
+            descriptor_set: descriptor_sets[0],
 
             sampler,
-            texture: Texture::null(),
+            texture,
             texture_version: 0,
 
             vertices,
@@ -113,6 +149,102 @@ impl GuiPipeline {
 
             device: device.clone(),
         })
+    }
+
+    pub fn draw(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffer: vk::Framebuffer,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
+        let device = &self.device;
+
+        let clear_values = [vk::ClearValue {
+            color: vk::ClearColorValue {
+                float32: [0.0, 0.0, 0.0, 0.0],
+            },
+        }];
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffer)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertices.vertex_buffer];
+        let desc_sets = [self.descriptor_set];
+        let offsets = [0];
+
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+            device.cmd_bind_index_buffer(
+                cmd_buf,
+                self.vertices.index_buffer,
+                0 as vk::DeviceSize,
+                vk::IndexType::UINT32,
+            );
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        for (ix, &(start, ix_count)) in self.vertices.ranges.iter().enumerate()
+        {
+            let clip = self.vertices.clips[ix];
+            let offset = vk::Offset2D {
+                x: clip.min.x as i32,
+                y: clip.min.y as i32,
+            };
+            let extent = vk::Extent2D {
+                width: (clip.max.x - clip.min.x) as u32,
+                height: (clip.max.y - clip.min.y) as u32,
+            };
+
+            let scissor = vk::Rect2D { offset, extent };
+            let scissors = [scissor];
+
+            unsafe {
+                device.cmd_set_scissor(cmd_buf, 0, &scissors);
+                device.cmd_draw_indexed(cmd_buf, ix_count, 1, start, 0, 0)
+            };
+        }
+
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
     }
 
     pub fn texture_version(&self) -> u64 {
@@ -151,6 +283,30 @@ impl GuiPipeline {
 
         self.texture = texture;
         self.texture_version = version;
+
+        // update the descriptor set
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(texture.view)
+            .sampler(self.sampler)
+            .build();
+        let image_infos = [image_info];
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)
+            .build();
+
+        let descriptor_writes = [sampler_descriptor_write];
+
+        unsafe {
+            app.vk_context()
+                .device()
+                .update_descriptor_sets(&descriptor_writes, &[])
+        }
 
         Ok(())
     }
@@ -415,7 +571,7 @@ impl GuiVertices {
 
             clips.push(*clip);
 
-            ranges.push((offset, offset + len));
+            ranges.push((offset, len));
             offset += len;
         }
 
