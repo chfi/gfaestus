@@ -40,6 +40,121 @@ pub struct GuiPipeline {
 }
 
 impl GuiPipeline {
+    pub fn new(
+        app: &super::super::GfaestusVk,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> Result<Self> {
+        let device = app.vk_context().device();
+
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            desc_set_layout,
+        );
+
+        let sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .anisotropy_enable(false)
+                // .max_anisotropy(16.0)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { device.create_sampler(&sampler_info, None) }
+        }?;
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let sampler_pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [sampler_pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let vertices = GuiVertices::new(device);
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+
+            sampler,
+            texture: Texture::null(),
+            texture_version: 0,
+
+            vertices,
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
+    }
+
+    pub fn texture_version(&self) -> u64 {
+        self.texture_version
+    }
+
+    pub fn texture_is_null(&self) -> bool {
+        self.texture.is_null()
+    }
+
+    pub fn upload_texture(
+        &mut self,
+        app: &super::super::GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        texture: egui::Texture,
+    ) -> Result<()> {
+        if !self.texture_is_null() {
+            self.texture.destroy(&app.vk_context.device());
+        }
+
+        let width = texture.width;
+        let height = texture.height;
+        let pixels = &texture.pixels;
+
+        let version = texture.version;
+
+        let texture = Texture::from_pixel_bytes(
+            app,
+            command_pool,
+            transition_queue,
+            width,
+            height,
+            pixels,
+        )?;
+
+        self.texture = texture;
+        self.texture_version = version;
+
+        Ok(())
+    }
+
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
 
@@ -169,8 +284,6 @@ impl GuiPipeline {
                 .build();
 
         let layout = {
-            use vk::ShaderStageFlags as Flags;
-
             let layouts = [descriptor_set_layout];
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
