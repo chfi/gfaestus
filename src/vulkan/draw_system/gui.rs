@@ -238,7 +238,14 @@ impl GuiPipeline {
 
             unsafe {
                 device.cmd_set_scissor(cmd_buf, 0, &scissors);
-                device.cmd_draw_indexed(cmd_buf, ix_count, 1, start, 0, 0)
+                device.cmd_draw_indexed(
+                    cmd_buf,
+                    ix_count,
+                    1,
+                    0,
+                    start as i32,
+                    0,
+                )
             };
         }
 

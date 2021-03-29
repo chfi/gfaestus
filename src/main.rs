@@ -185,6 +185,16 @@ fn main() {
     )
     .unwrap();
 
+    let (mut gui, opts_from_gui) = GfaestusGui::new(
+        &gfaestus,
+        gfaestus.swapchain_props,
+        gfaestus.msaa_samples,
+        gfaestus.render_pass,
+    )
+    .unwrap();
+
+    gui.set_graph_stats(stats);
+
     main_view
         .node_draw_system
         .vertices
@@ -244,9 +254,9 @@ fn main() {
             app.apply_input(app_in);
         }
 
-        // while let Ok(gui_in) = gui_rx.try_recv() {
-        //     gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
-        // }
+        while let Ok(gui_in) = gui_rx.try_recv() {
+            gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
+        }
 
         // while let Ok(opt_in) = opts_from_gui.try_recv() {
         //     app.apply_app_config_state(opt_in);
@@ -273,6 +283,10 @@ fn main() {
             Event::RedrawEventsCleared => {
                 // TODO update state etc.
 
+                gui.begin_frame(Some(app.dims().into()));
+
+                let meshes = gui.end_frame();
+
                 if dirty_swapchain {
                     let size = window.inner_size();
                     if size.width > 0 && size.height > 0 {
@@ -289,6 +303,13 @@ fn main() {
                 let render_pass = gfaestus.render_pass;
                 let extent = gfaestus.swapchain_props.extent;
 
+                gui.upload_texture(&gfaestus).unwrap();
+
+                if !meshes.is_empty() {
+                    println!("got meshes");
+                    gui.upload_vertices(&gfaestus, &meshes).unwrap();
+                }
+
                 let draw =
                     |cmd_buf: vk::CommandBuffer,
                      framebuffer: vk::Framebuffer| {
@@ -303,6 +324,16 @@ fn main() {
                                 Point::ZERO,
                             )
                             .unwrap();
+
+                        // if !meshes.is_empty() {
+                        gui.draw(
+                            cmd_buf,
+                            render_pass,
+                            framebuffer,
+                            [size.width as f32, size.height as f32],
+                        )
+                        .unwrap();
+                        // }
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
