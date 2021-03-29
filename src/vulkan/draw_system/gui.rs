@@ -32,7 +32,7 @@ pub struct GuiPipeline {
     texture: Texture,
     texture_version: u64,
 
-    vertices: GuiVertices,
+    pub vertices: GuiVertices,
 
     pipeline_layout: vk::PipelineLayout,
     pipeline: vk::Pipeline,
@@ -260,7 +260,7 @@ impl GuiPipeline {
         app: &super::super::GfaestusVk,
         command_pool: vk::CommandPool,
         transition_queue: vk::Queue,
-        texture: egui::Texture,
+        texture: &egui::Texture,
     ) -> Result<()> {
         if !self.texture_is_null() {
             self.texture.destroy(&app.vk_context.device());
@@ -344,8 +344,8 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        let vert_src = read_shader_from_file("shaders/gui.frag.spv").unwrap();
-        let frag_src = read_shader_from_file("shaders/gui.vert.spv").unwrap();
+        let vert_src = read_shader_from_file("shaders/gui.vert.spv").unwrap();
+        let frag_src = read_shader_from_file("shaders/gui.frag.spv").unwrap();
 
         let vert_module = create_shader_module(device, &vert_src);
         let frag_module = create_shader_module(device, &frag_src);

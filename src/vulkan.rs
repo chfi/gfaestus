@@ -53,8 +53,8 @@ pub struct GfaestusVk {
     swapchain_image_views: Vec<vk::ImageView>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
 
-    command_pool: vk::CommandPool,
-    transient_command_pool: vk::CommandPool,
+    pub command_pool: vk::CommandPool,
+    pub transient_command_pool: vk::CommandPool,
     // command_buffers: Vec<vk::CommandBuffer>,
     in_flight_frames: InFlightFrames,
 
