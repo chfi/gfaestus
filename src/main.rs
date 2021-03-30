@@ -281,15 +281,13 @@ fn main() {
             // Event::MainEventsCleared => {
             // }
             Event::RedrawEventsCleared => {
-                // TODO update state etc.
-
-                gui.begin_frame(Some(app.dims().into()));
-
-                let meshes = gui.end_frame();
-
                 if dirty_swapchain {
                     let size = window.inner_size();
                     if size.width > 0 && size.height > 0 {
+                        app.update_dims([
+                            size.width as f32,
+                            size.height as f32,
+                        ]);
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
@@ -297,6 +295,10 @@ fn main() {
                         return;
                     }
                 }
+
+                gui.begin_frame(Some(app.dims().into()));
+
+                let meshes = gui.end_frame();
 
                 // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
 
@@ -346,10 +348,6 @@ fn main() {
 
                 dirty_swapchain =
                     gfaestus.draw_frame_from(draw, draw_2).unwrap();
-
-                // dirty_swapchain = gfaestus.draw_frame_from(draw, true).unwrap();
-
-                // dirty_swapchain = gfaestus.draw_frame_().unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

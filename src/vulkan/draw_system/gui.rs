@@ -187,30 +187,6 @@ impl GuiPipeline {
             push_constants.bytes()
         };
 
-        unsafe {
-            let offsets = [0];
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
-            device.cmd_bind_index_buffer(
-                cmd_buf,
-                self.vertices.index_buffer,
-                // start as vk::DeviceSize,
-                // (start * 4) as vk::DeviceSize,
-                0 as vk::DeviceSize,
-                vk::IndexType::UINT32,
-            );
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline_layout,
-                0,
-                &desc_sets[0..=0],
-                &null,
-            );
-        };
-
         for (ix, &(start, ix_count)) in self.vertices.ranges.iter().enumerate()
         {
             let clip = self.vertices.clips[ix];
@@ -219,6 +195,8 @@ impl GuiPipeline {
                 y: clip.min.y as i32,
             };
             let extent = vk::Extent2D {
+                // width: clip.max.x as u32,
+                // height: clip.max.y as u32,
                 width: (clip.max.x - clip.min.x) as u32,
                 height: (clip.max.y - clip.min.y) as u32,
             };
@@ -229,6 +207,28 @@ impl GuiPipeline {
             unsafe {
                 // let offsets = [(start as u64) * 12];
 
+                device.cmd_set_scissor(cmd_buf, 0, &scissors);
+
+                let offsets = [0];
+                device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+                device.cmd_bind_index_buffer(
+                    cmd_buf,
+                    self.vertices.index_buffer,
+                    0 as vk::DeviceSize,
+                    vk::IndexType::UINT32,
+                );
+
+                let null = [];
+                device.cmd_bind_descriptor_sets(
+                    cmd_buf,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline_layout,
+                    0,
+                    &desc_sets[0..=0],
+                    &null,
+                );
+
                 use vk::ShaderStageFlags as Flags;
                 device.cmd_push_constants(
                     cmd_buf,
@@ -238,7 +238,6 @@ impl GuiPipeline {
                     &pc_bytes,
                 );
 
-                // device.cmd_set_scissor(cmd_buf, 0, &scissors);
                 device.cmd_draw_indexed(
                     cmd_buf,
                     ix_count,
