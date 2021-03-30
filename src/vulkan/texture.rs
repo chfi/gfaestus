@@ -41,7 +41,7 @@ impl Texture {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        let format = vk::Format::R8G8B8A8_UNORM;
+        let format = vk::Format::R8_UNORM;
 
         let image_size =
             (pixels.len() * std::mem::size_of::<u8>()) as vk::DeviceSize;
@@ -83,7 +83,11 @@ impl Texture {
             .format(format)
             .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(ImgUsage::TRANSFER_SRC | ImgUsage::TRANSFER_DST)
+            .usage(
+                ImgUsage::TRANSFER_SRC
+                    | ImgUsage::TRANSFER_DST
+                    | vk::ImageUsageFlags::SAMPLED,
+            )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .samples(vk::SampleCountFlags::TYPE_1)
             .flags(vk::ImageCreateFlags::empty())
@@ -324,14 +328,18 @@ impl Texture1D {
         };
 
         let img_info = vk::ImageCreateInfo::builder()
-            .image_type(vk::ImageType::TYPE_2D)
+            .image_type(vk::ImageType::TYPE_1D)
             .extent(extent)
             .mip_levels(1)
             .array_layers(1)
             .format(format)
             .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(ImgUsage::TRANSFER_SRC | ImgUsage::TRANSFER_DST)
+            .usage(
+                ImgUsage::TRANSFER_SRC
+                    | ImgUsage::TRANSFER_DST
+                    | ImgUsage::SAMPLED,
+            )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .samples(vk::SampleCountFlags::TYPE_1)
             .flags(vk::ImageCreateFlags::empty())

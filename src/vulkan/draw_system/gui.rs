@@ -110,6 +110,7 @@ impl GuiPipeline {
 
         let texture = Texture::null();
 
+        /*
         for set in descriptor_sets.iter() {
             let image_info = vk::DescriptorImageInfo::builder()
                 .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -130,6 +131,7 @@ impl GuiPipeline {
 
             unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
         }
+        */
 
         let vertices = GuiVertices::new(device);
 
