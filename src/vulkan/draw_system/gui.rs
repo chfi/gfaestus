@@ -139,12 +139,6 @@ impl GuiPipeline {
     ) -> Result<()> {
         let device = &self.device;
 
-        // let clear_values = [vk::ClearValue {
-        //     color: vk::ClearColorValue {
-        //         float32: [0.0, 0.0, 0.0, 0.0],
-        //     },
-        // }];
-
         let clear_values = [];
 
         let extent = vk::Extent2D {
@@ -189,14 +183,14 @@ impl GuiPipeline {
 
         for (ix, &(start, ix_count)) in self.vertices.ranges.iter().enumerate()
         {
+            let vx_offset = self.vertices.vertex_offsets[ix];
+
             let clip = self.vertices.clips[ix];
             let offset = vk::Offset2D {
                 x: clip.min.x as i32,
                 y: clip.min.y as i32,
             };
             let extent = vk::Extent2D {
-                // width: clip.max.x as u32,
-                // height: clip.max.y as u32,
                 width: (clip.max.x - clip.min.x) as u32,
                 height: (clip.max.y - clip.min.y) as u32,
             };
@@ -205,8 +199,6 @@ impl GuiPipeline {
             let scissors = [scissor];
 
             unsafe {
-                // let offsets = [(start as u64) * 12];
-
                 device.cmd_set_scissor(cmd_buf, 0, &scissors);
 
                 let offsets = [0];
@@ -215,7 +207,7 @@ impl GuiPipeline {
                 device.cmd_bind_index_buffer(
                     cmd_buf,
                     self.vertices.index_buffer,
-                    0 as vk::DeviceSize,
+                    (start * 4) as vk::DeviceSize,
                     vk::IndexType::UINT32,
                 );
 
@@ -242,8 +234,8 @@ impl GuiPipeline {
                     cmd_buf,
                     ix_count,
                     1,
-                    start,
-                    (start * 32) as i32,
+                    0,
+                    vx_offset as i32,
                     0,
                 )
             };
@@ -383,7 +375,7 @@ impl GuiPipeline {
         let input_assembly_info =
             vk::PipelineInputAssemblyStateCreateInfo::builder()
                 .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-                .primitive_restart_enable(false)
+                .primitive_restart_enable(true)
                 .build();
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
@@ -428,13 +420,13 @@ impl GuiPipeline {
         let color_blend_attachment =
             vk::PipelineColorBlendAttachmentState::builder()
                 .color_write_mask(vk::ColorComponentFlags::all())
-                .blend_enable(false)
-                // .src_color_blend_factor(vk::BlendFactor::ONE)
-                // .dst_color_blend_factor(vk::BlendFactor::ZERO)
-                // .color_blend_op(vk::BlendOp::ADD)
-                // .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                // .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-                // .alpha_blend_op(vk::BlendOp::ADD)
+                .blend_enable(true)
+                .src_color_blend_factor(vk::BlendFactor::ONE)
+                .dst_color_blend_factor(vk::BlendFactor::ZERO)
+                .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .alpha_blend_op(vk::BlendOp::ADD)
                 .build();
         let color_blend_attachments = [color_blend_attachment];
 
@@ -512,6 +504,7 @@ pub struct GuiVertices {
     index_memory: vk::DeviceMemory,
 
     ranges: Vec<(u32, u32)>,
+    vertex_offsets: Vec<u32>,
     clips: Vec<egui::Rect>,
 
     device: Device,
@@ -526,6 +519,7 @@ impl GuiVertices {
         let index_memory = vk::DeviceMemory::null();
 
         let ranges = Vec::new();
+        let vertex_offsets = Vec::new();
         let clips = Vec::new();
 
         let device = device.clone();
@@ -540,6 +534,7 @@ impl GuiVertices {
             index_memory,
 
             ranges,
+            vertex_offsets,
             clips,
 
             device,
@@ -571,12 +566,15 @@ impl GuiVertices {
         let mut indices: Vec<u32> = Vec::new();
 
         let mut ranges: Vec<(u32, u32)> = Vec::new();
+        let mut vertex_offsets: Vec<u32> = Vec::new();
         let mut clips: Vec<egui::Rect> = Vec::new();
 
         let mut offset = 0u32;
+        let mut vertex_offset = 0u32;
 
         for egui::ClippedMesh(clip, mesh) in meshes.iter() {
             let len = mesh.indices.len() as u32;
+            let vx_len = mesh.vertices.len() as u32;
 
             indices.extend(mesh.indices.iter().copied());
             vertices.extend(mesh.vertices.iter().map(|vx| {
@@ -596,7 +594,10 @@ impl GuiVertices {
             clips.push(*clip);
 
             ranges.push((offset, len));
+            vertex_offsets.push(vertex_offset);
+
             offset += len;
+            vertex_offset += vx_len;
         }
 
         let (vx_buf, vx_mem) = app
@@ -604,8 +605,6 @@ impl GuiVertices {
                 vk::BufferUsageFlags::VERTEX_BUFFER,
                 &vertices,
             )?;
-
-        println!("indices.len() {}", indices.len());
 
         let (ix_buf, ix_mem) = app
             .create_device_local_buffer_with_data::<u32, _>(
@@ -620,6 +619,7 @@ impl GuiVertices {
         self.index_memory = ix_mem;
 
         self.ranges.clone_from(&ranges);
+        self.vertex_offsets.clone_from(&vertex_offsets);
         self.clips.clone_from(&clips);
 
         Ok(())
@@ -642,6 +642,7 @@ impl GuiVertices {
             self.index_memory = vk::DeviceMemory::null();
 
             self.ranges.clear();
+            self.vertex_offsets.clear();
             self.clips.clear();
         }
     }

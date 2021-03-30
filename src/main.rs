@@ -232,15 +232,17 @@ fn main() {
             winit_tx.send(ev).unwrap();
         }
 
+        gui.set_dark_mode();
+
         // hacky -- this should take place after mouse pos is updated
         // in egui but before input is sent to mainview
-        // input_manager.set_mouse_over_gui(gui.pointer_over_gui());
+        input_manager.set_mouse_over_gui(gui.pointer_over_gui());
         input_manager.handle_events();
 
         let screen_dims = app.dims();
         let mouse_pos = app.mouse_pos();
 
-        // gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
+        gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
         main_view.set_mouse_pos(Some(mouse_pos));
         main_view.set_screen_dims(screen_dims);
 
@@ -300,11 +302,8 @@ fn main() {
 
                 let meshes = gui.end_frame();
 
-                // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
-
                 let render_pass = gfaestus.render_pass;
                 let render_pass_dc = gfaestus.render_pass_dc;
-                let extent = gfaestus.swapchain_props.extent;
 
                 gui.upload_texture(&gfaestus).unwrap();
 

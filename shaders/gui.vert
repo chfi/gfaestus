@@ -32,19 +32,6 @@ vec4 linear_from_srgba(vec4 srgba) {
 }
 
 void main() {
-  // gl_Position = vec4(position, 0.0, 1.0);
-
-  // gl_Position = vec4(4.0 * (pos.x / u_screen_size.width),
-  // gl_Position = vec4(4.0 * (pos.x / u_screen_size.width),
-  //                    4.0 * (pos.y / u_screen_size.height),
-  // gl_Position = vec4(pos.x / 10000.0,
-  //                    pos.y / 10000.0,
-                     // 1.0 - 2.0 * pos.y / u_screen_size.height,
-                     // 2.0 * pos.y / u_screen_size.height,
-                     // 0.0,
-                     // 1.0);
-
-  // gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
 
   gl_Position = vec4(
                      2.0 * pos.x / screen_size.width - 1.0,
@@ -52,10 +39,8 @@ void main() {
                      0.0,
                      1.0);
 
-  // vs_color = linear_from_
+  vs_color = color;
+  // vs_color = linear_from_srgba(color);
 
-  // vs_color = color;
-  // vs_color = color;
-  vs_color = linear_from_srgba(color);
   vs_uv = uv;
 }
