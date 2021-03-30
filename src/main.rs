@@ -307,7 +307,6 @@ fn main() {
                 gui.upload_texture(&gfaestus).unwrap();
 
                 if !meshes.is_empty() {
-                    // println!("got meshes");
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 

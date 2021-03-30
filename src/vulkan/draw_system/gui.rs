@@ -65,7 +65,6 @@ impl GuiPipeline {
                 .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .anisotropy_enable(false)
-                // .max_anisotropy(16.0)
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .unnormalized_coordinates(false)
                 .compare_enable(false)
@@ -109,29 +108,6 @@ impl GuiPipeline {
         }?;
 
         let texture = Texture::null();
-
-        /*
-        for set in descriptor_sets.iter() {
-            let image_info = vk::DescriptorImageInfo::builder()
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(texture.view)
-                .sampler(sampler)
-                .build();
-            let image_infos = [image_info];
-
-            let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-                .dst_set(*set)
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&image_infos)
-                .build();
-
-            let descriptor_writes = [sampler_descriptor_write];
-
-            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
-        }
-        */
 
         let vertices = GuiVertices::new(device);
 

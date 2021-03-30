@@ -256,7 +256,7 @@ impl GfaestusVk {
         let framebuffer = self.swapchain_framebuffers[img_index as usize];
         let framebuffer_dc = self.swapchain_framebuffers_dc[img_index as usize];
 
-        self.execute_one_time_commands_semaphores(
+        let cmd_buf_1 = self.execute_one_time_commands_semaphores(
             device,
             self.transient_command_pool,
             queue,
@@ -274,7 +274,7 @@ impl GfaestusVk {
         let signal_semaphores = [render_finished];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
 
-        self.execute_one_time_commands_semaphores(
+        let cmd_buf_2 = self.execute_one_time_commands_semaphores(
             device,
             self.transient_command_pool,
             queue,
@@ -316,6 +316,13 @@ impl GfaestusVk {
             device.queue_wait_idle(queue)?;
         };
 
+        unsafe {
+            device.free_command_buffers(
+                self.transient_command_pool,
+                &[cmd_buf_1, cmd_buf_2],
+            )
+        };
+
         Ok(false)
     }
 
@@ -334,7 +341,7 @@ impl GfaestusVk {
         signal_semaphores: &[vk::Semaphore],
         fence: vk::Fence,
         commands: F,
-    ) -> Result<()>
+    ) -> Result<vk::CommandBuffer>
     where
         F: FnOnce(vk::CommandBuffer),
     {
@@ -398,9 +405,9 @@ impl GfaestusVk {
             }
         }
 
-        unsafe { device.free_command_buffers(command_pool, &[cmd_buf]) };
+        // unsafe { device.free_command_buffers(command_pool, &[cmd_buf]) };
 
-        Ok(())
+        Ok(cmd_buf)
     }
 
     pub fn execute_one_time_commands<F>(
