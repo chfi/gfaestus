@@ -67,8 +67,8 @@ impl GuiPipeline {
                 .anisotropy_enable(false)
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .unnormalized_coordinates(false)
-                .compare_enable(false)
-                .compare_op(vk::CompareOp::ALWAYS)
+                // .compare_enable(false)
+                // .compare_op(vk::CompareOp::ALWAYS)
                 .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
                 .mip_lod_bias(0.0)
                 .min_lod(0.0)
@@ -139,13 +139,13 @@ impl GuiPipeline {
     ) -> Result<()> {
         let device = &self.device;
 
-        let clear_values = [vk::ClearValue {
-            color: vk::ClearColorValue {
-                float32: [0.0, 0.0, 0.0, 0.0],
-            },
-        }];
+        // let clear_values = [vk::ClearValue {
+        //     color: vk::ClearColorValue {
+        //         float32: [0.0, 0.0, 0.0, 0.0],
+        //     },
+        // }];
 
-        // let clear_values = [];
+        let clear_values = [];
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
@@ -243,9 +243,7 @@ impl GuiPipeline {
                     ix_count,
                     1,
                     start,
-                    (start * 48) as i32,
-                    // 0,
-                    // start as i32,
+                    (start * 32) as i32,
                     0,
                 )
             };
@@ -423,20 +421,20 @@ impl GuiPipeline {
                 .sample_shading_enable(false)
                 .rasterization_samples(msaa_samples)
                 .min_sample_shading(1.0)
-                .alpha_to_coverage_enable(false)
-                .alpha_to_one_enable(false)
+                .alpha_to_coverage_enable(true)
+                .alpha_to_one_enable(true)
                 .build();
 
         let color_blend_attachment =
             vk::PipelineColorBlendAttachmentState::builder()
                 .color_write_mask(vk::ColorComponentFlags::all())
-                .blend_enable(true)
-                .src_color_blend_factor(vk::BlendFactor::ONE)
-                .dst_color_blend_factor(vk::BlendFactor::ZERO)
-                .color_blend_op(vk::BlendOp::ADD)
-                .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
-                .alpha_blend_op(vk::BlendOp::ADD)
+                .blend_enable(false)
+                // .src_color_blend_factor(vk::BlendFactor::ONE)
+                // .dst_color_blend_factor(vk::BlendFactor::ZERO)
+                // .color_blend_op(vk::BlendOp::ADD)
+                // .src_alpha_blend_factor(vk::BlendFactor::ONE)
+                // .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                // .alpha_blend_op(vk::BlendOp::ADD)
                 .build();
         let color_blend_attachments = [color_blend_attachment];
 
@@ -677,14 +675,14 @@ impl GuiVertex {
             .binding(0)
             .location(1)
             .format(vk::Format::R32G32_SFLOAT)
-            .offset(12)
+            .offset(8)
             .build();
 
         let color_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
             .format(vk::Format::R32G32B32A32_SFLOAT)
-            .offset(24)
+            .offset(16)
             .build();
 
         [pos_desc, uv_desc, color_desc]
