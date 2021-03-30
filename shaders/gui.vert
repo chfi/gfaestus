@@ -8,10 +8,10 @@ layout (location = 2) in vec4 color;
 layout (location = 0) out vec4 vs_color;
 layout (location = 1) out vec2 vs_uv;
 
-// layout (push_constant) uniform ScreenSize {
-//   float width;
-//   float height;
-// } screen_size;
+layout (push_constant) uniform ScreenSize {
+  float width;
+  float height;
+} screen_size;
 
 // layout (set = 0, binding = 0) uniform View {
 //   mat4 view;
@@ -47,10 +47,8 @@ void main() {
   // gl_Position = vec4(pos.x, pos.y, 0.0, 1.0);
 
   gl_Position = vec4(
-                     2.0 * pos.x / 800.0 - 1.0,
-                     2.0 * pos.y / 600.0 - 1.0,
-                     // 2.0 * pos.x / screen_size.width - 1.0,
-                     // 2.0 * pos.y / screen_size.height - 1.0,
+                     2.0 * pos.x / screen_size.width - 1.0,
+                     2.0 * pos.y / screen_size.height - 1.0,
                      0.0,
                      1.0);
 

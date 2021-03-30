@@ -180,13 +180,22 @@ impl GuiPipeline {
 
         let vx_bufs = [self.vertices.vertex_buffer];
         let desc_sets = [self.descriptor_set];
-        let offsets = [0];
+
+        let pc_bytes = {
+            let push_constants = GuiPushConstants::new(viewport_dims);
+
+            push_constants.bytes()
+        };
 
         unsafe {
+            let offsets = [0];
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
             device.cmd_bind_index_buffer(
                 cmd_buf,
                 self.vertices.index_buffer,
+                // start as vk::DeviceSize,
+                // (start * 4) as vk::DeviceSize,
                 0 as vk::DeviceSize,
                 vk::IndexType::UINT32,
             );
@@ -218,13 +227,26 @@ impl GuiPipeline {
             let scissors = [scissor];
 
             unsafe {
-                device.cmd_set_scissor(cmd_buf, 0, &scissors);
+                // let offsets = [(start as u64) * 12];
+
+                use vk::ShaderStageFlags as Flags;
+                device.cmd_push_constants(
+                    cmd_buf,
+                    self.pipeline_layout,
+                    Flags::VERTEX,
+                    0,
+                    &pc_bytes,
+                );
+
+                // device.cmd_set_scissor(cmd_buf, 0, &scissors);
                 device.cmd_draw_indexed(
                     cmd_buf,
                     ix_count,
                     1,
-                    0,
-                    start as i32,
+                    start,
+                    (start * 48) as i32,
+                    // 0,
+                    // start as i32,
                     0,
                 )
             };
@@ -363,7 +385,7 @@ impl GuiPipeline {
 
         let input_assembly_info =
             vk::PipelineInputAssemblyStateCreateInfo::builder()
-                .topology(vk::PrimitiveTopology::LINE_LIST)
+                .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
                 .primitive_restart_enable(false)
                 .build();
 
@@ -430,8 +452,17 @@ impl GuiPipeline {
         let layout = {
             let layouts = [descriptor_set_layout];
 
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(vk::ShaderStageFlags::VERTEX)
+                .offset(0)
+                .size(8)
+                .build();
+
+            let pc_ranges = [pc_range];
+
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
                 .build();
 
             unsafe {
@@ -548,7 +579,7 @@ impl GuiVertices {
         let mut offset = 0u32;
 
         for egui::ClippedMesh(clip, mesh) in meshes.iter() {
-            let len = indices.len() as u32;
+            let len = mesh.indices.len() as u32;
 
             indices.extend(mesh.indices.iter().copied());
             vertices.extend(mesh.vertices.iter().map(|vx| {
@@ -576,6 +607,8 @@ impl GuiVertices {
                 vk::BufferUsageFlags::VERTEX_BUFFER,
                 &vertices,
             )?;
+
+        println!("indices.len() {}", indices.len());
 
         let (ix_buf, ix_mem) = app
             .create_device_local_buffer_with_data::<u32, _>(
@@ -656,5 +689,44 @@ impl GuiVertex {
             .build();
 
         [pos_desc, uv_desc, color_desc]
+    }
+}
+
+pub struct GuiPushConstants {
+    width: f32,
+    height: f32,
+}
+
+impl GuiPushConstants {
+    #[inline]
+    pub fn new(viewport_dims: [f32; 2]) -> Self {
+        let width = viewport_dims[0];
+        let height = viewport_dims[1];
+
+        Self { width, height }
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> [u8; 8] {
+        use crate::view;
+
+        let mut bytes = [0u8; 8];
+
+        {
+            let mut offset = 0;
+
+            let mut add_float = |f: f32| {
+                let f_bytes = f.to_ne_bytes();
+                for i in 0..4 {
+                    bytes[offset] = f_bytes[i];
+                    offset += 1;
+                }
+            };
+
+            add_float(self.width);
+            add_float(self.height);
+        }
+
+        bytes
     }
 }
