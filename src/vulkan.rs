@@ -42,6 +42,7 @@ pub struct GfaestusVk {
     present_family_index: u32,
 
     pub msaa_samples: vk::SampleCountFlags,
+    pub render_pass_dc: vk::RenderPass,
     pub render_pass: vk::RenderPass,
     transient_color: Texture,
 
@@ -52,6 +53,7 @@ pub struct GfaestusVk {
     swapchain_images: Vec<vk::Image>,
     swapchain_image_views: Vec<vk::ImageView>,
     swapchain_framebuffers: Vec<vk::Framebuffer>,
+    swapchain_framebuffers_dc: Vec<vk::Framebuffer>,
 
     pub command_pool: vk::CommandPool,
     pub transient_command_pool: vk::CommandPool,
@@ -114,6 +116,12 @@ impl GfaestusVk {
 
         let msaa_samples = vk_context.get_max_usable_sample_count();
 
+        let render_pass_dc = create_swapchain_render_pass_dont_clear(
+            vk_context.device(),
+            swapchain_props,
+            msaa_samples,
+        )?;
+
         let render_pass = create_swapchain_render_pass(
             vk_context.device(),
             swapchain_props,
@@ -147,6 +155,14 @@ impl GfaestusVk {
             swapchain_props,
         );
 
+        let swapchain_framebuffers_dc = create_swapchain_framebuffers(
+            vk_context.device(),
+            &swapchain_image_views,
+            transient_color,
+            render_pass_dc,
+            swapchain_props,
+        );
+
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         let descriptor_pool = create_descriptor_pool(vk_context.device(), 1)?;
@@ -161,6 +177,7 @@ impl GfaestusVk {
             present_family_index: present_ix,
 
             msaa_samples,
+            render_pass_dc,
             render_pass,
             transient_color,
 
@@ -171,6 +188,7 @@ impl GfaestusVk {
             swapchain_images: images,
             swapchain_image_views,
             swapchain_framebuffers,
+            swapchain_framebuffers_dc,
 
             command_pool,
             transient_command_pool,
@@ -804,6 +822,12 @@ impl GfaestusVk {
         let swapchain_image_views =
             create_swapchain_image_views(device, &images, swapchain_props)?;
 
+        let render_pass_dc = create_swapchain_render_pass_dont_clear(
+            device,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
         let render_pass = create_swapchain_render_pass(
             device,
             swapchain_props,
@@ -826,6 +850,14 @@ impl GfaestusVk {
             swapchain_props,
         );
 
+        let swapchain_framebuffers_dc = create_swapchain_framebuffers(
+            device,
+            &swapchain_image_views,
+            transient_color,
+            render_pass_dc,
+            swapchain_props,
+        );
+
         // TODO recreate render pass, framebuffers, etc.
 
         self.swapchain = swapchain;
@@ -835,9 +867,11 @@ impl GfaestusVk {
         self.swapchain_images = images;
         self.swapchain_image_views = swapchain_image_views;
         self.swapchain_framebuffers = swapchain_framebuffers;
+        self.swapchain_framebuffers_dc = swapchain_framebuffers_dc;
 
         self.transient_color = transient_color;
         self.render_pass = render_pass;
+        self.render_pass_dc = render_pass_dc;
 
         Ok(())
     }
@@ -892,6 +926,10 @@ impl GfaestusVk {
                 .iter()
                 .for_each(|f| device.destroy_framebuffer(*f, None));
             device.destroy_render_pass(self.render_pass, None);
+            self.swapchain_framebuffers_dc
+                .iter()
+                .for_each(|f| device.destroy_framebuffer(*f, None));
+            device.destroy_render_pass(self.render_pass_dc, None);
 
             self.swapchain_image_views
                 .iter()
