@@ -157,7 +157,8 @@ impl GuiPipeline {
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
+        _framebuffer: vk::Framebuffer,
+        framebuffer_dc: vk::Framebuffer,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
         let device = &self.device;
@@ -168,6 +169,8 @@ impl GuiPipeline {
             },
         }];
 
+        // let clear_values = [];
+
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
             height: viewport_dims[1] as u32,
@@ -175,7 +178,7 @@ impl GuiPipeline {
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
-            .framebuffer(framebuffer)
+            .framebuffer(framebuffer_dc)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
@@ -572,10 +575,18 @@ impl GuiVertices {
             let len = indices.len() as u32;
 
             indices.extend(mesh.indices.iter().copied());
-            vertices.extend(mesh.vertices.iter().map(|vx| GuiVertex {
-                position: [vx.pos.x, vx.pos.y],
-                uv: [vx.uv.x, vx.uv.y],
-                color: vx.color.to_array(),
+            vertices.extend(mesh.vertices.iter().map(|vx| {
+                let (r, g, b, a) = vx.color.to_tuple();
+                GuiVertex {
+                    position: [vx.pos.x, vx.pos.y],
+                    uv: [vx.uv.x, vx.uv.y],
+                    color: [
+                        (r as f32) / 255.0,
+                        (g as f32) / 255.0,
+                        (b as f32) / 255.0,
+                        (a as f32) / 255.0,
+                    ],
+                }
             }));
 
             clips.push(*clip);
@@ -634,7 +645,7 @@ impl GuiVertices {
 pub struct GuiVertex {
     pub position: [f32; 2],
     pub uv: [f32; 2],
-    pub color: [u8; 4],
+    pub color: [f32; 4],
 }
 
 impl GuiVertex {
@@ -664,7 +675,7 @@ impl GuiVertex {
         let color_desc = vk::VertexInputAttributeDescription::builder()
             .binding(0)
             .location(2)
-            .format(vk::Format::R8G8B8A8_UINT)
+            .format(vk::Format::R32G32B32A32_SFLOAT)
             .offset(24)
             .build();
 

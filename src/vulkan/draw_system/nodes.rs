@@ -469,6 +469,7 @@ impl NodePipelines {
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffer: vk::Framebuffer,
+        _framebuffer_dc: vk::Framebuffer,
         viewport_dims: [f32; 2],
         node_width: f32,
         view: View,

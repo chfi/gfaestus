@@ -202,13 +202,19 @@ impl GfaestusVk {
         &self.vk_context
     }
 
-    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
+    pub fn draw_frame_from<F, G>(
+        &mut self,
+        commands: F,
+        commands_2: G,
+    ) -> Result<bool>
     where
-        F: FnOnce(vk::CommandBuffer, vk::Framebuffer),
+        F: FnOnce(vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
+        G: FnOnce(vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
     {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
         let img_available = sync_objects.image_available_semaphore;
+        let nodes_finished = sync_objects.nodes_finished_semaphore;
         let render_finished = sync_objects.render_finished_semaphore;
         let in_flight_fence = sync_objects.fence;
         let wait_fences = [in_flight_fence];
@@ -240,17 +246,15 @@ impl GfaestusVk {
 
         unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
 
-        // TODO update uniforms
-
         let device = self.vk_context.device();
         let wait_semaphores = [img_available];
-        let signal_semaphores = [render_finished];
-
+        let signal_semaphores = [nodes_finished];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
 
         let queue = self.graphics_queue;
 
         let framebuffer = self.swapchain_framebuffers[img_index as usize];
+        let framebuffer_dc = self.swapchain_framebuffers_dc[img_index as usize];
 
         self.execute_one_time_commands_semaphores(
             device,
@@ -259,9 +263,28 @@ impl GfaestusVk {
             &wait_semaphores,
             &wait_stages,
             &signal_semaphores,
+            vk::Fence::null(),
+            // in_flight_fence,
+            |cmd_buf| {
+                commands(cmd_buf, framebuffer, framebuffer_dc);
+            },
+        )?;
+
+        let wait_semaphores = [nodes_finished];
+        let signal_semaphores = [render_finished];
+        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
+
+        self.execute_one_time_commands_semaphores(
+            device,
+            self.transient_command_pool,
+            queue,
+            &wait_semaphores,
+            &wait_stages,
+            &signal_semaphores,
+            // vk::Fence::null(),
             in_flight_fence,
             |cmd_buf| {
-                commands(cmd_buf, framebuffer);
+                commands_2(cmd_buf, framebuffer, framebuffer_dc);
             },
         )?;
 
@@ -371,7 +394,7 @@ impl GfaestusVk {
 
             unsafe {
                 device.queue_submit(queue, &[submit_info], fence)?;
-                device.queue_wait_idle(queue)?;
+                // device.queue_wait_idle(queue)?;
             }
         }
 
@@ -890,6 +913,13 @@ impl GfaestusVk {
                 }
             };
 
+            let nodes_finished_semaphore = {
+                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+                unsafe {
+                    device.create_semaphore(&semaphore_info, None).unwrap()
+                }
+            };
+
             let render_finished_semaphore = {
                 let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
                 unsafe {
@@ -906,6 +936,7 @@ impl GfaestusVk {
 
             let sync_objects = SyncObjects {
                 image_available_semaphore,
+                nodes_finished_semaphore,
                 render_finished_semaphore,
                 fence: in_flight_fence,
             };
@@ -1106,6 +1137,7 @@ impl SwapchainSupportDetails {
 #[derive(Clone, Copy)]
 struct SyncObjects {
     image_available_semaphore: vk::Semaphore,
+    nodes_finished_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
     fence: vk::Fence,
 }
@@ -1114,6 +1146,7 @@ impl SyncObjects {
     fn destroy(&self, device: &Device) {
         unsafe {
             device.destroy_semaphore(self.image_available_semaphore, None);
+            device.destroy_semaphore(self.nodes_finished_semaphore, None);
             device.destroy_semaphore(self.render_finished_semaphore, None);
             device.destroy_fence(self.fence, None);
         }

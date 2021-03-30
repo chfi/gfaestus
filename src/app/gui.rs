@@ -58,7 +58,7 @@ pub struct GfaestusGui {
     enabled_ui_elements: EnabledUiElements,
 
     // gui_draw_system: GuiDrawSystem,
-    gui_draw_system: GuiPipeline,
+    pub gui_draw_system: GuiPipeline,
 
     hover_node_id: Option<NodeId>,
     selected_node: NodeSelection,
@@ -652,12 +652,14 @@ impl GfaestusGui {
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffer: vk::Framebuffer,
+        framebuffer_dc: vk::Framebuffer,
         screen_dims: [f32; 2],
     ) -> Result<()> {
         self.gui_draw_system.draw(
             cmd_buf,
             render_pass,
             framebuffer,
+            framebuffer_dc,
             screen_dims,
         )
     }

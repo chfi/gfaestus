@@ -189,7 +189,7 @@ fn main() {
         &gfaestus,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
-        gfaestus.render_pass,
+        gfaestus.render_pass_dc,
     )
     .unwrap();
 
@@ -301,18 +301,20 @@ fn main() {
                 // let command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf::frame(gfaestus.vk_context().device(), pool, render_pass, framebuffer, swapchain_props)
 
                 let render_pass = gfaestus.render_pass;
+                let render_pass_dc = gfaestus.render_pass_dc;
                 let extent = gfaestus.swapchain_props.extent;
 
                 gui.upload_texture(&gfaestus).unwrap();
 
                 if !meshes.is_empty() {
-                    println!("got meshes");
+                    // println!("got meshes");
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
                 let draw =
                     |cmd_buf: vk::CommandBuffer,
-                     framebuffer: vk::Framebuffer| {
+                     framebuffer: vk::Framebuffer,
+                     framebuffer_dc: vk::Framebuffer| {
                         let size = window.inner_size();
 
                         main_view
@@ -320,23 +322,33 @@ fn main() {
                                 cmd_buf,
                                 render_pass,
                                 framebuffer,
+                                framebuffer_dc,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
                             )
                             .unwrap();
+                    };
 
-                        // if !meshes.is_empty() {
+                let draw_2 =
+                    |cmd_buf: vk::CommandBuffer,
+                     framebuffer: vk::Framebuffer,
+                     framebuffer_dc: vk::Framebuffer| {
+                        let size = window.inner_size();
+
                         gui.draw(
                             cmd_buf,
-                            render_pass,
+                            render_pass_dc,
                             framebuffer,
+                            framebuffer_dc,
                             [size.width as f32, size.height as f32],
                         )
                         .unwrap();
-                        // }
                     };
 
-                dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
+                dirty_swapchain =
+                    gfaestus.draw_frame_from(draw, draw_2).unwrap();
+
+                // dirty_swapchain = gfaestus.draw_frame_from(draw, true).unwrap();
 
                 // dirty_swapchain = gfaestus.draw_frame_().unwrap();
             }

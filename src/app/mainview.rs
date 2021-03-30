@@ -137,6 +137,7 @@ impl MainView {
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffer: vk::Framebuffer,
+        framebuffer_dc: vk::Framebuffer,
         screen_dims: [f32; 2],
         offset: Point,
     ) -> Result<()> {
@@ -146,6 +147,7 @@ impl MainView {
             cmd_buf,
             render_pass,
             framebuffer,
+            framebuffer_dc,
             screen_dims,
             self.base_node_width,
             view,
