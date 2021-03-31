@@ -14,9 +14,6 @@ ash = "0.31"
 ash-window = "0.5"
 vk-mem = "0.2.2"
 
-vulkano = "0.20"
-vulkano-shaders = "0.20"
-vulkano-win = "0.20"
 winit = "0.24"
 
 egui = "0.9"

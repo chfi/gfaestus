@@ -9,7 +9,6 @@ use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
 use gfaestus::universe::*;
-use gfaestus::util::*;
 use gfaestus::view::View;
 
 use rgb::*;

@@ -12,12 +12,6 @@ use handlegraph::{
 use anyhow::Result;
 
 use rustc_hash::FxHashMap;
-use vulkano::{
-    command_buffer::{AutoCommandBuffer, DynamicState},
-    device::Queue,
-    framebuffer::{RenderPassAbstract, Subpass},
-    sync::GpuFuture,
-};
 
 use crossbeam::channel;
 use parking_lot::Mutex;

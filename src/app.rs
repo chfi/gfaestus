@@ -1,13 +1,7 @@
 pub mod gui;
 pub mod mainview;
-pub mod node_flags;
 pub mod settings;
 pub mod theme;
-
-use node_flags::*;
-
-use vulkano::device::Queue;
-use vulkano::sync::GpuFuture;
 
 use std::sync::Arc;
 

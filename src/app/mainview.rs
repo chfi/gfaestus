@@ -1,9 +1,3 @@
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
-use vulkano::device::Queue;
-use vulkano::framebuffer::{RenderPassAbstract, Subpass};
-use vulkano::sync::GpuFuture;
-use vulkano::{command_buffer::DynamicState, sampler::Sampler};
-
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
@@ -19,7 +13,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
 use crate::view::{ScreenDims, View};
-use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
@@ -27,10 +20,7 @@ use crate::input::binds::{
 };
 use crate::input::MousePos;
 
-use super::{
-    node_flags::{FlagUpdate, LayoutFlags, NodeFlag, NodeFlags},
-    theme::{Theme, ThemeId},
-};
+use super::theme::ThemeId;
 
 use crate::vulkan::{
     context::VkContext,
