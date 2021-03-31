@@ -750,7 +750,7 @@ fn create_pipeline(
         .sample_shading_enable(false)
         .rasterization_samples(msaa_samples)
         .min_sample_shading(1.0)
-        .alpha_to_coverage_enable(false)
+        .alpha_to_coverage_enable(true)
         .alpha_to_one_enable(false)
         .build();
 
@@ -758,18 +758,19 @@ fn create_pipeline(
         vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::all())
             .blend_enable(true)
-            .src_color_blend_factor(vk::BlendFactor::ONE)
-            .dst_color_blend_factor(vk::BlendFactor::ZERO)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .color_blend_op(vk::BlendOp::ADD)
-            .src_alpha_blend_factor(vk::BlendFactor::ONE)
-            .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+            .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .alpha_blend_op(vk::BlendOp::ADD)
             .build();
     let color_blend_attachments = [color_blend_attachment];
 
     let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)
-        .logic_op(vk::LogicOp::COPY)
+        .logic_op(vk::LogicOp::NO_OP)
+        // .logic_op(vk::LogicOp::COPY)
         .attachments(&color_blend_attachments)
         .blend_constants([0.0, 0.0, 0.0, 0.0])
         .build();

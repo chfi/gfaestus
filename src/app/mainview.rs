@@ -143,13 +143,21 @@ impl MainView {
     ) -> Result<()> {
         let view = self.view.load();
 
+        let node_width = {
+            let mut width = self.base_node_width;
+            if view.scale > 100.0 {
+                width *= view.scale / 100.0;
+            }
+            width
+        };
+
         self.node_draw_system.draw_themed(
             cmd_buf,
             render_pass,
             framebuffer,
             framebuffer_dc,
             screen_dims,
-            self.base_node_width,
+            node_width,
             view,
             offset,
             0,
