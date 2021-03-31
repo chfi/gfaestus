@@ -204,7 +204,7 @@ impl GfaestusVk {
 
     pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
     where
-        F: FnOnce(vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
+        F: FnOnce(&Device, vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
     {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
@@ -253,14 +253,14 @@ impl GfaestusVk {
 
         let cmd_buf = self.execute_one_time_commands_semaphores(
             device,
-            self.transient_command_pool,
+            self.command_pool,
             queue,
             &wait_semaphores,
             &wait_stages,
             &signal_semaphores,
             in_flight_fence,
             |cmd_buf| {
-                commands(cmd_buf, framebuffer, framebuffer_dc);
+                commands(device, cmd_buf, framebuffer, framebuffer_dc);
             },
         )?;
 
@@ -293,8 +293,7 @@ impl GfaestusVk {
         };
 
         unsafe {
-            device
-                .free_command_buffers(self.transient_command_pool, &[cmd_buf]);
+            device.free_command_buffers(self.command_pool, &[cmd_buf]);
         };
 
         Ok(false)

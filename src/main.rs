@@ -1,32 +1,3 @@
-#[allow(unused_imports)]
-use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
-#[allow(unused_imports)]
-use vulkano::framebuffer::{
-    Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
-};
-#[allow(unused_imports)]
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
-use vulkano::{
-    format::Format,
-    image::{
-        AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess,
-        SwapchainImage,
-    },
-};
-
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode,
-    SurfaceTransform, Swapchain, SwapchainCreationError,
-};
-use vulkano::sync::{self, FlushError, GpuFuture};
-use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::viewport::Viewport,
-};
-
-use vulkano_win::VkSurfaceBuild;
-
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::window::{Window, WindowBuilder};
@@ -37,8 +8,6 @@ use gfaestus::app::{App, AppConfigMsg, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
-use gfaestus::render::nodes::OverlayCache;
-use gfaestus::render::*;
 use gfaestus::universe::*;
 use gfaestus::util::*;
 use gfaestus::view::View;
@@ -51,7 +20,7 @@ use ash::{
     extensions::{ext::DebugReport, khr::Surface},
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
-use ash::{vk, Entry};
+use ash::{vk, Device};
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -311,10 +280,9 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
-                let device = gfaestus.vk_context().device().clone();
-
                 let draw =
-                    |cmd_buf: vk::CommandBuffer,
+                    |device: &Device,
+                     cmd_buf: vk::CommandBuffer,
                      framebuffer: vk::Framebuffer,
                      framebuffer_dc: vk::Framebuffer| {
                         let size = window.inner_size();
@@ -331,14 +299,15 @@ fn main() {
                             .unwrap();
 
                         unsafe {
-                            // let memory_barriers = [vk::MemoryBarrier
-                            // let memory_barrier = vk::MemoryBarrier::builder()
-                            //     .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
-                            //     .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            //     .build();
-                            // let memory_barriers = [memory_barriers];
+                            let memory_barrier = vk::MemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .build();
+                            let memory_barriers = [memory_barrier];
 
-                            let memory_barriers = [];
+                            // let memory_barriers = [];
                             let buffer_memory_barriers = [];
                             let image_memory_barriers = [];
                             device.cmd_pipeline_barrier(
