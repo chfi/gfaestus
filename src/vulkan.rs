@@ -202,14 +202,9 @@ impl GfaestusVk {
         &self.vk_context
     }
 
-    pub fn draw_frame_from<F, G>(
-        &mut self,
-        commands: F,
-        commands_2: G,
-    ) -> Result<bool>
+    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
     where
         F: FnOnce(vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
-        G: FnOnce(vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
     {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
@@ -247,13 +242,8 @@ impl GfaestusVk {
 
         let device = self.vk_context.device();
 
-        let nodes_finished = {
-            let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-            unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
-        };
-
         let wait_semaphores = [img_available];
-        let signal_semaphores = [nodes_finished];
+        let signal_semaphores = [render_finished];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
 
         let queue = self.graphics_queue;
@@ -261,24 +251,7 @@ impl GfaestusVk {
         let framebuffer = self.swapchain_framebuffers[img_index as usize];
         let framebuffer_dc = self.swapchain_framebuffers_dc[img_index as usize];
 
-        let cmd_buf_1 = self.execute_one_time_commands_semaphores(
-            device,
-            self.transient_command_pool,
-            queue,
-            &wait_semaphores,
-            &wait_stages,
-            &signal_semaphores,
-            vk::Fence::null(),
-            |cmd_buf| {
-                commands(cmd_buf, framebuffer, framebuffer_dc);
-            },
-        )?;
-
-        let wait_semaphores = [nodes_finished];
-        let signal_semaphores = [render_finished];
-        let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
-
-        let cmd_buf_2 = self.execute_one_time_commands_semaphores(
+        let cmd_buf = self.execute_one_time_commands_semaphores(
             device,
             self.transient_command_pool,
             queue,
@@ -287,7 +260,7 @@ impl GfaestusVk {
             &signal_semaphores,
             in_flight_fence,
             |cmd_buf| {
-                commands_2(cmd_buf, framebuffer, framebuffer_dc);
+                commands(cmd_buf, framebuffer, framebuffer_dc);
             },
         )?;
 
@@ -320,12 +293,8 @@ impl GfaestusVk {
         };
 
         unsafe {
-            device.free_command_buffers(
-                self.transient_command_pool,
-                &[cmd_buf_1, cmd_buf_2],
-            );
-
-            device.destroy_semaphore(nodes_finished, None);
+            device
+                .free_command_buffers(self.transient_command_pool, &[cmd_buf]);
         };
 
         Ok(false)
@@ -406,11 +375,8 @@ impl GfaestusVk {
 
             unsafe {
                 device.queue_submit(queue, &[submit_info], fence)?;
-                // device.queue_wait_idle(queue)?;
             }
         }
-
-        // unsafe { device.free_command_buffers(command_pool, &[cmd_buf]) };
 
         Ok(cmd_buf)
     }

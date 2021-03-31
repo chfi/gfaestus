@@ -311,6 +311,8 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
+                let device = gfaestus.vk_context().device().clone();
+
                 let draw =
                     |cmd_buf: vk::CommandBuffer,
                      framebuffer: vk::Framebuffer,
@@ -327,13 +329,28 @@ fn main() {
                                 Point::ZERO,
                             )
                             .unwrap();
-                    };
 
-                let draw_2 =
-                    |cmd_buf: vk::CommandBuffer,
-                     framebuffer: vk::Framebuffer,
-                     framebuffer_dc: vk::Framebuffer| {
-                        let size = window.inner_size();
+                        unsafe {
+                            // let memory_barriers = [vk::MemoryBarrier
+                            // let memory_barrier = vk::MemoryBarrier::builder()
+                            //     .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
+                            //     .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            //     .build();
+                            // let memory_barriers = [memory_barriers];
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
 
                         gui.draw(
                             cmd_buf,
@@ -345,8 +362,7 @@ fn main() {
                         .unwrap();
                     };
 
-                dirty_swapchain =
-                    gfaestus.draw_frame_from(draw, draw_2).unwrap();
+                dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
