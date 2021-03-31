@@ -18,12 +18,9 @@ use handlegraph::handle::NodeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
-use crate::render::nodes::OverlayCache;
-use crate::render::*;
 use crate::view::{ScreenDims, View};
 use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
 
-// use crate::input::binds::*;
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
     SystemInputBindings, WheelBind,
@@ -54,13 +51,6 @@ pub struct MainView {
 
     view: Arc<AtomicCell<View>>,
     anim_handler_thread: AnimHandlerThread,
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct NodeData {
-    vertices: Vec<Vertex>,
-    flags: LayoutFlags,
-    // _updates: FxHashSet<NodeId>
 }
 
 impl MainView {

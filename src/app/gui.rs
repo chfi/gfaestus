@@ -28,7 +28,6 @@ use theme_editor::*;
 
 use crate::app::RenderConfigOpts;
 use crate::geometry::*;
-use crate::render::GuiDrawSystem;
 use crate::view::View;
 
 use crate::input::binds::{

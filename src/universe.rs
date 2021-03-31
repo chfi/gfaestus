@@ -13,7 +13,7 @@ use handlegraph::packedgraph::PackedGraph;
 use anyhow::Result;
 
 use crate::geometry::*;
-use crate::render::Vertex;
+use crate::vulkan::draw_system::Vertex;
 
 pub mod config;
 pub mod grid;
@@ -96,16 +96,14 @@ impl Universe<FlatLayout> {
         })
     }
 
-    pub fn new_vertices(&self) -> Vec<crate::vulkan::draw_system::Vertex> {
-        use crate::vulkan::draw_system::Vertex as NewVertex;
-
+    pub fn new_vertices(&self) -> Vec<Vertex> {
         let mut vertices = Vec::new();
 
         for node in self.graph_layout.nodes().iter() {
-            let v0 = NewVertex {
+            let v0 = Vertex {
                 position: [node.p0.x, node.p0.y],
             };
-            let v1 = NewVertex {
+            let v1 = Vertex {
                 position: [node.p1.x, node.p1.y],
             };
             vertices.push(v0);
