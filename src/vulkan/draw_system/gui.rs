@@ -375,7 +375,7 @@ impl GuiPipeline {
         let input_assembly_info =
             vk::PipelineInputAssemblyStateCreateInfo::builder()
                 .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
-                .primitive_restart_enable(true)
+                .primitive_restart_enable(false)
                 .build();
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
@@ -414,7 +414,7 @@ impl GuiPipeline {
                 .rasterization_samples(msaa_samples)
                 .min_sample_shading(1.0)
                 .alpha_to_coverage_enable(true)
-                .alpha_to_one_enable(true)
+                .alpha_to_one_enable(false)
                 .build();
 
         let color_blend_attachment =
