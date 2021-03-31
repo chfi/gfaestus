@@ -214,7 +214,6 @@ impl GfaestusVk {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
         let img_available = sync_objects.image_available_semaphore;
-        let nodes_finished = sync_objects.nodes_finished_semaphore;
         let render_finished = sync_objects.render_finished_semaphore;
         let in_flight_fence = sync_objects.fence;
         let wait_fences = [in_flight_fence];
@@ -247,6 +246,12 @@ impl GfaestusVk {
         unsafe { self.vk_context.device().reset_fences(&wait_fences) }?;
 
         let device = self.vk_context.device();
+
+        let nodes_finished = {
+            let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
+            unsafe { device.create_semaphore(&semaphore_info, None).unwrap() }
+        };
+
         let wait_semaphores = [img_available];
         let signal_semaphores = [nodes_finished];
         let wait_stages = [vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT];
@@ -264,7 +269,6 @@ impl GfaestusVk {
             &wait_stages,
             &signal_semaphores,
             vk::Fence::null(),
-            // in_flight_fence,
             |cmd_buf| {
                 commands(cmd_buf, framebuffer, framebuffer_dc);
             },
@@ -281,7 +285,6 @@ impl GfaestusVk {
             &wait_semaphores,
             &wait_stages,
             &signal_semaphores,
-            // vk::Fence::null(),
             in_flight_fence,
             |cmd_buf| {
                 commands_2(cmd_buf, framebuffer, framebuffer_dc);
@@ -320,7 +323,9 @@ impl GfaestusVk {
             device.free_command_buffers(
                 self.transient_command_pool,
                 &[cmd_buf_1, cmd_buf_2],
-            )
+            );
+
+            device.destroy_semaphore(nodes_finished, None);
         };
 
         Ok(false)
@@ -920,13 +925,6 @@ impl GfaestusVk {
                 }
             };
 
-            let nodes_finished_semaphore = {
-                let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
-                unsafe {
-                    device.create_semaphore(&semaphore_info, None).unwrap()
-                }
-            };
-
             let render_finished_semaphore = {
                 let semaphore_info = vk::SemaphoreCreateInfo::builder().build();
                 unsafe {
@@ -943,7 +941,6 @@ impl GfaestusVk {
 
             let sync_objects = SyncObjects {
                 image_available_semaphore,
-                nodes_finished_semaphore,
                 render_finished_semaphore,
                 fence: in_flight_fence,
             };
@@ -1144,7 +1141,6 @@ impl SwapchainSupportDetails {
 #[derive(Clone, Copy)]
 struct SyncObjects {
     image_available_semaphore: vk::Semaphore,
-    nodes_finished_semaphore: vk::Semaphore,
     render_finished_semaphore: vk::Semaphore,
     fence: vk::Fence,
 }
@@ -1153,7 +1149,6 @@ impl SyncObjects {
     fn destroy(&self, device: &Device) {
         unsafe {
             device.destroy_semaphore(self.image_available_semaphore, None);
-            device.destroy_semaphore(self.nodes_finished_semaphore, None);
             device.destroy_semaphore(self.render_finished_semaphore, None);
             device.destroy_fence(self.fence, None);
         }
