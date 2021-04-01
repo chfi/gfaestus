@@ -295,8 +295,11 @@ impl GfaestusVk {
 
         let queue = self.graphics_queue;
 
-        let framebuffer = self.swapchain_framebuffers[img_index as usize];
-        let framebuffer_dc = self.swapchain_framebuffers_dc[img_index as usize];
+        let framebuffers = &self.framebuffers[img_index as usize];
+
+        // let framebuffer = framebuffers.nodes.
+        // let framebuffer = self.swapchain_framebuffers[img_index as usize];
+        // let framebuffer_dc = self.swapchain_framebuffers_dc[img_index as usize];
 
         let cmd_buf = self.execute_one_time_commands_semaphores(
             device,
@@ -307,7 +310,7 @@ impl GfaestusVk {
             &signal_semaphores,
             in_flight_fence,
             |cmd_buf| {
-                commands(device, cmd_buf, framebuffer, framebuffer_dc);
+                commands(device, cmd_buf, framebuffers.nodes, framebuffers.gui);
             },
         )?;
 

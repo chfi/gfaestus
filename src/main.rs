@@ -123,8 +123,10 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
+    dbg!();
     let gfaestus = GfaestusVk::new(&window);
 
+    dbg!();
     if let Err(err) = &gfaestus {
         println!("{:?}", err.root_cause());
     }
@@ -149,15 +151,19 @@ fn main() {
         &gfaestus,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
-        gfaestus.render_pass,
+        gfaestus.render_passes.nodes,
+        // gfaestus.render_pass,
     )
     .unwrap();
+
+    dbg!();
 
     let (mut gui, opts_from_gui) = GfaestusGui::new(
         &gfaestus,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
-        gfaestus.render_pass_dc,
+        gfaestus.render_passes.gui,
+        // gfaestus.render_pass_dc,
     )
     .unwrap();
 
@@ -169,6 +175,7 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
+    dbg!();
     // node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
@@ -185,6 +192,7 @@ fn main() {
     let mut dirty_swapchain = false;
 
     // let mut command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf
+    dbg!();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -279,6 +287,9 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
+                let node_pass = gfaestus.render_passes.nodes;
+                let gui_pass = gfaestus.render_passes.gui;
+
                 let draw =
                     |device: &Device,
                      cmd_buf: vk::CommandBuffer,
@@ -289,7 +300,7 @@ fn main() {
                         main_view
                             .draw_nodes(
                                 cmd_buf,
-                                render_pass,
+                                node_pass,
                                 framebuffer,
                                 framebuffer_dc,
                                 [size.width as f32, size.height as f32],
@@ -318,11 +329,13 @@ fn main() {
                                 &buffer_memory_barriers,
                                 &image_memory_barriers,
                             );
+
+                            // device.cmd_copy_image(cmd_buf, src_image, src_image_layout, dst_image, dst_image_layout, regions)
                         }
 
                         gui.draw(
                             cmd_buf,
-                            render_pass_dc,
+                            gui_pass,
                             framebuffer,
                             framebuffer_dc,
                             [size.width as f32, size.height as f32],

@@ -5,6 +5,7 @@ layout (early_fragment_tests) in;
 flat layout (location = 0) in int node_id;
 
 layout (location = 0) out vec4 f_color;
+layout (location = 1) out uint f_id;
 // layout (location = 1) out vec4 f_mask;
 
 layout (set = 0, binding = 0) uniform sampler1D theme_sampler;

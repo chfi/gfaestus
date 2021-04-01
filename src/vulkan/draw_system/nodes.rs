@@ -482,11 +482,18 @@ impl NodePipelines {
 
         let clear_values = {
             let bg = theme.background_color;
-            [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [bg.r, bg.g, bg.b, 1.0],
+            [
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [bg.r, bg.g, bg.b, 1.0],
+                    },
                 },
-            }]
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        uint32: [0, 0, 0, 0],
+                    },
+                },
+            ]
         };
 
         let extent = vk::Extent2D {
@@ -765,7 +772,21 @@ fn create_pipeline(
             .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
             .alpha_blend_op(vk::BlendOp::ADD)
             .build();
-    let color_blend_attachments = [color_blend_attachment];
+
+    let id_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::R)
+            .blend_enable(false)
+            // .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            // .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            // .color_blend_op(vk::BlendOp::ADD)
+            // .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            // .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            // .alpha_blend_op(vk::BlendOp::ADD)
+            .build();
+
+    let color_blend_attachments =
+        [color_blend_attachment, id_color_blend_attachment];
 
     let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)

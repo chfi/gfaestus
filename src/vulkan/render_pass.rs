@@ -9,19 +9,19 @@ use super::SwapchainProperties;
 use anyhow::Result;
 
 pub struct RenderPasses {
-    nodes: vk::RenderPass,
+    pub nodes: vk::RenderPass,
     // offscreen: vk::RenderPass,
     // offscreen_msaa: vk::RenderPass,
-    selection_edge_detect: vk::RenderPass,
-    selection_blur: vk::RenderPass,
-    gui: vk::RenderPass,
+    pub selection_edge_detect: vk::RenderPass,
+    pub selection_blur: vk::RenderPass,
+    pub gui: vk::RenderPass,
 }
 
 pub struct Framebuffers {
-    nodes: vk::Framebuffer,
-    selection_edge_detect: vk::Framebuffer,
-    selection_blur: vk::Framebuffer,
-    gui: vk::Framebuffer,
+    pub nodes: vk::Framebuffer,
+    pub selection_edge_detect: vk::Framebuffer,
+    pub selection_blur: vk::Framebuffer,
+    pub gui: vk::Framebuffer,
 }
 
 impl Framebuffers {
@@ -40,6 +40,7 @@ pub struct NodeAttachments {
     resolve: Texture,
     mask: Texture,
     id_color: Texture,
+    id_resolve: Texture,
 }
 
 pub struct OffscreenAttachment {
@@ -164,13 +165,22 @@ impl NodeAttachments {
         let mask =
             Self::mask(vk_context, command_pool, queue, swapchain_props)?;
 
-        let id_color =
-            Self::id_color(vk_context, command_pool, queue, swapchain_props)?;
+        let id_color = Self::id_color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        let id_resolve =
+            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         Ok(Self {
             color,
             resolve,
             mask,
+            id_resolve,
             id_color,
         })
     }
@@ -196,8 +206,15 @@ impl NodeAttachments {
             Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
         self.mask =
             Self::mask(vk_context, command_pool, queue, swapchain_props)?;
-        self.id_color =
-            Self::id_color(vk_context, command_pool, queue, swapchain_props)?;
+        self.id_color = Self::id_color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+        self.id_resolve =
+            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         Ok(())
     }
@@ -216,7 +233,7 @@ impl NodeAttachments {
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Texture> {
-        let resolve = Texture::create_transient_color(
+        let color = Texture::create_transient_color(
             vk_context,
             command_pool,
             queue,
@@ -224,10 +241,32 @@ impl NodeAttachments {
             msaa_samples,
         )?;
 
-        Ok(resolve)
+        Ok(color)
     }
 
     fn resolve(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Texture> {
+        let extent = swapchain_props.extent;
+
+        let resolve = Texture::create_attachment_image(
+            vk_context,
+            command_pool,
+            queue,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            extent,
+            swapchain_props.format.format,
+            None,
+        )?;
+
+        Ok(resolve)
+    }
+
+    fn id_resolve(
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
@@ -242,7 +281,7 @@ impl NodeAttachments {
             vk::ImageUsageFlags::COLOR_ATTACHMENT,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             extent,
-            swapchain_props.format.format,
+            vk::Format::R32_UINT,
             None,
         )?;
 
@@ -302,22 +341,54 @@ impl NodeAttachments {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
     ) -> Result<Texture> {
         let extent = swapchain_props.extent;
 
-        let id = Texture::create_attachment_image(
+        let format = vk::Format::R32_UINT;
+
+        // let color = Texture::create_transient_color(
+        //     vk_context,
+        //     command_pool,
+        //     queue,
+        //     swapchain_props,
+        //     msaa_samples,
+        // )?;
+
+        // Ok(color)
+
+        use vk::ImageLayout as Layout;
+        use vk::ImageUsageFlags as Usage;
+
+        let (img, mem) = super::GfaestusVk::create_image(
             vk_context,
-            command_pool,
-            queue,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT
-                | vk::ImageUsageFlags::TRANSFER_SRC,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            extent,
-            vk::Format::R32_UINT,
-            None,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            swapchain_props.extent,
+            msaa_samples,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            Usage::TRANSIENT_ATTACHMENT | Usage::COLOR_ATTACHMENT,
         )?;
 
-        Ok(id)
+        super::GfaestusVk::transition_image(
+            vk_context.device(),
+            command_pool,
+            queue,
+            img,
+            format,
+            Layout::UNDEFINED,
+            Layout::COLOR_ATTACHMENT_OPTIMAL,
+        )?;
+
+        let view = super::GfaestusVk::create_image_view(
+            vk_context.device(),
+            img,
+            1,
+            format,
+            vk::ImageAspectFlags::COLOR,
+        )?;
+
+        Ok(Texture::new(img, mem, view, None))
     }
 }
 
@@ -360,7 +431,9 @@ impl RenderPasses {
             let attachments = [
                 node_attachments.color.view,
                 node_attachments.id_color.view,
-                node_attachments.resolve.view,
+                swapchain_image_view,
+                node_attachments.id_resolve.view,
+                // node_attachments.resolve.view,
             ];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
@@ -370,6 +443,8 @@ impl RenderPasses {
                 .height(extent.height)
                 .layers(1)
                 .build();
+
+            println!("node framebuffer {:#?}", framebuffer_info);
 
             unsafe { device.create_framebuffer(&framebuffer_info, None) }
         }?;
@@ -491,15 +566,30 @@ impl RenderPasses {
 
         let id_color_attch_desc = vk::AttachmentDescription::builder()
             .format(vk::Format::R32_UINT)
-            .samples(vk::SampleCountFlags::TYPE_1)
+            .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
-        let attch_descs =
-            [color_attch_desc, id_color_attch_desc, resolve_attch_desc];
+        let id_resolve_attch_desc = vk::AttachmentDescription::builder()
+            .format(vk::Format::R32_UINT)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+            .build();
+
+        let attch_descs = [
+            color_attch_desc,
+            id_color_attch_desc,
+            resolve_attch_desc,
+            id_resolve_attch_desc,
+        ];
 
         let color_attch_ref = vk::AttachmentReference::builder()
             .attachment(0)
@@ -516,8 +606,13 @@ impl RenderPasses {
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
+        let id_resolve_attch_ref = vk::AttachmentReference::builder()
+            .attachment(3)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
         let color_attchs = [color_attch_ref, id_color_attch_ref];
-        let resolve_attchs = [resolve_attch_ref];
+        let resolve_attchs = [resolve_attch_ref, id_resolve_attch_ref];
 
         let subpass_desc = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
@@ -539,13 +634,27 @@ impl RenderPasses {
             )
             .build();
 
-        let subpass_deps = [subpass_dep];
+        let subpass_dep_2 = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .build();
+
+        let subpass_deps = [subpass_dep, subpass_dep_2];
 
         let render_pass_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attch_descs)
             .subpasses(&subpass_descs)
             .dependencies(&subpass_deps)
             .build();
+
+        println!("render_pass_info {:#?}", render_pass_info);
 
         let render_pass =
             unsafe { device.create_render_pass(&render_pass_info, None) }?;
