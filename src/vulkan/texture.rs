@@ -192,6 +192,49 @@ impl Texture {
         }
     }
 
+    pub fn create_attachment_image(
+        vk_context: &super::context::VkContext,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        usage: vk::ImageUsageFlags,
+        layout: vk::ImageLayout,
+        extent: vk::Extent2D,
+        format: vk::Format,
+        sampler: Option<vk::Sampler>,
+    ) -> Result<Self> {
+        use vk::ImageLayout as Layout;
+
+        let (img, mem) = super::GfaestusVk::create_image(
+            vk_context,
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+            extent,
+            vk::SampleCountFlags::TYPE_1,
+            format,
+            vk::ImageTiling::OPTIMAL,
+            usage,
+        )?;
+
+        super::GfaestusVk::transition_image(
+            vk_context.device(),
+            command_pool,
+            transition_queue,
+            img,
+            format,
+            Layout::UNDEFINED,
+            layout,
+        )?;
+
+        let view = super::GfaestusVk::create_image_view(
+            vk_context.device(),
+            img,
+            1,
+            format,
+            vk::ImageAspectFlags::COLOR,
+        )?;
+
+        Ok(Self::new(img, mem, view, sampler))
+    }
+
     pub fn create_transient_color(
         vk_context: &super::context::VkContext,
         command_pool: vk::CommandPool,
