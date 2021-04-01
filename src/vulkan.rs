@@ -191,7 +191,6 @@ impl GfaestusVk {
             transient_command_pool,
             graphics_queue,
             swapchain_props,
-            msaa_samples,
         )?;
 
         let framebuffers = swapchain_image_views
@@ -202,6 +201,7 @@ impl GfaestusVk {
                         vk_context.device(),
                         &node_attachments,
                         &offscreen_attachment,
+                        transient_color,
                         *view,
                         swapchain_props,
                     )
@@ -921,7 +921,6 @@ impl GfaestusVk {
             self.transient_command_pool,
             self.graphics_queue,
             swapchain_props,
-            self.msaa_samples,
         )?;
 
         let framebuffers = swapchain_image_views
@@ -932,6 +931,7 @@ impl GfaestusVk {
                         device,
                         &node_attachments,
                         &offscreen_attachment,
+                        transient_color,
                         *view,
                         swapchain_props,
                     )

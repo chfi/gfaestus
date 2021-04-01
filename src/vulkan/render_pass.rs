@@ -53,10 +53,17 @@ impl OffscreenAttachment {
         queue: vk::Queue,
         // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
+        // format: vk::Format,
     ) -> Result<Self> {
-        let color =
-            Self::color(vk_context, command_pool, queue, swapchain_props)?;
+        let format = vk::Format::R8G8B8A8_UNORM;
+
+        let color = Self::color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            format,
+        )?;
 
         Ok(Self { color })
     }
@@ -67,12 +74,19 @@ impl OffscreenAttachment {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
+        // format: vk::Format,
     ) -> Result<()> {
         self.destroy(vk_context.device());
 
-        self.color =
-            Self::color(vk_context, command_pool, queue, swapchain_props)?;
+        let format = vk::Format::R8G8B8A8_UNORM;
+
+        self.color = Self::color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            format,
+        )?;
 
         Ok(())
     }
@@ -86,6 +100,7 @@ impl OffscreenAttachment {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
+        format: vk::Format,
     ) -> Result<Texture> {
         let extent = swapchain_props.extent;
 
@@ -118,7 +133,7 @@ impl OffscreenAttachment {
             vk::ImageUsageFlags::COLOR_ATTACHMENT,
             vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             extent,
-            swapchain_props.format.format,
+            format,
             Some(sampler),
         )?;
 
@@ -335,6 +350,7 @@ impl RenderPasses {
         device: &Device,
         node_attachments: &NodeAttachments,
         offscreen_attachment: &OffscreenAttachment,
+        gui_intermediary: Texture,
         swapchain_image_view: vk::ImageView,
         swapchain_props: SwapchainProperties,
     ) -> Result<Framebuffers> {
@@ -387,7 +403,7 @@ impl RenderPasses {
         }?;
 
         let gui = {
-            let attachments = [swapchain_image_view];
+            let attachments = [gui_intermediary.view, swapchain_image_view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.gui)
