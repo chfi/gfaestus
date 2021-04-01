@@ -135,16 +135,16 @@ impl NodeAttachments {
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
-        let color =
-            Self::color(vk_context, command_pool, queue, swapchain_props)?;
-
-        let resolve = Self::resolve(
+        let color = Self::color(
             vk_context,
             command_pool,
             queue,
             swapchain_props,
             msaa_samples,
         )?;
+
+        let resolve =
+            Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         let mask =
             Self::mask(vk_context, command_pool, queue, swapchain_props)?;
@@ -170,15 +170,15 @@ impl NodeAttachments {
     ) -> Result<()> {
         self.destroy(vk_context.device());
 
-        self.color =
-            Self::color(vk_context, command_pool, queue, swapchain_props)?;
-        self.resolve = Self::resolve(
+        self.color = Self::color(
             vk_context,
             command_pool,
             queue,
             swapchain_props,
             msaa_samples,
         )?;
+        self.resolve =
+            Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
         self.mask =
             Self::mask(vk_context, command_pool, queue, swapchain_props)?;
         self.id_color =
@@ -199,6 +199,24 @@ impl NodeAttachments {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<Texture> {
+        let resolve = Texture::create_transient_color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        Ok(resolve)
+    }
+
+    fn resolve(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        swapchain_props: SwapchainProperties,
     ) -> Result<Texture> {
         let extent = swapchain_props.extent;
 
@@ -214,24 +232,6 @@ impl NodeAttachments {
         )?;
 
         Ok(color)
-    }
-
-    fn resolve(
-        vk_context: &VkContext,
-        command_pool: vk::CommandPool,
-        queue: vk::Queue,
-        swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
-    ) -> Result<Texture> {
-        let resolve = Texture::create_transient_color(
-            vk_context,
-            command_pool,
-            queue,
-            swapchain_props,
-            msaa_samples,
-        )?;
-
-        Ok(resolve)
     }
 
     fn mask(
@@ -343,8 +343,8 @@ impl RenderPasses {
         let nodes = {
             let attachments = [
                 node_attachments.color.view,
-                node_attachments.resolve.view,
                 node_attachments.id_color.view,
+                node_attachments.resolve.view,
             ];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
@@ -483,19 +483,19 @@ impl RenderPasses {
             .build();
 
         let attch_descs =
-            [color_attch_desc, resolve_attch_desc, id_color_attch_desc];
+            [color_attch_desc, id_color_attch_desc, resolve_attch_desc];
 
         let color_attch_ref = vk::AttachmentReference::builder()
             .attachment(0)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        let resolve_attch_ref = vk::AttachmentReference::builder()
+        let id_color_attch_ref = vk::AttachmentReference::builder()
             .attachment(1)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        let id_color_attch_ref = vk::AttachmentReference::builder()
+        let resolve_attch_ref = vk::AttachmentReference::builder()
             .attachment(2)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
