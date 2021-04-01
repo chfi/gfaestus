@@ -432,6 +432,7 @@ impl RenderPasses {
                 node_attachments.color.view,
                 node_attachments.id_color.view,
                 swapchain_image_view,
+                // node_attachments.resolve.view,
                 node_attachments.id_resolve.view,
                 // node_attachments.resolve.view,
             ];
@@ -479,6 +480,8 @@ impl RenderPasses {
 
         let gui = {
             let attachments = [gui_intermediary.view, swapchain_image_view];
+            // let attachments =
+            //     [node_attachments.resolve.view, swapchain_image_view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.gui)
@@ -561,7 +564,8 @@ impl RenderPasses {
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            // .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let id_color_attch_desc = vk::AttachmentDescription::builder()
@@ -783,8 +787,8 @@ impl RenderPasses {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
             .samples(msaa_samples)
-            .load_op(vk::AttachmentLoadOp::LOAD)
-            .store_op(vk::AttachmentStoreOp::STORE)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
@@ -794,7 +798,8 @@ impl RenderPasses {
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
-            .initial_layout(vk::ImageLayout::UNDEFINED)
+            // .initial_layout(vk::ImageLayout::UNDEFINED)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .build();
 

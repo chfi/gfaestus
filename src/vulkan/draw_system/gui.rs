@@ -141,6 +141,14 @@ impl GuiPipeline {
 
         let clear_values = [];
 
+        // let clear_values = {
+        //     [vk::ClearValue {
+        //         color: vk::ClearColorValue {
+        //             float32: [0.0, 0.0, 0.0, 0.0],
+        //         },
+        //     }]
+        // };
+
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
             height: viewport_dims[1] as u32,
