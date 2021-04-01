@@ -1,6 +1,7 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
+use super::context::VkContext;
 use super::texture::*;
 use super::GfaestusVk;
 use super::SwapchainProperties;
@@ -23,10 +24,15 @@ pub struct Framebuffers {
     gui: vk::Framebuffer,
 }
 
-pub struct RenderTarget {
-    image: vk::Image,
-    view: vk::ImageView,
-    sampler: Option<vk::Sampler>,
+impl Framebuffers {
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_framebuffer(self.nodes, None);
+            device.destroy_framebuffer(self.selection_edge_detect, None);
+            device.destroy_framebuffer(self.selection_blur, None);
+            device.destroy_framebuffer(self.gui, None);
+        }
+    }
 }
 
 pub struct NodeAttachments {
@@ -36,19 +42,115 @@ pub struct NodeAttachments {
     id_color: Texture,
 }
 
-impl NodeAttachments {
+pub struct OffscreenAttachment {
+    color: Texture,
+}
+
+impl OffscreenAttachment {
     pub fn new(
-        app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
-        let color = Self::color(app, swapchain_props)?;
+        let color =
+            Self::color(vk_context, command_pool, queue, swapchain_props)?;
 
-        let resolve = Self::resolve(app, swapchain_props, msaa_samples)?;
+        Ok(Self { color })
+    }
 
-        let mask = Self::mask(app, swapchain_props)?;
+    pub fn recreate(
+        &mut self,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<()> {
+        self.destroy(vk_context.device());
 
-        let id_color = Self::id_color(app, swapchain_props)?;
+        self.color =
+            Self::color(vk_context, command_pool, queue, swapchain_props)?;
+
+        Ok(())
+    }
+
+    pub fn destroy(&mut self, device: &Device) {
+        self.color.destroy(device);
+    }
+
+    fn color(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Texture> {
+        let extent = swapchain_props.extent;
+
+        let sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .anisotropy_enable(false)
+                // .max_anisotropy(16.0)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { vk_context.device().create_sampler(&sampler_info, None) }
+        }?;
+
+        let color = Texture::create_attachment_image(
+            vk_context,
+            command_pool,
+            queue,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            extent,
+            swapchain_props.format.format,
+            Some(sampler),
+        )?;
+
+        Ok(color)
+    }
+}
+
+impl NodeAttachments {
+    pub fn new(
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        // app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<Self> {
+        let color =
+            Self::color(vk_context, command_pool, queue, swapchain_props)?;
+
+        let resolve = Self::resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        let mask =
+            Self::mask(vk_context, command_pool, queue, swapchain_props)?;
+
+        let id_color =
+            Self::id_color(vk_context, command_pool, queue, swapchain_props)?;
 
         Ok(Self {
             color,
@@ -60,16 +162,27 @@ impl NodeAttachments {
 
     pub fn recreate(
         &mut self,
-        app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<()> {
-        self.destroy(app.vk_context().device());
+        self.destroy(vk_context.device());
 
-        self.color = Self::color(app, swapchain_props)?;
-        self.resolve = Self::resolve(app, swapchain_props, msaa_samples)?;
-        self.mask = Self::mask(app, swapchain_props)?;
-        self.id_color = Self::id_color(app, swapchain_props)?;
+        self.color =
+            Self::color(vk_context, command_pool, queue, swapchain_props)?;
+        self.resolve = Self::resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+        self.mask =
+            Self::mask(vk_context, command_pool, queue, swapchain_props)?;
+        self.id_color =
+            Self::id_color(vk_context, command_pool, queue, swapchain_props)?;
 
         Ok(())
     }
@@ -82,13 +195,11 @@ impl NodeAttachments {
     }
 
     fn color(
-        app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
         swapchain_props: SwapchainProperties,
     ) -> Result<Texture> {
-        let vk_context = app.vk_context();
-
-        let command_pool = app.transient_command_pool;
-        let queue = app.graphics_queue;
         let extent = swapchain_props.extent;
 
         let color = Texture::create_attachment_image(
@@ -106,15 +217,12 @@ impl NodeAttachments {
     }
 
     fn resolve(
-        app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Texture> {
-        let vk_context = app.vk_context();
-
-        let command_pool = app.transient_command_pool;
-        let queue = app.graphics_queue;
-
         let resolve = Texture::create_transient_color(
             vk_context,
             command_pool,
@@ -127,14 +235,13 @@ impl NodeAttachments {
     }
 
     fn mask(
-        app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
+        // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
     ) -> Result<Texture> {
-        let vk_context = app.vk_context();
         let device = vk_context.device();
-
-        let command_pool = app.transient_command_pool;
-        let queue = app.graphics_queue;
         let extent = swapchain_props.extent;
 
         let mask_sampler = {
@@ -175,13 +282,12 @@ impl NodeAttachments {
     }
 
     fn id_color(
-        app: &GfaestusVk,
+        // app: &GfaestusVk,
+        vk_context: &VkContext,
+        command_pool: vk::CommandPool,
+        queue: vk::Queue,
         swapchain_props: SwapchainProperties,
     ) -> Result<Texture> {
-        let vk_context = app.vk_context();
-
-        let command_pool = app.transient_command_pool;
-        let queue = app.graphics_queue;
         let extent = swapchain_props.extent;
 
         let id = Texture::create_attachment_image(
@@ -228,7 +334,7 @@ impl RenderPasses {
         &self,
         device: &Device,
         node_attachments: &NodeAttachments,
-        offscreen: Texture,
+        offscreen_attachment: &OffscreenAttachment,
         swapchain_image_view: vk::ImageView,
         swapchain_props: SwapchainProperties,
     ) -> Result<Framebuffers> {
@@ -253,7 +359,7 @@ impl RenderPasses {
         }?;
 
         let selection_edge_detect = {
-            let attachments = [offscreen.view];
+            let attachments = [offscreen_attachment.color.view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.selection_edge_detect)
