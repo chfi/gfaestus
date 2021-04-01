@@ -2,6 +2,7 @@ use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
 use super::texture::*;
+use super::GfaestusVk;
 use super::SwapchainProperties;
 
 use anyhow::Result;
@@ -13,6 +14,190 @@ pub struct RenderPasses {
     selection_edge_detect: vk::RenderPass,
     selection_blur: vk::RenderPass,
     gui: vk::RenderPass,
+}
+
+pub struct Framebuffers {
+    nodes: vk::Framebuffer,
+    selection_edge_detect: vk::Framebuffer,
+    selection_blur: vk::Framebuffer,
+    gui: vk::Framebuffer,
+}
+
+pub struct RenderTarget {
+    image: vk::Image,
+    view: vk::ImageView,
+    sampler: Option<vk::Sampler>,
+}
+
+pub struct NodeAttachments {
+    color: Texture,
+    resolve: Texture,
+    mask: Texture,
+    id_color: Texture,
+}
+
+impl NodeAttachments {
+    pub fn new(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<Self> {
+        let color = Self::color(app, swapchain_props)?;
+
+        let resolve = Self::resolve(app, swapchain_props, msaa_samples)?;
+
+        let mask = Self::mask(app, swapchain_props)?;
+
+        let id_color = Self::id_color(app, swapchain_props)?;
+
+        Ok(Self {
+            color,
+            resolve,
+            mask,
+            id_color,
+        })
+    }
+
+    pub fn recreate(
+        &mut self,
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<()> {
+        self.destroy(app.vk_context().device());
+
+        self.color = Self::color(app, swapchain_props)?;
+        self.resolve = Self::resolve(app, swapchain_props, msaa_samples)?;
+        self.mask = Self::mask(app, swapchain_props)?;
+        self.id_color = Self::id_color(app, swapchain_props)?;
+
+        Ok(())
+    }
+
+    pub fn destroy(&mut self, device: &Device) {
+        self.color.destroy(device);
+        self.resolve.destroy(device);
+        self.mask.destroy(device);
+        self.id_color.destroy(device);
+    }
+
+    fn color(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Texture> {
+        let vk_context = app.vk_context();
+
+        let command_pool = app.transient_command_pool;
+        let queue = app.graphics_queue;
+        let extent = swapchain_props.extent;
+
+        let color = Texture::create_attachment_image(
+            vk_context,
+            command_pool,
+            queue,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            extent,
+            swapchain_props.format.format,
+            None,
+        )?;
+
+        Ok(color)
+    }
+
+    fn resolve(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<Texture> {
+        let vk_context = app.vk_context();
+
+        let command_pool = app.transient_command_pool;
+        let queue = app.graphics_queue;
+
+        let resolve = Texture::create_transient_color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        Ok(resolve)
+    }
+
+    fn mask(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Texture> {
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let command_pool = app.transient_command_pool;
+        let queue = app.graphics_queue;
+        let extent = swapchain_props.extent;
+
+        let mask_sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .anisotropy_enable(false)
+                // .max_anisotropy(16.0)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .compare_enable(false)
+                .compare_op(vk::CompareOp::ALWAYS)
+                .mipmap_mode(vk::SamplerMipmapMode::LINEAR)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { device.create_sampler(&sampler_info, None) }
+        }?;
+
+        let mask = Texture::create_attachment_image(
+            vk_context,
+            command_pool,
+            queue,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            extent,
+            vk::Format::R8G8B8A8_UNORM,
+            Some(mask_sampler),
+        )?;
+
+        Ok(mask)
+    }
+
+    fn id_color(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Texture> {
+        let vk_context = app.vk_context();
+
+        let command_pool = app.transient_command_pool;
+        let queue = app.graphics_queue;
+        let extent = swapchain_props.extent;
+
+        let id = Texture::create_attachment_image(
+            vk_context,
+            command_pool,
+            queue,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            extent,
+            vk::Format::R32_UINT,
+            None,
+        )?;
+
+        Ok(id)
+    }
 }
 
 impl RenderPasses {
@@ -39,6 +224,80 @@ impl RenderPasses {
         })
     }
 
+    pub fn framebuffers(
+        &self,
+        device: &Device,
+        node_attachments: &NodeAttachments,
+        offscreen: Texture,
+        swapchain_image_view: vk::ImageView,
+        swapchain_props: SwapchainProperties,
+    ) -> Result<Framebuffers> {
+        let extent = swapchain_props.extent;
+
+        let nodes = {
+            let attachments = [
+                node_attachments.color.view,
+                node_attachments.resolve.view,
+                node_attachments.id_color.view,
+            ];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(self.nodes)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { device.create_framebuffer(&framebuffer_info, None) }
+        }?;
+
+        let selection_edge_detect = {
+            let attachments = [offscreen.view];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(self.selection_edge_detect)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { device.create_framebuffer(&framebuffer_info, None) }
+        }?;
+
+        let selection_blur = {
+            let attachments = [swapchain_image_view];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(self.selection_blur)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { device.create_framebuffer(&framebuffer_info, None) }
+        }?;
+
+        let gui = {
+            let attachments = [swapchain_image_view];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(self.gui)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { device.create_framebuffer(&framebuffer_info, None) }
+        }?;
+
+        Ok(Framebuffers {
+            nodes,
+            selection_edge_detect,
+            selection_blur,
             gui,
         })
     }
