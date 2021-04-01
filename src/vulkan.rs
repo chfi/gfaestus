@@ -55,6 +55,11 @@ pub struct GfaestusVk {
     swapchain_framebuffers: Vec<vk::Framebuffer>,
     swapchain_framebuffers_dc: Vec<vk::Framebuffer>,
 
+    pub render_passes: RenderPasses,
+    pub node_attachments: NodeAttachments,
+    pub offscreen_attachment: OffscreenAttachment,
+    pub framebuffers: Vec<Framebuffers>,
+
     pub command_pool: vk::CommandPool,
     pub transient_command_pool: vk::CommandPool,
     // command_buffers: Vec<vk::CommandBuffer>,
@@ -167,6 +172,43 @@ impl GfaestusVk {
 
         let descriptor_pool = create_descriptor_pool(vk_context.device(), 1)?;
 
+        let render_passes = RenderPasses::create(
+            vk_context.device(),
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        let node_attachments = NodeAttachments::new(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        let offscreen_attachment = OffscreenAttachment::new(
+            &vk_context,
+            transient_command_pool,
+            graphics_queue,
+            swapchain_props,
+            msaa_samples,
+        )?;
+
+        let framebuffers = swapchain_image_views
+            .iter()
+            .map(|view| {
+                render_passes
+                    .framebuffers(
+                        vk_context.device(),
+                        &node_attachments,
+                        &offscreen_attachment,
+                        *view,
+                        swapchain_props,
+                    )
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
         Ok(Self {
             vk_context,
 
@@ -189,6 +231,11 @@ impl GfaestusVk {
             swapchain_image_views,
             swapchain_framebuffers,
             swapchain_framebuffers_dc,
+
+            render_passes,
+            node_attachments,
+            offscreen_attachment,
+            framebuffers,
 
             command_pool,
             transient_command_pool,
@@ -858,6 +905,40 @@ impl GfaestusVk {
             swapchain_props,
         );
 
+        let render_passes =
+            RenderPasses::create(device, swapchain_props, self.msaa_samples)?;
+
+        let node_attachments = NodeAttachments::new(
+            self.vk_context(),
+            self.transient_command_pool,
+            self.graphics_queue,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let offscreen_attachment = OffscreenAttachment::new(
+            self.vk_context(),
+            self.transient_command_pool,
+            self.graphics_queue,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
+
+        let framebuffers = swapchain_image_views
+            .iter()
+            .map(|view| {
+                render_passes
+                    .framebuffers(
+                        device,
+                        &node_attachments,
+                        &offscreen_attachment,
+                        *view,
+                        swapchain_props,
+                    )
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+
         // TODO recreate render pass, framebuffers, etc.
 
         self.swapchain = swapchain;
@@ -872,6 +953,11 @@ impl GfaestusVk {
         self.transient_color = transient_color;
         self.render_pass = render_pass;
         self.render_pass_dc = render_pass_dc;
+
+        self.render_passes = render_passes;
+        self.node_attachments = node_attachments;
+        self.offscreen_attachment = offscreen_attachment;
+        self.framebuffers = framebuffers;
 
         Ok(())
     }
@@ -930,6 +1016,12 @@ impl GfaestusVk {
                 .iter()
                 .for_each(|f| device.destroy_framebuffer(*f, None));
             device.destroy_render_pass(self.render_pass_dc, None);
+
+            self.framebuffers.iter().for_each(|f| f.destroy(device));
+            self.render_passes.destroy(device);
+
+            self.node_attachments.destroy(device);
+            self.offscreen_attachment.destroy(device);
 
             self.swapchain_image_views
                 .iter()
