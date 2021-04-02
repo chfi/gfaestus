@@ -18,6 +18,7 @@ use anyhow::Result;
 use crate::geometry::Point;
 use crate::view::View;
 use crate::vulkan::texture::Texture1D;
+use crate::vulkan::GfaestusVk;
 use crate::vulkan::SwapchainProperties;
 
 use super::Vertex;
@@ -36,6 +37,82 @@ pub struct NodeThemePipeline {
     themes: Vec<NodeThemeData>,
 
     device: Device,
+}
+
+pub struct NodeIdBuffer {
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    size: vk::DeviceSize,
+    width: u32,
+    height: u32,
+}
+
+impl NodeIdBuffer {
+    pub fn new(app: &GfaestusVk, width: u32, height: u32) -> Result<Self> {
+        let img_size = (width * height) as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::STORAGE_BUFFER;
+
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+        let (buffer, memory, size) =
+            app.create_buffer(img_size, usage, mem_props)?;
+
+        Ok(Self {
+            buffer,
+            memory,
+            size,
+            width,
+            height,
+        })
+    }
+
+    pub fn destroy(&mut self, device: &Device) {
+        unsafe {
+            device.destroy_buffer(self.buffer, None);
+            device.free_memory(self.memory, None);
+        }
+
+        self.buffer = vk::Buffer::null();
+        self.memory = vk::DeviceMemory::null();
+        self.size = 0 as vk::DeviceSize;
+        self.width = 0;
+        self.height = 0;
+    }
+
+    pub fn recreate(
+        &mut self,
+        app: &GfaestusVk,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        if self.width * self.height == width * height {
+            return Ok(());
+        }
+
+        self.destroy(app.vk_context().device());
+
+        let img_size = (width * height) as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::STORAGE_BUFFER;
+
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+        let (buffer, memory, size) =
+            app.create_buffer(img_size, usage, mem_props)?;
+
+        self.buffer = buffer;
+        self.memory = memory;
+        self.size = size;
+        self.width = width;
+        self.height = height;
+
+        Ok(())
+    }
 }
 
 pub struct NodeThemeData {
