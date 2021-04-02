@@ -139,15 +139,16 @@ impl GuiPipeline {
     ) -> Result<()> {
         let device = &self.device;
 
-        let clear_values = [];
+        // let clear_values = [];
 
-        // let clear_values = {
-        //     [vk::ClearValue {
-        //         color: vk::ClearColorValue {
-        //             float32: [0.0, 0.0, 0.0, 0.0],
-        //         },
-        //     }]
-        // };
+        let clear_values = {
+            [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    // float32: [1.0, 1.0, 1.0, 0.0],
+                    float32: [0.0, 0.0, 0.0, 0.0],
+                },
+            }]
+        };
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
@@ -430,10 +431,10 @@ impl GuiPipeline {
                 .color_write_mask(vk::ColorComponentFlags::all())
                 .blend_enable(true)
                 .src_color_blend_factor(vk::BlendFactor::ONE)
-                .dst_color_blend_factor(vk::BlendFactor::ZERO)
-                .color_blend_op(vk::BlendOp::ADD)
+                .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
                 .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                .dst_alpha_blend_factor(vk::BlendFactor::ZERO)
+                .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+                .color_blend_op(vk::BlendOp::ADD)
                 .alpha_blend_op(vk::BlendOp::ADD)
                 .build();
         let color_blend_attachments = [color_blend_attachment];
