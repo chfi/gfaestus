@@ -36,15 +36,17 @@ impl Framebuffers {
 }
 
 pub struct NodeAttachments {
-    color: Texture,
-    resolve: Texture,
-    mask: Texture,
-    id_color: Texture,
-    id_resolve: Texture,
+    pub color: Texture,
+    pub resolve: Texture,
+    pub mask: Texture,
+    pub id_color: Texture,
+    pub id_resolve: Texture,
+}
+
 }
 
 pub struct OffscreenAttachment {
-    color: Texture,
+    pub color: Texture,
 }
 
 impl OffscreenAttachment {
@@ -479,7 +481,8 @@ impl RenderPasses {
         }?;
 
         let gui = {
-            let attachments = [gui_intermediary.view, swapchain_image_view];
+            // let attachments = [gui_intermediary.view, swapchain_image_view];
+            let attachments = [swapchain_image_view];
             // let attachments =
             //     [node_attachments.resolve.view, swapchain_image_view];
 
@@ -552,7 +555,7 @@ impl RenderPasses {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
             .samples(msaa_samples)
-            .load_op(vk::AttachmentLoadOp::LOAD)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -566,6 +569,7 @@ impl RenderPasses {
             .initial_layout(vk::ImageLayout::UNDEFINED)
             // .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
         let id_color_attch_desc = vk::AttachmentDescription::builder()
@@ -638,19 +642,7 @@ impl RenderPasses {
             )
             .build();
 
-        let subpass_dep_2 = vk::SubpassDependency::builder()
-            .src_subpass(vk::SUBPASS_EXTERNAL)
-            .dst_subpass(0)
-            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .src_access_mask(vk::AccessFlags::empty())
-            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-            .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-            )
-            .build();
-
-        let subpass_deps = [subpass_dep, subpass_dep_2];
+        let subpass_deps = [subpass_dep];
 
         let render_pass_info = vk::RenderPassCreateInfo::builder()
             .attachments(&attch_descs)
@@ -786,42 +778,47 @@ impl RenderPasses {
     ) -> Result<vk::RenderPass> {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
-            .samples(msaa_samples)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
-            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            // .samples(msaa_samples)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::LOAD)
+            .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .build();
 
+        /*
         let resolve_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .load_op(vk::AttachmentLoadOp::LOAD)
             .store_op(vk::AttachmentStoreOp::STORE)
             // .initial_layout(vk::ImageLayout::UNDEFINED)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .build();
+        */
 
-        let attch_descs = [color_attch_desc, resolve_attch_desc];
+        let attch_descs = [color_attch_desc]; //, resolve_attch_desc];
 
         let color_attch_ref = vk::AttachmentReference::builder()
             .attachment(0)
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        let resolve_attch_ref = vk::AttachmentReference::builder()
-            .attachment(1)
-            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .build();
+        // let resolve_attch_ref = vk::AttachmentReference::builder()
+        //     .attachment(1)
+        //     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+        //     .build();
 
         let color_attchs = [color_attch_ref];
-        let resolve_attchs = [resolve_attch_ref];
+        // let resolve_attchs = [resolve_attch_ref];
+        // let resolve_attchs = [];
 
         let subpass_desc = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attchs)
-            .resolve_attachments(&resolve_attchs)
+            // .resolve_attachments(&resolve_attchs)
             .build();
 
         let subpass_descs = [subpass_desc];

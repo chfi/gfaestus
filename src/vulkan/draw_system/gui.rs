@@ -139,16 +139,7 @@ impl GuiPipeline {
     ) -> Result<()> {
         let device = &self.device;
 
-        // let clear_values = [];
-
-        let clear_values = {
-            [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    // float32: [1.0, 1.0, 1.0, 0.0],
-                    float32: [0.0, 0.0, 0.0, 0.0],
-                },
-            }]
-        };
+        let clear_values = [];
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
@@ -420,9 +411,9 @@ impl GuiPipeline {
         let multisampling_info =
             vk::PipelineMultisampleStateCreateInfo::builder()
                 .sample_shading_enable(false)
-                .rasterization_samples(msaa_samples)
+                .rasterization_samples(vk::SampleCountFlags::TYPE_1)
                 .min_sample_shading(1.0)
-                .alpha_to_coverage_enable(true)
+                .alpha_to_coverage_enable(false)
                 .alpha_to_one_enable(false)
                 .build();
 
@@ -430,11 +421,11 @@ impl GuiPipeline {
             vk::PipelineColorBlendAttachmentState::builder()
                 .color_write_mask(vk::ColorComponentFlags::all())
                 .blend_enable(true)
-                .src_color_blend_factor(vk::BlendFactor::ONE)
+                .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
                 .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-                .src_alpha_blend_factor(vk::BlendFactor::ONE)
-                .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
                 .color_blend_op(vk::BlendOp::ADD)
+                .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+                .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
                 .alpha_blend_op(vk::BlendOp::ADD)
                 .build();
         let color_blend_attachments = [color_blend_attachment];
