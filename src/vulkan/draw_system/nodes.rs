@@ -890,12 +890,6 @@ fn create_pipeline(
         vk::PipelineColorBlendAttachmentState::builder()
             .color_write_mask(vk::ColorComponentFlags::R)
             .blend_enable(false)
-            // .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            // .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            // .color_blend_op(vk::BlendOp::ADD)
-            // .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
-            // .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-            // .alpha_blend_op(vk::BlendOp::ADD)
             .build();
 
     let color_blend_attachments =
@@ -903,8 +897,7 @@ fn create_pipeline(
 
     let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)
-        .logic_op(vk::LogicOp::NO_OP)
-        // .logic_op(vk::LogicOp::COPY)
+        .logic_op(vk::LogicOp::COPY)
         .attachments(&color_blend_attachments)
         .blend_constants([0.0, 0.0, 0.0, 0.0])
         .build();
