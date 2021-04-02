@@ -10,6 +10,7 @@ use gfaestus::graph_query::*;
 use gfaestus::input::*;
 use gfaestus::universe::*;
 use gfaestus::view::View;
+use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
 
 use rgb::*;
 
@@ -191,7 +192,16 @@ fn main() {
 
     let mut dirty_swapchain = false;
 
-    // let mut command_buffer = gfaestus::vulkan::draw_system::GfaestusCmdBuf
+    let mut node_id_buffer = {
+        let screen_dims = app.dims();
+        NodeIdBuffer::new(
+            &gfaestus,
+            screen_dims.width as u32,
+            screen_dims.height as u32,
+        )
+        .unwrap()
+    };
+
     dbg!();
 
     event_loop.run(move |event, _, control_flow| {
@@ -269,6 +279,9 @@ fn main() {
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
+                        node_id_buffer
+                            .recreate(&gfaestus, size.width, size.height)
+                            .unwrap();
                     } else {
                         return;
                     }
@@ -290,6 +303,8 @@ fn main() {
                 let node_pass = gfaestus.render_passes.nodes;
                 let gui_pass = gfaestus.render_passes.gui;
 
+                let node_id_image = gfaestus.node_attachments.id_resolve.image;
+
                 let draw =
                     |device: &Device,
                      cmd_buf: vk::CommandBuffer,
@@ -308,18 +323,40 @@ fn main() {
                             )
                             .unwrap();
 
+                        /*
                         unsafe {
-                            let memory_barrier = vk::MemoryBarrier::builder()
+                            // let memory_barrier = vk::MemoryBarrier::builder()
+                            //     .src_access_mask(
+                            //         vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                            //     )
+                            //     .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                            //     .build();
+                            // let memory_barriers = [memory_barrier];
+
+                            let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(
                                     vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                                 )
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                // .src_queue_family_index(gfx_queue)
+                                // .dst_queue_family_index(gfx_queue)
+                                .image(node_id_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
                                 .build();
-                            let memory_barriers = [memory_barrier];
 
-                            // let memory_barriers = [];
+                            let memory_barriers = [];
                             let buffer_memory_barriers = [];
-                            let image_memory_barriers = [];
+                            let image_memory_barriers = [image_memory_barrier];
                             device.cmd_pipeline_barrier(
                                 cmd_buf,
                                 vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -329,9 +366,8 @@ fn main() {
                                 &buffer_memory_barriers,
                                 &image_memory_barriers,
                             );
-
-                            // device.cmd_copy_image(cmd_buf, src_image, src_image_layout, dst_image, dst_image_layout, regions)
                         }
+                         */
 
                         gui.draw(
                             cmd_buf,
@@ -344,6 +380,19 @@ fn main() {
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
+
+                GfaestusVk::copy_image_to_buffer(
+                    gfaestus.vk_context().device(),
+                    gfaestus.transient_command_pool,
+                    gfaestus.graphics_queue,
+                    gfaestus.node_attachments.id_resolve.image,
+                    node_id_buffer.buffer,
+                    vk::Extent2D {
+                        width: screen_dims.width as u32,
+                        height: screen_dims.height as u32,
+                    },
+                )
+                .unwrap();
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
