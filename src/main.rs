@@ -323,23 +323,15 @@ fn main() {
                             )
                             .unwrap();
 
-                        /*
-                        unsafe {
-                            // let memory_barrier = vk::MemoryBarrier::builder()
-                            //     .src_access_mask(
-                            //         vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                            //     )
-                            //     .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                            //     .build();
-                            // let memory_barriers = [memory_barrier];
 
+                        unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(
                                     vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                                 )
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                                 .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                                 // .src_queue_family_index(gfx_queue)
@@ -367,7 +359,6 @@ fn main() {
                                 &image_memory_barriers,
                             );
                         }
-                         */
 
                         gui.draw(
                             cmd_buf,

@@ -83,8 +83,8 @@ impl NodeIdBuffer {
     }
 
     pub fn new(app: &GfaestusVk, width: u32, height: u32) -> Result<Self> {
-        // let img_size = (width * height * 4) as vk::DeviceSize;
-        let img_size = (width * height * 4) as vk::DeviceSize;
+        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
+            as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;
@@ -129,8 +129,8 @@ impl NodeIdBuffer {
 
         self.destroy(app.vk_context().device());
 
-        // let img_size = (width * height) as vk::DeviceSize;
-        let img_size = (width * height * 4) as vk::DeviceSize;
+        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
+            as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;

@@ -508,6 +508,15 @@ impl GfaestusVk {
                             vk::PipelineStageFlags::TRANSFER,
                         ),
                         (
+                            vk::ImageLayout::UNDEFINED,
+                            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                        ) => (
+                            vk::AccessFlags::empty(),
+                            vk::AccessFlags::TRANSFER_WRITE,
+                            vk::PipelineStageFlags::TOP_OF_PIPE,
+                            vk::PipelineStageFlags::TRANSFER,
+                        ),
+                        (
                             vk::ImageLayout::TRANSFER_DST_OPTIMAL,
                             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                         ) => (
@@ -730,8 +739,8 @@ impl GfaestusVk {
                     device.cmd_copy_image_to_buffer(
                         cmd_buf,
                         image,
-                        vk::ImageLayout::GENERAL,
-                        // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        // vk::ImageLayout::GENERAL,
+                        vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                         buffer,
                         &regions,
                     )
