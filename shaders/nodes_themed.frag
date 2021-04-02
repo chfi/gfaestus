@@ -28,25 +28,7 @@ layout (push_constant) uniform NodePC {
 } node_uniform;
 
 void main() {
-
-  /*
-  int is_selected = selection.flag[node_id - 1];
-
-  if ((is_selected & 1) == 1) {
-    f_mask = vec4(1.0, 1.0, 1.0, 1.0);
-  } else {
-    f_mask = vec4(0.0, 0.0, 0.0, 0.0);
-  }
-
-  uint w = uint(vo.viewport_dims.x);
-  uint h = uint(vo.viewport_dims.y);
-
-  float x = floor(gl_FragCoord.x);
-  float y = floor(gl_FragCoord.y);
-
-  uint ix = uint((y * vo.viewport_dims.x) + x);
-  data.data[ix] = uint(node_id);
-  */
+  f_id = uint(node_id);
 
   float color_u = float((node_id - 1) % node_uniform.texture_period) / node_uniform.texture_period;
   f_color = texture(theme_sampler, color_u);

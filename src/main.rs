@@ -393,6 +393,24 @@ fn main() {
                     },
                 )
                 .unwrap();
+
+                let hover_node = {
+                    let mouse_pos = app.mouse_pos();
+                    let x = mouse_pos.x as u32;
+                    let y = mouse_pos.y as u32;
+
+                    let val = node_id_buffer.read(
+                        gfaestus.vk_context().device(),
+                        x,
+                        y,
+                    );
+
+                    // println!("{}, {}\t{:?}", x, y, val);
+
+                    val.map(|v| NodeId::from(v as u64))
+                };
+
+                gui.set_hover_node(hover_node);
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
@@ -415,6 +433,7 @@ fn main() {
             Event::LoopDestroyed => {
                 gfaestus.wait_gpu_idle().unwrap();
                 main_view.node_draw_system.destroy();
+                node_id_buffer.destroy(gfaestus.vk_context().device());
             }
             _ => (),
         }

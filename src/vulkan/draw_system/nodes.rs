@@ -48,8 +48,43 @@ pub struct NodeIdBuffer {
 }
 
 impl NodeIdBuffer {
+    pub fn read(&self, device: &Device, x: u32, y: u32) -> Option<u32> {
+        if x > self.width || y > self.height {
+            return None;
+        }
+
+        let value = unsafe {
+            let data_ptr = device
+                .map_memory(
+                    self.memory,
+                    0,
+                    self.size,
+                    vk::MemoryMapFlags::empty(),
+                )
+                .unwrap();
+
+            let index = (y * self.width + x) as usize;
+
+            let val_ptr = data_ptr as *const u32;
+            let val_ptr = val_ptr.add(index);
+
+            let value = std::ptr::read(val_ptr);
+
+            device.unmap_memory(self.memory);
+
+            value
+        };
+
+        if value == 0 {
+            None
+        } else {
+            Some(value + 1)
+        }
+    }
+
     pub fn new(app: &GfaestusVk, width: u32, height: u32) -> Result<Self> {
-        let img_size = (width * height) as vk::DeviceSize;
+        // let img_size = (width * height * 4) as vk::DeviceSize;
+        let img_size = (width * height * 4) as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;
@@ -94,7 +129,8 @@ impl NodeIdBuffer {
 
         self.destroy(app.vk_context().device());
 
-        let img_size = (width * height) as vk::DeviceSize;
+        // let img_size = (width * height) as vk::DeviceSize;
+        let img_size = (width * height * 4) as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;

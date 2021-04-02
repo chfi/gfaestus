@@ -280,8 +280,10 @@ impl NodeAttachments {
             vk_context,
             command_pool,
             queue,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC,
+            // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::GENERAL,
             extent,
             vk::Format::R32_UINT,
             None,
@@ -587,8 +589,10 @@ impl RenderPasses {
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
-            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .initial_layout(vk::ImageLayout::GENERAL)
+            .final_layout(vk::ImageLayout::GENERAL)
+            // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 

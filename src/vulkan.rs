@@ -536,6 +536,19 @@ impl GfaestusVk {
                             vk::PipelineStageFlags::TOP_OF_PIPE,
                             vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                         ),
+                        (
+                            vk::ImageLayout::UNDEFINED,
+                            vk::ImageLayout::GENERAL,
+                        ) => (
+                            vk::AccessFlags::empty(),
+                            vk::AccessFlags::COLOR_ATTACHMENT_READ
+                                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                                | vk::AccessFlags::MEMORY_READ
+                                | vk::AccessFlags::MEMORY_WRITE,
+                            vk::PipelineStageFlags::TOP_OF_PIPE,
+                            // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                        ),
                         _ => panic!(
                             "Unsupported layout transition({:?} => {:?}).",
                             old_layout, new_layout
@@ -717,7 +730,8 @@ impl GfaestusVk {
                     device.cmd_copy_image_to_buffer(
                         cmd_buf,
                         image,
-                        vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                        vk::ImageLayout::GENERAL,
+                        // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
                         buffer,
                         &regions,
                     )
