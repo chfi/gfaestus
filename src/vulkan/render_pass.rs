@@ -43,8 +43,6 @@ pub struct NodeAttachments {
     pub id_resolve: Texture,
 }
 
-}
-
 pub struct OffscreenAttachment {
     pub color: Texture,
 }

@@ -25,7 +25,7 @@ use super::theme::ThemeId;
 use crate::vulkan::{
     context::VkContext,
     draw_system::{
-        nodes::{NodePipelines, NodeThemePipeline, NodeVertices},
+        nodes::{NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices},
         NodeDrawAsh,
     },
     GfaestusVk, SwapchainProperties,
@@ -36,6 +36,8 @@ use ash::vk;
 pub struct MainView {
     // pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
     pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
+
+    node_id_buffer: NodeIdBuffer,
 
     base_node_width: f32,
 
@@ -83,8 +85,16 @@ impl MainView {
         let anim_handler_thread =
             anim_handler_thread(anim_handler, screen_dims, view.clone());
 
+        let node_id_buffer = NodeIdBuffer::new(
+            &app,
+            screen_dims.width as u32,
+            screen_dims.height as u32,
+        )?;
+
         let main_view = Self {
             node_draw_system,
+            node_id_buffer,
+
             base_node_width,
 
             view,
@@ -110,6 +120,18 @@ impl MainView {
     pub fn reset_view(&self) {
         self.view
             .store(self.anim_handler_thread.initial_view.load());
+    }
+
+    pub fn node_id_buffer(&self) -> vk::Buffer {
+        self.node_id_buffer.buffer
+    }
+
+    pub fn read_node_id_at(&self, point: Point) -> Option<u32> {
+        let x = point.x as u32;
+        let y = point.y as u32;
+
+        self.node_id_buffer
+            .read(self.node_draw_system.device(), x, y)
     }
 
     pub fn draw_nodes(
@@ -237,9 +259,8 @@ impl MainView {
                         use crate::app::AppMsg;
                         use crate::app::Select;
 
-                        /*
                         let selected_node = self
-                            .read_node_id_at(screen_dims, pos)
+                            .read_node_id_at(pos)
                             .map(|nid| NodeId::from(nid as u64));
 
                         if let Some(node) = selected_node {
@@ -250,7 +271,6 @@ impl MainView {
                                 }))
                                 .unwrap();
                         }
-                        */
                     }
                     _ => (),
                 }

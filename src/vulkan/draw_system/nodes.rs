@@ -577,6 +577,10 @@ impl NodePipelines {
         })
     }
 
+    pub fn device(&self) -> &Device {
+        &self.theme_pipeline.device
+    }
+
     pub fn draw_themed(
         &self,
         cmd_buf: vk::CommandBuffer,

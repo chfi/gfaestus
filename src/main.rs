@@ -377,7 +377,7 @@ fn main() {
                     gfaestus.transient_command_pool,
                     gfaestus.graphics_queue,
                     gfaestus.node_attachments.id_resolve.image,
-                    node_id_buffer.buffer,
+                    main_view.node_id_buffer(),
                     vk::Extent2D {
                         width: screen_dims.width as u32,
                         height: screen_dims.height as u32,
@@ -395,8 +395,6 @@ fn main() {
                         x,
                         y,
                     );
-
-                    // println!("{}, {}\t{:?}", x, y, val);
 
                     val.map(|v| NodeId::from(v as u64))
                 };
