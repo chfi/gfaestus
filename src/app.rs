@@ -1,5 +1,6 @@
 pub mod gui;
 pub mod mainview;
+pub mod node_flags;
 pub mod settings;
 pub mod theme;
 
