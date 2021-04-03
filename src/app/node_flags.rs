@@ -60,8 +60,6 @@ impl SelectionBuffer {
 
         let latest_selection = FxHashSet::default();
 
-        let device = app.vk_context().device().clone();
-
         Ok(Self {
             latest_selection,
             node_count,
@@ -69,8 +67,6 @@ impl SelectionBuffer {
             buffer,
             memory,
             size,
-
-            device,
         })
     }
 
@@ -89,65 +85,20 @@ impl SelectionBuffer {
     pub fn clear(&mut self) {
         self.latest_selection.clear();
     }
-}
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct LayoutFlags {
-    // latest_flags: Vec<(NodeId, NodeFlag)>,
-    latest_selection: FxHashSet<NodeId>,
-    // selection_buffer: CpuAccessibleBuffer,
+    pub fn clear_buffer(&mut self, device: &Device) -> Result<()> {
+        unsafe {
+            let data_ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
 
-    // latest_flags: FxHashMap<NodeId, NodeFlag>,
-}
+            let val_ptr = data_ptr as *mut u8;
+            std::ptr::write_bytes(val_ptr, 0u8, self.size as usize);
 
-/// Instruction for updating the flags of a single node
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct FlagUpdate {
-    node: NodeId,
-    add: NodeFlags,
-    remove: NodeFlags,
-}
-
-impl LayoutFlags {
-    /*
-    pub fn update_flags(
-        &mut self,
-        new_flags: &FxHashMap<NodeId, NodeFlag>,
-        buffer: &CpuAccessibleBuffer<[u32]>,
-    ) -> Result<(), WriteLockError> {
-        let latest_keys = self.latest_flags.keys().collect::<FxHashSet<_>>();
-        let new_keys = new_flags.keys().collect::<FxHashSet<_>>();
-        let removed = latest_keys.difference(&new_keys);
-        let added = new_keys.difference(&latest_keys);
-        {
-            let mut buf = buffer.write()?;
-            for &node in removed {
-                let ix = node.0 as usize;
-                buf[ix] = 0;
-            }
-            for &node in added {
-                let ix = node.0 as usize;
-                let value = *new_flags.get(&node).unwrap() as u32;
-                buf[ix] = value;
-            }
-        }
-        self.latest_flags.clone_from(new_flags);
-        Ok(())
-    }
-    */
-
-    pub fn clear(&mut self) {
-        self.latest_selection.clear()
-    }
-
-    pub fn clear_buffer(
-        &mut self,
-        buffer: &CpuAccessibleBuffer<[u32]>,
-    ) -> Result<(), WriteLockError> {
-        let mut buf = buffer.write()?;
-
-        for ix in 0..buf.len() {
-            buf[ix] = 0;
+            device.unmap_memory(self.memory);
         }
 
         Ok(())
@@ -155,30 +106,55 @@ impl LayoutFlags {
 
     pub fn add_select_one(
         &mut self,
+        device: &Device,
         node: NodeId,
-        buffer: &CpuAccessibleBuffer<[u32]>,
-    ) -> Result<(), WriteLockError> {
+    ) -> Result<()> {
         if self.latest_selection.insert(node) {
-            let mut buf = buffer.write()?;
-            let ix = (node.0 - 1) as usize;
-            buf[ix] = 1;
+            unsafe {
+                let data_ptr = device.map_memory(
+                    self.memory,
+                    0,
+                    self.size,
+                    vk::MemoryMapFlags::empty(),
+                )?;
+
+                let val_ptr = data_ptr as *mut u8;
+                let ix = (node.0 - 1) as usize;
+
+                val_ptr.add(ix);
+                val_ptr.write(1);
+
+                device.unmap_memory(self.memory);
+            }
         }
+
         Ok(())
     }
 
-    pub fn write_latest_buffer(
-        &self,
-        buffer: &CpuAccessibleBuffer<[u32]>,
-    ) -> Result<(), WriteLockError> {
-        let mut buf = buffer.write()?;
+    pub fn write_latest_buffer(&mut self, device: &Device) -> Result<()> {
+        unsafe {
+            let data_ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
 
-        for ix in 0..buf.len() {
-            let node = NodeId::from((ix + 1) as u64);
-            if self.latest_selection.contains(&node) {
-                buf[ix] = 1;
-            } else {
-                buf[ix] = 0;
+            let val_ptr = data_ptr as *mut u8;
+
+            for ix in 0..self.size {
+                let node = NodeId::from((ix + 1) as u64);
+
+                val_ptr.add(1);
+
+                if self.latest_selection.contains(&node) {
+                    val_ptr.write(1);
+                } else {
+                    val_ptr.write(0);
+                }
             }
+
+            device.unmap_memory(self.memory);
         }
 
         Ok(())
@@ -186,68 +162,39 @@ impl LayoutFlags {
 
     pub fn update_selection(
         &mut self,
+        device: &Device,
         new_selection: &FxHashSet<NodeId>,
-        buffer: &CpuAccessibleBuffer<[u32]>,
-    ) -> Result<(), WriteLockError> {
+    ) -> Result<()> {
         let removed = self.latest_selection.difference(new_selection);
         let added = new_selection.difference(&self.latest_selection);
 
-        {
-            let mut buf = buffer.write()?;
+        unsafe {
+            let data_ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
 
             for &node in removed {
+                let val_ptr = data_ptr as *mut u8;
                 let ix = (node.0 - 1) as usize;
-                buf[ix] = 0;
+                val_ptr.add(ix);
+                val_ptr.write(0);
             }
 
             for &node in added {
+                let val_ptr = data_ptr as *mut u8;
                 let ix = (node.0 - 1) as usize;
-                buf[ix] = 1;
+                val_ptr.add(ix);
+                val_ptr.write(1);
             }
+
+            device.unmap_memory(self.memory);
         }
 
         self.latest_selection.clone_from(new_selection);
 
         Ok(())
-    }
-}
-
-impl std::default::Default for NodeFlag {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl From<NodeFlag> for NodeFlags {
-    fn from(flag: NodeFlag) -> Self {
-        NodeFlags(flag as u8)
-    }
-}
-
-impl std::ops::BitOr<NodeFlag> for NodeFlags {
-    type Output = Self;
-
-    fn bitor(self, rhs: NodeFlag) -> Self::Output {
-        NodeFlags(self.0 | rhs as u8)
-    }
-}
-
-impl std::ops::BitAnd<NodeFlag> for NodeFlags {
-    type Output = Self;
-
-    fn bitand(self, rhs: NodeFlag) -> Self::Output {
-        NodeFlags(self.0 & rhs as u8)
-    }
-}
-
-impl std::ops::BitOrAssign<NodeFlag> for NodeFlags {
-    fn bitor_assign(&mut self, rhs: NodeFlag) {
-        self.0 |= rhs as u8;
-    }
-}
-
-impl std::ops::BitAndAssign<NodeFlag> for NodeFlags {
-    fn bitand_assign(&mut self, rhs: NodeFlag) {
-        self.0 &= rhs as u8;
     }
 }
