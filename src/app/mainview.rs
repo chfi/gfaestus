@@ -11,6 +11,7 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use super::node_flags::SelectionBuffer;
 use crate::geometry::*;
 use crate::view::{ScreenDims, View};
 
@@ -36,8 +37,8 @@ use ash::vk;
 pub struct MainView {
     // pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
     pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
-
     node_id_buffer: NodeIdBuffer,
+    selection_buffer: SelectionBuffer,
 
     base_node_width: f32,
 
@@ -49,6 +50,7 @@ impl MainView {
     pub fn new(
         app: &GfaestusVk,
         // vk_context: &VkContext,
+        node_count: usize,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
@@ -91,9 +93,12 @@ impl MainView {
             screen_dims.height as u32,
         )?;
 
+        let selection_buffer = SelectionBuffer::new(app, node_count)?;
+
         let main_view = Self {
             node_draw_system,
             node_id_buffer,
+            selection_buffer,
 
             base_node_width,
 
@@ -124,6 +129,15 @@ impl MainView {
 
     pub fn node_id_buffer(&self) -> vk::Buffer {
         self.node_id_buffer.buffer
+    }
+
+    pub fn recreate_node_id_buffer(
+        &mut self,
+        app: &GfaestusVk,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        self.node_id_buffer.recreate(app, width, height)
     }
 
     pub fn read_node_id_at(&self, point: Point) -> Option<u32> {
@@ -164,6 +178,24 @@ impl MainView {
             offset,
             0,
         )
+    }
+
+    pub fn update_node_selection(
+        &mut self,
+        new_selection: &FxHashSet<NodeId>,
+    ) -> Result<()> {
+        let device = self.node_draw_system.device();
+        let selection = &mut self.selection_buffer;
+
+        selection.update_selection(device, new_selection)
+    }
+
+    pub fn clear_node_selection(&mut self) -> Result<()> {
+        let device = self.node_draw_system.device();
+        let selection = &mut self.selection_buffer;
+
+        selection.clear();
+        selection.clear_buffer(device)
     }
 
     pub fn set_view_center(&self, center: Point) {
