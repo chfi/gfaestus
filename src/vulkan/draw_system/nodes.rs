@@ -9,8 +9,6 @@ use ash::{vk, Device, Entry, Instance};
 
 use std::ffi::CString;
 
-use std::sync::{Arc, Weak};
-
 use nalgebra_glm as glm;
 
 use anyhow::Result;
@@ -37,6 +35,115 @@ pub struct NodeThemePipeline {
     themes: Vec<NodeThemeData>,
 
     device: Device,
+}
+
+pub struct SelectionDescriptors {
+    pool: vk::DescriptorPool,
+    layout: vk::DescriptorSetLayout,
+    // TODO should be one per swapchain image
+    descriptor_set: vk::DescriptorSet,
+    // should not be owned by this, but MainView
+    // buffer: vk::Buffer,
+}
+
+impl SelectionDescriptors {
+    fn new(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        buffer: vk::Buffer,
+        image_count: u32,
+        // msaa_samples: vk::SampleCountFlags,
+    ) -> Result<Self> {
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let layout = Self::create_descriptor_set_layout(device)?;
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        for set in descriptor_sets.iter() {
+            let buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let buf_infos = [buf_info];
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&buf_infos)
+                .build();
+
+            let descriptor_writes = [descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        Ok(Self {
+            pool: descriptor_pool,
+            layout,
+            // TODO should be one per swapchain image
+            descriptor_set: descriptor_sets[0],
+            // should not be owned by this, but MainView
+            // buffer,
+        })
+    }
+
+    fn layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build()
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
 }
 
 pub struct NodeIdBuffer {
@@ -269,12 +376,14 @@ impl NodeThemePipeline {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
+        selection_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         create_pipeline(
             device,
             msaa_samples,
             render_pass,
             descriptor_set_layout,
+            selection_set_layout,
             "shaders/nodes_themed.frag.spv",
         )
     }
@@ -284,6 +393,7 @@ impl NodeThemePipeline {
         // device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        selection_set_layout: vk::DescriptorSetLayout,
         // image_count: usize,
     ) -> Result<Self> {
         let device = app.vk_context().device();
@@ -295,6 +405,7 @@ impl NodeThemePipeline {
             msaa_samples,
             render_pass,
             desc_set_layout,
+            selection_set_layout,
         );
 
         let sampler = create_sampler(device)?;
@@ -408,12 +519,14 @@ impl NodeOverlayPipeline {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
+        selection_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         create_pipeline(
             device,
             msaa_samples,
             render_pass,
             descriptor_set_layout,
+            selection_set_layout,
             "shaders/nodes_overlay.frag.spv",
         )
     }
@@ -422,6 +535,7 @@ impl NodeOverlayPipeline {
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        selection_set_layout: vk::DescriptorSetLayout,
         // image_count: usize,
     ) -> Result<Self> {
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
@@ -431,6 +545,7 @@ impl NodeOverlayPipeline {
             msaa_samples,
             render_pass,
             desc_set_layout,
+            selection_set_layout,
         );
 
         let sampler = create_sampler(device)?;
@@ -550,30 +665,49 @@ pub struct NodePipelines {
     theme_pipeline: NodeThemePipeline,
     overlay_pipeline: NodeOverlayPipeline,
 
+    selection_descriptors: SelectionDescriptors,
+
     pub vertices: NodeVertices,
 }
 
 impl NodePipelines {
     pub fn new(
-        app: &super::super::GfaestusVk,
+        app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        selection_buffer: vk::Buffer,
     ) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
         let vertices = NodeVertices::new(device);
 
-        let theme_pipeline =
-            NodeThemePipeline::new(app, msaa_samples, render_pass)?;
-        let overlay_pipeline =
-            NodeOverlayPipeline::new(device, msaa_samples, render_pass)?;
+        let selection_descriptors = SelectionDescriptors::new(
+            app,
+            swapchain_props,
+            selection_buffer,
+            1,
+        )?;
+
+        let theme_pipeline = NodeThemePipeline::new(
+            app,
+            msaa_samples,
+            render_pass,
+            selection_descriptors.layout,
+        )?;
+        let overlay_pipeline = NodeOverlayPipeline::new(
+            device,
+            msaa_samples,
+            render_pass,
+            selection_descriptors.layout,
+        )?;
 
         Ok(Self {
             theme_pipeline,
             overlay_pipeline,
             vertices,
+            selection_descriptors,
         })
     }
 
@@ -645,7 +779,11 @@ impl NodePipelines {
         };
 
         let vx_bufs = [self.vertices.vertex_buffer];
-        let desc_sets = [self.theme_pipeline.themes[0].descriptor_set];
+        let desc_sets = [
+            self.theme_pipeline.themes[0].descriptor_set,
+            self.selection_descriptors.descriptor_set,
+        ];
+
         let offsets = [0];
         unsafe {
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
@@ -656,7 +794,7 @@ impl NodePipelines {
                 vk::PipelineBindPoint::GRAPHICS,
                 self.theme_pipeline.pipeline_layout,
                 0,
-                &desc_sets[0..=0],
+                &desc_sets[0..=1],
                 &null,
             );
         };
@@ -793,6 +931,7 @@ fn create_pipeline(
     msaa_samples: vk::SampleCountFlags,
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
+    selection_set_layout: vk::DescriptorSetLayout,
     frag_shader_path: &str,
 ) -> (vk::Pipeline, vk::PipelineLayout) {
     let vert_src =
@@ -909,7 +1048,7 @@ fn create_pipeline(
     let layout = {
         use vk::ShaderStageFlags as Flags;
 
-        let layouts = [descriptor_set_layout];
+        let layouts = [descriptor_set_layout, selection_set_layout];
 
         let pc_range = vk::PushConstantRange::builder()
             .stage_flags(Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT)

@@ -10,6 +10,10 @@ layout (location = 1) out uint f_id;
 
 layout (set = 0, binding = 0) uniform samplerBuffer overlay;
 
+layout (set = 1, binding = 0) readonly buffer Selection {
+  uint flag[];
+} selection;
+
 // layout (set = 1, binding = 0) buffer Data {
 //   uint data[];
 // } data;

@@ -22,6 +22,7 @@ use crate::view::View;
 
 pub mod gui;
 pub mod nodes;
+pub mod selection;
 
 use nodes::*;
 
