@@ -233,11 +233,40 @@ fn main() {
         main_view.set_mouse_pos(Some(mouse_pos));
         main_view.set_screen_dims(screen_dims);
 
-        // let hover_node = main_view
-        //     .read_node_id_at(screen_dims, mouse_pos)
-        //     .map(|nid| NodeId::from(nid as u64));
+        let hover_node = main_view
+            .read_node_id_at(mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
 
-        // app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+        app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+
+        gui.set_hover_node(hover_node);
+
+        if let Some(selected) = app.selected_nodes() {
+            if selected.len() == 1 {
+                let node_id = selected.iter().next().copied().unwrap();
+
+                if gui.selected_node() != Some(node_id) {
+                    let request = GraphQueryRequest::NodeStats(node_id);
+                    let resp = graph_query.query_request_blocking(request);
+                    if let GraphQueryResp::NodeStats {
+                        node_id,
+                        len,
+                        degree,
+                        coverage,
+                    } = resp
+                    {
+                        gui.one_selection(node_id, len, degree, coverage);
+                    }
+                }
+            } else {
+                gui.many_selection(selected.len());
+            }
+
+            main_view.update_node_selection(selected).unwrap();
+        } else {
+            gui.no_selection();
+            main_view.clear_node_selection().unwrap();
+        }
 
         while let Ok(app_in) = app_rx.try_recv() {
             app.apply_input(app_in);
@@ -280,8 +309,7 @@ fn main() {
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
-                        node_id_buffer
-                            .recreate(&gfaestus, size.width, size.height)
+                        main_view.recreate_node_id_buffer(&gfaestus, size.width, size.height)
                             .unwrap();
                     } else {
                         return;
@@ -386,21 +414,6 @@ fn main() {
                 )
                 .unwrap();
 
-                let hover_node = {
-                    let mouse_pos = app.mouse_pos();
-                    let x = mouse_pos.x as u32;
-                    let y = mouse_pos.y as u32;
-
-                    let val = node_id_buffer.read(
-                        gfaestus.vk_context().device(),
-                        x,
-                        y,
-                    );
-
-                    val.map(|v| NodeId::from(v as u64))
-                };
-
-                gui.set_hover_node(hover_node);
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
