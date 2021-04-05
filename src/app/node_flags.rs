@@ -15,26 +15,6 @@ use anyhow::Result;
 
 use crate::vulkan::GfaestusVk;
 
-// use vulkano::buffer::cpu_access::{
-//     CpuAccessibleBuffer, ReadLock, ReadLockError, WriteLock, WriteLockError,
-// };
-
-/// Bitflags for controlling display options on a per-node basis
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(u8)]
-pub enum NodeFlag {
-    None = 0b0,
-    Selected = 0b1,
-    // SeqHash = 0b10,
-    // Coverage = 0b100,
-    // Highlight = 0b1000,
-}
-
-/// A collection of [`NodeFlag`] bitflags for a single node
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(transparent)]
-pub struct NodeFlags(u8);
-
 pub struct SelectionBuffer {
     latest_selection: FxHashSet<NodeId>,
     node_count: usize,
@@ -46,8 +26,8 @@ pub struct SelectionBuffer {
 
 impl SelectionBuffer {
     pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
-        let size =
-            ((node_count * std::mem::size_of::<u8>()) as u32) as vk::DeviceSize;
+        let size = ((node_count * std::mem::size_of::<u32>()) as u32)
+            as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;
@@ -95,8 +75,9 @@ impl SelectionBuffer {
                 vk::MemoryMapFlags::empty(),
             )?;
 
-            let val_ptr = data_ptr as *mut u8;
-            std::ptr::write_bytes(val_ptr, 0u8, self.size as usize);
+            let val_ptr = data_ptr as *mut u32;
+            // std::ptr::write_bytes(val_ptr, 1u8, (self.size / 4) as usize);
+            std::ptr::write_bytes(val_ptr, 0u8, (self.size / 4) as usize);
 
             device.unmap_memory(self.memory);
         }
@@ -118,10 +99,14 @@ impl SelectionBuffer {
                     vk::MemoryMapFlags::empty(),
                 )?;
 
-                let val_ptr = data_ptr as *mut u8;
+                let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
+                // let ix = (node.0) as usize;
+                // let ix = 1;
+                println!("inserting node at {}", ix);
 
-                val_ptr.add(ix);
+                let val_ptr = val_ptr.add(ix);
+                // let val_ptr = val_ptr.add(2);
                 val_ptr.write(1);
 
                 device.unmap_memory(self.memory);
@@ -140,12 +125,12 @@ impl SelectionBuffer {
                 vk::MemoryMapFlags::empty(),
             )?;
 
-            let val_ptr = data_ptr as *mut u8;
+            let val_ptr = data_ptr as *mut u32;
 
             for ix in 0..self.size {
                 let node = NodeId::from((ix + 1) as u64);
 
-                val_ptr.add(1);
+                let val_ptr = val_ptr.add(1);
 
                 if self.latest_selection.contains(&node) {
                     val_ptr.write(1);
@@ -168,6 +153,9 @@ impl SelectionBuffer {
         let removed = self.latest_selection.difference(new_selection);
         let added = new_selection.difference(&self.latest_selection);
 
+        let mut removed_count = 0;
+        let mut added_count = 0;
+
         unsafe {
             let data_ptr = device.map_memory(
                 self.memory,
@@ -177,20 +165,39 @@ impl SelectionBuffer {
             )?;
 
             for &node in removed {
-                let val_ptr = data_ptr as *mut u8;
+                let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
-                val_ptr.add(ix);
+                let val_ptr = val_ptr.add(ix);
                 val_ptr.write(0);
+                removed_count += 1;
             }
 
             for &node in added {
-                let val_ptr = data_ptr as *mut u8;
+                let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
-                val_ptr.add(ix);
+                let val_ptr = val_ptr.add(ix);
                 val_ptr.write(1);
+                // let val_ptr = val_ptr.add(1);
+                // val_ptr.write(1);
+                // let val_ptr = val_ptr.add(1);
+                // val_ptr.write(0);
+                // let val_ptr = val_ptr.add(1);
+                // val_ptr.write(0);
+                // val_ptr.write(std::u32::MAX);
+                added_count += 1;
+                println!("adding {}, ix {}", node.0, ix);
             }
 
             device.unmap_memory(self.memory);
+        }
+
+        if removed_count != 0 || added_count != 0 {
+            println!(
+                "new_sel: {}\tremoved: {}\tadded: {}",
+                new_selection.len(),
+                removed_count,
+                added_count,
+            );
         }
 
         self.latest_selection.clone_from(new_selection);

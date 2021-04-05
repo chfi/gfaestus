@@ -62,11 +62,14 @@ impl MainView {
         //     render_pass,
         // )?;
 
+        let selection_buffer = SelectionBuffer::new(app, node_count)?;
+
         let node_draw_system = NodePipelines::new(
             app,
             swapchain_props,
             msaa_samples,
             render_pass,
+            selection_buffer.buffer,
         )?;
 
         let base_node_width = 100.0;
@@ -92,8 +95,6 @@ impl MainView {
             screen_dims.width as u32,
             screen_dims.height as u32,
         )?;
-
-        let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
         let main_view = Self {
             node_draw_system,
