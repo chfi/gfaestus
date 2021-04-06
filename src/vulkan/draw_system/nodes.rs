@@ -185,7 +185,7 @@ impl NodeIdBuffer {
         if value == 0 {
             None
         } else {
-            Some(value + 1)
+            Some(value)
         }
     }
 

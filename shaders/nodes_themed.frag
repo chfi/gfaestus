@@ -33,8 +33,7 @@ layout (push_constant) uniform NodePC {
 
 void main() {
 
-  // uint is_selected = selection.flag[node_id - 1];
-  uint is_selected = selection.flag[node_id ];
+  uint is_selected = selection.flag[node_id - 1];
 
   f_id = uint(node_id);
 
