@@ -170,12 +170,39 @@ impl NodeIdBuffer {
                 )
                 .unwrap();
 
+            let x_offset = |x: u32, o: i32| -> u32 {
+                let x = x as i32;
+                (x + o).clamp(0, self.width as i32) as u32
+            };
+
+            let y_offset = |y: u32, o: i32| -> u32 {
+                let y = y as i32;
+                (y + o).clamp(0, self.height as i32) as u32
+            };
+
+            let to_ix =
+                |x: u32, y: u32| -> usize { (y * self.width + x) as usize };
+
             let index = (y * self.width + x) as usize;
 
-            let val_ptr = data_ptr as *const u32;
-            let val_ptr = val_ptr.add(index);
+            let ix_l = to_ix(x_offset(x, -1), y);
+            let ix_r = to_ix(x_offset(x, 1), y);
 
-            let value = std::ptr::read(val_ptr);
+            let ix_u = to_ix(x, y_offset(y, -1));
+            let ix_d = to_ix(x, y_offset(y, 1));
+
+            let indices = [index, ix_l, ix_r, ix_u, ix_d];
+
+            let mut value = 0;
+
+            for &ix in indices.iter() {
+                let val_ptr = (data_ptr as *const u32).add(ix);
+                value = val_ptr.read();
+
+                if value != 0 {
+                    break;
+                }
+            }
 
             device.unmap_memory(self.memory);
 
