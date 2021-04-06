@@ -432,7 +432,8 @@ impl NodeAttachments {
             queue,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            // vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             vk::Format::R8G8B8A8_UNORM,
             Some(mask_sampler),
@@ -479,10 +480,14 @@ impl RenderPasses {
 
         let nodes = {
             let attachments = [
+                // color attachments
                 node_attachments.color.view,
                 node_attachments.id_color.view,
-                node_attachments.resolve.view,
                 node_attachments.mask.view,
+                //
+                // resolve attachments
+                // node_attachments.resolve.view,
+                swapchain_image_view,
                 node_attachments.id_resolve.view,
                 node_attachments.mask_resolve.view,
             ];
@@ -641,7 +646,8 @@ impl RenderPasses {
             .build();
 
         let mask_attch_desc = vk::AttachmentDescription::builder()
-            .format(swapchain_props.format.format)
+            // .format(swapchain_props.format.format)
+            .format(vk::Format::R8G8B8A8_UNORM)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
@@ -650,7 +656,8 @@ impl RenderPasses {
             .build();
 
         let mask_resolve_attch_desc = vk::AttachmentDescription::builder()
-            .format(swapchain_props.format.format)
+            // .format(swapchain_props.format.format)
+            .format(vk::Format::R8G8B8A8_UNORM)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)

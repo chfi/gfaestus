@@ -482,6 +482,111 @@ impl GfaestusVk {
         Ok(())
     }
 
+    pub fn image_transition_barrier(
+        image: vk::Image,
+        old_layout: vk::ImageLayout,
+        new_layout: vk::ImageLayout,
+    ) -> (
+        vk::ImageMemoryBarrier,
+        vk::PipelineStageFlags,
+        vk::PipelineStageFlags,
+    ) {
+        let (src_access, dst_access, src_stage, dst_stage) =
+            match (old_layout, new_layout) {
+                (
+                    vk::ImageLayout::UNDEFINED,
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                ) => (
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::TRANSFER_WRITE,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::TRANSFER,
+                ),
+                (
+                    vk::ImageLayout::UNDEFINED,
+                    vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                ) => (
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::TRANSFER_WRITE,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::TRANSFER,
+                ),
+                (
+                    vk::ImageLayout::UNDEFINED,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ) => (
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::SHADER_READ,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                ),
+                (
+                    vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ) => (
+                    vk::AccessFlags::TRANSFER_WRITE,
+                    vk::AccessFlags::SHADER_READ,
+                    vk::PipelineStageFlags::TRANSFER,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                ),
+                // (
+                //     vk::ImageLayout::UNDEFINED,
+                //     vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+                // ) => (
+                //     vk::AccessFlags::empty(),
+                //     vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
+                //         | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
+                //     vk::PipelineStageFlags::TOP_OF_PIPE,
+                //     vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
+                // ),
+                (
+                    vk::ImageLayout::UNDEFINED,
+                    vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                ) => (
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::COLOR_ATTACHMENT_READ
+                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                ),
+                (vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL) => (
+                    vk::AccessFlags::empty(),
+                    vk::AccessFlags::COLOR_ATTACHMENT_READ
+                        | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                        | vk::AccessFlags::MEMORY_READ
+                        | vk::AccessFlags::MEMORY_WRITE,
+                    vk::PipelineStageFlags::TOP_OF_PIPE,
+                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                ),
+                _ => panic!(
+                    "Unsupported layout transition({:?} => {:?}).",
+                    old_layout, new_layout
+                ),
+            };
+
+        let aspect_mask = vk::ImageAspectFlags::COLOR;
+
+        let barrier = vk::ImageMemoryBarrier::builder()
+            .old_layout(old_layout)
+            .new_layout(new_layout)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .image(image)
+            .subresource_range(vk::ImageSubresourceRange {
+                aspect_mask,
+                base_mip_level: 0,
+                level_count: 1,
+                base_array_layer: 0,
+                layer_count: 1,
+            })
+            .src_access_mask(src_access)
+            .dst_access_mask(dst_access)
+            .build();
+
+        (barrier, src_stage, dst_stage)
+    }
+
     pub fn transition_image(
         device: &Device,
         command_pool: vk::CommandPool,
@@ -496,101 +601,10 @@ impl GfaestusVk {
             command_pool,
             transition_queue,
             |buf| {
-                let (src_access, dst_access, src_stage, dst_stage) =
-                    match (old_layout, new_layout) {
-                        (
-                            vk::ImageLayout::UNDEFINED,
-                            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                        ) => (
-                            vk::AccessFlags::empty(),
-                            vk::AccessFlags::TRANSFER_WRITE,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
-                            vk::PipelineStageFlags::TRANSFER,
-                        ),
-                        (
-                            vk::ImageLayout::UNDEFINED,
-                            vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                        ) => (
-                            vk::AccessFlags::empty(),
-                            vk::AccessFlags::TRANSFER_WRITE,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
-                            vk::PipelineStageFlags::TRANSFER,
-                        ),
-                        (
-                            vk::ImageLayout::UNDEFINED,
-                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        ) => (
-                            vk::AccessFlags::empty(),
-                            vk::AccessFlags::SHADER_READ,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
-                            vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        ),
-                        (
-                            vk::ImageLayout::TRANSFER_DST_OPTIMAL,
-                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        ) => (
-                            vk::AccessFlags::TRANSFER_WRITE,
-                            vk::AccessFlags::SHADER_READ,
-                            vk::PipelineStageFlags::TRANSFER,
-                            vk::PipelineStageFlags::FRAGMENT_SHADER,
-                        ),
-                        // (
-                        //     vk::ImageLayout::UNDEFINED,
-                        //     vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                        // ) => (
-                        //     vk::AccessFlags::empty(),
-                        //     vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_READ
-                        //         | vk::AccessFlags::DEPTH_STENCIL_ATTACHMENT_WRITE,
-                        //     vk::PipelineStageFlags::TOP_OF_PIPE,
-                        //     vk::PipelineStageFlags::EARLY_FRAGMENT_TESTS,
-                        // ),
-                        (
-                            vk::ImageLayout::UNDEFINED,
-                            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                        ) => (
-                            vk::AccessFlags::empty(),
-                            vk::AccessFlags::COLOR_ATTACHMENT_READ
-                                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
-                            vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                        ),
-                        (
-                            vk::ImageLayout::UNDEFINED,
-                            vk::ImageLayout::GENERAL,
-                        ) => (
-                            vk::AccessFlags::empty(),
-                            vk::AccessFlags::COLOR_ATTACHMENT_READ
-                                | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
-                                | vk::AccessFlags::MEMORY_READ
-                                | vk::AccessFlags::MEMORY_WRITE,
-                            vk::PipelineStageFlags::TOP_OF_PIPE,
-                            // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-                            vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                        ),
-                        _ => panic!(
-                            "Unsupported layout transition({:?} => {:?}).",
-                            old_layout, new_layout
-                        ),
-                    };
-
-                let aspect_mask = vk::ImageAspectFlags::COLOR;
-
-                let barrier = vk::ImageMemoryBarrier::builder()
-                    .old_layout(old_layout)
-                    .new_layout(new_layout)
-                    .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                    .image(image)
-                    .subresource_range(vk::ImageSubresourceRange {
-                        aspect_mask,
-                        base_mip_level: 0,
-                        level_count: 1,
-                        base_array_layer: 0,
-                        layer_count: 1,
-                    })
-                    .src_access_mask(src_access)
-                    .dst_access_mask(dst_access)
-                    .build();
+                let (barrier, src_stage, dst_stage) =
+                    Self::image_transition_barrier(
+                        image, old_layout, new_layout,
+                    );
 
                 unsafe {
                     device.cmd_pipeline_barrier(

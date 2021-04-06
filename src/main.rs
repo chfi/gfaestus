@@ -309,7 +309,12 @@ fn main() {
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
-                        main_view.recreate_node_id_buffer(&gfaestus, size.width, size.height)
+                        main_view
+                            .recreate_node_id_buffer(
+                                &gfaestus,
+                                size.width,
+                                size.height,
+                            )
                             .unwrap();
                     } else {
                         return;
@@ -333,6 +338,7 @@ fn main() {
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
+                let node_mask_image = gfaestus.node_attachments.mask_resolve.image;
 
                 let draw =
                     |device: &Device,
@@ -340,6 +346,40 @@ fn main() {
                      framebuffer: vk::Framebuffer,
                      framebuffer_dc: vk::Framebuffer| {
                         let size = window.inner_size();
+
+                        unsafe {
+                            let mask_image_barrier = vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .image(node_mask_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build();
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [mask_image_barrier];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
 
                         main_view
                             .draw_nodes(
@@ -352,8 +392,14 @@ fn main() {
                             )
                             .unwrap();
 
-
                         unsafe {
+                            // let (image_memory_barrier, _src_stage, _dst_stage) =
+                            //     GfaestusVk::image_transition_barrier(
+                            //         node_id_image,
+                            //         vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            //         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            //     );
+
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(
                                     vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
@@ -363,8 +409,6 @@ fn main() {
                                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
                                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                                // .src_queue_family_index(gfx_queue)
-                                // .dst_queue_family_index(gfx_queue)
                                 .image(node_id_image)
                                 .subresource_range(vk::ImageSubresourceRange {
                                     aspect_mask: vk::ImageAspectFlags::COLOR,
@@ -413,7 +457,6 @@ fn main() {
                     },
                 )
                 .unwrap();
-
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

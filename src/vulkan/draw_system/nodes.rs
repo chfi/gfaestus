@@ -771,6 +771,11 @@ impl NodePipelines {
                         uint32: [0, 0, 0, 0],
                     },
                 },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
             ]
         };
 
