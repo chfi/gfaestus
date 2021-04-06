@@ -1067,8 +1067,17 @@ fn create_pipeline(
             .blend_enable(false)
             .build();
 
-    let color_blend_attachments =
-        [color_blend_attachment, id_color_blend_attachment];
+    let mask_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(false)
+            .build();
+
+    let color_blend_attachments = [
+        color_blend_attachment,
+        id_color_blend_attachment,
+        mask_color_blend_attachment,
+    ];
 
     let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
         .logic_op_enable(false)
