@@ -13,8 +13,10 @@ use anyhow::Result;
 
 use super::{create_shader_module, read_shader_from_file};
 
-use crate::app::node_flags::SelectionBuffer;
 use crate::vulkan::{texture::Texture, GfaestusVk, SwapchainProperties};
+use crate::{
+    app::node_flags::SelectionBuffer, vulkan::render_pass::Framebuffers,
+};
 
 pub struct SelectionOutlineEdgePipeline {
     descriptor_pool: vk::DescriptorPool,
@@ -122,6 +124,94 @@ impl SelectionOutlineEdgePipeline {
         unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
     }
 
+    pub fn draw(
+        &self,
+        device: &Device,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
+        let clear_values = {
+            [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            }]
+        };
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.selection_edge_detect)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        // let vx_bufs = [];
+        let desc_sets = [self.descriptor_set];
+        // let offsets = [];
+
+        unsafe {
+            // device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        let push_constants = PushConstants::new(viewport_dims, true);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline_layout,
+                Flags::VERTEX | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, 3u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
 
@@ -198,7 +288,7 @@ fn create_pipeline(
 
     let input_assembly_info =
         vk::PipelineInputAssemblyStateCreateInfo::builder()
-            .topology(vk::PrimitiveTopology::LINE_LIST)
+            .topology(vk::PrimitiveTopology::TRIANGLE_LIST)
             .primitive_restart_enable(false)
             .build();
 
@@ -351,12 +441,10 @@ impl PushConstants {
             add_float(self.height);
         }
 
-        let offset = 8;
-
         if self.enabled {
-            bytes[12] = 1;
+            bytes[11] = 1;
         } else {
-            bytes[12] = 0;
+            bytes[11] = 0;
         }
 
         bytes
