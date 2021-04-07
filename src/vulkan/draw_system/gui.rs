@@ -15,10 +15,10 @@ use nalgebra_glm as glm;
 
 use anyhow::Result;
 
-use crate::geometry::Point;
 use crate::view::View;
 use crate::vulkan::texture::Texture;
 use crate::vulkan::SwapchainProperties;
+use crate::{geometry::Point, vulkan::render_pass::Framebuffers};
 
 use super::{create_shader_module, read_shader_from_file};
 
@@ -133,8 +133,7 @@ impl GuiPipeline {
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
-        _framebuffer: vk::Framebuffer,
-        framebuffer_dc: vk::Framebuffer,
+        framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
         let device = &self.device;
@@ -148,7 +147,7 @@ impl GuiPipeline {
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
-            .framebuffer(framebuffer_dc)
+            .framebuffer(framebuffers.gui)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,

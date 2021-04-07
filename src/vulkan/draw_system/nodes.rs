@@ -19,6 +19,8 @@ use crate::vulkan::texture::Texture1D;
 use crate::vulkan::GfaestusVk;
 use crate::vulkan::SwapchainProperties;
 
+use crate::vulkan::render_pass::Framebuffers;
+
 use super::Vertex;
 use super::{create_shader_module, read_shader_from_file};
 
@@ -746,8 +748,7 @@ impl NodePipelines {
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-        _framebuffer_dc: vk::Framebuffer,
+        framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
         node_width: f32,
         view: View,
@@ -786,7 +787,7 @@ impl NodePipelines {
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
-            .framebuffer(framebuffer)
+            .framebuffer(framebuffers.nodes)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,

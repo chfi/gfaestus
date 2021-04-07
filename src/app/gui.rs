@@ -20,9 +20,9 @@ mod theme_editor;
 
 use theme_editor::*;
 
-use crate::app::RenderConfigOpts;
 use crate::geometry::*;
 use crate::view::View;
+use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
@@ -644,15 +644,13 @@ impl GfaestusGui {
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-        framebuffer_dc: vk::Framebuffer,
+        framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
     ) -> Result<()> {
         self.gui_draw_system.draw(
             cmd_buf,
             render_pass,
-            framebuffer,
-            framebuffer_dc,
+            framebuffers,
             screen_dims,
         )
     }

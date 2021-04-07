@@ -12,8 +12,8 @@ use handlegraph::handle::NodeId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::node_flags::SelectionBuffer;
-use crate::geometry::*;
 use crate::view::{ScreenDims, View};
+use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
@@ -153,8 +153,7 @@ impl MainView {
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
-        framebuffer: vk::Framebuffer,
-        framebuffer_dc: vk::Framebuffer,
+        framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
         offset: Point,
     ) -> Result<()> {
@@ -171,8 +170,7 @@ impl MainView {
         self.node_draw_system.draw_themed(
             cmd_buf,
             render_pass,
-            framebuffer,
-            framebuffer_dc,
+            framebuffers,
             screen_dims,
             node_width,
             view,

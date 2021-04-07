@@ -11,6 +11,7 @@ use gfaestus::input::*;
 use gfaestus::universe::*;
 use gfaestus::view::View;
 use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
+use gfaestus::vulkan::render_pass::Framebuffers;
 
 use rgb::*;
 
@@ -343,8 +344,7 @@ fn main() {
                 let draw =
                     |device: &Device,
                      cmd_buf: vk::CommandBuffer,
-                     framebuffer: vk::Framebuffer,
-                     framebuffer_dc: vk::Framebuffer| {
+                     framebuffers: &Framebuffers| {
                         let size = window.inner_size();
 
                         unsafe {
@@ -385,8 +385,7 @@ fn main() {
                             .draw_nodes(
                                 cmd_buf,
                                 node_pass,
-                                framebuffer,
-                                framebuffer_dc,
+                                framebuffers,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
                             )
@@ -436,8 +435,7 @@ fn main() {
                         gui.draw(
                             cmd_buf,
                             gui_pass,
-                            framebuffer,
-                            framebuffer_dc,
+                            framebuffers,
                             [size.width as f32, size.height as f32],
                         )
                         .unwrap();

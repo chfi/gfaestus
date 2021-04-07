@@ -34,6 +34,8 @@ use std::{
 
 use anyhow::Result;
 
+use render_pass::Framebuffers;
+
 pub struct GfaestusVk {
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
@@ -251,7 +253,7 @@ impl GfaestusVk {
 
     pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
     where
-        F: FnOnce(&Device, vk::CommandBuffer, vk::Framebuffer, vk::Framebuffer),
+        F: FnOnce(&Device, vk::CommandBuffer, &Framebuffers),
     {
         let sync_objects = self.in_flight_frames.next().unwrap();
 
@@ -310,7 +312,7 @@ impl GfaestusVk {
             &signal_semaphores,
             in_flight_fence,
             |cmd_buf| {
-                commands(device, cmd_buf, framebuffers.nodes, framebuffers.gui);
+                commands(device, cmd_buf, framebuffers);
             },
         )?;
 
