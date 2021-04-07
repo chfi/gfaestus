@@ -432,8 +432,8 @@ impl NodeAttachments {
             queue,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED,
-            vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            // vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+            // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             vk::Format::R8G8B8A8_UNORM,
             Some(mask_sampler),
@@ -453,7 +453,8 @@ impl RenderPasses {
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
             swapchain_props,
-            vk::Format::R8G8B8A8_UNORM,
+            swapchain_props.format.format,
+            // vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
             Self::create_selection_blur(device, swapchain_props)?;
@@ -506,7 +507,8 @@ impl RenderPasses {
         }?;
 
         let selection_edge_detect = {
-            let attachments = [offscreen_attachment.color.view];
+            // let attachments = [offscreen_attachment.color.view];
+            let attachments = [swapchain_image_view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.selection_edge_detect)
@@ -571,7 +573,8 @@ impl RenderPasses {
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
             swapchain_props,
-            vk::Format::R8G8B8A8_UNORM,
+            swapchain_props.format.format,
+            // vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
             Self::create_selection_blur(device, swapchain_props)?;
@@ -663,7 +666,8 @@ impl RenderPasses {
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             // .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 

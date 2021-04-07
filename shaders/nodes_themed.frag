@@ -32,8 +32,9 @@ void main() {
   f_id = uint(node_id);
 
   if ((is_selected & 1) == 1) {
-  // if ((is_selected & 1) != 0) {
     f_mask = vec4(1.0, 1.0, 1.0, 1.0);
+  } else {
+    f_mask = vec4(0.0, 0.0, 0.0, 0.0);
   }
 
   float color_u = float((node_id - 1) % node_uniform.texture_period) / node_uniform.texture_period;

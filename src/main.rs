@@ -13,6 +13,8 @@ use gfaestus::view::View;
 use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
+use gfaestus::vulkan::draw_system::selection::SelectionOutlineEdgePipeline;
+
 use rgb::*;
 
 use anyhow::Result;
@@ -204,6 +206,14 @@ fn main() {
         .unwrap()
     };
 
+    let mut selection_edge = SelectionOutlineEdgePipeline::new(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_edge_detect,
+        gfaestus.node_attachments.mask_resolve,
+    )
+    .unwrap();
+
     dbg!();
 
     event_loop.run(move |event, _, control_flow| {
@@ -310,6 +320,9 @@ fn main() {
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
+
+selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.node_attachments.mask_resolve);
+
                         main_view
                             .recreate_node_id_buffer(
                                 &gfaestus,
@@ -335,7 +348,10 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
+                let device = gfaestus.vk_context().device().clone();
+
                 let node_pass = gfaestus.render_passes.nodes;
+                let edge_pass = gfaestus.render_passes.selection_edge_detect;
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
@@ -347,6 +363,8 @@ fn main() {
                      framebuffers: &Framebuffers| {
                         let size = window.inner_size();
 
+
+                         /*
                         unsafe {
                             let mask_image_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(
@@ -380,6 +398,7 @@ fn main() {
                                 &image_memory_barriers,
                             );
                         }
+                         */
 
                         main_view
                             .draw_nodes(
@@ -431,6 +450,9 @@ fn main() {
                                 &image_memory_barriers,
                             );
                         }
+
+                        selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
+                            [size.width as f32, size.height as f32]).unwrap();
 
                         gui.draw(
                             cmd_buf,
