@@ -254,6 +254,244 @@ impl SelectionOutlineEdgePipeline {
     }
 }
 
+pub struct SelectionOutlineBlurPipeline {
+    descriptor_pool: vk::DescriptorPool,
+    descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_set: vk::DescriptorSet,
+
+    pipeline_layout: vk::PipelineLayout,
+    pipeline: vk::Pipeline,
+}
+
+impl SelectionOutlineBlurPipeline {
+    pub fn new(
+        app: &GfaestusVk,
+        image_count: u32,
+        render_pass: vk::RenderPass,
+        offscreen_image: Texture,
+    ) -> Result<Self> {
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let layout = Self::create_descriptor_set_layout(device)?;
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        for set in descriptor_sets.iter() {
+            let image_info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                .image_view(offscreen_image.view)
+                .sampler(offscreen_image.sampler.unwrap())
+                .build();
+            let image_infos = [image_info];
+
+            let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+                .image_info(&image_infos)
+                .build();
+
+            let descriptor_writes = [sampler_descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(device, render_pass, layout);
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: layout,
+            descriptor_set: descriptor_sets[0],
+            pipeline_layout,
+            pipeline,
+        })
+    }
+
+    pub fn write_descriptor_set(
+        &mut self,
+        device: &Device,
+        new_image: Texture,
+    ) {
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(new_image.view)
+            .sampler(new_image.sampler.unwrap())
+            .build();
+        let image_infos = [image_info];
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)
+            .build();
+
+        let descriptor_writes = [sampler_descriptor_write];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+    }
+
+    pub fn draw(
+        &self,
+        device: &Device,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
+        // let clear_values = [];
+        let clear_values = {
+            [vk::ClearValue {
+                color: vk::ClearColorValue {
+                    float32: [0.0, 0.0, 0.0, 1.0],
+                },
+            }]
+        };
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.selection_blur)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        // let vx_bufs = [];
+        let desc_sets = [self.descriptor_set];
+        // let offsets = [];
+
+        unsafe {
+            // device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        let push_constants = PushConstants::new(viewport_dims, true);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline_layout,
+                Flags::VERTEX | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, 3u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
+    fn layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build()
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
+    fn create_pipeline(
+        device: &Device,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        create_pipeline(
+            device,
+            render_pass,
+            descriptor_set_layout,
+            "shaders/post.vert.spv",
+            "shaders/post_edge.frag.spv",
+            // "shaders/post_blur.frag.spv",
+        )
+    }
+}
+
 fn create_pipeline(
     device: &Device,
     render_pass: vk::RenderPass,
