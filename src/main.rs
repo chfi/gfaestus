@@ -13,7 +13,9 @@ use gfaestus::view::View;
 use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
-use gfaestus::vulkan::draw_system::selection::SelectionOutlineEdgePipeline;
+use gfaestus::vulkan::draw_system::selection::{
+    SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
+};
 
 use rgb::*;
 
@@ -214,6 +216,14 @@ fn main() {
     )
     .unwrap();
 
+    let mut selection_blur = SelectionOutlineBlurPipeline::new(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_blur,
+        gfaestus.offscreen_attachment.color,
+    )
+    .unwrap();
+
     dbg!();
 
     event_loop.run(move |event, _, control_flow| {
@@ -321,7 +331,11 @@ fn main() {
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
 
-selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.node_attachments.mask_resolve);
+                        selection_edge.write_descriptor_set(gfaestus.vk_context().device(),
+                                                            gfaestus.node_attachments.mask_resolve);
+
+                        selection_blur.write_descriptor_set(gfaestus.vk_context().device(),
+                                                            gfaestus.offscreen_attachment.color);
 
                         main_view
                             .recreate_node_id_buffer(
@@ -352,10 +366,13 @@ selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.nod
 
                 let node_pass = gfaestus.render_passes.nodes;
                 let edge_pass = gfaestus.render_passes.selection_edge_detect;
+                let blur_pass = gfaestus.render_passes.selection_blur;
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
                 let node_mask_image = gfaestus.node_attachments.mask_resolve.image;
+
+                let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
                 let draw =
                     |device: &Device,
@@ -364,18 +381,18 @@ selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.nod
                         let size = window.inner_size();
 
 
-                         /*
+
                         unsafe {
-                            let mask_image_barrier = vk::ImageMemoryBarrier::builder()
+                            let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(
                                     vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                                 )
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-                                .image(node_mask_image)
+                                .image(offscreen_image)
                                 .subresource_range(vk::ImageSubresourceRange {
                                     aspect_mask: vk::ImageAspectFlags::COLOR,
                                     base_mip_level: 0,
@@ -387,7 +404,7 @@ selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.nod
 
                             let memory_barriers = [];
                             let buffer_memory_barriers = [];
-                            let image_memory_barriers = [mask_image_barrier];
+                            let image_memory_barriers = [offscreen_image_barrier];
                             device.cmd_pipeline_barrier(
                                 cmd_buf,
                                 vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
@@ -398,7 +415,6 @@ selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.nod
                                 &image_memory_barriers,
                             );
                         }
-                         */
 
                         main_view
                             .draw_nodes(
@@ -451,16 +467,57 @@ selection_edge.write_descriptor_set(gfaestus.vk_context().device(), gfaestus.nod
                             );
                         }
 
-                        selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
+                        // selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
+                        //     [size.width as f32, size.height as f32]).unwrap();
+
+
+                        unsafe {
+                            let image_memory_barrier = vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                // .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                                // .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .image(offscreen_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build();
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [image_memory_barrier];
+                            // let image_memory_barriers = [];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
+
+                        selection_blur.draw(&device, cmd_buf, blur_pass, framebuffers,
                             [size.width as f32, size.height as f32]).unwrap();
 
-                        gui.draw(
-                            cmd_buf,
-                            gui_pass,
-                            framebuffers,
-                            [size.width as f32, size.height as f32],
-                        )
-                        .unwrap();
+                        // gui.draw(
+                        //     cmd_buf,
+                        //     gui_pass,
+                        //     framebuffers,
+                        //     [size.width as f32, size.height as f32],
+                        // )
+                        // .unwrap();
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
