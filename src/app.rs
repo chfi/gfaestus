@@ -4,11 +4,6 @@ pub mod node_flags;
 pub mod settings;
 pub mod theme;
 
-use node_flags::*;
-
-use vulkano::device::Queue;
-use vulkano::sync::GpuFuture;
-
 use std::sync::Arc;
 
 use crossbeam::channel;
@@ -29,8 +24,7 @@ use theme::*;
 pub use settings::*;
 
 pub struct App {
-    themes: Themes,
-
+    // themes: Themes,
     mouse_pos: MousePos,
     screen_dims: ScreenDims,
 
@@ -48,7 +42,7 @@ pub struct App {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
     KeyClearSelection,
-    KeyToggleTheme,
+    // KeyToggleTheme,
     KeyToggleOverlay,
 }
 
@@ -59,7 +53,7 @@ impl BindableInput for AppInput {
 
         let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
             (Key::Escape, Input::KeyClearSelection),
-            (Key::F9, Input::KeyToggleTheme),
+            // (Key::F9, Input::KeyToggleTheme),
             (Key::F10, Input::KeyToggleOverlay),
         ]
         .iter()
@@ -112,19 +106,18 @@ pub enum RenderConfigOpts {
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(
-        queue: Arc<Queue>,
+        // queue: Arc<Queue>,
         mouse_pos: MousePos,
         screen_dims: Dims,
     ) -> Result<Self> {
-        let themes = Themes::new_from_primary_and_secondary(
-            queue.clone(),
-            &dark_default(),
-            &light_default(),
-        )?;
+        // let themes = Themes::new_from_primary_and_secondary(
+        //     queue.clone(),
+        //     &dark_default(),
+        //     &light_default(),
+        // )?;
 
         Ok(Self {
-            themes,
-
+            // themes,
             mouse_pos,
             screen_dims: screen_dims.into(),
 
@@ -140,44 +133,44 @@ impl App {
         })
     }
 
-    pub fn themes(&self) -> &Themes {
-        &self.themes
-    }
+    // pub fn themes(&self) -> &Themes {
+    //     &self.themes
+    // }
 
-    pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
-        self.themes.active_theme()
-    }
+    // pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
+    //     self.themes.active_theme()
+    // }
 
-    pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
-        self.themes.active_theme_ignore_cache()
-    }
+    // pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
+    //     self.themes.active_theme_ignore_cache()
+    // }
 
-    pub fn active_theme_def(&self) -> (ThemeId, &ThemeDef) {
-        let (id, _) = self.themes.active_theme_ignore_cache();
-        let def = self.themes.get_theme_def(id);
-        (id, def)
-    }
+    // pub fn active_theme_def(&self) -> (ThemeId, &ThemeDef) {
+    //     let (id, _) = self.themes.active_theme_ignore_cache();
+    //     let def = self.themes.get_theme_def(id);
+    //     (id, def)
+    // }
 
-    pub fn all_theme_defs(&self) -> Vec<(ThemeId, &ThemeDef)> {
-        let mut res = Vec::new();
-        res.push((ThemeId::Primary, &self.themes.primary_def));
-        res.push((ThemeId::Secondary, &self.themes.secondary_def));
-        res
-    }
+    // pub fn all_theme_defs(&self) -> Vec<(ThemeId, &ThemeDef)> {
+    //     let mut res = Vec::new();
+    //     res.push((ThemeId::Primary, &self.themes.primary_def));
+    //     res.push((ThemeId::Secondary, &self.themes.secondary_def));
+    //     res
+    // }
 
-    pub fn active_theme_luma(&self) -> f32 {
-        let (_, theme) = self.active_theme_ignore_cache();
-        theme.bg_luma()
-    }
+    // pub fn active_theme_luma(&self) -> f32 {
+    //     let (_, theme) = self.active_theme_ignore_cache();
+    //     theme.bg_luma()
+    // }
 
-    pub fn dark_active_theme(&self) -> bool {
-        let (_, theme) = self.active_theme_ignore_cache();
-        theme.is_dark()
-    }
+    // pub fn dark_active_theme(&self) -> bool {
+    //     let (_, theme) = self.active_theme_ignore_cache();
+    //     theme.is_dark()
+    // }
 
-    pub fn theme_upload_future(&mut self) -> Option<Box<dyn GpuFuture>> {
-        self.themes.take_future()
-    }
+    // pub fn theme_upload_future(&mut self) -> Option<Box<dyn GpuFuture>> {
+    //     self.themes.take_future()
+    // }
 
     pub fn hover_node(&self) -> Option<NodeId> {
         self.hover_node
@@ -251,17 +244,17 @@ impl App {
                         self.selected_nodes.clear();
                     }
                 }
-                AppInput::KeyToggleTheme => {
-                    if state.pressed() {
-                        let new_theme = self.themes.toggle_theme();
-                        let is_dark = self.dark_active_theme();
-                        let luma = self.active_theme_luma();
-                        println!(
-                            "{:?}\tdark? {}\tluma: {}",
-                            new_theme, is_dark, luma
-                        );
-                    }
-                }
+                // AppInput::KeyToggleTheme => {
+                //     if state.pressed() {
+                //         let new_theme = self.themes.toggle_theme();
+                //         let is_dark = self.dark_active_theme();
+                //         let luma = self.active_theme_luma();
+                //         println!(
+                //             "{:?}\tdark? {}\tluma: {}",
+                //             new_theme, is_dark, luma
+                //         );
+                //     }
+                // }
                 AppInput::KeyToggleOverlay => {
                     if state.pressed() {
                         self.use_overlay = !self.use_overlay;
@@ -271,19 +264,19 @@ impl App {
         }
     }
 
-    pub fn active_theme_config_state(&self) -> settings::AppConfigState {
-        let (id, _) = self.themes.active_theme_ignore_cache();
+    // pub fn active_theme_config_state(&self) -> settings::AppConfigState {
+    //     let (id, _) = self.themes.active_theme_ignore_cache();
 
-        let def = self.themes.get_theme_def(id).clone();
+    //     let def = self.themes.get_theme_def(id).clone();
 
-        settings::AppConfigState::Theme { id, def }
-    }
+    //     settings::AppConfigState::Theme { id, def }
+    // }
 
     pub fn apply_app_config_state(&mut self, app_cfg: AppConfigState) {
         match app_cfg {
-            AppConfigState::Theme { id, def } => {
-                self.themes.replace_theme_def(id, def).unwrap();
-            }
+            // AppConfigState::Theme { id, def } => {
+            //     self.themes.replace_theme_def(id, def).unwrap();
+            // }
             AppConfigState::ToggleOverlay => {
                 self.use_overlay = !self.use_overlay;
             }

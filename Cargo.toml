@@ -10,9 +10,10 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-vulkano = "0.20"
-vulkano-shaders = "0.20"
-vulkano-win = "0.20"
+ash = "0.31"
+ash-window = "0.5"
+vk-mem = "0.2.2"
+
 winit = "0.24"
 
 egui = "0.9"
@@ -33,6 +34,10 @@ handlegraph = "0.7.0-alpha.2"
 anyhow = "1.0"
 
 rustc-hash = "1.1"
+
+
+[profile.dev]
+opt-level = 2
 
 [profile.release]
 debug = true

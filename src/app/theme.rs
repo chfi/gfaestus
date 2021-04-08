@@ -1,11 +1,3 @@
-use vulkano::{
-    device::Queue,
-    format::R8G8B8A8Unorm,
-    image::{Dimensions, ImmutableImage, MipmapsCount},
-    sampler::{Filter, MipmapMode, Sampler, SamplerAddressMode},
-    sync::GpuFuture,
-};
-
 use rgb::*;
 
 use anyhow::Result;
@@ -48,6 +40,7 @@ impl std::default::Default for ThemeDef {
     }
 }
 
+/*
 /// A theme represented as a clear value-compatible background color,
 /// and an immutable image that can be indexed by node ID in the
 /// fragment shader
@@ -150,6 +143,7 @@ impl Theme {
         ))
     }
 }
+*/
 
 const RAINBOW: [(f32, f32, f32); 7] = [
     (1.0, 0.0, 0.0),
@@ -195,6 +189,7 @@ pub fn dark_default() -> ThemeDef {
     }
 }
 
+/*
 /// The running app's theme state, including the active & all uploaded
 /// themes. Tracks the theme texture's GPU upload state (to an extent),
 /// and whether draw systems using the active texture needs to recreate
@@ -388,3 +383,5 @@ impl Themes {
         }
     }
 }
+
+*/

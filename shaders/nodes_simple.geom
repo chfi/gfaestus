@@ -8,21 +8,20 @@ layout (triangle_strip, max_vertices = 4) out;
 
 layout (location = 0) out int node_id;
 
-layout (push_constant) uniform View {
+layout (push_constant) uniform NodePC {
+  mat4 view_transform;
   float node_width;
   float scale;
   vec2 viewport_dims;
-  mat4 view;
-  uint flags;
-} vo;
-
+  uint texture_period;
+} node_uniform;
 
 void build_rectangle(int id, vec4 pos0, vec4 pos1) {
   vec2 to_pos1 = vec2(pos1.x - pos0.x, pos1.y - pos0.y);
   vec2 norm_to_pos1 = normalize(to_pos1);
 
-  float screen_w = vo.viewport_dims.x;
-  float screen_h = vo.viewport_dims.y;
+  float screen_w = node_uniform.viewport_dims.x;
+  float screen_h = node_uniform.viewport_dims.y;
 
   float min_side = min(screen_w, screen_h);
   float pixel_size = 1 / min_side;
@@ -49,7 +48,7 @@ void build_rectangle(int id, vec4 pos0, vec4 pos1) {
 
   node_id = id;
 
-  float node_width = vo.node_width / (vo.scale * max(screen_w, screen_h));
+  float node_width = node_uniform.node_width / (node_uniform.scale * max(screen_w, screen_h));
 
   gl_Position = pos0 + vec4(to_pos1_orth, 0.0, 0.0) * node_width;
   EmitVertex();

@@ -27,6 +27,10 @@ impl GraphQuery {
         Ok(Self::new(graph))
     }
 
+    pub fn node_count(&self) -> usize {
+        self.graph.node_count()
+    }
+
     pub fn new(graph: PackedGraph) -> Self {
         let graph = Arc::new(graph);
         let query_thread = QueryThread::new(graph.clone());

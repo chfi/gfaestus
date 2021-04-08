@@ -13,7 +13,7 @@ pub fn viewport_scale(width: f32, height: f32) -> glm::Mat4 {
               0.0,     0.0,     0.0, 1.0)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, PartialOrd)]
 pub struct ScreenDims {
     pub width: f32,
     pub height: f32,
@@ -66,29 +66,29 @@ impl From<[u32; 2]> for ScreenDims {
     }
 }
 
-impl std::convert::TryFrom<vulkano::image::Dimensions> for ScreenDims {
-    type Error = ();
+// impl std::convert::TryFrom<vulkano::image::Dimensions> for ScreenDims {
+//     type Error = ();
 
-    #[inline]
-    fn try_from(dims: vulkano::image::Dimensions) -> Result<Self, ()> {
-        use vulkano::image::Dimensions as Dims;
-        match dims {
-            Dims::Dim2d { width, height } => Ok(Self {
-                width: width as f32,
-                height: height as f32,
-            }),
-            Dims::Dim2dArray { width, height, .. } => Ok(Self {
-                width: width as f32,
-                height: height as f32,
-            }),
-            Dims::Dim3d { width, height, .. } => Ok(Self {
-                width: width as f32,
-                height: height as f32,
-            }),
-            _ => Err(()),
-        }
-    }
-}
+//     #[inline]
+//     fn try_from(dims: vulkano::image::Dimensions) -> Result<Self, ()> {
+//         use vulkano::image::Dimensions as Dims;
+//         match dims {
+//             Dims::Dim2d { width, height } => Ok(Self {
+//                 width: width as f32,
+//                 height: height as f32,
+//             }),
+//             Dims::Dim2dArray { width, height, .. } => Ok(Self {
+//                 width: width as f32,
+//                 height: height as f32,
+//             }),
+//             Dims::Dim3d { width, height, .. } => Ok(Self {
+//                 width: width as f32,
+//                 height: height as f32,
+//             }),
+//             _ => Err(()),
+//         }
+//     }
+// }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {

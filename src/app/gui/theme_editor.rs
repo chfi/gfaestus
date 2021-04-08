@@ -117,9 +117,9 @@ impl ThemeEditorWindow {
                         }
                     };
 
-                    self.tx_theme
-                        .send(AppConfigState::Theme { id, def })
-                        .unwrap();
+                    // self.tx_theme
+                    //     .send(AppConfigState::Theme { id, def })
+                    //     .unwrap();
                     println!("Sent new theme");
                 }
             });

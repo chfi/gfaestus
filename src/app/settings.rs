@@ -93,7 +93,7 @@ impl ActiveRenderLayers {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppConfigState {
-    Theme { id: ThemeId, def: ThemeDef },
+    // Theme { id: ThemeId, def: ThemeDef },
     ToggleOverlay,
     // RenderLayers { active: ActiveRenderLayers },
 }

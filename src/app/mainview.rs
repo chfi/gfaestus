@@ -1,9 +1,3 @@
-use vulkano::command_buffer::{AutoCommandBuffer, AutoCommandBufferBuilder};
-use vulkano::device::Queue;
-use vulkano::framebuffer::{RenderPassAbstract, Subpass};
-use vulkano::sync::GpuFuture;
-use vulkano::{command_buffer::DynamicState, sampler::Sampler};
-
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
@@ -17,123 +11,101 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::geometry::*;
-use crate::render::nodes::OverlayCache;
-use crate::render::*;
+use super::node_flags::SelectionBuffer;
 use crate::view::{ScreenDims, View};
-use vulkano::command_buffer::AutoCommandBufferBuilderContextError;
+use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
-// use crate::input::binds::*;
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
     SystemInputBindings, WheelBind,
 };
 use crate::input::MousePos;
 
-use super::{
-    node_flags::{FlagUpdate, LayoutFlags, NodeFlag, NodeFlags},
-    theme::{Theme, ThemeId},
+use super::theme::ThemeId;
+
+use crate::vulkan::{
+    context::VkContext,
+    draw_system::nodes::{
+        NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices,
+    },
+    GfaestusVk, SwapchainProperties,
 };
 
-#[derive(Debug, Default, Clone)]
-pub struct NodeData {
-    vertices: Vec<Vertex>,
-    flags: LayoutFlags,
-    // _updates: FxHashSet<NodeId>
-}
+use ash::vk;
 
 pub struct MainView {
-    node_draw_system: NodeDrawSystem,
-    base_node_width: f32,
-    node_data: NodeData,
+    pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
+    pub node_id_buffer: NodeIdBuffer,
+    pub selection_buffer: SelectionBuffer,
 
-    line_draw_system: LineDrawSystem,
-    pub draw_grid: bool,
+    base_node_width: f32,
 
     view: Arc<AtomicCell<View>>,
     anim_handler_thread: AnimHandlerThread,
 }
 
 impl MainView {
-    pub fn new<Rn, Rl>(
-        // mouse_pos: MousePos,
-        gfx_queue: Arc<Queue>,
-        node_subpass: Subpass<Rn>,
-        line_subpass: Subpass<Rl>,
-    ) -> Result<(MainView, Box<dyn GpuFuture>)>
-    where
-        Rn: RenderPassAbstract + Send + Sync + Clone + 'static,
-        Rl: RenderPassAbstract + Send + Sync + Clone + 'static,
-    {
-        let (node_draw_system, future) =
-            NodeDrawSystem::new(gfx_queue.clone(), node_subpass)?;
+    pub fn new(
+        app: &GfaestusVk,
+        // vk_context: &VkContext,
+        node_count: usize,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> Result<Self> {
+        // let node_draw_system = NodeDrawAsh::new(
+        //     vk_context,
+        //     swapchain_props,
+        //     msaa_samples,
+        //     render_pass,
+        // )?;
 
-        let line_draw_system =
-            LineDrawSystem::new(gfx_queue.clone(), line_subpass);
+        let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
-        let draw_grid = false;
+        let node_draw_system = NodePipelines::new(
+            app,
+            swapchain_props,
+            msaa_samples,
+            render_pass,
+            selection_buffer.buffer,
+        )?;
+
+        let base_node_width = 100.0;
 
         let view = View::default();
 
         let anim_handler = AnimHandler::default();
         let view = Arc::new(AtomicCell::new(view));
 
-        let base_node_width = 100.0;
+        let screen_dims = {
+            let extent = swapchain_props.extent;
+            ScreenDims {
+                width: extent.width as f32,
+                height: extent.height as f32,
+            }
+        };
 
         let anim_handler_thread =
-            anim_handler_thread(anim_handler, view.clone());
+            anim_handler_thread(anim_handler, screen_dims, view.clone());
+
+        let node_id_buffer = NodeIdBuffer::new(
+            &app,
+            screen_dims.width as u32,
+            screen_dims.height as u32,
+        )?;
 
         let main_view = Self {
             node_draw_system,
-            base_node_width,
-            node_data: Default::default(),
+            node_id_buffer,
+            selection_buffer,
 
-            line_draw_system,
-            draw_grid,
+            base_node_width,
 
             view,
             anim_handler_thread,
         };
 
-        Ok((main_view, future))
-    }
-
-    pub fn prepare_themes(
-        &self,
-        sampler: &Arc<Sampler>,
-        primary: &Theme,
-        secondary: &Theme,
-    ) -> Result<()> {
-        self.node_draw_system
-            .prepare_themes(sampler, primary, secondary)
-    }
-
-    pub fn cache_theme(
-        &self,
-        sampler: &Arc<Sampler>,
-        theme_id: ThemeId,
-        theme: &Theme,
-    ) -> Result<()> {
-        self.node_draw_system.set_theme(sampler, theme_id, theme)
-    }
-
-    pub fn valid_theme_cache(&self, theme_id: ThemeId, hash: u64) -> bool {
-        if let Some(cached) = self.node_draw_system.cached_theme_hash(theme_id)
-        {
-            cached == hash
-        } else {
-            false
-        }
-    }
-
-    pub fn build_overlay_cache<I>(
-        &self,
-        colors: I,
-    ) -> Result<(OverlayCache, Box<dyn GpuFuture>)>
-    where
-        I: Iterator<Item = rgb::RGB<f32>>,
-    {
-        self.node_draw_system.build_overlay_cache(colors)
+        Ok(main_view)
     }
 
     pub fn view(&self) -> View {
@@ -154,174 +126,73 @@ impl MainView {
             .store(self.anim_handler_thread.initial_view.load());
     }
 
-    pub fn set_vertices<VI>(&mut self, vertices: VI)
-    where
-        VI: IntoIterator<Item = Vertex>,
-        VI::IntoIter: ExactSizeIterator,
-    {
-        self.node_data.vertices.clear();
-        self.node_data.flags.clear();
-        self.node_data.vertices.extend(vertices.into_iter());
+    pub fn node_id_buffer(&self) -> vk::Buffer {
+        self.node_id_buffer.buffer
+    }
 
-        let node_count = self.node_data.vertices.len() / 2;
-        self.node_draw_system
-            .allocate_node_selection_buffer(node_count)
-            .unwrap();
+    pub fn recreate_node_id_buffer(
+        &mut self,
+        app: &GfaestusVk,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
+        self.node_id_buffer.recreate(app, width, height)
+    }
+
+    pub fn read_node_id_at(&self, point: Point) -> Option<u32> {
+        let x = point.x as u32;
+        let y = point.y as u32;
+
+        self.node_id_buffer
+            .read(self.node_draw_system.device(), x, y)
+    }
+
+    pub fn draw_nodes(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        screen_dims: [f32; 2],
+        offset: Point,
+    ) -> Result<()> {
+        let view = self.view.load();
+
+        let node_width = {
+            let mut width = self.base_node_width;
+            if view.scale > 100.0 {
+                width *= view.scale / 100.0;
+            }
+            width
+        };
+
+        self.node_draw_system.draw_themed(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+            node_width,
+            view,
+            offset,
+            0,
+        )
     }
 
     pub fn update_node_selection(
         &mut self,
         new_selection: &FxHashSet<NodeId>,
     ) -> Result<()> {
-        let draw_sys = &self.node_draw_system;
-        let flags = &mut self.node_data.flags;
+        let device = self.node_draw_system.device();
+        let selection = &mut self.selection_buffer;
 
-        draw_sys.update_node_selection(|buffer| {
-            let _result = flags.update_selection(new_selection, buffer)?;
-            Ok(())
-        })
+        selection.update_selection(device, new_selection)
     }
 
     pub fn clear_node_selection(&mut self) -> Result<()> {
-        let draw_sys = &self.node_draw_system;
-        let flags = &mut self.node_data.flags;
+        let device = self.node_draw_system.device();
+        let selection = &mut self.selection_buffer;
 
-        flags.clear();
-
-        draw_sys.update_node_selection(|buffer| {
-            let _result = flags.clear_buffer(buffer)?;
-            Ok(())
-        })?;
-
-        Ok(())
-    }
-
-    pub fn has_vertices(&self) -> bool {
-        !self.node_data.vertices.is_empty()
-    }
-
-    pub fn draw_nodes_primary<'a>(
-        &self,
-        builder: &'a mut AutoCommandBufferBuilder,
-        dynamic_state: &DynamicState,
-        offset: Point,
-        theme: ThemeId,
-        overlay: Option<&OverlayCache>,
-    ) -> Result<&'a mut AutoCommandBufferBuilder> {
-        let view = self.view.load();
-        let node_width = {
-            let mut width = self.base_node_width;
-            if view.scale > 100.0 {
-                width *= view.scale / 100.0;
-            }
-            width
-        };
-
-        let vertices = if self.node_draw_system.has_cached_vertices() {
-            None
-        } else {
-            Some(self.node_data.vertices.iter().copied())
-        };
-
-        self.node_draw_system.draw_primary(
-            builder,
-            dynamic_state,
-            vertices,
-            view,
-            offset,
-            node_width,
-            theme,
-            overlay,
-        )
-    }
-
-    pub fn draw_nodes(
-        &self,
-        dynamic_state: &DynamicState,
-        offset: Point,
-        theme: ThemeId,
-        overlay: Option<&OverlayCache>,
-    ) -> Result<AutoCommandBuffer> {
-        let view = self.view.load();
-        let node_width = {
-            let mut width = self.base_node_width;
-            if view.scale > 100.0 {
-                width *= view.scale / 100.0;
-            }
-            width
-        };
-
-        let vertices = if self.node_draw_system.has_cached_vertices() {
-            None
-        } else {
-            Some(self.node_data.vertices.iter().copied())
-        };
-
-        self.node_draw_system.draw(
-            dynamic_state,
-            vertices,
-            view,
-            offset,
-            node_width,
-            // false,
-            theme,
-            overlay,
-        )
-    }
-
-    pub fn draw_nodes_dynamic<VI>(
-        &self,
-        dynamic_state: &DynamicState,
-        vertices: VI,
-        offset: Point,
-        theme: ThemeId,
-        overlay: Option<&OverlayCache>,
-    ) -> Result<AutoCommandBuffer>
-    where
-        VI: IntoIterator<Item = Vertex>,
-        VI::IntoIter: ExactSizeIterator,
-    {
-        let view = self.view.load();
-        let node_width = {
-            let mut width = self.base_node_width;
-            if view.scale > 100.0 {
-                width *= view.scale / 100.0;
-            }
-            width
-        };
-        self.node_draw_system.draw(
-            dynamic_state,
-            Some(vertices),
-            view,
-            offset,
-            node_width,
-            theme, // false,
-            overlay,
-        )
-    }
-
-    pub fn read_node_id_at<Dims: Into<ScreenDims>>(
-        &self,
-        screen_dims: Dims,
-        point: Point,
-    ) -> Option<u32> {
-        self.node_draw_system.read_node_id_at(screen_dims, point)
-    }
-
-    pub fn add_lines(
-        &self,
-        lines: &[(Point, Point)],
-        color: RGB<f32>,
-    ) -> Result<(usize, Box<dyn GpuFuture>)> {
-        self.line_draw_system.add_lines(lines, color)
-    }
-
-    pub fn draw_lines(
-        &self,
-        dynamic_state: &DynamicState,
-    ) -> Result<AutoCommandBuffer> {
-        let view = self.view.load();
-        self.line_draw_system.draw_stored(dynamic_state, view)
+        selection.clear();
+        selection.clear_buffer(device)
     }
 
     pub fn set_view_center(&self, center: Point) {
@@ -334,6 +205,10 @@ impl MainView {
         let mut view = self.view.load();
         view.scale = scale;
         self.view.store(view);
+    }
+
+    pub fn set_screen_dims<D: Into<ScreenDims>>(&self, dims: D) {
+        self.anim_handler_thread.screen_dims.store(dims.into());
     }
 
     pub fn set_mouse_pos(&self, pos: Option<Point>) {
@@ -414,7 +289,7 @@ impl MainView {
                         use crate::app::Select;
 
                         let selected_node = self
-                            .read_node_id_at(screen_dims, pos)
+                            .read_node_id_at(pos)
                             .map(|nid| NodeId::from(nid as u64));
 
                         if let Some(node) = selected_node {
@@ -438,6 +313,111 @@ impl MainView {
     }
 }
 
+// impl MainView {
+/*
+    pub fn prepare_themes(
+        &self,
+        sampler: &Arc<Sampler>,
+        primary: &Theme,
+        secondary: &Theme,
+    ) -> Result<()> {
+        self.node_draw_system
+            .prepare_themes(sampler, primary, secondary)
+    }
+
+    pub fn cache_theme(
+        &self,
+        sampler: &Arc<Sampler>,
+        theme_id: ThemeId,
+        theme: &Theme,
+    ) -> Result<()> {
+        self.node_draw_system.set_theme(sampler, theme_id, theme)
+    }
+
+    pub fn valid_theme_cache(&self, theme_id: ThemeId, hash: u64) -> bool {
+        if let Some(cached) = self.node_draw_system.cached_theme_hash(theme_id)
+        {
+            cached == hash
+        } else {
+            false
+        }
+    }
+
+    pub fn build_overlay_cache<I>(
+        &self,
+        colors: I,
+    ) -> Result<(OverlayCache, Box<dyn GpuFuture>)>
+    where
+        I: Iterator<Item = rgb::RGB<f32>>,
+    {
+        self.node_draw_system.build_overlay_cache(colors)
+    }
+
+    pub fn view(&self) -> View {
+        self.view.load()
+    }
+
+
+    pub fn update_node_selection(
+        &mut self,
+        new_selection: &FxHashSet<NodeId>,
+    ) -> Result<()> {
+        let draw_sys = &self.node_draw_system;
+        let flags = &mut self.node_data.flags;
+
+        draw_sys.update_node_selection(|buffer| {
+            let _result = flags.update_selection(new_selection, buffer)?;
+            Ok(())
+        })
+    }
+
+    pub fn clear_node_selection(&mut self) -> Result<()> {
+        let draw_sys = &self.node_draw_system;
+        let flags = &mut self.node_data.flags;
+
+        flags.clear();
+
+        draw_sys.update_node_selection(|buffer| {
+            let _result = flags.clear_buffer(buffer)?;
+            Ok(())
+        })?;
+
+        Ok(())
+    }
+
+    pub fn has_vertices(&self) -> bool {
+        !self.node_data.vertices.is_empty()
+    }
+
+
+    pub fn read_node_id_at<Dims: Into<ScreenDims>>(
+        &self,
+        screen_dims: Dims,
+        point: Point,
+    ) -> Option<u32> {
+        self.node_draw_system.read_node_id_at(screen_dims, point)
+    }
+
+    pub fn add_lines(
+        &self,
+        lines: &[(Point, Point)],
+        color: RGB<f32>,
+    ) -> Result<(usize, Box<dyn GpuFuture>)> {
+        self.line_draw_system.add_lines(lines, color)
+    }
+
+    pub fn draw_lines(
+        &self,
+        dynamic_state: &DynamicState,
+    ) -> Result<AutoCommandBuffer> {
+        let view = self.view.load();
+        self.line_draw_system.draw_stored(dynamic_state, view)
+    }
+
+*/
+
+// }
+
 pub enum DisplayLayer {
     Grid,
     Graph,
@@ -453,6 +433,7 @@ enum AnimMsg {
 
 pub struct AnimHandlerThread {
     settings: Arc<AtomicCell<AnimSettings>>,
+    screen_dims: Arc<AtomicCell<ScreenDims>>,
     initial_view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Option<Point>>>,
     _join_handle: std::thread::JoinHandle<()>,
@@ -495,8 +476,9 @@ impl AnimHandlerThread {
     }
 }
 
-fn anim_handler_thread(
+fn anim_handler_thread<D: Into<ScreenDims>>(
     anim_handler: AnimHandler,
+    screen_dims: D,
     view: Arc<AtomicCell<View>>,
 ) -> AnimHandlerThread {
     let mouse_pos = Arc::new(AtomicCell::new(None));
@@ -506,9 +488,12 @@ fn anim_handler_thread(
     let initial_view = view.load();
     let initial_view = Arc::new(AtomicCell::new(initial_view));
 
+    let screen_dims = Arc::new(AtomicCell::new(screen_dims.into()));
+
     let inner_settings = settings.clone();
     let inner_view = view;
     let inner_mouse_pos = mouse_pos.clone();
+    let inner_dims = screen_dims.clone();
 
     let (msg_tx, msg_rx) = channel::unbounded::<AnimMsg>();
 
@@ -519,6 +504,8 @@ fn anim_handler_thread(
         let settings = inner_settings;
         let view = inner_view;
         let mouse_pos = inner_mouse_pos;
+        let screen_dims = inner_dims;
+
         let mut anim = anim_handler;
 
         let mut last_update = std::time::Instant::now();
@@ -548,7 +535,8 @@ fn anim_handler_thread(
                 let dt = last_update.elapsed().as_secs_f32();
                 let settings = settings.load();
                 let pos = mouse_pos.load();
-                anim.update_cell(&settings, &view, pos, dt);
+                let dims = screen_dims.load();
+                anim.update_cell(&settings, &view, dims, pos, dt);
                 last_update = std::time::Instant::now();
             } else {
                 std::thread::sleep(sleep_delay);
@@ -561,12 +549,14 @@ fn anim_handler_thread(
         mouse_pos,
         msg_tx,
         settings,
+        screen_dims,
         initial_view,
     }
 }
 
 #[derive(Debug, Default, Clone)]
 pub struct AnimHandler {
+    // screen_dims: ScreenDims,
     mouse_pan_screen_origin: Option<Point>,
     view_anim_target: Option<View>,
     view_pan_const: Point,
@@ -575,15 +565,20 @@ pub struct AnimHandler {
 }
 
 impl AnimHandler {
+    // fn set_screen_dims<D: Into<ScreenDims>>(&mut self, dims: D) {
+    //     self.screen_dims = dims.into();
+    // }
+
     fn update_cell(
         &mut self,
         settings: &AnimSettings,
         view: &AtomicCell<View>,
+        screen_dims: ScreenDims,
         mouse_pos: Option<Point>,
         dt: f32,
     ) {
         let before = view.load();
-        let new = self.update(settings, before, mouse_pos, dt);
+        let new = self.update(settings, before, screen_dims, mouse_pos, dt);
         view.store(new);
     }
 
@@ -591,9 +586,13 @@ impl AnimHandler {
         &mut self,
         settings: &AnimSettings,
         mut view: View,
+        screen_dims: ScreenDims,
         mouse_pos: Option<Point>,
         dt: f32,
     ) -> View {
+        let pre_scale = view.scale;
+        let pre_view = view;
+
         view.scale += view.scale * dt * self.view_scale_delta;
 
         if let Some(min_scale) = settings.min_view_scale {
@@ -611,7 +610,62 @@ impl AnimHandler {
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
+        /*
+        if let Some(mouse) = mouse_pos {
+            // view.center += dxy * view.scale;
+
+            let mid = Point {
+                x: screen_dims.width / 2.0,
+                y: screen_dims.height / 2.0,
+            };
+
+            // let mid = Point::ZERO;
+
+            // let mouse = mouse
+            //     - Point {
+            //         x: screen_dims.width / 2.0,
+            //         y: screen_dims.height / 2.0,
+            //     };
+
+            // let mouse = mouse / 2.0;
+
+            // let mouse = Point {
+            //     x: mouse.x,
+            //     y: -mouse.y,
+            // };
+
+            let center = pre_view.screen_point_to_world(screen_dims, mid);
+
+            let mouse_world_pre =
+                pre_view.screen_point_to_world(screen_dims, mouse);
+
+            let pre_offset = mouse_world_pre - center;
+
+            let mouse_world_post =
+                view.screen_point_to_world(screen_dims, mouse);
+
+            let post_offset = mouse_world_post - center;
+
+            // println!("{:?}\t{:?}", mouse_world_pre, mouse_world_post);
+
+            // let delta = post_offset - pre_offset;
+
+            let delta = mouse_world_post - mouse_world_pre;
+            // let delta = mouse_world_post - post_center;
+
+            println!("{:?}", delta);
+
+            // let delta = Point {
+            //     x: delta.x * screen_dims.width,
+            //     y: delta.y * screen_dims.height,
+            // };
+
+            // view.center =
+            view.center += delta;
+        } else {
+            */
         view.center += dxy * view.scale;
+        // }
 
         // let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
         // let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));

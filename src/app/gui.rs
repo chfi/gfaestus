@@ -12,12 +12,6 @@ use handlegraph::{
 use anyhow::Result;
 
 use rustc_hash::FxHashMap;
-use vulkano::{
-    command_buffer::{AutoCommandBuffer, DynamicState},
-    device::Queue,
-    framebuffer::{RenderPassAbstract, Subpass},
-    sync::GpuFuture,
-};
 
 use crossbeam::channel;
 use parking_lot::Mutex;
@@ -26,10 +20,9 @@ mod theme_editor;
 
 use theme_editor::*;
 
-use crate::app::RenderConfigOpts;
 use crate::geometry::*;
-use crate::render::GuiDrawSystem;
 use crate::view::View;
+use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
@@ -41,12 +34,21 @@ use super::theme::{ThemeDef, ThemeId};
 
 use crate::app::settings::AppConfigState;
 
+use crate::vulkan::{
+    context::VkContext,
+    draw_system::gui::{GuiPipeline, GuiVertex, GuiVertices},
+    GfaestusVk, SwapchainProperties,
+};
+
+use ash::vk;
+
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
     enabled_ui_elements: EnabledUiElements,
 
-    gui_draw_system: GuiDrawSystem,
+    // gui_draw_system: GuiDrawSystem,
+    pub gui_draw_system: GuiPipeline,
 
     hover_node_id: Option<NodeId>,
     selected_node: NodeSelection,
@@ -204,14 +206,14 @@ pub struct GraphStats {
 }
 
 impl GfaestusGui {
-    pub fn new<R>(
-        gfx_queue: Arc<Queue>,
-        subpass: Subpass<R>,
-    ) -> Result<(GfaestusGui, channel::Receiver<AppConfigState>)>
-    where
-        R: RenderPassAbstract + Send + Sync + 'static,
-    {
-        let gui_draw_system = GuiDrawSystem::new(gfx_queue, subpass);
+    pub fn new(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+    ) -> Result<(GfaestusGui, channel::Receiver<AppConfigState>)> {
+        // let gui_draw_system = GuiDrawSystem::new(gfx_queue, subpass);
+        let gui_draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
 
         let ctx = egui::CtxRef::default();
 
@@ -613,6 +615,63 @@ impl GfaestusGui {
         self.ctx.is_pointer_over_area()
     }
 
+    pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+        let egui_tex = self.ctx.texture();
+        if egui_tex.version != self.gui_draw_system.texture_version() {
+            self.gui_draw_system.upload_texture(
+                app,
+                app.transient_command_pool,
+                app.graphics_queue,
+                &egui_tex,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn upload_vertices(
+        &mut self,
+        app: &GfaestusVk,
+        meshes: &[egui::ClippedMesh],
+    ) -> Result<()> {
+        self.gui_draw_system.vertices.upload_meshes(app, meshes)
+    }
+
+    pub fn draw(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        screen_dims: [f32; 2],
+    ) -> Result<()> {
+        self.gui_draw_system.draw(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+        )
+    }
+
+    pub fn end_frame(&self) -> Vec<egui::ClippedMesh> {
+        let (_output, shapes) = self.ctx.end_frame();
+        self.ctx.tessellate(shapes)
+    }
+
+    /*
+    fn draw_tessellated(&mut self, app: &GfaestusVk, clipped_meshes: &[egui::ClippedMesh]) -> Result<()> {
+        let egui_tex = self.ctx.texture();
+        if egui_tex.version != self.gui_draw_system.texture_version() {
+            self.gui_draw_system.upload_texture(
+                app,
+                app.transient_command_pool,
+                app.graphics_queue,
+                egui_tex,
+            )?;
+        }
+    }
+    */
+
+    /*
     fn draw_tessellated(
         &self,
         dynamic_state: &DynamicState,
@@ -628,10 +687,6 @@ impl GfaestusGui {
         Ok((cmd_buf, tex_future))
     }
 
-    pub fn push_event(&mut self, event: egui::Event) {
-        self.frame_input.events.push(event);
-    }
-
     pub fn end_frame_and_draw(
         &self,
         dynamic_state: &DynamicState,
@@ -645,6 +700,12 @@ impl GfaestusGui {
         }
 
         Some(self.draw_tessellated(dynamic_state, &clipped_meshes))
+    }
+
+    */
+
+    pub fn push_event(&mut self, event: egui::Event) {
+        self.frame_input.events.push(event);
     }
 
     pub fn apply_input(

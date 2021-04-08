@@ -1,34 +1,6 @@
-#[allow(unused_imports)]
-use vulkano::device::{Device, DeviceExtensions, RawDeviceExtensions};
-#[allow(unused_imports)]
-use vulkano::framebuffer::{
-    Framebuffer, FramebufferAbstract, RenderPassAbstract, Subpass,
-};
-#[allow(unused_imports)]
-use vulkano::instance::debug::{DebugCallback, MessageSeverity, MessageType};
-use vulkano::{
-    format::Format,
-    image::{
-        AttachmentImage, ImageAccess, ImageUsage, ImageViewAccess,
-        SwapchainImage,
-    },
-};
-
-use vulkano::instance::{Instance, PhysicalDevice};
-use vulkano::swapchain::{
-    self, AcquireError, ColorSpace, FullscreenExclusive, PresentMode,
-    SurfaceTransform, Swapchain, SwapchainCreationError,
-};
-use vulkano::sync::{self, FlushError, GpuFuture};
-use vulkano::{
-    command_buffer::{AutoCommandBufferBuilder, DynamicState, SubpassContents},
-    pipeline::viewport::Viewport,
-};
-
-use vulkano_win::VkSurfaceBuild;
-
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
@@ -37,14 +9,24 @@ use gfaestus::app::{App, AppConfigMsg, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
-use gfaestus::render::nodes::OverlayCache;
-use gfaestus::render::*;
 use gfaestus::universe::*;
-use gfaestus::util::*;
+use gfaestus::view::View;
+use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
+use gfaestus::vulkan::render_pass::Framebuffers;
+
+use gfaestus::vulkan::draw_system::selection::{
+    SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
+};
 
 use rgb::*;
 
 use anyhow::Result;
+
+use ash::{
+    extensions::{ext::DebugReport, khr::Surface},
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+};
+use ash::{vk, Device};
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -76,6 +58,7 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
+/*
 fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
     main_view: &MainView,
     graph_query: &GraphQuery,
@@ -88,6 +71,9 @@ fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
 
     Ok((overlay, future))
 }
+*/
+
+use gfaestus::vulkan::*;
 
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
@@ -137,24 +123,505 @@ fn main() {
         universe.layout().nodes().len() * 2
     );
 
+    let event_loop = EventLoop::new();
+    // let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
+    let window = WindowBuilder::new()
+        .with_title("Gfaestus")
+        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+        .build(&event_loop)
+        .unwrap();
+
+    let gfaestus = GfaestusVk::new(&window);
+
+    if let Err(err) = &gfaestus {
+        println!("{:?}", err.root_cause());
+    }
+
+    let mut gfaestus = gfaestus.unwrap();
+
+    let (winit_tx, winit_rx) =
+        crossbeam::channel::unbounded::<WindowEvent<'static>>();
+
+    let input_manager = InputManager::new(winit_rx);
+
+    let app_rx = input_manager.clone_app_rx();
+    let main_view_rx = input_manager.clone_main_view_rx();
+    let gui_rx = input_manager.clone_gui_rx();
+
+    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
+        .expect("error when creating App");
+
+    let node_vertices = universe.new_vertices();
+
+    let mut main_view = MainView::new(
+        &gfaestus,
+        graph_query.node_count(),
+        gfaestus.swapchain_props,
+        gfaestus.msaa_samples,
+        gfaestus.render_passes.nodes,
+        // gfaestus.render_pass,
+    )
+    .unwrap();
+
+    let (mut gui, opts_from_gui) = GfaestusGui::new(
+        &gfaestus,
+        gfaestus.swapchain_props,
+        gfaestus.msaa_samples,
+        gfaestus.render_passes.gui,
+        // gfaestus.render_pass_dc,
+    )
+    .unwrap();
+
+    gui.set_graph_stats(stats);
+
+    main_view
+        .node_draw_system
+        .vertices
+        .upload_vertices(&gfaestus, &node_vertices)
+        .unwrap();
+
+    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) =
+        crossbeam::channel::unbounded::<AppConfigMsg>();
+
+    let (opts_to_gui, opts_from_app) =
+        crossbeam::channel::unbounded::<AppConfigState>();
+
+    // for (id, def) in app.all_theme_defs() {
+    //     gui.update_theme_editor(id, def);
+    // }
+
+    let mut dirty_swapchain = false;
+
+    let mut selection_edge = SelectionOutlineEdgePipeline::new(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_edge_detect,
+        gfaestus.node_attachments.mask_resolve,
+    )
+    .unwrap();
+
+    let mut selection_blur = SelectionOutlineBlurPipeline::new(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_blur,
+        // gfaestus.render_passes.gui,
+        gfaestus.node_attachments.mask_resolve,
+        // gfaestus.offscreen_attachment.color,
+    )
+    .unwrap();
+
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        let event = if let Some(ev) = event.to_static() {
+            ev
+        } else {
+            return;
+        };
+
+        if let Event::WindowEvent { event, .. } = &event {
+            let ev = event.clone();
+            winit_tx.send(ev).unwrap();
+        }
+
+        gui.set_dark_mode();
+
+        // hacky -- this should take place after mouse pos is updated
+        // in egui but before input is sent to mainview
+        input_manager.set_mouse_over_gui(gui.pointer_over_gui());
+        input_manager.handle_events();
+
+        let screen_dims = app.dims();
+        let mouse_pos = app.mouse_pos();
+
+        gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
+        main_view.set_mouse_pos(Some(mouse_pos));
+        main_view.set_screen_dims(screen_dims);
+
+        let hover_node = main_view
+            .read_node_id_at(mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
+
+        app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+
+        gui.set_hover_node(hover_node);
+
+        if let Some(selected) = app.selected_nodes() {
+            if selected.len() == 1 {
+                let node_id = selected.iter().next().copied().unwrap();
+
+                if gui.selected_node() != Some(node_id) {
+                    let request = GraphQueryRequest::NodeStats(node_id);
+                    let resp = graph_query.query_request_blocking(request);
+                    if let GraphQueryResp::NodeStats {
+                        node_id,
+                        len,
+                        degree,
+                        coverage,
+                    } = resp
+                    {
+                        gui.one_selection(node_id, len, degree, coverage);
+                    }
+                }
+            } else {
+                gui.many_selection(selected.len());
+            }
+
+            main_view.update_node_selection(selected).unwrap();
+        } else {
+            gui.no_selection();
+            main_view.clear_node_selection().unwrap();
+        }
+
+        while let Ok(app_in) = app_rx.try_recv() {
+            app.apply_input(app_in);
+        }
+
+        while let Ok(gui_in) = gui_rx.try_recv() {
+            gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
+        }
+
+        // while let Ok(opt_in) = opts_from_gui.try_recv() {
+        //     app.apply_app_config_state(opt_in);
+        // }
+
+        while let Ok(main_view_in) = main_view_rx.try_recv() {
+            main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
+        }
+
+        while let Ok(app_msg) = app_msg_rx.try_recv() {
+            app.apply_app_msg(&app_msg);
+        }
+
+        while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
+            app.apply_app_config_msg(&cfg_msg);
+        }
+
+        match event {
+            Event::NewEvents(_) => {
+                // TODO
+            }
+            // Event::MainEventsCleared => {
+            // }
+            Event::RedrawEventsCleared => {
+                if dirty_swapchain {
+                    let size = window.inner_size();
+                    if size.width > 0 && size.height > 0 {
+                        app.update_dims([
+                            size.width as f32,
+                            size.height as f32,
+                        ]);
+                        gfaestus
+                            .recreate_swapchain(Some([size.width, size.height]))
+                            .unwrap();
+
+                        selection_edge.write_descriptor_set(
+                            gfaestus.vk_context().device(),
+                            gfaestus.node_attachments.mask_resolve,
+                        );
+
+                        selection_blur.write_descriptor_set(
+                            gfaestus.vk_context().device(),
+                            gfaestus.offscreen_attachment.color,
+                        );
+
+                        main_view
+                            .recreate_node_id_buffer(
+                                &gfaestus,
+                                size.width,
+                                size.height,
+                            )
+                            .unwrap();
+                    } else {
+                        return;
+                    }
+                }
+
+                gui.begin_frame(Some(app.dims().into()));
+
+                let meshes = gui.end_frame();
+
+                let render_pass = gfaestus.render_pass;
+                let render_pass_dc = gfaestus.render_pass_dc;
+
+                gui.upload_texture(&gfaestus).unwrap();
+
+                if !meshes.is_empty() {
+                    gui.upload_vertices(&gfaestus, &meshes).unwrap();
+                }
+
+                let device = gfaestus.vk_context().device().clone();
+
+                let node_pass = gfaestus.render_passes.nodes;
+                let edge_pass = gfaestus.render_passes.selection_edge_detect;
+                let blur_pass = gfaestus.render_passes.selection_blur;
+                let gui_pass = gfaestus.render_passes.gui;
+
+                let node_id_image = gfaestus.node_attachments.id_resolve.image;
+                let node_mask_image =
+                    gfaestus.node_attachments.mask_resolve.image;
+
+                let offscreen_image = gfaestus.offscreen_attachment.color.image;
+
+                let draw =
+                    |device: &Device,
+                     cmd_buf: vk::CommandBuffer,
+                     framebuffers: &Framebuffers| {
+                        let size = window.inner_size();
+
+
+
+                        unsafe {
+                            let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .image(offscreen_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build();
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [offscreen_image_barrier];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
+
+                        main_view
+                            .draw_nodes(
+                                cmd_buf,
+                                node_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                                Point::ZERO,
+                            )
+                            .unwrap();
+
+                        unsafe {
+                            // let (image_memory_barrier, _src_stage, _dst_stage) =
+                            //     GfaestusVk::image_transition_barrier(
+                            //         node_id_image,
+                            //         vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+                            //         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+                            //     );
+
+                            let image_memory_barrier = vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+                                .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .image(node_id_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build();
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [image_memory_barrier];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
+
+                        selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
+                            [size.width as f32, size.height as f32]).unwrap();
+
+
+                        unsafe {
+                            let image_memory_barrier = vk::ImageMemoryBarrier::builder()
+                                .src_access_mask(
+                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                                )
+                                .dst_access_mask(vk::AccessFlags::SHADER_READ)
+                                .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+                                .image(offscreen_image)
+                                .subresource_range(vk::ImageSubresourceRange {
+                                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                                    base_mip_level: 0,
+                                    level_count: 1,
+                                    base_array_layer: 0,
+                                    layer_count: 1,
+                                })
+                                .build();
+
+                            let memory_barriers = [];
+                            let buffer_memory_barriers = [];
+                            let image_memory_barriers = [image_memory_barrier];
+                            // let image_memory_barriers = [];
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                                vk::DependencyFlags::BY_REGION,
+                                &memory_barriers,
+                                &buffer_memory_barriers,
+                                &image_memory_barriers,
+                            );
+                        }
+
+                        selection_blur
+                            .draw(
+                                &device,
+                                cmd_buf,
+                                // gui_pass,
+                                blur_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                            )
+                            .unwrap();
+
+                        gui.draw(
+                            cmd_buf,
+                            gui_pass,
+                            framebuffers,
+                            [size.width as f32, size.height as f32],
+                        )
+                        .unwrap();
+                    };
+
+                dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
+
+                GfaestusVk::copy_image_to_buffer(
+                    gfaestus.vk_context().device(),
+                    gfaestus.transient_command_pool,
+                    gfaestus.graphics_queue,
+                    gfaestus.node_attachments.id_resolve.image,
+                    main_view.node_id_buffer(),
+                    vk::Extent2D {
+                        width: screen_dims.width as u32,
+                        height: screen_dims.height as u32,
+                    },
+                )
+                .unwrap();
+            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested => {
+                    *control_flow = ControlFlow::Exit;
+                }
+                WindowEvent::Resized { .. } => {
+                    dirty_swapchain = true;
+                }
+                WindowEvent::MouseInput { button, state, .. } => {
+                    // TODO
+                }
+                WindowEvent::CursorMoved { position, .. } => {
+                    // TODO
+                }
+                WindowEvent::MouseWheel { delta, .. } => {
+                    // TODO
+                }
+                _ => (),
+            },
+            Event::LoopDestroyed => {
+                gfaestus.wait_gpu_idle().unwrap();
+
+                let device = gfaestus.vk_context().device();
+
+                main_view.selection_buffer.destroy(device);
+                main_view.node_id_buffer.destroy(device);
+                main_view.node_draw_system.destroy();
+
+                gui.gui_draw_system.destroy();
+
+                selection_edge.destroy(device);
+                selection_blur.destroy(device);
+            }
+            _ => (),
+        }
+    });
+}
+
+/*
+fn main_old() {
+    let args = std::env::args().collect::<Vec<_>>();
+
+    let gfa_file = if let Some(name) = args.get(1) {
+        name
+    } else {
+        eprintln!("must provide path to a GFA file");
+        std::process::exit(1);
+    };
+
+    let layout_file = if let Some(name) = args.get(2) {
+        name
+    } else {
+        eprintln!("must provide path to a layout file");
+        std::process::exit(1);
+    };
+
+    eprintln!("loading GFA");
+    let t = std::time::Instant::now();
+    let init_t = std::time::Instant::now();
+
+    let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
+
+    let (universe, stats) =
+        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
+
+    let (top_left, bottom_right) = universe.layout().bounding_box();
+
+    eprintln!(
+        "layout bounding box\t({:.2}, {:.2})\t({:.2}, {:.2})",
+        top_left.x, top_left.y, bottom_right.x, bottom_right.y
+    );
+    eprintln!(
+        "layout width: {:.2}\theight: {:.2}",
+        bottom_right.x - top_left.x,
+        bottom_right.y - top_left.y
+    );
+
+    // let init_layout = layout.clone();
+
+    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+
+    eprintln!(
+        "Loaded {} nodes\t{} points",
+        universe.layout().nodes().len(),
+        universe.layout().nodes().len() * 2
+    );
+
     let extensions = vulkano_win::required_extensions();
-
-    /*
-    let layers = vec![
-        "VK_LAYER_MESA_device_select",
-        "VK_LAYER_RENDERDOC_Capture",
-        "VK_LAYER_KHRONOS_validation",
-    ];
-
-    let instance = Instance::new(None, &extensions, layers).unwrap();
-    */
 
     let instance = Instance::new(None, &extensions, None).unwrap();
     let physical = PhysicalDevice::enumerate(&instance).next().unwrap();
 
-    // use this to force using X, to allow window sharing on wayland
-    // let event_loop: EventLoop<()> =
-    //     winit::platform::unix::EventLoopExtUnix::new_x11().unwrap();
     let event_loop = EventLoop::new();
     let surface = WindowBuilder::new()
         .build_vk_surface(&event_loop, instance.clone())
@@ -174,10 +641,6 @@ fn main() {
     };
 
     let features = physical.supported_features().clone();
-
-    // this has to be false for renderdoc capture replays to work, but
-    // the application doesn't work outside renderdoc if it's false..
-    // features.buffer_device_address = false;
 
     let (device, mut queues) = Device::new(
         physical,
@@ -239,12 +702,6 @@ fn main() {
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let input_manager = InputManager::new(winit_rx);
-
-    // let input_manager = Arc::new(InputManager::new(winit_rx));
-    // let input_manager_loop = {
-    //     let input_manager = input_manager.clone();
-    //     std::thread::spawn(move || input_manager.handle_events())
-    // };
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
@@ -949,110 +1406,4 @@ fn update_viewport(
     };
     dynamic_state.viewports = Some(vec![viewport]);
 }
-
-/* vulkano debug stuff (for future reference)
-
-let shader_non_semantic_info_ext = {
-    // let ext_str = std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
-    // let ext_bstr = b"VK_KHR_shader_non_semantic_info";
-    // let ext_bstr_vec: Vec<u8> = ext_bstr[..].into();
-    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-    let ext_str_2 = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-    // let ext_str =
-    //     std::ffi::CString::from(b"VK_KHR_shader_non_semantic_info"[..]);
-    let raw_ext = vulkano::instance::RawInstanceExtensions::new(vec![ext_str]);
-
-    // vulkano::instance::InstanceExtensions::from(&raw_ext)
-    raw_ext
-};
-
-let raw_exts_core = vulkano::instance::RawInstanceExtensions::supported_by_core().unwrap();
-// let raw_extensions = raw_extensions.union(&shader_non_semantic_info_ext);
-
-println!("raw_exts_core: {:?}", raw_exts_core);
-
-let raw_exts = vulkano::instance::RawInstanceExtensions::from(&extensions);
-
-let extensions = raw_exts;
-// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
-// let extensions = raw_exts.union(&shader_non_semantic_info_ext);
-// enable vulkan debugging
-// extensions.
-
-// println!();
-// println!("raw_exts_2: {:?}", raw_exts_2);
-// let extensions = extensions.union(&shader_non_semantic_info_ext);
-// println!();
-
-// extensions.ext_debug_utils = true;
-
-println!("extensions: {:?}", extensions);
-println!();
-
-println!("List of Vulkan debugging layers available to use:");
-let mut layers = vulkano::instance::layers_list().unwrap();
-while let Some(l) = layers.next() {
-    println!("\t{}", l.name());
-}
-let layers = vec!["VK_LAYER_KHRONOS_validation"];
-let instance = Instance::new(None, &extensions, layers).unwrap();
-
-
-
-let raw_dev_ext = RawDeviceExtensions::from(&device_ext);
-let debug_dev_ext = {
-    let ext_str = std::ffi::CString::new("VK_KHR_shader_non_semantic_info").unwrap();
-    let raw_ext = RawDeviceExtensions::new(vec![ext_str]);
-
-    raw_ext
-};
-
-let device_ext = raw_dev_ext.union(&debug_dev_ext);
-
-println!("device extensions: {:?}", device_ext);
-
-println!("features: {:?}", physical.supported_features());
-
-
-
-let severity = MessageSeverity {
-    error: true,
-    warning: true,
-    information: true,
-    verbose: true,
-};
-
-let ty = MessageType::all();
-
-let _debug_callback = DebugCallback::new(&instance, severity, ty, |msg| {
-    let severity = if msg.severity.error {
-        "error"
-    } else if msg.severity.warning {
-        "warning"
-    } else if msg.severity.information {
-        "information"
-    } else if msg.severity.verbose {
-        "verbose"
-    } else {
-        panic!("no-impl");
-    };
-
-    let ty = if msg.ty.general {
-        "general"
-    } else if msg.ty.validation {
-        "validation"
-    } else if msg.ty.performance {
-        "performance"
-    } else {
-        panic!("no-impl");
-    };
-
-    println!(
-        "{} {} {}: {}",
-        msg.layer_prefix, ty, severity, msg.description
-    );
-})
-.ok();
-
-
 */
