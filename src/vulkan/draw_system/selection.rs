@@ -372,7 +372,7 @@ impl SelectionOutlineBlurPipeline {
         let clear_values = {
             [vk::ClearValue {
                 color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
+                    float32: [1.0, 1.0, 1.0, 1.0],
                 },
             }]
         };
@@ -384,7 +384,8 @@ impl SelectionOutlineBlurPipeline {
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
-            .framebuffer(framebuffers.selection_blur)
+            .framebuffer(framebuffers.gui)
+            // .framebuffer(framebuffers.selection_blur)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
@@ -486,8 +487,8 @@ impl SelectionOutlineBlurPipeline {
             render_pass,
             descriptor_set_layout,
             "shaders/post.vert.spv",
-            "shaders/post_edge.frag.spv",
-            // "shaders/post_blur.frag.spv",
+            // "shaders/post_edge.frag.spv",
+            "shaders/post_blur.frag.spv",
         )
     }
 }

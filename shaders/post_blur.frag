@@ -15,7 +15,7 @@ vec2 uv_coord(vec2 coord) {
 }
 
 void main() {
-  /*
+
   vec2 uv = gl_FragCoord.xy / vec2(dims.width, dims.height);
   vec4 fc = gl_FragCoord;
 
@@ -52,16 +52,14 @@ void main() {
     result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 0.0))).rgb * row2[1];
     result += texture(u_color_sampler, uv_coord(fc.xy + vec2(1.0, 1.0))).rgb * row2[2];
 
-    // f_color = vec4(result, color.a);
-    f_color = vec4(1.0, 1.0, 1.0, 1.0);
+    f_color = vec4(result, color.a);
+    // f_color = vec4(1.0, 1.0, 1.0, 1.0);
   } else {
     // vec3 result = texture(u_color_sampler, uv).rgb;
-    // f_color = color;
+    f_color = color;
     // f_color = vec4(result, color.a);
     // f_color = vec4(0.0, 0.0, 0.0, 1.0);
-    f_color = vec4(1.0, 1.0, 1.0, 1.0);
+    // f_color = vec4(1.0, 1.0, 1.0, 1.0);
   }
-  */
 
-  f_color = vec4(1.0, 1.0, 1.0, 1.0);
 }

@@ -219,8 +219,10 @@ fn main() {
     let mut selection_blur = SelectionOutlineBlurPipeline::new(
         &gfaestus,
         1,
-        gfaestus.render_passes.selection_blur,
-        gfaestus.offscreen_attachment.color,
+        // gfaestus.render_passes.selection_blur,
+        gfaestus.render_passes.gui,
+        gfaestus.node_attachments.mask_resolve,
+        // gfaestus.offscreen_attachment.color,
     )
     .unwrap();
 
@@ -331,11 +333,15 @@ fn main() {
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
 
-                        selection_edge.write_descriptor_set(gfaestus.vk_context().device(),
-                                                            gfaestus.node_attachments.mask_resolve);
+                        selection_edge.write_descriptor_set(
+                            gfaestus.vk_context().device(),
+                            gfaestus.node_attachments.mask_resolve,
+                        );
 
-                        selection_blur.write_descriptor_set(gfaestus.vk_context().device(),
-                                                            gfaestus.offscreen_attachment.color);
+                        selection_blur.write_descriptor_set(
+                            gfaestus.vk_context().device(),
+                            gfaestus.offscreen_attachment.color,
+                        );
 
                         main_view
                             .recreate_node_id_buffer(
@@ -370,7 +376,8 @@ fn main() {
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
-                let node_mask_image = gfaestus.node_attachments.mask_resolve.image;
+                let node_mask_image =
+                    gfaestus.node_attachments.mask_resolve.image;
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
@@ -467,8 +474,8 @@ fn main() {
                             );
                         }
 
-                        // selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
-                        //     [size.width as f32, size.height as f32]).unwrap();
+                        selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
+                            [size.width as f32, size.height as f32]).unwrap();
 
 
                         unsafe {
@@ -477,9 +484,7 @@ fn main() {
                                     vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
                                 )
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
-                                .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-                                // .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
-                                // .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                                .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                                 .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                                 .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
                                 .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
@@ -508,8 +513,16 @@ fn main() {
                             );
                         }
 
-                        selection_blur.draw(&device, cmd_buf, blur_pass, framebuffers,
-                            [size.width as f32, size.height as f32]).unwrap();
+                        selection_blur
+                            .draw(
+                                &device,
+                                cmd_buf,
+                                gui_pass,
+                                // blur_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                            )
+                            .unwrap();
 
                         // gui.draw(
                         //     cmd_buf,
