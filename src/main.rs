@@ -219,8 +219,8 @@ fn main() {
     let mut selection_blur = SelectionOutlineBlurPipeline::new(
         &gfaestus,
         1,
-        // gfaestus.render_passes.selection_blur,
-        gfaestus.render_passes.gui,
+        gfaestus.render_passes.selection_blur,
+        // gfaestus.render_passes.gui,
         gfaestus.node_attachments.mask_resolve,
         // gfaestus.offscreen_attachment.color,
     )
@@ -517,20 +517,20 @@ fn main() {
                             .draw(
                                 &device,
                                 cmd_buf,
-                                gui_pass,
-                                // blur_pass,
+                                // gui_pass,
+                                blur_pass,
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
                             )
                             .unwrap();
 
-                        // gui.draw(
-                        //     cmd_buf,
-                        //     gui_pass,
-                        //     framebuffers,
-                        //     [size.width as f32, size.height as f32],
-                        // )
-                        // .unwrap();
+                        gui.draw(
+                            cmd_buf,
+                            gui_pass,
+                            framebuffers,
+                            [size.width as f32, size.height as f32],
+                        )
+                        .unwrap();
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();

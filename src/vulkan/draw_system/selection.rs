@@ -135,7 +135,7 @@ impl SelectionOutlineEdgePipeline {
         let clear_values = {
             [vk::ClearValue {
                 color: vk::ClearColorValue {
-                    float32: [0.0, 0.0, 0.0, 1.0],
+                    float32: [0.0, 0.0, 0.0, 0.0],
                 },
             }]
         };
@@ -171,13 +171,9 @@ impl SelectionOutlineEdgePipeline {
             )
         };
 
-        // let vx_bufs = [];
         let desc_sets = [self.descriptor_set];
-        // let offsets = [];
 
         unsafe {
-            // device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
             let null = [];
             device.cmd_bind_descriptor_sets(
                 cmd_buf,
@@ -368,14 +364,7 @@ impl SelectionOutlineBlurPipeline {
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
-        // let clear_values = [];
-        let clear_values = {
-            [vk::ClearValue {
-                color: vk::ClearColorValue {
-                    float32: [1.0, 1.0, 1.0, 1.0],
-                },
-            }]
-        };
+        let clear_values = [];
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
@@ -384,8 +373,7 @@ impl SelectionOutlineBlurPipeline {
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
-            .framebuffer(framebuffers.gui)
-            // .framebuffer(framebuffers.selection_blur)
+            .framebuffer(framebuffers.selection_blur)
             .render_area(vk::Rect2D {
                 offset: vk::Offset2D { x: 0, y: 0 },
                 extent,
@@ -409,13 +397,9 @@ impl SelectionOutlineBlurPipeline {
             )
         };
 
-        // let vx_bufs = [];
         let desc_sets = [self.descriptor_set];
-        // let offsets = [];
 
         unsafe {
-            // device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
             let null = [];
             device.cmd_bind_descriptor_sets(
                 cmd_buf,
@@ -487,7 +471,6 @@ impl SelectionOutlineBlurPipeline {
             render_pass,
             descriptor_set_layout,
             "shaders/post.vert.spv",
-            // "shaders/post_edge.frag.spv",
             "shaders/post_blur.frag.spv",
         )
     }

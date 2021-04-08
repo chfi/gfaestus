@@ -10,8 +10,6 @@ use anyhow::Result;
 
 pub struct RenderPasses {
     pub nodes: vk::RenderPass,
-    // offscreen: vk::RenderPass,
-    // offscreen_msaa: vk::RenderPass,
     pub selection_edge_detect: vk::RenderPass,
     pub selection_blur: vk::RenderPass,
     pub gui: vk::RenderPass,
@@ -134,7 +132,6 @@ impl OffscreenAttachment {
             queue,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED,
-            // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             format,
@@ -307,16 +304,6 @@ impl NodeAttachments {
 
         let format = vk::Format::R32_UINT;
 
-        // let color = Texture::create_transient_color(
-        //     vk_context,
-        //     command_pool,
-        //     queue,
-        //     swapchain_props,
-        //     msaa_samples,
-        // )?;
-
-        // Ok(color)
-
         use vk::ImageLayout as Layout;
         use vk::ImageUsageFlags as Usage;
 
@@ -365,8 +352,6 @@ impl NodeAttachments {
             queue,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::TRANSFER_SRC,
-            // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-            // vk::ImageLayout::GENERAL,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             extent,
             vk::Format::R32_UINT,
@@ -434,7 +419,6 @@ impl NodeAttachments {
             queue,
             vk::ImageUsageFlags::COLOR_ATTACHMENT
                 | vk::ImageUsageFlags::SAMPLED,
-            // vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             vk::Format::R8G8B8A8_UNORM,
@@ -455,7 +439,6 @@ impl RenderPasses {
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
             swapchain_props,
-            // swapchain_props.format.format,
             vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
@@ -510,7 +493,6 @@ impl RenderPasses {
 
         let selection_edge_detect = {
             let attachments = [offscreen_attachment.color.view];
-            // let attachments = [swapchain_image_view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.selection_edge_detect)
@@ -538,10 +520,7 @@ impl RenderPasses {
         }?;
 
         let gui = {
-            // let attachments = [gui_intermediary.view, swapchain_image_view];
             let attachments = [swapchain_image_view];
-            // let attachments =
-            //     [node_attachments.resolve.view, swapchain_image_view];
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.gui)
@@ -575,7 +554,6 @@ impl RenderPasses {
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
             swapchain_props,
-            // swapchain_props.format.format,
             vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
@@ -606,7 +584,6 @@ impl RenderPasses {
     ) -> Result<vk::RenderPass> {
         // attachments:
         // TODO depth
-        // TODO mask + resolve
 
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
@@ -623,10 +600,7 @@ impl RenderPasses {
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            // .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
         let id_color_attch_desc = vk::AttachmentDescription::builder()
@@ -636,7 +610,6 @@ impl RenderPasses {
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
         let id_resolve_attch_desc = vk::AttachmentDescription::builder()
@@ -644,15 +617,11 @@ impl RenderPasses {
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
-            // .initial_layout(vk::ImageLayout::GENERAL)
-            // .final_layout(vk::ImageLayout::GENERAL)
             .initial_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
         let mask_attch_desc = vk::AttachmentDescription::builder()
-            // .format(swapchain_props.format.format)
             .format(vk::Format::R8G8B8A8_UNORM)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
@@ -662,16 +631,12 @@ impl RenderPasses {
             .build();
 
         let mask_resolve_attch_desc = vk::AttachmentDescription::builder()
-            // .format(swapchain_props.format.format)
             .format(vk::Format::R8G8B8A8_UNORM)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            // .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .final_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
             .build();
 
         let attch_descs = [
@@ -765,11 +730,10 @@ impl RenderPasses {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(format)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let attch_descs = [color_attch_desc];
@@ -821,11 +785,10 @@ impl RenderPasses {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
             .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let attch_descs = [color_attch_desc];
@@ -836,12 +799,10 @@ impl RenderPasses {
             .build();
 
         let color_attchs = [color_attch_ref];
-        let resolve_attchs = [];
 
         let subpass_desc = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attchs)
-            .resolve_attachments(&resolve_attchs)
             .build();
 
         let subpass_descs = [subpass_desc];
@@ -879,27 +840,12 @@ impl RenderPasses {
     ) -> Result<vk::RenderPass> {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
-            // .samples(msaa_samples)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::LOAD)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            // .initial_layout(vk::ImageLayout::UNDEFINED)
-            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
             .build();
-
-        /*
-        let resolve_attch_desc = vk::AttachmentDescription::builder()
-            .format(swapchain_props.format.format)
-            .samples(vk::SampleCountFlags::TYPE_1)
-            .load_op(vk::AttachmentLoadOp::LOAD)
-            .store_op(vk::AttachmentStoreOp::STORE)
-            // .initial_layout(vk::ImageLayout::UNDEFINED)
-            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-            .build();
-        */
 
         let attch_descs = [color_attch_desc]; //, resolve_attch_desc];
 
@@ -908,19 +854,11 @@ impl RenderPasses {
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        // let resolve_attch_ref = vk::AttachmentReference::builder()
-        //     .attachment(1)
-        //     .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        //     .build();
-
         let color_attchs = [color_attch_ref];
-        // let resolve_attchs = [resolve_attch_ref];
-        // let resolve_attchs = [];
 
         let subpass_desc = vk::SubpassDescription::builder()
             .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
             .color_attachments(&color_attchs)
-            // .resolve_attachments(&resolve_attchs)
             .build();
 
         let subpass_descs = [subpass_desc];
