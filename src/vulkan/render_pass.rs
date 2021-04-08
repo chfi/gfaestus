@@ -248,8 +248,10 @@ impl NodeAttachments {
     pub fn destroy(&mut self, device: &Device) {
         self.color.destroy(device);
         self.resolve.destroy(device);
-        self.mask.destroy(device);
         self.id_color.destroy(device);
+        self.id_resolve.destroy(device);
+        self.mask.destroy(device);
+        self.mask_resolve.destroy(device);
     }
 
     fn color(
@@ -486,8 +488,6 @@ impl RenderPasses {
                 .layers(1)
                 .build();
 
-            println!("node framebuffer {:#?}", framebuffer_info);
-
             unsafe { device.create_framebuffer(&framebuffer_info, None) }
         }?;
 
@@ -713,8 +713,6 @@ impl RenderPasses {
             .subpasses(&subpass_descs)
             .dependencies(&subpass_deps)
             .build();
-
-        println!("render_pass_info {:#?}", render_pass_info);
 
         let render_pass =
             unsafe { device.create_render_pass(&render_pass_info, None) }?;

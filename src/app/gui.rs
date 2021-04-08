@@ -36,10 +36,7 @@ use crate::app::settings::AppConfigState;
 
 use crate::vulkan::{
     context::VkContext,
-    draw_system::{
-        gui::{GuiPipeline, GuiVertex, GuiVertices},
-        NodeDrawAsh,
-    },
+    draw_system::gui::{GuiPipeline, GuiVertex, GuiVertices},
     GfaestusVk, SwapchainProperties,
 };
 

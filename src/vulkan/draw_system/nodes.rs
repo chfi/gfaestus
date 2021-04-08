@@ -866,6 +866,17 @@ impl NodePipelines {
     }
 
     pub fn destroy(&mut self) {
+        let device = &self.theme_pipeline.device;
+
+        unsafe {
+            device.destroy_descriptor_set_layout(
+                self.selection_descriptors.layout,
+                None,
+            );
+            device
+                .destroy_descriptor_pool(self.selection_descriptors.pool, None);
+        }
+
         self.vertices.destroy();
         self.theme_pipeline.destroy();
         self.overlay_pipeline.destroy();

@@ -165,6 +165,11 @@ impl Texture {
             unsafe { device.create_image_view(&create_info, None) }
         }?;
 
+        unsafe {
+            device.destroy_buffer(buffer, None);
+            device.free_memory(buf_mem, None);
+        }
+
         Ok(Self::new(image, memory, view, None))
     }
 
@@ -309,7 +314,6 @@ impl Texture1D {
 
     pub fn create_from_colors(
         app: &super::GfaestusVk,
-        // vk_context: &super::context::VkContext,
         command_pool: vk::CommandPool,
         transition_queue: vk::Queue,
         colors: &[rgb::RGB<f32>],
@@ -459,6 +463,11 @@ impl Texture1D {
 
             unsafe { device.create_image_view(&create_info, None) }
         }?;
+
+        unsafe {
+            device.destroy_buffer(buffer, None);
+            device.free_memory(buf_mem, None);
+        }
 
         Ok(Self::new(image, memory, view))
     }

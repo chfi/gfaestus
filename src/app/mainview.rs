@@ -25,9 +25,8 @@ use super::theme::ThemeId;
 
 use crate::vulkan::{
     context::VkContext,
-    draw_system::{
-        nodes::{NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices},
-        NodeDrawAsh,
+    draw_system::nodes::{
+        NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices,
     },
     GfaestusVk, SwapchainProperties,
 };
@@ -35,10 +34,9 @@ use crate::vulkan::{
 use ash::vk;
 
 pub struct MainView {
-    // pub node_draw_system: crate::vulkan::draw_system::NodeDrawAsh,
     pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
-    node_id_buffer: NodeIdBuffer,
-    selection_buffer: SelectionBuffer,
+    pub node_id_buffer: NodeIdBuffer,
+    pub selection_buffer: SelectionBuffer,
 
     base_node_width: f32,
 

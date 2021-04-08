@@ -245,6 +245,30 @@ impl GuiPipeline {
         Ok(())
     }
 
+    pub fn destroy(&mut self) {
+        let device = &self.device;
+
+        unsafe {
+            device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
+
+            device.destroy_sampler(self.sampler, None);
+
+            device.destroy_pipeline(self.pipeline, None);
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+
+            self.vertices.destroy();
+
+            if !self.texture.is_null() {
+                self.texture.destroy(device);
+            }
+        }
+    }
+
     pub fn texture_version(&self) -> u64 {
         self.texture_version
     }
@@ -557,9 +581,9 @@ impl GuiVertices {
         // let req_capacity: usize =
         //     meshes.iter().map(|mesh| mesh.indices.len()).sum();
 
-        if self.vertex_buffer != vk::Buffer::null() {
-            self.destroy();
-        }
+        // if self.vertex_buffer != vk::Buffer::null() {
+        self.destroy();
+        // }
 
         let mut vertices: Vec<GuiVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
@@ -625,25 +649,23 @@ impl GuiVertices {
     }
 
     pub fn destroy(&mut self) {
-        if self.has_vertices() {
-            unsafe {
-                self.device.destroy_buffer(self.vertex_buffer, None);
-                self.device.free_memory(self.vertex_memory, None);
+        unsafe {
+            self.device.destroy_buffer(self.vertex_buffer, None);
+            self.device.free_memory(self.vertex_memory, None);
 
-                self.device.destroy_buffer(self.index_buffer, None);
-                self.device.free_memory(self.index_memory, None);
-            }
-
-            self.vertex_buffer = vk::Buffer::null();
-            self.vertex_memory = vk::DeviceMemory::null();
-
-            self.index_buffer = vk::Buffer::null();
-            self.index_memory = vk::DeviceMemory::null();
-
-            self.ranges.clear();
-            self.vertex_offsets.clear();
-            self.clips.clear();
+            self.device.destroy_buffer(self.index_buffer, None);
+            self.device.free_memory(self.index_memory, None);
         }
+
+        self.vertex_buffer = vk::Buffer::null();
+        self.vertex_memory = vk::DeviceMemory::null();
+
+        self.index_buffer = vk::Buffer::null();
+        self.index_memory = vk::DeviceMemory::null();
+
+        self.ranges.clear();
+        self.vertex_offsets.clear();
+        self.clips.clear();
     }
 }
 

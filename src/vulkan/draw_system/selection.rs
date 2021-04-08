@@ -208,6 +208,19 @@ impl SelectionOutlineEdgePipeline {
         Ok(())
     }
 
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
+
+            device.destroy_pipeline(self.pipeline, None);
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
+    }
+
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
 
@@ -432,6 +445,19 @@ impl SelectionOutlineBlurPipeline {
         unsafe { device.cmd_end_render_pass(cmd_buf) };
 
         Ok(())
+    }
+
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+            device.destroy_descriptor_pool(self.descriptor_pool, None);
+
+            device.destroy_pipeline(self.pipeline, None);
+            device.destroy_pipeline_layout(self.pipeline_layout, None);
+        }
     }
 
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {

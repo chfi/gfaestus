@@ -1,5 +1,6 @@
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
@@ -123,16 +124,15 @@ fn main() {
     );
 
     let event_loop = EventLoop::new();
+    // let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
         .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
         .build(&event_loop)
         .unwrap();
 
-    dbg!();
     let gfaestus = GfaestusVk::new(&window);
 
-    dbg!();
     if let Err(err) = &gfaestus {
         println!("{:?}", err.root_cause());
     }
@@ -163,8 +163,6 @@ fn main() {
     )
     .unwrap();
 
-    dbg!();
-
     let (mut gui, opts_from_gui) = GfaestusGui::new(
         &gfaestus,
         gfaestus.swapchain_props,
@@ -182,9 +180,6 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
-    dbg!();
-    // node_sys.upload_vertices(&gfaestus, &node_vertices).unwrap();
-
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
     let (cfg_msg_tx, cfg_msg_rx) =
         crossbeam::channel::unbounded::<AppConfigMsg>();
@@ -197,16 +192,6 @@ fn main() {
     // }
 
     let mut dirty_swapchain = false;
-
-    let mut node_id_buffer = {
-        let screen_dims = app.dims();
-        NodeIdBuffer::new(
-            &gfaestus,
-            screen_dims.width as u32,
-            screen_dims.height as u32,
-        )
-        .unwrap()
-    };
 
     let mut selection_edge = SelectionOutlineEdgePipeline::new(
         &gfaestus,
@@ -225,8 +210,6 @@ fn main() {
         // gfaestus.offscreen_attachment.color,
     )
     .unwrap();
-
-    dbg!();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -568,8 +551,17 @@ fn main() {
             },
             Event::LoopDestroyed => {
                 gfaestus.wait_gpu_idle().unwrap();
+
+                let device = gfaestus.vk_context().device();
+
+                main_view.selection_buffer.destroy(device);
+                main_view.node_id_buffer.destroy(device);
                 main_view.node_draw_system.destroy();
-                node_id_buffer.destroy(gfaestus.vk_context().device());
+
+                gui.gui_draw_system.destroy();
+
+                selection_edge.destroy(device);
+                selection_blur.destroy(device);
             }
             _ => (),
         }
