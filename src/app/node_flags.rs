@@ -1,15 +1,11 @@
 use handlegraph::handle::NodeId;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashSet};
 
 use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
+    version::{DeviceV1_0}
 };
-use ash::{vk, Device, Entry, Instance};
+use ash::{vk, Device};
 
 use anyhow::Result;
 
@@ -76,7 +72,6 @@ impl SelectionBuffer {
             )?;
 
             let val_ptr = data_ptr as *mut u32;
-            // std::ptr::write_bytes(val_ptr, 1u8, (self.size / 4) as usize);
             std::ptr::write_bytes(val_ptr, 0u8, (self.size / 4) as usize);
 
             device.unmap_memory(self.memory);
@@ -101,9 +96,10 @@ impl SelectionBuffer {
 
                 let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
-                // let ix = (node.0) as usize;
-                // let ix = 1;
-                println!("inserting node at {}", ix);
+
+                if ix >= (self.size / 4) as usize {
+                    panic!("attempted to select a node that does not exist");
+                }
 
                 let val_ptr = val_ptr.add(ix);
                 // let val_ptr = val_ptr.add(2);
@@ -153,8 +149,6 @@ impl SelectionBuffer {
         let removed = self.latest_selection.difference(new_selection);
         let added = new_selection.difference(&self.latest_selection);
 
-        let mut removed_count = 0;
-        let mut added_count = 0;
 
         unsafe {
             let data_ptr = device.map_memory(
@@ -167,38 +161,32 @@ impl SelectionBuffer {
             for &node in removed {
                 let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
+
+
+                if ix >= (self.size / 4) as usize {
+                    panic!("attempted to deselect a node that does not exist");
+                }
+
                 let val_ptr = val_ptr.add(ix);
                 val_ptr.write(0);
-                removed_count += 1;
+
             }
 
             for &node in added {
                 let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
+
+                if ix >= (self.size / 4) as usize {
+                    panic!("attempted to select a node that does not exist");
+                }
+
                 let val_ptr = val_ptr.add(ix);
                 val_ptr.write(1);
-                // let val_ptr = val_ptr.add(1);
-                // val_ptr.write(1);
-                // let val_ptr = val_ptr.add(1);
-                // val_ptr.write(0);
-                // let val_ptr = val_ptr.add(1);
-                // val_ptr.write(0);
-                // val_ptr.write(std::u32::MAX);
-                added_count += 1;
-                println!("adding {}, ix {}", node.0, ix);
             }
 
             device.unmap_memory(self.memory);
         }
 
-        if removed_count != 0 || added_count != 0 {
-            println!(
-                "new_sel: {}\tremoved: {}\tadded: {}",
-                new_selection.len(),
-                removed_count,
-                added_count,
-            );
-        }
 
         self.latest_selection.clone_from(new_selection);
 
