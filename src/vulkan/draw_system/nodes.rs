@@ -158,7 +158,7 @@ pub struct NodeIdBuffer {
 
 impl NodeIdBuffer {
     pub fn read(&self, device: &Device, x: u32, y: u32) -> Option<u32> {
-        if x > self.width || y > self.height {
+        if x >= self.width || y >= self.height {
             return None;
         }
 
@@ -174,12 +174,12 @@ impl NodeIdBuffer {
 
             let x_offset = |x: u32, o: i32| -> u32 {
                 let x = x as i32;
-                (x + o).clamp(0, self.width as i32) as u32
+                (x + o).clamp(0, (self.width - 1) as i32) as u32
             };
 
             let y_offset = |y: u32, o: i32| -> u32 {
                 let y = y as i32;
-                (y + o).clamp(0, self.height as i32) as u32
+                (y + o).clamp(0, (self.height - 1) as i32) as u32
             };
 
             let to_ix =
