@@ -413,7 +413,7 @@ impl NodeThemePipeline {
             render_pass,
             descriptor_set_layout,
             selection_set_layout,
-            "shaders/nodes_themed.frag.spv",
+            include_bytes!("../../../shaders/nodes_themed.frag.spv"),
         )
     }
 
@@ -556,7 +556,7 @@ impl NodeOverlayPipeline {
             render_pass,
             descriptor_set_layout,
             selection_set_layout,
-            "shaders/nodes_overlay.frag.spv",
+            include_bytes!("../../../shaders/nodes_overlay.frag.spv"),
         )
     }
 
@@ -976,13 +976,14 @@ fn create_pipeline(
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
     selection_set_layout: vk::DescriptorSetLayout,
-    frag_shader_path: &str,
+    frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_src =
-        read_shader_from_file("shaders/nodes_simple.vert.spv").unwrap();
-    let geom_src =
-        read_shader_from_file("shaders/nodes_simple.geom.spv").unwrap();
-    let frag_src = read_shader_from_file(frag_shader_path).unwrap();
+    let vert_src = crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
+    let geom_src = crate::load_shader!("../../../shaders/nodes_simple.geom.spv");
+    let frag_src = {
+        let mut cursor = std::io::Cursor::new(frag_shader);
+        ash::util::read_spv(&mut cursor).unwrap()
+    };
 
     let vert_module = create_shader_module(device, &vert_src);
     let geom_module = create_shader_module(device, &geom_src);

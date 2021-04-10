@@ -257,8 +257,8 @@ impl SelectionOutlineEdgePipeline {
             device,
             render_pass,
             descriptor_set_layout,
-            "shaders/post.vert.spv",
-            "shaders/post_edge.frag.spv",
+            include_bytes!("../../../shaders/post.vert.spv"),
+            include_bytes!("../../../shaders/post_edge.frag.spv"),
         )
     }
 }
@@ -496,8 +496,8 @@ impl SelectionOutlineBlurPipeline {
             device,
             render_pass,
             descriptor_set_layout,
-            "shaders/post.vert.spv",
-            "shaders/post_blur.frag.spv",
+            include_bytes!("../../../shaders/post.vert.spv"),
+            include_bytes!("../../../shaders/post_blur.frag.spv"),
         )
     }
 }
@@ -506,11 +506,17 @@ fn create_pipeline(
     device: &Device,
     render_pass: vk::RenderPass,
     descriptor_set_layout: vk::DescriptorSetLayout,
-    vert_shader_path: &str,
-    frag_shader_path: &str,
+    vert_shader: &[u8],
+    frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_src = read_shader_from_file(vert_shader_path).unwrap();
-    let frag_src = read_shader_from_file(frag_shader_path).unwrap();
+    let vert_src = {
+        let mut cursor = std::io::Cursor::new(vert_shader);
+        ash::util::read_spv(&mut cursor).unwrap()
+    };
+    let frag_src = {
+        let mut cursor = std::io::Cursor::new(frag_shader);
+        ash::util::read_spv(&mut cursor).unwrap()
+    };
 
     let vert_module = create_shader_module(device, &vert_src);
     let frag_module = create_shader_module(device, &frag_src);

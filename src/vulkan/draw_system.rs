@@ -52,6 +52,17 @@ impl Vertex {
     }
 }
 
+#[macro_export]
+macro_rules! load_shader {
+    ($path:literal) => {
+        {
+        let buf = include_bytes!($path);
+        let mut cursor = std::io::Cursor::new(buf);
+        ash::util::read_spv(&mut cursor).unwrap()
+        }
+    }
+}
+
 fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
 where
     P: AsRef<std::path::Path>,

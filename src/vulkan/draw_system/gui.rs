@@ -366,8 +366,8 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        let vert_src = read_shader_from_file("shaders/gui.vert.spv").unwrap();
-        let frag_src = read_shader_from_file("shaders/gui.frag.spv").unwrap();
+        let vert_src = crate::load_shader!("../../../shaders/gui.vert.spv");
+        let frag_src = crate::load_shader!("../../../shaders/gui.frag.spv");
 
         let vert_module = create_shader_module(device, &vert_src);
         let frag_module = create_shader_module(device, &frag_src);
