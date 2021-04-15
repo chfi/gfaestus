@@ -58,21 +58,6 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
-/*
-fn construct_overlay<F: FnMut(&PackedGraph, Handle) -> RGB<f32>>(
-    main_view: &MainView,
-    graph_query: &GraphQuery,
-    f: F,
-) -> Result<(OverlayCache, Box<dyn GpuFuture>)> {
-    let colors = graph_query.build_overlay_colors(f);
-
-    let (overlay, future) =
-        main_view.build_overlay_cache(colors.into_iter())?;
-
-    Ok((overlay, future))
-}
-*/
-
 use gfaestus::vulkan::*;
 
 fn main() {

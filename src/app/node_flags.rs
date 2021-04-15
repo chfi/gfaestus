@@ -1,11 +1,15 @@
 use handlegraph::handle::NodeId;
 
-use rustc_hash::{FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use ash::{
-    version::{DeviceV1_0}
+    extensions::{
+        ext::DebugReport,
+        khr::{Surface, Swapchain},
+    },
+    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
 };
-use ash::{vk, Device};
+use ash::{vk, Device, Entry, Instance};
 
 use anyhow::Result;
 

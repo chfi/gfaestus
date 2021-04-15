@@ -1,11 +1,5 @@
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use std::ffi::CString;
 
@@ -628,6 +622,90 @@ impl NodeOverlayPipeline {
     }
 }
 
+pub struct NodeOverlay {
+    descriptor_set: vk::DescriptorSet,
+
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    size: vk::DeviceSize,
+
+    host_visible: bool,
+}
+
+impl NodeOverlay {
+    /// Create a new overlay that can be written to by the CPU after construction
+    pub fn new_empty(
+        app: &GfaestusVk,
+        pool: vk::DescriptorPool,
+        layout: vk::DescriptorSetLayout,
+        node_count: usize,
+    ) -> Result<Self> {
+        let device = app.vk_context().device();
+
+        let size = ((node_count * std::mem::size_of::<[f32; 4]>()) as u32)
+            as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST;
+
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+        let (buffer, memory, size) =
+            app.create_buffer(size, usage, mem_props)?;
+
+        let descriptor_sets = {
+            let layouts = vec![layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        for set in descriptor_sets.iter() {
+            let buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let buf_infos = [buf_info];
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
+                .buffer_info(&buf_infos)
+                .build();
+
+            let descriptor_writes = [descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        Ok(Self {
+            descriptor_set: descriptor_sets[0],
+
+            buffer,
+            memory,
+            size,
+
+            host_visible: true,
+        })
+    }
+
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_buffer(self.buffer, None);
+            device.free_memory(self.memory, None);
+        }
+    }
+}
+
 pub struct NodeVertices {
     vertex_count: usize,
     vertex_buffer: vk::Buffer,
@@ -978,8 +1056,10 @@ fn create_pipeline(
     selection_set_layout: vk::DescriptorSetLayout,
     frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_src = crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
-    let geom_src = crate::load_shader!("../../../shaders/nodes_simple.geom.spv");
+    let vert_src =
+        crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
+    let geom_src =
+        crate::load_shader!("../../../shaders/nodes_simple.geom.spv");
     let frag_src = {
         let mut cursor = std::io::Cursor::new(frag_shader);
         ash::util::read_spv(&mut cursor).unwrap()
