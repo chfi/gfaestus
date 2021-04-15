@@ -634,6 +634,8 @@ pub struct NodeOverlay {
 
 impl NodeOverlay {
     /// Create a new overlay that can be written to by the CPU after construction
+    ///
+    /// Uses host-visible and host-coherent memory
     pub fn new_empty(
         app: &GfaestusVk,
         pool: vk::DescriptorPool,
@@ -642,7 +644,7 @@ impl NodeOverlay {
     ) -> Result<Self> {
         let device = app.vk_context().device();
 
-        let size = ((node_count * std::mem::size_of::<[f32; 4]>()) as u32)
+        let size = ((node_count * std::mem::size_of::<[u8; 4]>()) as u32)
             as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER
@@ -695,6 +697,99 @@ impl NodeOverlay {
             size,
 
             host_visible: true,
+        })
+    }
+
+    /// Create a new overlay that's filled during construction and immutable afterward
+    ///
+    /// Uses device memory if available
+    pub fn new_static<F>(
+        app: &GfaestusVk,
+        pool: vk::DescriptorPool,
+        layout: vk::DescriptorSetLayout,
+        graph: crate::graph_query::GraphQuery,
+        mut overlay_fn: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(
+            &handlegraph::packedgraph::PackedGraph,
+            handlegraph::handle::NodeId,
+        ) -> rgb::RGB<f32>,
+    {
+        use handlegraph::handlegraph::IntoHandles;
+
+        let device = app.vk_context().device();
+
+        let buffer_size = (graph.node_count() * std::mem::size_of::<[u8; 4]>())
+            as vk::DeviceSize;
+
+        let mut pixels: Vec<u8> = Vec::with_capacity(buffer_size as usize);
+
+        {
+            let graph = graph.graph();
+
+            let mut nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+
+            nodes.sort();
+
+            for node in nodes {
+                let color = overlay_fn(graph, node);
+
+                pixels.push((color.r * 255.0) as u8);
+                pixels.push((color.g * 255.0) as u8);
+                pixels.push((color.b * 255.0) as u8);
+                pixels.push(255);
+            }
+        }
+
+        let (buffer, memory) = app
+            .create_device_local_buffer_with_data::<[u8; 4], _>(
+                vk::BufferUsageFlags::TRANSFER_DST
+                    | vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER,
+                &pixels,
+            )?;
+
+        let descriptor_sets = {
+            let layouts = vec![layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        for set in descriptor_sets.iter() {
+            let buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let buf_infos = [buf_info];
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
+                .buffer_info(&buf_infos)
+                .build();
+
+            let descriptor_writes = [descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        Ok(Self {
+            descriptor_set: descriptor_sets[0],
+
+            buffer,
+            memory,
+            size: buffer_size,
+
+            host_visible: false,
         })
     }
 
