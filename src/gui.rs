@@ -43,8 +43,10 @@ use crate::vulkan::{
 use ash::vk;
 
 pub mod widgets;
+pub mod windows;
 
 use widgets::*;
+use windows::*;
 
 pub struct Gui {
     ctx: egui::CtxRef,
