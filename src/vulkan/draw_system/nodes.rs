@@ -700,6 +700,49 @@ impl NodeOverlay {
         })
     }
 
+    /// Update the colors for a host-visible overlay by providing a
+    /// set of node IDs and new colors
+    pub fn update_overlay<I>(
+        &mut self,
+        device: &Device,
+        new_colors: I,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGB<f32>)>,
+    {
+        assert!(self.host_visible);
+
+        unsafe {
+            let ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            for (node, color) in new_colors.into_iter() {
+                let val_ptr = ptr as *mut u32;
+                let ix = (node.0 - 1) as usize;
+
+                let val_ptr = (val_ptr.add(ix)) as *mut u8;
+                val_ptr.write((color.r * 255.0) as u8);
+
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write((color.g * 255.0) as u8);
+
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write((color.b * 255.0) as u8);
+
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write(255u8);
+            }
+
+            device.unmap_memory(self.memory);
+        }
+
+        Ok(())
+    }
+
     /// Create a new overlay that's filled during construction and immutable afterward
     ///
     /// Uses device memory if available
