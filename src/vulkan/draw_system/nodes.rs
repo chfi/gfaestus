@@ -220,7 +220,8 @@ impl NodeIdBuffer {
             | vk::BufferUsageFlags::STORAGE_BUFFER;
 
         let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
-            | vk::MemoryPropertyFlags::HOST_COHERENT;
+            | vk::MemoryPropertyFlags::HOST_COHERENT
+            | vk::MemoryPropertyFlags::HOST_CACHED;
 
         let (buffer, memory, size) =
             app.create_buffer(img_size, usage, mem_props)?;
