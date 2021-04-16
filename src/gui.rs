@@ -42,6 +42,10 @@ use crate::vulkan::{
 
 use ash::vk;
 
+pub mod widgets;
+
+use widgets::*;
+
 pub struct Gui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
