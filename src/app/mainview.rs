@@ -47,19 +47,11 @@ pub struct MainView {
 impl MainView {
     pub fn new(
         app: &GfaestusVk,
-        // vk_context: &VkContext,
         node_count: usize,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
-        // let node_draw_system = NodeDrawAsh::new(
-        //     vk_context,
-        //     swapchain_props,
-        //     msaa_samples,
-        //     render_pass,
-        // )?;
-
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
         let node_draw_system = NodePipelines::new(
@@ -315,33 +307,6 @@ impl MainView {
 
 // impl MainView {
 /*
-    pub fn prepare_themes(
-        &self,
-        sampler: &Arc<Sampler>,
-        primary: &Theme,
-        secondary: &Theme,
-    ) -> Result<()> {
-        self.node_draw_system
-            .prepare_themes(sampler, primary, secondary)
-    }
-
-    pub fn cache_theme(
-        &self,
-        sampler: &Arc<Sampler>,
-        theme_id: ThemeId,
-        theme: &Theme,
-    ) -> Result<()> {
-        self.node_draw_system.set_theme(sampler, theme_id, theme)
-    }
-
-    pub fn valid_theme_cache(&self, theme_id: ThemeId, hash: u64) -> bool {
-        if let Some(cached) = self.node_draw_system.cached_theme_hash(theme_id)
-        {
-            cached == hash
-        } else {
-            false
-        }
-    }
 
     pub fn build_overlay_cache<I>(
         &self,
@@ -351,42 +316,6 @@ impl MainView {
         I: Iterator<Item = rgb::RGB<f32>>,
     {
         self.node_draw_system.build_overlay_cache(colors)
-    }
-
-    pub fn view(&self) -> View {
-        self.view.load()
-    }
-
-
-    pub fn update_node_selection(
-        &mut self,
-        new_selection: &FxHashSet<NodeId>,
-    ) -> Result<()> {
-        let draw_sys = &self.node_draw_system;
-        let flags = &mut self.node_data.flags;
-
-        draw_sys.update_node_selection(|buffer| {
-            let _result = flags.update_selection(new_selection, buffer)?;
-            Ok(())
-        })
-    }
-
-    pub fn clear_node_selection(&mut self) -> Result<()> {
-        let draw_sys = &self.node_draw_system;
-        let flags = &mut self.node_data.flags;
-
-        flags.clear();
-
-        draw_sys.update_node_selection(|buffer| {
-            let _result = flags.clear_buffer(buffer)?;
-            Ok(())
-        })?;
-
-        Ok(())
-    }
-
-    pub fn has_vertices(&self) -> bool {
-        !self.node_data.vertices.is_empty()
     }
 
 

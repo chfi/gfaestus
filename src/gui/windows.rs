@@ -8,10 +8,13 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
+use crossbeam::atomic::AtomicCell;
+
 use crate::geometry::*;
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
 
+#[derive(Debug, Clone)]
 pub struct NodeDetails {
     node_id: NodeId,
     sequence: Vec<u8>,
@@ -52,6 +55,9 @@ impl NodeDetails {
     }
 }
 
+// pub struct
+
+#[derive(Debug, Clone)]
 pub struct NodeList {
     // probably not needed as I can assume compact node IDs
     all_nodes: Vec<NodeId>,
@@ -68,10 +74,60 @@ pub struct NodeList {
     slots: Vec<NodeDetails>,
 
     update_slots: bool,
+
+    apply_filter: AtomicCell<bool>,
+}
+
+impl
+
+pub enum NodeListMsg {
+    ApplyFilter(Option<bool>),
+    NextPage,
+    PrevPage,
+    SetPage(usize),
+    SetFiltered(Vec<NodeId>),
 }
 
 impl NodeList {
     const ID: &'static str = "node_list_window";
+
+    pub fn apply_msg(&mut self, msg: NodeListMsg) {
+        match msg {
+            NodeListMsg::ApplyFilter(apply) => {
+                if let Some(apply) = apply {
+                    self.apply_filter.store(apply);
+                    // TODO only update when necessary
+                    self.update_slots = true;
+                } else {
+                    self.apply_filter.fetch_xor(true);
+                    self.update_slots = true;
+                }
+            }
+            NodeListMsg::NextPage => {
+                if self.page < self.page_count {
+                    self.page += 1;
+                    self.update_slots = true;
+                }
+            }
+            NodeListMsg::PrevPage => {
+                if self.page > 0 {
+                    self.page -= 1;
+                    self.update_slots = true;
+                }
+            }
+            NodeListMsg::SetPage(page) => {
+                let page = page.clamp(0, self.page_count);
+                if self.page != page {
+                    self.page = page;
+                    self.update_slots = true;
+                }
+            }
+            NodeListMsg::SetFiltered(mut nodes) => {
+                std::mem::swap(&mut nodes, &mut self.filtered_nodes);
+                self.update_slots = true;
+            }
+        }
+    }
 
     pub fn new(graph_query: &GraphQuery, page_size: usize) -> Self {
         let graph = graph_query.graph();
@@ -112,6 +168,10 @@ impl NodeList {
         self.filtered_nodes.clear();
         self.filtered_nodes.extend(nodes.iter().copied());
 
+        if self.filtered_nodes.is_empty() {
+            self.apply_filter.store(false);
+        }
+
         if self.apply_filter.load() {
             self.update_slots = true;
         }
@@ -123,11 +183,17 @@ impl NodeList {
         ctx: &egui::CtxRef,
         show: &mut bool,
     ) -> Option<egui::Response> {
-        let nodes = if self.filtered_nodes.is_empty() {
+        let mut filter = self.apply_filter.load();
+
+        let nodes = if !filter || self.filtered_nodes.is_empty() {
+            filter = false;
             &self.all_nodes
         } else {
+            filter = true;
             &self.filtered_nodes
         };
+
+        self.page_count = nodes.len() / self.page_size;
 
         // this'll need fixing
         // let start =
