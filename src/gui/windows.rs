@@ -4,6 +4,7 @@ use handlegraph::{
     handlegraph::*,
     mutablehandlegraph::*,
     packed::*,
+    packedgraph::*,
     pathhandlegraph::*,
 };
 
@@ -20,11 +21,43 @@ pub struct NodeDetails {
     visible: bool,
 }
 
+impl NodeDetails {
+    pub fn from_id(graph: &PackedGraph, node_id: NodeId) -> Self {
+        let visible = true;
+
+        let handle = Handle::pack(node_id, false);
+
+        let sequence = graph.sequence_vec(handle);
+
+        let degree_l = graph.neighbors(handle, Direction::Left).count();
+        let degree_r = graph.neighbors(handle, Direction::Right).count();
+
+        let degree = (degree_l, degree_r);
+
+        let paths = graph
+            .steps_on_handle(handle)
+            .into_iter()
+            .flatten()
+            .map(|(path, _)| path)
+            .collect();
+
+        Self {
+            node_id,
+            sequence,
+            degree,
+            paths,
+
+            visible,
+        }
+    }
+}
+
 pub struct NodeList {
     // probably not needed as I can assume compact node IDs
     all_nodes: Vec<NodeId>,
 
-    filtered_nodes: Option<Vec<NodeId>>,
+    // filtered_nodes: Option<Vec<NodeId>>,
+    filtered_nodes: Vec<NodeId>,
 
     page: usize,
     page_count: usize,
@@ -40,13 +73,54 @@ pub struct NodeList {
 impl NodeList {
     const ID: &'static str = "node_list_window";
 
+    pub fn new(graph_query: &GraphQuery, page_size: usize) -> Self {
+        let graph = graph_query.graph();
+        let node_count = graph.node_count();
+
+        let mut all_nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+        all_nodes.sort();
+
+        let page_count = if node_count % page_size == 0 {
+            node_count / page_size
+        } else {
+            (node_count / page_size) + 1
+        };
+
+        let filtered_nodes: Vec<NodeId> = Vec::new();
+
+        let mut slots: Vec<NodeDetails> = Vec::with_capacity(page_size);
+
+        for &node in all_nodes[0..page_size].iter() {
+            let slot = NodeDetails::from_id(graph, node);
+
+            slots.push(slot);
+        }
+
+        Self {
+            all_nodes,
+            filtered_nodes,
+
+            page: 0,
+            page_count,
+            page_size,
+
+            slots,
+
+            update_slots: false,
+        }
+    }
+
     pub fn ui(
         &mut self,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
         show: &mut bool,
     ) -> Option<egui::Response> {
-        let nodes = self.filtered_nodes.as_ref().unwrap_or(&self.all_nodes);
+        let nodes = if self.filtered_nodes.is_empty() {
+            &self.all_nodes
+        } else {
+            &self.filtered_nodes
+        };
 
         // this'll need fixing
         // let start =
