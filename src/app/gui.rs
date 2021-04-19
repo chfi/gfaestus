@@ -24,6 +24,8 @@ use crate::geometry::*;
 use crate::view::View;
 use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
 
+use crate::graph_query::GraphQuery;
+
 use crate::input::binds::{
     BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
     SystemInputBindings, WheelBind,
@@ -42,10 +44,14 @@ use crate::vulkan::{
 
 use ash::vk;
 
+use crate::gui::windows::{NodeDetails, NodeList};
+
 pub struct GfaestusGui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
     enabled_ui_elements: EnabledUiElements,
+
+    pub node_list: NodeList,
 
     // gui_draw_system: GuiDrawSystem,
     pub gui_draw_system: GuiPipeline,
@@ -121,6 +127,8 @@ struct EnabledUiElements {
     selected_node: bool,
 
     theme_editor: bool,
+
+    details: bool,
 }
 
 impl std::default::Default for EnabledUiElements {
@@ -136,6 +144,8 @@ impl std::default::Default for EnabledUiElements {
             selected_node: true,
 
             theme_editor: false,
+
+            details: true,
         }
     }
 }
@@ -208,6 +218,7 @@ pub struct GraphStats {
 impl GfaestusGui {
     pub fn new(
         app: &GfaestusVk,
+        graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
@@ -256,11 +267,15 @@ impl GfaestusGui {
 
         let (app_cfg_tx, app_cfg_rx) = channel::unbounded::<AppConfigState>();
 
+        let node_list = NodeList::new(graph_query, 10);
+
         Ok((
             Self {
                 ctx,
                 frame_input: FrameInput::default(),
                 enabled_ui_elements: EnabledUiElements::default(),
+
+                node_list,
 
                 hover_node_id,
                 selected_node: NodeSelection::default(),
@@ -452,6 +467,10 @@ impl GfaestusGui {
                     enabled.theme_editor = !enabled.theme_editor;
                 }
 
+                if ui.selectable_label(enabled.details, "Details").clicked() {
+                    enabled.details = !enabled.details;
+                }
+
                 if ui.selectable_label(enabled.frame_rate, "FPS").clicked() {
                     enabled.frame_rate = !enabled.frame_rate;
                 }
@@ -463,7 +482,11 @@ impl GfaestusGui {
         });
     }
 
-    pub fn begin_frame(&mut self, screen_rect: Option<Point>) {
+    pub fn begin_frame(
+        &mut self,
+        screen_rect: Option<Point>,
+        graph_query: &GraphQuery,
+    ) {
         let mut raw_input = self.frame_input.into_raw_input();
         let screen_rect = screen_rect.map(|p| egui::Rect {
             min: Point::ZERO.into(),
@@ -576,6 +599,14 @@ impl GfaestusGui {
         });
         */
         // }
+
+        if self.enabled_ui_elements.details {
+            self.node_list.ui(
+                graph_query,
+                &self.ctx,
+                &mut self.enabled_ui_elements.details,
+            );
+        }
 
         if self.enabled_ui_elements.egui_inspection_ui {
             egui::Window::new("egui_inspection_ui_window")

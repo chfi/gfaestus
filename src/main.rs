@@ -150,6 +150,7 @@ fn main() {
 
     let (mut gui, opts_from_gui) = GfaestusGui::new(
         &gfaestus,
+        &graph_query,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
@@ -246,16 +247,23 @@ fn main() {
                         coverage,
                     } = resp
                     {
+                        gui.node_list.set_filtered(&[node_id]);
                         gui.one_selection(node_id, len, degree, coverage);
                     }
                 }
             } else {
+
+                let mut nodes = selected.iter().copied().collect::<Vec<_>>();
+                nodes.sort();
+
+                gui.node_list.set_filtered(&nodes);
                 gui.many_selection(selected.len());
             }
 
             main_view.update_node_selection(selected).unwrap();
         } else {
             gui.no_selection();
+            gui.node_list.set_filtered(&[]);
             main_view.clear_node_selection().unwrap();
         }
 
@@ -323,7 +331,7 @@ fn main() {
                     }
                 }
 
-                gui.begin_frame(Some(app.dims().into()));
+                gui.begin_frame(Some(app.dims().into()), &graph_query);
 
                 let meshes = gui.end_frame();
 

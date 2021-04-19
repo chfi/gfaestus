@@ -80,11 +80,7 @@ impl NodeList {
         let mut all_nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
         all_nodes.sort();
 
-        let page_count = if node_count % page_size == 0 {
-            node_count / page_size
-        } else {
-            (node_count / page_size) + 1
-        };
+        let page_count = node_count / page_size;
 
         let filtered_nodes: Vec<NodeId> = Vec::new();
 
@@ -107,6 +103,17 @@ impl NodeList {
             slots,
 
             update_slots: false,
+
+            apply_filter: AtomicCell::new(false),
+        }
+    }
+
+    pub fn set_filtered(&mut self, nodes: &[NodeId]) {
+        self.filtered_nodes.clear();
+        self.filtered_nodes.extend(nodes.iter().copied());
+
+        if self.apply_filter.load() {
+            self.update_slots = true;
         }
     }
 
@@ -162,34 +169,46 @@ impl NodeList {
             self.update_slots = false;
         }
 
-        egui::Window::new(Self::ID).show(ctx, |ui| {
-            for slot in self.slots.iter() {
-                let label = format!(
-                    "{} - ({}, {}) - {} - {}",
-                    slot.node_id,
-                    slot.degree.0,
-                    slot.degree.1,
-                    slot.sequence.len(),
-                    slot.paths.len()
-                );
+        egui::Window::new("Nodes")
+            .id(egui::Id::new(Self::ID))
+            .show(ctx, |ui| {
+                if ui.selectable_label(filter, "Filter").clicked() {
+                    self.apply_filter.store(!filter);
+                    self.update_slots = true;
+                }
 
+                let label = format!("Node - Degree - Seq. len - Paths");
                 ui.label(label);
-            }
 
-            if ui.button("Prev").clicked() {
-                if self.page > 0 {
-                    self.page -= 1;
-                    self.update_slots = true;
-                }
-            }
+                for slot in self.slots.iter() {
+                    if slot.visible {
+                        let label = format!(
+                            "{} - ({}, {}) - {} - {}",
+                            slot.node_id,
+                            slot.degree.0,
+                            slot.degree.1,
+                            slot.sequence.len(),
+                            slot.paths.len()
+                        );
 
-            if ui.button("Next").clicked() {
-                if self.page < self.page_count {
-                    self.page += 1;
-                    self.update_slots = true;
+                        ui.label(label);
+                    }
                 }
-            }
-        })
+
+                if ui.button("Prev").clicked() {
+                    if self.page > 0 {
+                        self.page -= 1;
+                        self.update_slots = true;
+                    }
+                }
+
+                if ui.button("Next").clicked() {
+                    if self.page < self.page_count {
+                        self.page += 1;
+                        self.update_slots = true;
+                    }
+                }
+            })
     }
 }
 
