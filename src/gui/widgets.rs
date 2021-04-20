@@ -44,21 +44,27 @@ impl MenuBar {
         let overlays = &mut open_windows.overlays;
 
         egui::TopPanel::top(Self::ID).show(ctx, |ui| {
-            if ui.selectable_label(*nodes, "Nodes").clicked() {
-                *nodes = !*nodes;
-            }
+            ui.horizontal(|ui| {
+                if ui.selectable_label(*nodes, "Nodes").clicked() {
+                    *nodes = !*nodes;
+                }
 
-            if ui.selectable_label(*paths, "Paths").clicked() {
-                *paths = !*paths;
-            }
+                if ui.selectable_label(*paths, "Paths").clicked() {
+                    *paths = !*paths;
+                }
 
-            if ui.selectable_label(*themes, "Themes").clicked() {
-                *themes = !*themes;
-            }
+                if ui.selectable_label(*themes, "Themes").clicked() {
+                    *themes = !*themes;
+                }
 
-            if ui.selectable_label(*overlays, "Overlays").clicked() {
-                *overlays = !*overlays;
-            }
+                if ui.selectable_label(*overlays, "Overlays").clicked() {
+                    *overlays = !*overlays;
+                }
+
+                if ui.selectable_label(*fps, "FPS").clicked() {
+                    *fps = !*fps;
+                }
+            });
         });
     }
 }
@@ -248,10 +254,10 @@ impl Widget for GraphStats {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct GraphStatsMsg {
-    node_count: Option<usize>,
-    edge_count: Option<usize>,
-    path_count: Option<usize>,
-    total_len: Option<usize>,
+    pub node_count: Option<usize>,
+    pub edge_count: Option<usize>,
+    pub path_count: Option<usize>,
+    pub total_len: Option<usize>,
 }
 
 impl GraphStats {

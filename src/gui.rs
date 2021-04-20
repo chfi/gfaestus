@@ -63,6 +63,10 @@ pub enum Windows {
 
     Themes,
     Overlays,
+
+    EguiInspection,
+    EguiSettings,
+    EguiMemory,
 }
 
 pub struct ViewStateChannel<T, U>
@@ -215,34 +219,52 @@ pub enum Views {
 
     OverlayEditor,
     OverlayList,
+
+    EguiInspection,
+    EguiSettings,
+    EguiMemory,
 }
 
 impl Windows {
     pub fn name(&self) -> &str {
         match self {
             Windows::Settings => "Settings",
+
             Windows::FPS => "FPS",
             Windows::GraphStats => "Graph Stats",
+
             Windows::Nodes => "Nodes",
             Windows::Paths => "Paths",
+
             Windows::Themes => "Themes",
             Windows::Overlays => "Overlays",
+
+            Windows::EguiInspection => "Egui Inspection",
+            Windows::EguiSettings => "Egui Settings",
+            Windows::EguiMemory => "Egui Memory",
         }
     }
 
     pub fn views(&self) -> Vec<Views> {
         match self {
             Windows::Settings => vec![Views::Settings],
+
             Windows::FPS => vec![Views::FPS],
             Windows::GraphStats => vec![Views::GraphStats],
+
             Windows::Nodes => vec![Views::NodeList, Views::NodeDetails],
             Windows::Paths => vec![Views::PathList, Views::PathDetails],
+
             Windows::Themes => vec![Views::ThemeEditor, Views::ThemeList],
             Windows::Overlays => vec![Views::OverlayEditor, Views::OverlayList],
+
+            Windows::EguiInspection => vec![Views::EguiInspection],
+            Windows::EguiSettings => vec![Views::EguiSettings],
+            Windows::EguiMemory => vec![Views::EguiMemory],
         }
     }
 
-    pub fn all_windows() -> [Windows; 7] {
+    pub fn all_windows() -> [Windows; 10] {
         [
             Self::Settings,
             Self::FPS,
@@ -251,6 +273,9 @@ impl Windows {
             Self::Paths,
             Self::Themes,
             Self::Overlays,
+            Self::EguiInspection,
+            Self::EguiSettings,
+            Self::EguiMemory,
         ]
     }
 }
@@ -258,13 +283,20 @@ impl Windows {
 impl Views {
     pub fn window(&self) -> Windows {
         match self {
-            Views::Settings => Windows::Settings,
-            Views::FPS => Windows::FPS,
-            Views::GraphStats => Windows::GraphStats,
-            Views::NodeList | Views::NodeDetails => Windows::Nodes,
-            Views::PathList | Views::PathDetails => Windows::Paths,
-            Views::ThemeEditor | Views::ThemeList => Windows::Themes,
-            Views::OverlayEditor | Views::OverlayList => Windows::Overlays,
+            Self::Settings => Windows::Settings,
+
+            Self::FPS => Windows::FPS,
+            Self::GraphStats => Windows::GraphStats,
+
+            Self::NodeList | Views::NodeDetails => Windows::Nodes,
+            Self::PathList | Views::PathDetails => Windows::Paths,
+
+            Self::ThemeEditor | Views::ThemeList => Windows::Themes,
+            Self::OverlayEditor | Views::OverlayList => Windows::Overlays,
+
+            Self::EguiInspection => Windows::EguiInspection,
+            Self::EguiSettings => Windows::EguiSettings,
+            Self::EguiMemory => Windows::EguiMemory,
         }
     }
 }
@@ -281,20 +313,38 @@ pub struct OpenWindows {
 
     themes: bool,
     overlays: bool,
+
+    egui_inspection: bool,
+    egui_settings: bool,
+    egui_memory: bool,
 }
 
 impl std::default::Default for OpenWindows {
     fn default() -> Self {
         Self {
             settings: false,
+
             fps: true,
             graph_stats: true,
+
             nodes: true,
             paths: false,
+
             themes: false,
             overlays: false,
+
+            egui_inspection: false,
+            egui_settings: false,
+            egui_memory: false,
         }
     }
+}
+
+pub enum GuiMsg {
+    EnableView(Views),
+    SetWindowOpen { window: Windows, open: Option<bool> },
+    SetLightMode,
+    SetDarkMode,
 }
 
 pub struct Gui {
@@ -310,6 +360,9 @@ pub struct Gui {
     open_windows: OpenWindows,
 
     view_state: AppViewState,
+
+    gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
+    gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -366,6 +419,8 @@ impl Gui {
 
         let (sender, receiver) = channel::unbounded::<AppConfigState>();
 
+        let (gui_msg_tx, gui_msg_rx) = channel::unbounded::<GuiMsg>();
+
         let view_state = AppViewState::new(graph_query);
 
         let gui = Self {
@@ -381,11 +436,17 @@ impl Gui {
             open_windows,
 
             view_state,
+
+            gui_msg_tx,
+            gui_msg_rx,
         };
 
         Ok((gui, receiver))
     }
 
+    pub fn clone_gui_msg_tx(&self) -> crossbeam::channel::Sender<GuiMsg> {
+        self.gui_msg_tx.clone()
+    }
 
     pub fn set_hover_node(&mut self, node: Option<NodeId>) {
         self.hover_node_id = node;
@@ -452,6 +513,22 @@ impl Gui {
                 .ui(graph_query, &self.ctx, &mut x);
         }
 
+        if self.open_windows.egui_inspection {
+            egui::Window::new("egui_inspection_ui_window")
+                .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
+        }
+
+        if self.open_windows.egui_settings {
+            egui::Window::new("egui_settings_ui_window")
+                .show(&self.ctx, |ui| self.ctx.settings_ui(ui));
+        }
+
+        if self.open_windows.egui_memory {
+            egui::Window::new("egui_memory_ui_window")
+                .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+        }
+    }
+
     pub fn end_frame(&self) -> Vec<egui::ClippedMesh> {
         let (_output, shapes) = self.ctx.end_frame();
         self.ctx.tessellate(shapes)
@@ -505,6 +582,53 @@ impl Gui {
         self.frame_input.events.push(event);
     }
 
+    pub fn apply_received_gui_msgs(&mut self) {
+        while let Ok(msg) = self.gui_msg_rx.try_recv() {
+            match msg {
+                GuiMsg::EnableView(view) => {
+                    //
+                }
+                GuiMsg::SetWindowOpen { window, open } => {
+                    let open_windows = &mut self.open_windows;
+
+                    let win_state = match window {
+                        Windows::Settings => &mut open_windows.settings,
+                        Windows::FPS => &mut open_windows.fps,
+                        Windows::GraphStats => &mut open_windows.graph_stats,
+                        Windows::Nodes => &mut open_windows.nodes,
+                        Windows::Paths => &mut open_windows.paths,
+                        Windows::Themes => &mut open_windows.themes,
+                        Windows::Overlays => &mut open_windows.overlays,
+                        Windows::EguiInspection => {
+                            &mut open_windows.egui_inspection
+                        }
+                        Windows::EguiSettings => {
+                            &mut open_windows.egui_settings
+                        }
+                        Windows::EguiMemory => &mut open_windows.egui_memory,
+                    };
+
+                    if let Some(open) = open {
+                        *win_state = open;
+                    } else {
+                        *win_state = !*win_state;
+                    }
+                }
+                GuiMsg::SetLightMode => {
+                    let mut style: egui::Style = (*self.ctx.style()).clone();
+                    style.visuals = egui::style::Visuals::light();
+                    style.visuals.window_corner_radius = 0.0;
+                    self.ctx.set_style(style);
+                }
+                GuiMsg::SetDarkMode => {
+                    let mut style: egui::Style = (*self.ctx.style()).clone();
+                    style.visuals = egui::style::Visuals::dark();
+                    style.visuals.window_corner_radius = 0.0;
+                    self.ctx.set_style(style);
+                }
+            }
+        }
+    }
 
     pub fn apply_input(
         &mut self,
