@@ -7,11 +7,13 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
+use rustc_hash::FxHashMap;
+
 use crate::geometry::*;
 use crate::view::View;
 
 pub trait Widget {
-    fn id(&self) -> &str;
+    fn id() -> &'static str;
 
     fn ui(
         &self,
@@ -19,6 +21,46 @@ pub trait Widget {
         pos: Point,
         size: Option<Point>,
     ) -> Option<egui::Response>;
+}
+
+pub struct MenuBar {}
+
+impl MenuBar {
+    pub const ID: &'static str = "app_menu_bar";
+
+    pub fn ui<'a>(
+        ctx: &egui::CtxRef,
+        open_windows: &'a mut super::OpenWindows,
+    ) {
+        let settings = &mut open_windows.settings;
+
+        let fps = &mut open_windows.fps;
+        let graph_stats = &mut open_windows.graph_stats;
+
+        let nodes = &mut open_windows.nodes;
+        let paths = &mut open_windows.paths;
+
+        let themes = &mut open_windows.themes;
+        let overlays = &mut open_windows.overlays;
+
+        egui::TopPanel::top(Self::ID).show(ctx, |ui| {
+            if ui.selectable_label(*nodes, "Nodes").clicked() {
+                *nodes = !*nodes;
+            }
+
+            if ui.selectable_label(*paths, "Paths").clicked() {
+                *paths = !*paths;
+            }
+
+            if ui.selectable_label(*themes, "Themes").clicked() {
+                *themes = !*themes;
+            }
+
+            if ui.selectable_label(*overlays, "Overlays").clicked() {
+                *overlays = !*overlays;
+            }
+        });
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -54,7 +96,7 @@ impl std::default::Default for NodeSelection {
 
 impl Widget for NodeSelection {
     #[inline]
-    fn id(&self) -> &str {
+    fn id() -> &'static str {
         "node_select_info"
     }
 
@@ -76,7 +118,7 @@ impl Widget for NodeSelection {
             max: size.into(),
         };
 
-        egui::Window::new(self.id())
+        egui::Window::new(Self::id())
             .fixed_rect(rect)
             .title_bar(false)
             .show(&ctx, |ui| {
@@ -118,6 +160,49 @@ pub struct FrameRate {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+pub struct FrameRateMsg(FrameRate);
+
+impl FrameRate {
+    pub fn apply_msg(&self, msg: FrameRateMsg) -> Self {
+        msg.0
+    }
+}
+
+impl Widget for FrameRate {
+    #[inline]
+    fn id() -> &'static str {
+        "frame_rate_box"
+    }
+
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        size: Option<Point>,
+    ) -> Option<egui::Response> {
+        let scr = ctx.input().screen_rect();
+
+        let size = size.unwrap_or(Point {
+            x: pos.x + 200.0,
+            y: pos.y + scr.max.y,
+        });
+
+        let rect = egui::Rect {
+            min: pos.into(),
+            max: size.into(),
+        };
+
+        egui::Window::new(Self::id())
+            .fixed_rect(rect)
+            .title_bar(false)
+            .show(ctx, |ui| {
+                ui.label(format!("FPS: {:.2}", self.fps));
+                ui.label(format!("update time: {:.2} ms", self.frame_time));
+            })
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct ViewInfo {
     position: Point,
     view: View,
@@ -126,9 +211,31 @@ pub struct ViewInfo {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
+pub struct ViewInfoMsg(ViewInfo);
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct GraphStats {
     pub node_count: usize,
     pub edge_count: usize,
     pub path_count: usize,
     pub total_len: usize,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct GraphStatsMsg {
+    node_count: Option<usize>,
+    edge_count: Option<usize>,
+    path_count: Option<usize>,
+    total_len: Option<usize>,
+}
+
+impl GraphStats {
+    pub fn apply_msg(&self, msg: GraphStatsMsg) -> Self {
+        Self {
+            node_count: msg.node_count.unwrap_or(self.node_count),
+            edge_count: msg.edge_count.unwrap_or(self.edge_count),
+            path_count: msg.path_count.unwrap_or(self.path_count),
+            total_len: msg.total_len.unwrap_or(self.total_len),
+        }
+    }
 }

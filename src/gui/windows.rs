@@ -57,7 +57,7 @@ impl NodeDetails {
 
 // pub struct
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NodeList {
     // probably not needed as I can assume compact node IDs
     all_nodes: Vec<NodeId>,
@@ -77,8 +77,6 @@ pub struct NodeList {
 
     apply_filter: AtomicCell<bool>,
 }
-
-impl
 
 pub enum NodeListMsg {
     ApplyFilter(Option<bool>),
