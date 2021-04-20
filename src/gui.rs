@@ -100,6 +100,10 @@ where
         self.tx.send(msg).unwrap();
     }
 
+    pub fn clone_tx(&self) -> crossbeam::channel::Sender<U> {
+        self.tx.clone()
+    }
+
     pub fn apply_received<F>(&mut self, f: F)
     where
         F: for<'a> Fn(&'a mut T, U),
@@ -159,6 +163,18 @@ impl AppViewState {
 
             path_list,
         }
+    }
+
+    pub fn fps(&self) -> &ViewStateChannel<FrameRate, FrameRateMsg> {
+        &self.fps
+    }
+
+    pub fn graph_stats(&self) -> &ViewStateChannel<GraphStats, GraphStatsMsg> {
+        &self.graph_stats
+    }
+
+    pub fn node_list(&self) -> &ViewStateChannel<NodeList, NodeListMsg> {
+        &self.node_list
     }
 
     pub fn apply_received(&mut self) {
@@ -285,13 +301,15 @@ pub struct Gui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
 
-    draw_system: GuiPipeline,
+    pub draw_system: GuiPipeline,
 
     hover_node_id: Option<NodeId>,
 
     windows_active_view: FxHashMap<Windows, Views>,
 
     open_windows: OpenWindows,
+
+    view_state: AppViewState,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -348,6 +366,8 @@ impl Gui {
 
         let (sender, receiver) = channel::unbounded::<AppConfigState>();
 
+        let view_state = AppViewState::new(graph_query);
+
         let gui = Self {
             ctx,
             frame_input,
@@ -359,11 +379,83 @@ impl Gui {
             windows_active_view,
 
             open_windows,
+
+            view_state,
         };
 
         Ok((gui, receiver))
     }
 
+
+    pub fn set_hover_node(&mut self, node: Option<NodeId>) {
+        self.hover_node_id = node;
+    }
+
+    pub fn app_view_state(&self) -> &AppViewState {
+        &self.view_state
+    }
+
+    pub fn begin_frame(
+        &mut self,
+        screen_rect: Option<Point>,
+        graph_query: &GraphQuery,
+    ) {
+        let mut raw_input = self.frame_input.into_raw_input();
+
+        let screen_rect = screen_rect.map(|p| egui::Rect {
+            min: Point::ZERO.into(),
+            max: p.into(),
+        });
+        raw_input.screen_rect = screen_rect;
+
+        self.ctx.begin_frame(raw_input);
+
+        MenuBar::ui(&self.ctx, &mut self.open_windows);
+
+        if let Some(node_id) = self.hover_node_id {
+            egui::containers::popup::show_tooltip_text(
+                &self.ctx,
+                node_id.0.to_string(),
+            )
+        }
+
+        self.view_state.apply_received();
+
+        let scr = self.ctx.input().screen_rect();
+
+        let view_state = &mut self.view_state;
+
+        if self.open_windows.fps {
+            view_state.fps.state.ui(
+                &self.ctx,
+                Point {
+                    x: 0.8 * scr.max.x,
+                    y: 30.0,
+                },
+                None,
+            );
+        }
+
+        if self.open_windows.graph_stats {
+            view_state.graph_stats.state.ui(
+                &self.ctx,
+                Point { x: 12.0, y: 40.0 },
+                None,
+            );
+        }
+
+        if self.open_windows.nodes {
+            let mut x = false;
+            view_state
+                .node_list
+                .state
+                .ui(graph_query, &self.ctx, &mut x);
+        }
+
+    pub fn end_frame(&self) -> Vec<egui::ClippedMesh> {
+        let (_output, shapes) = self.ctx.end_frame();
+        self.ctx.tessellate(shapes)
+    }
 
     pub fn active_views(&self) -> Vec<Views> {
         let mut views: Vec<_> =
@@ -371,28 +463,159 @@ impl Gui {
         views.sort();
         views
     }
+
+    pub fn pointer_over_gui(&self) -> bool {
+        self.ctx.is_pointer_over_area()
+    }
+
+    pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+        let egui_tex = self.ctx.texture();
+        if egui_tex.version != self.draw_system.texture_version() {
+            self.draw_system.upload_texture(
+                app,
+                app.transient_command_pool,
+                app.graphics_queue,
+                &egui_tex,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    pub fn upload_vertices(
+        &mut self,
+        app: &GfaestusVk,
+        meshes: &[egui::ClippedMesh],
+    ) -> Result<()> {
+        self.draw_system.vertices.upload_meshes(app, meshes)
+    }
+
+    pub fn draw(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        screen_dims: [f32; 2],
+    ) -> Result<()> {
+        self.draw_system
+            .draw(cmd_buf, render_pass, framebuffers, screen_dims)
+    }
+
+    pub fn push_event(&mut self, event: egui::Event) {
+        self.frame_input.events.push(event);
+    }
+
+
+    pub fn apply_input(
+        &mut self,
+        app_msg_tx: &crossbeam::channel::Sender<crate::app::AppMsg>,
+        cfg_msg_tx: &crossbeam::channel::Sender<crate::app::AppConfigMsg>,
+        input: SystemInput<GuiInput>,
+    ) {
+        use GuiInput as In;
+        let payload = input.payload();
+
+        match input {
+            SystemInput::Keyboard { state, .. } => {
+                if state.pressed() {
+                    match payload {
+                        GuiInput::KeyEguiInspectionUi => {
+                            self.gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::EguiInspection,
+                                    open: None,
+                                })
+                                .unwrap();
+                        }
+                        GuiInput::KeyEguiSettingsUi => {
+                            self.gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::EguiSettings,
+                                    open: None,
+                                })
+                                .unwrap();
+                        }
+                        GuiInput::KeyEguiMemoryUi => {
+                            self.gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::EguiMemory,
+                                    open: None,
+                                })
+                                .unwrap();
+                        }
+                        GuiInput::KeyToggleRender(opt) => {
+                            use crate::app::AppConfigMsg as Msg;
+                            use crate::app::RenderConfigOpts as Opts;
+
+                            let cfg_msg = match opt {
+                                Opts::SelOutlineEdge => {
+                                    Msg::ToggleSelectionEdgeDetect
+                                }
+                                Opts::SelOutlineBlur => {
+                                    Msg::ToggleSelectionEdgeBlur
+                                }
+                                Opts::SelOutline => Msg::ToggleSelectionOutline,
+                                Opts::NodesColor => Msg::ToggleNodesColor,
+                            };
+
+                            cfg_msg_tx.send(cfg_msg).unwrap();
+                        }
+                        _ => (),
+                    }
+                }
+            }
+            SystemInput::MouseButton { pos, state, .. } => {
+                let pressed = state.pressed();
+
+                let button = match payload {
+                    GuiInput::ButtonLeft => Some(egui::PointerButton::Primary),
+                    GuiInput::ButtonRight => {
+                        Some(egui::PointerButton::Secondary)
+                    }
+
+                    _ => None,
+                };
+
+                if let Some(button) = button {
+                    let egui_event = egui::Event::PointerButton {
+                        pos: pos.into(),
+                        button,
+                        pressed,
+                        modifiers: Default::default(),
+                    };
+
+                    self.push_event(egui_event);
+                }
+            }
+            SystemInput::Wheel { delta, .. } => {
+                if let In::WheelScroll = payload {
+                    self.frame_input.scroll_delta = delta;
+                }
+            }
+        }
+    }
 }
 
-struct ActiveWindows {
-    egui_inspection_ui: bool,
-    egui_settings_ui: bool,
-    egui_memory_ui: bool,
+// struct ActiveWindows {
+//     egui_inspection_ui: bool,
+//     egui_settings_ui: bool,
+//     egui_memory_ui: bool,
 
-    graph_info: bool,
+//     graph_info: bool,
 
-    selection_info: bool,
+//     selection_info: bool,
 
-    theme_editor: bool,
+//     theme_editor: bool,
 
-    options: bool,
-}
+//     options: bool,
+// }
 
-struct ActiveWidgets {
-    fps: bool,
-    graph_stats: bool,
-    view_info: bool,
-    selected_node: bool,
-}
+// struct ActiveWidgets {
+//     fps: bool,
+//     graph_stats: bool,
+//     view_info: bool,
+//     selected_node: bool,
+// }
 
 /// Wrapper for input events that are fed into egui
 #[derive(Debug, Default, Clone)]
@@ -413,5 +636,71 @@ impl FrameInput {
         self.scroll_delta = 0.0;
 
         raw_input
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum GuiInput {
+    KeyEguiInspectionUi,
+    KeyEguiSettingsUi,
+    KeyEguiMemoryUi,
+    ButtonLeft,
+    ButtonRight,
+    WheelScroll,
+    KeyToggleRender(RenderConfigOpts),
+}
+
+impl BindableInput for GuiInput {
+    fn default_binds() -> SystemInputBindings<Self> {
+        use winit::event;
+        use winit::event::VirtualKeyCode as Key;
+        use GuiInput as Input;
+
+        let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
+            (Key::F1, Input::KeyEguiInspectionUi),
+            (Key::F2, Input::KeyEguiSettingsUi),
+            (Key::F3, Input::KeyEguiMemoryUi),
+            (
+                Key::Key1,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
+            ),
+            (
+                Key::Key2,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
+            ),
+            (
+                Key::Key3,
+                Input::KeyToggleRender(RenderConfigOpts::SelOutline),
+            ),
+            (
+                Key::Key4,
+                Input::KeyToggleRender(RenderConfigOpts::NodesColor),
+            ),
+        ]
+        .iter()
+        .copied()
+        .map(|(k, i)| (k, vec![KeyBind::new(i)]))
+        .collect::<FxHashMap<_, _>>();
+
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [
+            (
+                event::MouseButton::Left,
+                vec![MouseButtonBind::new(Input::ButtonLeft)],
+            ),
+            (
+                event::MouseButton::Right,
+                vec![MouseButtonBind::new(Input::ButtonRight)],
+            ),
+        ]
+        .iter()
+        .cloned()
+        .collect();
+
+        let wheel_bind = Some(WheelBind::new(false, 1.0, Input::WheelScroll));
+
+        SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
     }
 }
