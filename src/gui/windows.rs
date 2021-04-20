@@ -120,8 +120,9 @@ impl NodeList {
                     self.update_slots = true;
                 }
             }
-            NodeListMsg::SetFiltered(mut nodes) => {
-                std::mem::swap(&mut nodes, &mut self.filtered_nodes);
+            NodeListMsg::SetFiltered(nodes) => {
+                self.set_filtered(&nodes);
+                // std::mem::swap(&mut nodes, &mut self.filtered_nodes);
                 self.update_slots = true;
             }
         }
@@ -234,6 +235,7 @@ impl NodeList {
         }
 
         egui::Window::new("Nodes")
+            // .enabled(*show)
             .id(egui::Id::new(Self::ID))
             .show(ctx, |ui| {
                 if ui.selectable_label(filter, "Filter").clicked() {

@@ -16,9 +16,9 @@ use rustc_hash::FxHashMap;
 use crossbeam::channel;
 use parking_lot::Mutex;
 
-mod theme_editor;
+// mod theme_editor;
 
-use theme_editor::*;
+// use theme_editor::*;
 
 use crate::geometry::*;
 use crate::view::View;
@@ -65,6 +65,120 @@ pub enum Windows {
     Overlays,
 }
 
+pub struct ViewStateChannel<T, U>
+where
+    U: Send + Sync,
+{
+    state: T,
+    tx: crossbeam::channel::Sender<U>,
+    rx: crossbeam::channel::Receiver<U>,
+}
+
+impl<T, U> std::default::Default for ViewStateChannel<T, U>
+where
+    T: Default,
+    U: Send + Sync,
+{
+    fn default() -> Self {
+        let (tx, rx) = crossbeam::channel::unbounded::<U>();
+        let state = T::default();
+
+        Self { state, tx, rx }
+    }
+}
+
+impl<T, U> ViewStateChannel<T, U>
+where
+    U: Send + Sync,
+{
+    pub fn new(state: T) -> Self {
+        let (tx, rx) = crossbeam::channel::unbounded::<U>();
+        Self { state, tx, rx }
+    }
+
+    pub fn send(&self, msg: U) {
+        self.tx.send(msg).unwrap();
+    }
+
+    pub fn apply_received<F>(&mut self, f: F)
+    where
+        F: for<'a> Fn(&'a mut T, U),
+    {
+        while let Ok(msg) = self.rx.try_recv() {
+            f(&mut self.state, msg);
+        }
+    }
+}
+
+pub struct AppViewState {
+    // settings: (),
+    fps: ViewStateChannel<FrameRate, FrameRateMsg>,
+
+    graph_stats: ViewStateChannel<GraphStats, GraphStatsMsg>,
+
+    // view_info: ViewStateChannel<ViewInfo, ViewInfoMsg>,
+    node_list: ViewStateChannel<NodeList, NodeListMsg>,
+    // node_details: NodeList,
+    path_list: ViewStateChannel<NodeList, NodeListMsg>,
+    // path_details: PathList,
+
+    // theme_editor: ThemeEditor,
+    // theme_list: ThemeList,
+
+    // overlay_editor: OverlayEditor,
+    // overlay_list: OverlayList,
+}
+
+impl AppViewState {
+    pub fn new(graph_query: &GraphQuery) -> Self {
+        // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
+
+        let graph = graph_query.graph();
+
+        let stats = GraphStats {
+            node_count: graph.node_count(),
+            edge_count: graph.edge_count(),
+            path_count: graph.path_count(),
+            total_len: graph.total_length(),
+        };
+
+        let node_list_state = NodeList::new(graph_query, 15);
+
+        let path_list_state = NodeList::new(graph_query, 15);
+
+        let node_list =
+            ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
+        let path_list =
+            ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
+
+        Self {
+            fps: Default::default(),
+            graph_stats: ViewStateChannel::new(stats),
+
+            node_list,
+
+            path_list,
+        }
+    }
+
+    pub fn apply_received(&mut self) {
+        self.fps.apply_received(|state, msg| {
+            *state = FrameRate::apply_msg(state, msg);
+        });
+
+        self.graph_stats.apply_received(|state, msg| {
+            *state = GraphStats::apply_msg(state, msg);
+        });
+
+        self.node_list.apply_received(|state, msg| {
+            state.apply_msg(msg);
+        });
+
+        self.path_list.apply_received(|state, msg| {
+            state.apply_msg(msg);
+        });
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Views {

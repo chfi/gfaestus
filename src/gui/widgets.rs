@@ -221,6 +221,31 @@ pub struct GraphStats {
     pub total_len: usize,
 }
 
+impl Widget for GraphStats {
+    #[inline]
+    fn id() -> &'static str {
+        "graph_stats_box"
+    }
+
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        _size: Option<Point>,
+    ) -> Option<egui::Response> {
+        egui::Window::new(Self::id())
+            .title_bar(false)
+            .collapsible(false)
+            .fixed_pos(pos)
+            .show(ctx, |ui| {
+                ui.label(format!("Nodes: {}", self.node_count));
+                ui.label(format!("Edges: {}", self.edge_count));
+                ui.label(format!("Paths: {}", self.path_count));
+                ui.label(format!("Total length: {}", self.total_len));
+            })
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 pub struct GraphStatsMsg {
     node_count: Option<usize>,
