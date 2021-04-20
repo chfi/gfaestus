@@ -14,6 +14,10 @@ use crate::geometry::*;
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
 
+pub mod theme;
+
+use theme::*;
+
 #[derive(Debug, Clone)]
 pub struct NodeDetails {
     node_id: NodeId,

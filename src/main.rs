@@ -4,8 +4,7 @@ use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
-use gfaestus::app::{gui::*, AppConfigState};
-use gfaestus::app::{App, AppConfigMsg, AppMsg};
+use gfaestus::app::{App, AppConfigMsg, AppConfigState, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
@@ -13,6 +12,8 @@ use gfaestus::universe::*;
 use gfaestus::view::View;
 use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
 use gfaestus::vulkan::render_pass::Framebuffers;
+
+use gfaestus::gui::{widgets::*, windows::*, *};
 
 use gfaestus::vulkan::draw_system::selection::{
     SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
@@ -144,21 +145,24 @@ fn main() {
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.nodes,
-        // gfaestus.render_pass,
     )
     .unwrap();
 
-    let (mut gui, opts_from_gui) = GfaestusGui::new(
+    let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
         &graph_query,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
-        // gfaestus.render_pass_dc,
     )
     .unwrap();
 
-    gui.set_graph_stats(stats);
+    gui.app_view_state().graph_stats().send(GraphStatsMsg {
+        node_count: Some(stats.node_count),
+        edge_count: Some(stats.edge_count),
+        path_count: Some(stats.path_count),
+        total_len: Some(stats.total_len),
+    });
 
     main_view
         .node_draw_system
@@ -197,6 +201,8 @@ fn main() {
     )
     .unwrap();
 
+    let gui_msg_tx = gui.clone_gui_msg_tx();
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -211,7 +217,7 @@ fn main() {
             winit_tx.send(ev).unwrap();
         }
 
-        gui.set_dark_mode();
+        gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
         // hacky -- this should take place after mouse pos is updated
         // in egui but before input is sent to mainview
@@ -234,36 +240,15 @@ fn main() {
         gui.set_hover_node(hover_node);
 
         if let Some(selected) = app.selected_nodes() {
-            if selected.len() == 1 {
-                let node_id = selected.iter().next().copied().unwrap();
+            let mut nodes = selected.iter().copied().collect::<Vec<_>>();
+            nodes.sort();
 
-                if gui.selected_node() != Some(node_id) {
-                    let request = GraphQueryRequest::NodeStats(node_id);
-                    let resp = graph_query.query_request_blocking(request);
-                    if let GraphQueryResp::NodeStats {
-                        node_id,
-                        len,
-                        degree,
-                        coverage,
-                    } = resp
-                    {
-                        gui.node_list.set_filtered(&[node_id]);
-                        gui.one_selection(node_id, len, degree, coverage);
-                    }
-                }
-            } else {
-
-                let mut nodes = selected.iter().copied().collect::<Vec<_>>();
-                nodes.sort();
-
-                gui.node_list.set_filtered(&nodes);
-                gui.many_selection(selected.len());
-            }
+            gui.app_view_state().node_list().send(NodeListMsg::SetFiltered(nodes));
 
             main_view.update_node_selection(selected).unwrap();
         } else {
-            gui.no_selection();
-            gui.node_list.set_filtered(&[]);
+            gui.app_view_state().node_list().send(NodeListMsg::SetFiltered(Vec::new()));
+
             main_view.clear_node_selection().unwrap();
         }
 
@@ -551,7 +536,7 @@ fn main() {
                 main_view.node_id_buffer.destroy(device);
                 main_view.node_draw_system.destroy();
 
-                gui.gui_draw_system.destroy();
+                gui.draw_system.destroy();
 
                 selection_edge.destroy(device);
                 selection_blur.destroy(device);

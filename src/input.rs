@@ -8,10 +8,10 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
-use crate::app::gui::GuiInput;
 use crate::app::mainview::MainViewInput;
 use crate::app::AppInput;
 use crate::geometry::*;
+use crate::gui::GuiInput;
 
 pub mod binds;
 
