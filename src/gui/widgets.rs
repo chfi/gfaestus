@@ -160,13 +160,13 @@ impl Widget for NodeSelection {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FrameRate {
-    fps: f32,
-    frame_time: f32,
-    frame: usize,
+    pub fps: f32,
+    pub frame_time: f32,
+    pub frame: usize,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct FrameRateMsg(FrameRate);
+pub struct FrameRateMsg(pub FrameRate);
 
 impl FrameRate {
     pub fn apply_msg(&self, msg: FrameRateMsg) -> Self {

@@ -203,6 +203,10 @@ fn main() {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
+    const FRAME_HISTORY_LEN: usize = 10;
+    let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
+    let mut frame = 0;
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -283,6 +287,9 @@ fn main() {
             // Event::MainEventsCleared => {
             // }
             Event::RedrawEventsCleared => {
+
+                let frame_t = std::time::Instant::now();
+
                 if dirty_swapchain {
                     let size = window.inner_size();
                     if size.width > 0 && size.height > 0 {
@@ -319,9 +326,6 @@ fn main() {
                 gui.begin_frame(Some(app.dims().into()), &graph_query);
 
                 let meshes = gui.end_frame();
-
-                let render_pass = gfaestus.render_pass;
-                let render_pass_dc = gfaestus.render_pass_dc;
 
                 gui.upload_texture(&gfaestus).unwrap();
 
@@ -508,6 +512,27 @@ fn main() {
                     },
                 )
                 .unwrap();
+
+
+                let frame_time = frame_t.elapsed().as_secs_f32();
+                frame_time_history[frame % frame_time_history.len()] =
+                    frame_time;
+
+                if frame > FRAME_HISTORY_LEN && frame % FRAME_HISTORY_LEN == 0 {
+                    let ft_sum: f32 = frame_time_history.iter().sum();
+                    let avg = ft_sum / (FRAME_HISTORY_LEN as f32);
+                    let fps = 1.0 / avg;
+                    let avg_ms = avg * 1000.0;
+
+                    gui.app_view_state().fps().send(FrameRateMsg(FrameRate {
+                        fps,
+                        frame_time: avg_ms,
+                        frame,
+                    }));
+                }
+
+                frame += 1;
+
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
