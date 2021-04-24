@@ -740,6 +740,7 @@ impl BindableInput for MainViewInput {
 
 pub struct EaseExponential {
     end: f32,
+
     time: f32,
 }
 
@@ -769,5 +770,148 @@ impl EaseExponential {
     #[inline]
     pub fn current(&self) -> f32 {
         self.value_at(self.time)
+    }
+}
+
+use std::time::{Duration, Instant};
+
+
+pub trait Easing {
+
+    fn new(duration: Duration) -> Self;
+
+    fn value_at_time(&self, time: Duration) -> f64;
+
+    fn current_value(&self) -> f64;
+
+    fn update(&mut self, delta: Duration);
+
+    // fn easing(start: f32, end: f32, time: f32) -> f32;
+
+    // fn normalized_time(&self, time: Instant) -> f32;
+
+
+    // fn current(&self) -> f32 {
+
+    // }
+}
+
+pub struct EaseExpo {
+    duration: Duration,
+
+    now: Duration,
+}
+
+impl EaseExpo {
+    pub fn new(duration: Duration) -> Self {
+        Self {
+            duration,
+            now: Duration::new(0, 0),
+        }
+    }
+
+    pub fn value_at_time(&self, time: Duration) -> f64 {
+        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
+        Self::value_at_normalized_time(norm_time)
+    }
+
+    pub fn current_value(&self) -> f64 {
+        self.value_at_time(self.now)
+    }
+
+
+    pub fn update(&mut self, delta: Duration) {
+        self.now += delta;
+    }
+
+    fn value_at_normalized_time(time: f64) -> f64 {
+        if time <= 0.0 || time >= 1.0 {
+            time
+        } else {
+            2.0f64.powf(10.0 * time - 10.0)
+        }
+    }
+}
+
+impl Easing for EaseExpo {
+
+    #[inline]
+    fn new(duration: Duration) -> Self {
+        EaseExpo::new(duration)
+    }
+
+    #[inline]
+    fn value_at_time(&self, time: Duration) -> f64 {
+        EaseExpo::value_at_time(self, time)
+    }
+
+    #[inline]
+    fn current_value(&self) -> f64 {
+        EaseExpo::current_value(self)
+    }
+
+    #[inline]
+    fn update(&mut self, delta: Duration) {
+        EaseExpo::update(self, delta);
+    }
+}
+
+
+
+
+
+pub trait EasingFunction {
+    fn value_at_normalized_time(time: f64) -> f64;
+}
+
+pub struct EasingExpoOut {}
+
+impl EasingFunction for EasingExpoOut {
+    #[inline]
+    fn value_at_normalized_time(time: f64) -> f64 {
+        if time <= 0.0 || time >= 1.0 {
+            time
+        } else {
+            2.0f64.powf(10.0 * time - 10.0)
+        }
+    }
+}
+
+pub struct EasingElasticOut {}
+
+impl EasingFunction for EasingElasticOut {
+    fn value_at_normalized_time(time: f64) -> f64 {
+        const C4: f64 = std::f64::consts::TAU / 3.0;
+
+        if time <= 0.0 || time >= 1.0 {
+            time.clamp(0.0, 1.0)
+        } else {
+            let expo = -10.0 * time;
+            let period = (time * 10.0 - 0.75) * C4;
+
+            2.0f64.powf(expo) * period.sin() + 1.0
+        }
+    }
+}
+
+pub struct EasingCirc {}
+
+impl EasingFunction for EasingCirc {
+
+    #[inline]
+    fn value_at_normalized_time(time: f64) -> f64 {
+        if time < 0.5 {
+            let pow = (2.0 * time).powi(2);
+            let sqrt = (1.0 - pow).sqrt();
+            let num = 1.0 - sqrt;
+
+            num / 2.0
+        } else {
+            let pow = (-2.0 * time + 2.0).powi(2);
+            let sqrt = (1.0 - pow).sqrt();
+            let num = sqrt + 1.0;
+
+            num / 2.0
+        }
     }
 }
