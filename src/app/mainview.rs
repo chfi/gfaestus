@@ -543,65 +543,7 @@ impl AnimHandler {
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
-        /*
-        if let Some(mouse) = mouse_pos {
-            // view.center += dxy * view.scale;
-
-            let mid = Point {
-                x: screen_dims.width / 2.0,
-                y: screen_dims.height / 2.0,
-            };
-
-            // let mid = Point::ZERO;
-
-            // let mouse = mouse
-            //     - Point {
-            //         x: screen_dims.width / 2.0,
-            //         y: screen_dims.height / 2.0,
-            //     };
-
-            // let mouse = mouse / 2.0;
-
-            // let mouse = Point {
-            //     x: mouse.x,
-            //     y: -mouse.y,
-            // };
-
-            let center = pre_view.screen_point_to_world(screen_dims, mid);
-
-            let mouse_world_pre =
-                pre_view.screen_point_to_world(screen_dims, mouse);
-
-            let pre_offset = mouse_world_pre - center;
-
-            let mouse_world_post =
-                view.screen_point_to_world(screen_dims, mouse);
-
-            let post_offset = mouse_world_post - center;
-
-            // println!("{:?}\t{:?}", mouse_world_pre, mouse_world_post);
-
-            // let delta = post_offset - pre_offset;
-
-            let delta = mouse_world_post - mouse_world_pre;
-            // let delta = mouse_world_post - post_center;
-
-            println!("{:?}", delta);
-
-            // let delta = Point {
-            //     x: delta.x * screen_dims.width,
-            //     y: delta.y * screen_dims.height,
-            // };
-
-            // view.center =
-            view.center += delta;
-        } else {
-            */
         view.center += dxy * view.scale;
-        // }
-
-        // let zoom_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
-        // let pan_friction = 1.0 - (10.0_f32.powf(dt - 1.0));
 
         let zoom_friction = if dt >= 1.0 {
             0.0

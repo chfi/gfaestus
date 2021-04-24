@@ -1,4 +1,4 @@
-use crate::view::View;
+use crate::view::{ScreenDims, View};
 use crate::geometry::*;
 
 use std::time::Duration;
@@ -44,12 +44,46 @@ impl AnimationOrder {
     }
 }
 
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AnimationDef {
     kind: AnimationKind,
     order: AnimationOrder,
 }
 
+impl AnimationDef {
+    pub fn pan_key(h: isize, v: isize) -> Self {
+        let kind = AnimationKind::Relative;
+
+        let center  =
+        {
+            use std::cmp::Ordering;
+
+            let x = match h.cmp(&0) {
+                Ordering::Less => -1.0f32,
+                Ordering::Equal => 0.0f32,
+                Ordering::Greater => 1.0f32,
+            };
+
+            let y = match v.cmp(&0) {
+                Ordering::Less => -1.0f32,
+                Ordering::Equal => 0.0f32,
+                Ordering::Greater => 1.0f32,
+            };
+
+            Point { x, y }
+        };
+
+        let order = AnimationOrder::Translate {
+            center,
+        };
+
+        Self {
+            kind,
+            order
+        }
+    }
+}
 
 pub trait EasingFunction {
     fn value_at_normalized_time(time: f64) -> f64;
@@ -142,6 +176,32 @@ impl ViewLerp {
     }
 }
 
+pub struct ViewAnimationBoxed {
+    view_lerp: ViewLerp,
+    duration: Duration,
+
+    now: Duration,
+
+    easing: Box<dyn Fn(f64) -> f64>,
+}
+
+impl ViewAnimationBoxed {
+    pub fn view_at_time(&self, time: Duration) -> View {
+        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
+        let anim_time = (self.easing)(norm_time);
+
+        self.view_lerp.lerp(anim_time)
+    }
+
+    pub fn current_view(&self) -> View {
+        self.view_at_time(self.now)
+    }
+
+    pub fn update(&mut self, delta: Duration) {
+        self.now += delta;
+    }
+}
+
 
 pub struct ViewAnimation<E>
 where E: EasingFunction,
@@ -182,6 +242,21 @@ impl<E: EasingFunction> ViewAnimation<E> {
             now,
 
             _easing: std::marker::PhantomData,
+        }
+    }
+
+    pub fn boxed(self) -> ViewAnimationBoxed {
+        let view_lerp = self.view_lerp;
+        let duration = self.duration;
+        let now = self.now;
+
+        let easing = Box::new(|t| E::value_at_normalized_time(t));
+
+        ViewAnimationBoxed {
+            view_lerp,
+            duration,
+            now,
+            easing,
         }
     }
 
