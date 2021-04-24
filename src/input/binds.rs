@@ -284,9 +284,18 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                     }
 
                     let delta = match delta {
-                        event::MouseScrollDelta::LineDelta(_, y) => *y,
+                        event::MouseScrollDelta::LineDelta(_x, y) =>
+                        {
+                            // eprintln!("LineDelta({}, {}", x, y);
+                            *y
+                        }
                         event::MouseScrollDelta::PixelDelta(pos) => {
-                            pos.y as f32
+                            // eprintln!("PixelDelta({:.4}, {:.4}", pos.x, pos.y);
+
+                            // PixelDelta events seem to differ in
+                            // frequency as well as magnitude; a more
+                            // complex solution is probably needed
+                            (pos.y as f32) * 0.1
                         }
                     };
 
