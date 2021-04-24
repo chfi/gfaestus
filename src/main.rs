@@ -501,6 +501,7 @@ fn main() {
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
 
+                let screen_dims = app.dims();
                 GfaestusVk::copy_image_to_buffer(
                     gfaestus.vk_context().device(),
                     gfaestus.transient_command_pool,
@@ -512,8 +513,7 @@ fn main() {
                         height: screen_dims.height as u32,
                     },
                 )
-                .unwrap();
-
+                    .unwrap();
 
                 let frame_time = frame_t.elapsed().as_secs_f32();
                 frame_time_history[frame % frame_time_history.len()] =

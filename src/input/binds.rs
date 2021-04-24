@@ -290,7 +290,8 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                             *y
                         }
                         event::MouseScrollDelta::PixelDelta(pos) => {
-                            // eprintln!("PixelDelta({:.4}, {:.4}", pos.x, pos.y);
+                            // eprintln!("PixelDelta({:.4}, {:.4})", pos.x, pos.y);
+
 
                             // PixelDelta events seem to differ in
                             // frequency as well as magnitude; a more
