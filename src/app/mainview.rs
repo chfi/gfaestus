@@ -737,3 +737,37 @@ impl BindableInput for MainViewInput {
         SystemInputBindings::new(key_binds, mouse_binds, wheel_bind)
     }
 }
+
+pub struct EaseExponential {
+    end: f32,
+    time: f32,
+}
+
+impl EaseExponential {
+    pub fn new_from_zero(end: f32) -> Self {
+        assert!(end >= 0.0, "Animations must have positive length");
+
+        Self {
+            end,
+
+            time: 0.0,
+        }
+    }
+
+    #[inline]
+    pub fn value_at(&self, time: f32) -> f32 {
+        let interval = self.end;
+        let t = time / interval;
+
+        if t == 0.0 {
+            0.0
+        } else {
+            2.0f32.powf(10.0 * t - 10.0).min(1.0)
+        }
+    }
+
+    #[inline]
+    pub fn current(&self) -> f32 {
+        self.value_at(self.time)
+    }
+}
