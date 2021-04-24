@@ -738,127 +738,7 @@ impl BindableInput for MainViewInput {
     }
 }
 
-pub struct EaseExponential {
-    end: f32,
-
-    time: f32,
-}
-
-impl EaseExponential {
-    pub fn new_from_zero(end: f32) -> Self {
-        assert!(end >= 0.0, "Animations must have positive length");
-
-        Self {
-            end,
-
-            time: 0.0,
-        }
-    }
-
-    #[inline]
-    pub fn value_at(&self, time: f32) -> f32 {
-        let interval = self.end;
-        let t = time / interval;
-
-        if t == 0.0 {
-            0.0
-        } else {
-            2.0f32.powf(10.0 * t - 10.0).min(1.0)
-        }
-    }
-
-    #[inline]
-    pub fn current(&self) -> f32 {
-        self.value_at(self.time)
-    }
-}
-
 use std::time::{Duration, Instant};
-
-
-pub trait Easing {
-
-    fn new(duration: Duration) -> Self;
-
-    fn value_at_time(&self, time: Duration) -> f64;
-
-    fn current_value(&self) -> f64;
-
-    fn update(&mut self, delta: Duration);
-
-    // fn easing(start: f32, end: f32, time: f32) -> f32;
-
-    // fn normalized_time(&self, time: Instant) -> f32;
-
-
-    // fn current(&self) -> f32 {
-
-    // }
-}
-
-pub struct EaseExpo {
-    duration: Duration,
-
-    now: Duration,
-}
-
-impl EaseExpo {
-    pub fn new(duration: Duration) -> Self {
-        Self {
-            duration,
-            now: Duration::new(0, 0),
-        }
-    }
-
-    pub fn value_at_time(&self, time: Duration) -> f64 {
-        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
-        Self::value_at_normalized_time(norm_time)
-    }
-
-    pub fn current_value(&self) -> f64 {
-        self.value_at_time(self.now)
-    }
-
-
-    pub fn update(&mut self, delta: Duration) {
-        self.now += delta;
-    }
-
-    fn value_at_normalized_time(time: f64) -> f64 {
-        if time <= 0.0 || time >= 1.0 {
-            time
-        } else {
-            2.0f64.powf(10.0 * time - 10.0)
-        }
-    }
-}
-
-impl Easing for EaseExpo {
-
-    #[inline]
-    fn new(duration: Duration) -> Self {
-        EaseExpo::new(duration)
-    }
-
-    #[inline]
-    fn value_at_time(&self, time: Duration) -> f64 {
-        EaseExpo::value_at_time(self, time)
-    }
-
-    #[inline]
-    fn current_value(&self) -> f64 {
-        EaseExpo::current_value(self)
-    }
-
-    #[inline]
-    fn update(&mut self, delta: Duration) {
-        EaseExpo::update(self, delta);
-    }
-}
-
-
-
-
 
 pub trait EasingFunction {
     fn value_at_normalized_time(time: f64) -> f64;
@@ -914,4 +794,86 @@ impl EasingFunction for EasingCirc {
             num / 2.0
         }
     }
+}
+
+pub struct ViewLerp {
+    start: View,
+    end: View,
+
+    origin_delta: Point,
+    scale_delta: f32,
+}
+
+impl ViewLerp {
+    pub fn new(start: View, end: View) -> Self {
+
+        let origin_delta = end.center - start.center;
+        let scale_delta = end.scale - start.scale;
+
+        Self {
+            start,
+            end,
+            origin_delta,
+            scale_delta
+        }
+    }
+
+    pub fn lerp(&self, t: f64) -> View {
+        if t <= 0.0 {
+            self.start
+        } else if t >= 1.0 {
+            self.end
+        } else {
+            let center = self.start.center + self.origin_delta * (t as f32);
+            let scale = self.start.scale + self.scale_delta * (t as f32);
+            View { center, scale }
+        }
+    }
+}
+
+
+pub struct ViewAnimation<E>
+where E: EasingFunction,
+{
+    view_lerp: ViewLerp,
+    duration: Duration,
+
+    now: Duration,
+
+    _easing: std::marker::PhantomData<E>,
+}
+
+impl<E: EasingFunction> ViewAnimation<E> {
+    pub fn new(start: View, end: View, duration: Duration) -> Self {
+
+        let view_lerp = ViewLerp::new(start, end);
+
+        let now = Duration::new(0, 0);
+
+        Self {
+            view_lerp,
+            duration,
+
+            now,
+
+            _easing: std::marker::PhantomData,
+        }
+    }
+
+    pub fn view_at_time(&self, time: Duration) -> View {
+        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
+
+        let anim_time = E::value_at_normalized_time(norm_time);
+
+        self.view_lerp.lerp(anim_time)
+    }
+
+    pub fn current_view(&self) -> View {
+        self.view_at_time(self.now)
+    }
+
+    pub fn update(&mut self, delta: Duration) {
+        self.now += delta;
+    }
+
 }
