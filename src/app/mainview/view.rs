@@ -1,7 +1,7 @@
 use crate::view::{ScreenDims, View};
 use crate::geometry::*;
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationKind {
@@ -291,4 +291,108 @@ impl<E: EasingFunction> ViewAnimation<E> {
     pub fn update(&mut self, delta: Duration) {
         self.now += delta;
     }
+}
+
+use std::sync::Arc;
+use crossbeam::atomic::AtomicCell;
+use crossbeam::channel;
+
+
+
+pub struct AnimHandlerNew {
+    // settings: Arc<AtomicCell<AnimSettings>>,
+
+
+    screen_dims: Arc<AtomicCell<ScreenDims>>,
+    initial_view: Arc<AtomicCell<View>>,
+    mouse_pos: Arc<AtomicCell<Point>>,
+
+    _join_handle: std::thread::JoinHandle<()>,
+    anim_tx: channel::Sender::<AnimationDef>,
+
+    // animation: Option<ViewAnimationBoxed>,
+    // animation: Option<Box<dyn
+    // mouse_pan_screen_origin: Origin<Point>,
+
+    // animation: Option<Animation>,
+}
+
+impl AnimHandlerNew {
+    pub fn new<D: Into<ScreenDims>>(
+        view: Arc<AtomicCell<View>>,
+        mouse_pos: Point,
+        screen_dims: D,
+    ) -> Self {
+
+        let screen_dims_ = Arc::new(AtomicCell::new(screen_dims.into()));
+        let screen_dims = screen_dims_.clone();
+
+        let initial_view = view.load();
+        let initial_view_ = Arc::new(AtomicCell::new(initial_view));
+        let initial_view = initial_view_.clone();
+
+        let view_ = view;
+
+        let mouse_pos_ = Arc::new(AtomicCell::new(mouse_pos));
+        let mouse_pos = mouse_pos_.clone();
+
+
+        let (anim_tx, anim_rx) = channel::unbounded::<AnimationDef>();
+
+        let _join_handle = std::thread::spawn(move || {
+
+            let update_delay = std::time::Duration::from_millis(5);
+            let sleep_delay = std::time::Duration::from_micros(2500);
+
+            let mut animation: Option<ViewAnimationBoxed> = None;
+
+            let view = view_;
+            let mouse_pos = mouse_pos_;
+            let screen_dims = screen_dims_;
+            let initial_view = initial_view_;
+
+            let mut last_update = Instant::now();
+
+            loop {
+
+                let cur_view = view.load();
+
+                while let Ok(def) = anim_rx.try_recv() {
+                    let view_anim: ViewAnimation<EasingCirc> = ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(1000));
+
+                    animation = Some(view_anim.boxed());
+                    last_update = Instant::now();
+                }
+
+                let now = Instant::now();
+
+                let delta: Duration = now.duration_since(last_update);
+
+                if delta >= update_delay {
+
+                    if let Some(anim) = animation.as_mut() {
+                        anim.update(delta);
+                        view.store(anim.current_view());
+                    }
+
+                    last_update = Instant::now();
+                } else {
+                    std::thread::sleep(sleep_delay);
+                }
+            }
+        });
+
+
+        Self {
+            screen_dims,
+            initial_view,
+            mouse_pos,
+
+            _join_handle,
+            anim_tx,
+        }
+
+
+    }
+
 }
