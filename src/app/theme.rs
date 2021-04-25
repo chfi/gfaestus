@@ -8,6 +8,100 @@ use rustc_hash::FxHashMap;
 
 use crossbeam::atomic::AtomicCell;
 
+use crate::vulkan::{GfaestusVk, SwapchainProperties, context::VkContext, draw_system::{gui::{GuiPipeline, GuiVertex, GuiVertices}, nodes::NodeThemePipeline}, texture::*};
+
+
+pub struct AppThemes {
+    next_theme_id: usize,
+
+    theme_definitions: FxHashMap<usize, ThemeDef>,
+
+    active_theme: usize,
+    previous_theme: usize,
+}
+
+impl AppThemes {
+    pub fn default_themes(app: &GfaestusVk,
+                          theme_pipeline: &mut NodeThemePipeline
+    ) -> Result<Self> {
+
+        // TODO make sure to clean up any deleted/overwritten themes
+        // already loaded into the pipeline
+
+        let light = light_default();
+        let light_ix = 0;
+
+        let dark = dark_default();
+        let dark_ix = 1;
+
+        theme_pipeline.upload_theme_data(app, light_ix, &light)?;
+        theme_pipeline.upload_theme_data(app, dark_ix, &dark)?;
+
+        let next_theme_id = 2;
+
+        let theme_definitions: FxHashMap<usize, ThemeDef> =
+            std::array::IntoIter::new(
+                [(light_ix, light), (dark_ix, dark)])
+            .collect();
+
+        let active_theme = light_ix;
+        let previous_theme = dark_ix;
+
+        Ok(Self {
+            next_theme_id,
+
+            theme_definitions,
+
+            active_theme,
+            previous_theme,
+        })
+    }
+
+    pub fn active_theme(&self) -> usize {
+        self.active_theme
+    }
+
+    pub fn toggle_previous_theme(&mut self) {
+        std::mem::swap(&mut self.active_theme,
+                       &mut self.previous_theme);
+    }
+
+    pub fn new_theme(&mut self,
+                     app: &GfaestusVk,
+                     theme_pipeline: &mut NodeThemePipeline,
+                     theme_def: &ThemeDef,
+    ) -> Result<usize> {
+
+        let theme_id = self.next_theme_id;
+
+        theme_pipeline.upload_theme_data(app, theme_id, theme_def)?;
+
+        self.next_theme_id += 1;
+
+        Ok(theme_id)
+    }
+
+    pub fn remove_theme(&mut self,
+                        app: &GfaestusVk,
+                        theme_pipeline: &mut NodeThemePipeline,
+                        theme_id: usize,
+                        new_theme_def: &ThemeDef,
+    ) -> Option<usize>
+    {
+        if theme_id == self.active_theme ||
+            theme_id == self.previous_theme ||
+            !theme_pipeline.has_theme(theme_id) {
+                return None;
+            }
+
+        theme_pipeline.destroy_theme(theme_id);
+
+        Some(theme_id)
+    }
+}
+
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd)]
 pub enum ThemeId {
     Primary,

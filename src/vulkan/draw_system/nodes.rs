@@ -557,7 +557,15 @@ impl NodeThemePipeline {
         }
     }
 
-    pub fn upload_theme_data(&mut self, app: &GfaestusVk, theme_id: usize, theme_def: &ThemeDef) -> Result<()> {
+    pub fn has_theme(&self, theme_id: usize) -> bool {
+        self.themes.contains_key(&theme_id)
+    }
+
+    pub fn upload_theme_data(&mut self,
+                             app: &GfaestusVk,
+                             theme_id: usize,
+                             theme_def: &ThemeDef
+    ) -> Result<()> {
 
         let theme = NodeThemeData::from_theme_def(app,
                                                   self.descriptor_pool,
@@ -570,6 +578,13 @@ impl NodeThemePipeline {
         self.themes.insert(theme_id, theme);
 
         Ok(())
+    }
+
+    pub fn destroy_theme(&mut self, theme_id: usize) {
+        if let Some(theme) = self.themes.get_mut(&theme_id) {
+            theme.destroy(&self.device);
+        }
+        self.themes.remove(&theme_id);
     }
 }
 
