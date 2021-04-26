@@ -4,6 +4,7 @@ use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
+use gfaestus::app::theme::{AppThemes, ThemeDef};
 use gfaestus::app::{App, AppConfigMsg, AppConfigState, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -177,9 +178,17 @@ fn main() {
     let (opts_to_gui, opts_from_app) =
         crossbeam::channel::unbounded::<AppConfigState>();
 
-    // for (id, def) in app.all_theme_defs() {
-    //     gui.update_theme_editor(id, def);
-    // }
+    let mut app_themes = AppThemes::default_themes(
+        &gfaestus,
+        &mut main_view.node_draw_system.theme_pipeline,
+    )
+    .unwrap();
+
+    main_view
+        .node_draw_system
+        .theme_pipeline
+        .set_active_theme(0)
+        .unwrap();
 
     let mut dirty_swapchain = false;
 

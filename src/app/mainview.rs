@@ -169,7 +169,6 @@ impl MainView {
             node_width,
             view,
             offset,
-            0,
         )
     }
 
