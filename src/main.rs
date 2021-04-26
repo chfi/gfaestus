@@ -178,11 +178,12 @@ fn main() {
     let (opts_to_gui, opts_from_app) =
         crossbeam::channel::unbounded::<AppConfigState>();
 
-    let mut app_themes = AppThemes::default_themes(
-        &gfaestus,
-        &mut main_view.node_draw_system.theme_pipeline,
-    )
-    .unwrap();
+    app.themes
+        .upload_to_gpu(
+            &gfaestus,
+            &mut main_view.node_draw_system.theme_pipeline,
+        )
+        .unwrap();
 
     main_view
         .node_draw_system
@@ -355,6 +356,13 @@ fn main() {
                     gfaestus.node_attachments.mask_resolve.image;
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
+
+
+                main_view
+                    .node_draw_system
+                    .theme_pipeline
+                    .set_active_theme(app.themes.active_theme())
+                    .unwrap();
 
                 let draw =
                     |device: &Device,

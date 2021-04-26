@@ -4,7 +4,7 @@ use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
-use super::theme::{ThemeDef, ThemeId};
+use super::theme::ThemeDef;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ActiveRenderLayers {

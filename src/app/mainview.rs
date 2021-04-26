@@ -21,8 +21,6 @@ use crate::input::binds::{
 };
 use crate::input::MousePos;
 
-use super::theme::ThemeId;
-
 use crate::vulkan::{
     context::VkContext,
     draw_system::nodes::{

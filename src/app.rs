@@ -23,6 +23,7 @@ use theme::*;
 pub use settings::*;
 
 pub struct App {
+    pub themes: AppThemes,
     // themes: Themes,
     mouse_pos: MousePos,
     screen_dims: ScreenDims,
@@ -41,7 +42,7 @@ pub struct App {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
     KeyClearSelection,
-    // KeyToggleTheme,
+    KeyToggleTheme,
     KeyToggleOverlay,
 }
 
@@ -52,7 +53,7 @@ impl BindableInput for AppInput {
 
         let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
             (Key::Escape, Input::KeyClearSelection),
-            // (Key::F9, Input::KeyToggleTheme),
+            (Key::F9, Input::KeyToggleTheme),
             (Key::F10, Input::KeyToggleOverlay),
         ]
         .iter()
@@ -105,7 +106,6 @@ pub enum RenderConfigOpts {
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(
-        // queue: Arc<Queue>,
         mouse_pos: MousePos,
         screen_dims: Dims,
     ) -> Result<Self> {
@@ -115,8 +115,11 @@ impl App {
         //     &light_default(),
         // )?;
 
+        let themes = AppThemes::default_themes();
+
         Ok(Self {
-            // themes,
+            themes,
+
             mouse_pos,
             screen_dims: screen_dims.into(),
 
@@ -243,17 +246,12 @@ impl App {
                         self.selected_nodes.clear();
                     }
                 }
-                // AppInput::KeyToggleTheme => {
-                //     if state.pressed() {
-                //         let new_theme = self.themes.toggle_theme();
-                //         let is_dark = self.dark_active_theme();
-                //         let luma = self.active_theme_luma();
-                //         println!(
-                //             "{:?}\tdark? {}\tluma: {}",
-                //             new_theme, is_dark, luma
-                //         );
-                //     }
-                // }
+
+                AppInput::KeyToggleTheme => {
+                    if state.pressed() {
+                        self.themes.toggle_previous_theme();
+                    }
+                }
                 AppInput::KeyToggleOverlay => {
                     if state.pressed() {
                         self.use_overlay = !self.use_overlay;
@@ -262,14 +260,6 @@ impl App {
             }
         }
     }
-
-    // pub fn active_theme_config_state(&self) -> settings::AppConfigState {
-    //     let (id, _) = self.themes.active_theme_ignore_cache();
-
-    //     let def = self.themes.get_theme_def(id).clone();
-
-    //     settings::AppConfigState::Theme { id, def }
-    // }
 
     pub fn apply_app_config_state(&mut self, app_cfg: AppConfigState) {
         match app_cfg {

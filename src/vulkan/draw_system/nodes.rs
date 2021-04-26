@@ -749,7 +749,7 @@ impl NodePipelines {
         let device = &self.theme_pipeline.device;
 
         let clear_values = {
-            let bg = self.theme_pipeline.background_color;
+            let bg = self.theme_pipeline.active_background_color();
             [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
