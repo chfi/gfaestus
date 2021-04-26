@@ -208,13 +208,7 @@ impl NodeThemePipeline {
         theme_id: usize,
         theme_def: &ThemeDef,
     ) -> Result<()> {
-        let theme = ThemeData::from_theme_def(
-            app,
-            // self.descriptor_pool,
-            // self.descriptor_set_layout,
-            // self.sampler,
-            theme_def,
-        )?;
+        let theme = ThemeData::from_theme_def(app, theme_def)?;
 
         // handle cleanup if theme already exists
         if let Some(old_theme) = self.themes.get_mut(&theme_id) {

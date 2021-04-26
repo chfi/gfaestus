@@ -5,7 +5,7 @@ use rgb::*;
 use crossbeam::channel;
 
 use crate::app::settings::AppConfigState;
-use crate::app::theme::{ThemeDef, ThemeId};
+use crate::app::theme::{AppThemeMsg, ThemeDef};
 
 fn rgb_to_color32(color: RGB<f32>) -> egui::Color32 {
     let r = (255.0 * color.r).floor();
@@ -21,6 +21,19 @@ fn color32_to_rgb(color: egui::Color32) -> RGB<f32> {
     RGB::new(r, g, b)
 }
 
+// pub struct ThemeEditor {
+//     tx_theme: channel::Sender<AppThemeMsg>,
+
+//     editing_theme: Option<(ThemeId, ThemeDef)>,
+// }
+
+// impl ThemeEditor {
+//     pub fn new() -> (Self, channel::Receiver<AppThemeMsg>) {
+
+//     }
+// }
+
+/*
 /// The window that contains the theme editor widget, and lets the
 /// user choose which theme to edit
 pub struct ThemeEditorWindow {
@@ -195,3 +208,5 @@ impl ThemeEditor {
         }
     }
 }
+
+*/
