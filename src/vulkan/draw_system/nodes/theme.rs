@@ -102,7 +102,6 @@ impl NodeThemePipeline {
 
     pub fn new(
         app: &GfaestusVk,
-        // device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         selection_set_layout: vk::DescriptorSetLayout,
@@ -173,7 +172,7 @@ impl NodeThemePipeline {
 
     pub fn destroy(&mut self) {
         unsafe {
-            for (ix, theme) in self.themes.iter_mut() {
+            for (_ix, theme) in self.themes.iter_mut() {
                 theme.destroy(&self.device);
             }
             self.themes.clear();

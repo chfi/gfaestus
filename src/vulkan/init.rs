@@ -8,18 +8,9 @@ use ash::{
 };
 use ash::{vk, Device, Entry, Instance};
 
-use winit::{
-    dpi::PhysicalSize,
-    event::{ElementState, Event, MouseButton, MouseScrollDelta, WindowEvent},
-    event_loop::{ControlFlow, EventLoop},
-    window::{Window, WindowBuilder},
-};
+use winit::window::Window;
 
-use std::{
-    ffi::{CStr, CString},
-    mem::{align_of, size_of},
-    sync::Arc,
-};
+use std::ffi::{CStr, CString};
 
 use anyhow::Result;
 

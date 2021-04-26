@@ -1,6 +1,5 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
-use rustc_hash::FxHashMap;
 
 use std::ffi::CString;
 
@@ -8,16 +7,15 @@ use nalgebra_glm as glm;
 
 use anyhow::Result;
 
+use crate::geometry::Point;
 use crate::view::View;
-use crate::vulkan::texture::Texture1D;
 use crate::vulkan::GfaestusVk;
 use crate::vulkan::SwapchainProperties;
-use crate::{app::theme::ThemeDef, geometry::Point};
 
 use crate::vulkan::render_pass::Framebuffers;
 
+use super::create_shader_module;
 use super::Vertex;
-use super::{create_shader_module, read_shader_from_file};
 
 pub mod theme;
 

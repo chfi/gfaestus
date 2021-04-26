@@ -3,7 +3,6 @@ use ash::{vk, Device};
 
 use super::context::VkContext;
 use super::texture::*;
-use super::GfaestusVk;
 use super::SwapchainProperties;
 
 use anyhow::Result;

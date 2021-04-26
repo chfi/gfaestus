@@ -1,26 +1,14 @@
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use std::ffi::CString;
 
-use std::sync::{Arc, Weak};
-
-use nalgebra_glm as glm;
-
 use anyhow::Result;
 
-use crate::view::View;
+use crate::vulkan::render_pass::Framebuffers;
 use crate::vulkan::texture::Texture;
-use crate::vulkan::SwapchainProperties;
-use crate::{geometry::Point, vulkan::render_pass::Framebuffers};
 
-use super::{create_shader_module, read_shader_from_file};
+use super::create_shader_module;
 
 pub struct GuiPipeline {
     descriptor_pool: vk::DescriptorPool,
@@ -50,12 +38,8 @@ impl GuiPipeline {
 
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
-            desc_set_layout,
-        );
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(device, render_pass, desc_set_layout);
 
         let sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
@@ -67,8 +51,6 @@ impl GuiPipeline {
                 .anisotropy_enable(false)
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .unnormalized_coordinates(false)
-                // .compare_enable(false)
-                // .compare_op(vk::CompareOp::ALWAYS)
                 .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
                 .mip_lod_bias(0.0)
                 .min_lod(0.0)
@@ -362,7 +344,6 @@ impl GuiPipeline {
 
     fn create_pipeline(
         device: &Device,
-        msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
@@ -573,17 +554,7 @@ impl GuiVertices {
         app: &super::super::GfaestusVk,
         meshes: &[egui::ClippedMesh],
     ) -> Result<()> {
-        // let (clips, meshes): (Vec<_>, Vec<_>) = meshes
-        //     .iter()
-        //     .map(|egui::ClippedMesh(rect, mesh)| (*rect, mesh))
-        //     .unzip();
-
-        // let req_capacity: usize =
-        //     meshes.iter().map(|mesh| mesh.indices.len()).sum();
-
-        // if self.vertex_buffer != vk::Buffer::null() {
         self.destroy();
-        // }
 
         let mut vertices: Vec<GuiVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
@@ -727,8 +698,6 @@ impl GuiPushConstants {
 
     #[inline]
     pub fn bytes(&self) -> [u8; 8] {
-        use crate::view;
-
         let mut bytes = [0u8; 8];
 
         {

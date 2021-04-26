@@ -1,30 +1,11 @@
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
-
-use std::ffi::CString;
-
-use std::sync::{Arc, Weak};
-
-use nalgebra_glm as glm;
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use anyhow::Result;
-
-use super::SwapchainProperties;
-
-use crate::geometry::Point;
-use crate::view::View;
 
 pub mod gui;
 pub mod nodes;
 pub mod selection;
-
-use nodes::*;
 
 #[derive(Clone, Copy)]
 pub struct Vertex {
@@ -54,13 +35,11 @@ impl Vertex {
 
 #[macro_export]
 macro_rules! load_shader {
-    ($path:literal) => {
-        {
+    ($path:literal) => {{
         let buf = include_bytes!($path);
         let mut cursor = std::io::Cursor::new(buf);
         ash::util::read_spv(&mut cursor).unwrap()
-        }
-    }
+    }};
 }
 
 fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>

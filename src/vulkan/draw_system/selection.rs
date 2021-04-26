@@ -1,22 +1,14 @@
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use std::ffi::CString;
 
 use anyhow::Result;
 
-use super::{create_shader_module, read_shader_from_file};
+use super::create_shader_module;
 
-use crate::vulkan::{texture::Texture, GfaestusVk, SwapchainProperties};
-use crate::{
-    app::node_flags::SelectionBuffer, vulkan::render_pass::Framebuffers,
-};
+use crate::vulkan::render_pass::Framebuffers;
+use crate::vulkan::{texture::Texture, GfaestusVk};
 
 pub struct SelectionOutlineEdgePipeline {
     descriptor_pool: vk::DescriptorPool,

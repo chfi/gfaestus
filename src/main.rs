@@ -4,14 +4,12 @@ use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
-use gfaestus::app::theme::{AppThemes, ThemeDef};
 use gfaestus::app::{App, AppConfigMsg, AppConfigState, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
 use gfaestus::universe::*;
 use gfaestus::view::View;
-use gfaestus::vulkan::draw_system::nodes::NodeIdBuffer;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
 use gfaestus::gui::{widgets::*, windows::*, *};
@@ -20,14 +18,9 @@ use gfaestus::vulkan::draw_system::selection::{
     SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
 };
 
-use rgb::*;
-
 use anyhow::Result;
 
-use ash::{
-    extensions::{ext::DebugReport, khr::Surface},
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
+use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
 #[allow(unused_imports)]
@@ -81,7 +74,6 @@ fn main() {
 
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
-    let init_t = std::time::Instant::now();
 
     let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
 
@@ -344,7 +336,7 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
-                let device = gfaestus.vk_context().device().clone();
+                // let device = gfaestus.vk_context().device().clone();
 
                 let node_pass = gfaestus.render_passes.nodes;
                 let edge_pass = gfaestus.render_passes.selection_edge_detect;
@@ -352,8 +344,8 @@ fn main() {
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
-                let node_mask_image =
-                    gfaestus.node_attachments.mask_resolve.image;
+                // let node_mask_image =
+                //     gfaestus.node_attachments.mask_resolve.image;
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
