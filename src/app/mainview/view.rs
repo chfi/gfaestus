@@ -400,24 +400,29 @@ impl AnimHandlerNew {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeyPanState {
-    drifting: bool,
-
     up: bool,
     right: bool,
     down: bool,
     left: bool,
+
+    drift: Option<Point>,
 }
 
 
 impl KeyPanState {
 
+    pub fn drifting(&self) -> bool {
+        !(self.up || self.right || self.down || self.left)
+    }
+
     pub fn animation_def(&self) -> AnimationDef {
 
         let kind = AnimationKind::Relative;
 
-        if self.drifting {
-            let order = AnimationOrder::Translate
-            { center: Point::ZERO };
+        if self.drifting() {
+            let center = self.drift.unwrap_or_default();
+
+            let order = AnimationOrder::Translate { center };
 
             return AnimationDef { kind, order };
         }
@@ -456,6 +461,61 @@ impl std::default::Default for MousePanState {
         Self::Inactive
     }
 }
+
+
+impl MousePanState {
+    pub fn animation_def<D: Into<ScreenDims>>(
+        &self,
+        scale: f32,
+        screen_dims: D,
+        cur_mouse_screen: Point,
+        cur_mouse_world: Point,
+    ) -> AnimationDef {
+        match self {
+            MousePanState::Inactive => {
+                let order = AnimationOrder::Translate { center: Point::ZERO };
+                let kind = AnimationKind::Relative;
+                AnimationDef { order, kind }
+            }
+            MousePanState::Continuous { mouse_screen_origin } => {
+
+                let dims = screen_dims.into();
+
+                let mouse_delta = cur_mouse_screen - mouse_screen_origin;
+
+                let mouse_norm = Point {
+                    x: mouse_delta.x / dims.width,
+                    y: mouse_delta.y / dims.height,
+                };
+
+                let center = mouse_norm * scale;
+
+                let kind = AnimationKind::Relative;
+                let order = AnimationOrder::Translate { center };
+
+                AnimationDef { order, kind }
+            }
+            MousePanState::ClickAndDrag { mouse_world_origin } => {
+                // TODO click and drag origin has to be zeroed/updated
+                // to the new relative position, at some point
+
+                // ooor there may be a way to make it idempotent --
+                // feels like it
+
+                let mouse_delta = cur_mouse_world - mouse_world_origin;
+
+                let center = mouse_delta;
+
+                let kind = AnimationKind::Relative;
+                let order = AnimationOrder::Translate { center };
+
+                AnimationDef { order, kind }
+            }
+        }
+    }
+
+}
+
 
 
 
