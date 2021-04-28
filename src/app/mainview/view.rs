@@ -396,3 +396,81 @@ impl AnimHandlerNew {
     }
 
 }
+
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct KeyPanState {
+    drifting: bool,
+
+    up: bool,
+    right: bool,
+    down: bool,
+    left: bool,
+}
+
+
+impl KeyPanState {
+
+    pub fn animation_def(&self) -> AnimationDef {
+
+        let kind = AnimationKind::Relative;
+
+        if self.drifting {
+            let order = AnimationOrder::Translate
+            { center: Point::ZERO };
+
+            return AnimationDef { kind, order };
+        }
+
+        let d_x = match (self.left, self.right) {
+            (true, false) => -1.0,
+            (false, true) =>  1.0,
+            _ => 0.0,
+        };
+
+
+        let d_y = match (self.up, self.down) {
+            (true, false) => -1.0,
+            (false, true) =>  1.0,
+            _ => 0.0,
+        };
+
+        let center = Point::new(d_x, d_y);
+
+        let order = AnimationOrder::Translate { center };
+
+        AnimationDef { kind, order }
+    }
+}
+
+
+#[derive(Debug, Clone, Copy)]
+pub enum MousePanState {
+    Inactive,
+    Continuous { mouse_screen_origin: Point },
+    ClickAndDrag { mouse_world_origin: Point },
+}
+
+impl std::default::Default for MousePanState {
+    fn default() -> Self {
+        Self::Inactive
+    }
+}
+
+
+
+#[derive(Debug, Clone, Copy)]
+pub struct ViewInputState {
+    key_pan: KeyPanState,
+
+    mouse_pan: MousePanState,
+}
+
+impl std::default::Default for ViewInputState {
+    fn default() -> Self {
+        Self {
+            key_pan: Default::default(),
+            mouse_pan: MousePanState::Inactive,
+        }
+    }
+}
