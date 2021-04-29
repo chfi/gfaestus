@@ -93,7 +93,20 @@ impl EasingFunction for EasingExpoOut {
     #[inline]
     fn value_at_normalized_time(time: f64) -> f64 {
         if time <= 0.0 || time >= 1.0 {
-            time
+            time.clamp(0.0, 1.0)
+        } else {
+            1.0 - 2.0f64.powf(-10.0 * time)
+        }
+    }
+}
+
+pub struct EasingExpoIn {}
+
+impl EasingFunction for EasingExpoIn {
+    #[inline]
+    fn value_at_normalized_time(time: f64) -> f64 {
+        if time <= 0.0 || time >= 1.0 {
+            time.clamp(0.0, 1.0)
         } else {
             2.0f64.powf(10.0 * time - 10.0)
         }
@@ -359,7 +372,7 @@ impl AnimHandlerNew {
                 let cur_view = view.load();
 
                 while let Ok(def) = anim_rx.try_recv() {
-                    let view_anim: ViewAnimation<EasingCirc> =
+                    let view_anim: ViewAnimation<EasingExpoOut> =
                         ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(1000));
 
                     animation = Some(view_anim.boxed());
