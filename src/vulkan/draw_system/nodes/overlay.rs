@@ -2,21 +2,9 @@ use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 use rustc_hash::FxHashMap;
 
-use std::ffi::CString;
-
-use nalgebra_glm as glm;
-
 use anyhow::Result;
 
-use crate::geometry::Point;
-use crate::view::View;
 use crate::vulkan::GfaestusVk;
-use crate::vulkan::SwapchainProperties;
-
-use crate::vulkan::render_pass::Framebuffers;
-
-use super::super::create_shader_module;
-use super::super::Vertex;
 
 pub struct NodeOverlayPipeline {
     pub(super) descriptor_pool: vk::DescriptorPool,
@@ -25,8 +13,6 @@ pub struct NodeOverlayPipeline {
 
     pub(super) overlay_set: vk::DescriptorSet,
     pub(super) overlay_set_id: Option<usize>,
-
-    pub(super) sampler: vk::Sampler,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
@@ -45,7 +31,7 @@ impl NodeOverlayPipeline {
 
         let overlay_id = overlay_id?;
 
-        if let Some(overlay_id) = self.overlay_set_id {
+        if Some(overlay_id) == self.overlay_set_id {
             return Some(());
         }
 
@@ -53,7 +39,7 @@ impl NodeOverlayPipeline {
         self.overlay_set_id = Some(overlay_id);
 
         overlay
-            .write_descriptor_set(&self.device, self.sampler, &self.overlay_set)
+            .write_descriptor_set(&self.device, &self.overlay_set)
             .expect(&format!(
                 "Error writing theme {} descriptor set",
                 overlay_id
@@ -122,17 +108,15 @@ impl NodeOverlayPipeline {
             selection_set_layout,
         );
 
-        let sampler = super::create_sampler(device)?;
-
         let image_count = 1;
 
         let descriptor_pool = {
-            let sampler_pool_size = vk::DescriptorPoolSize {
+            let pool_size = vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
                 descriptor_count: image_count,
             };
 
-            let pool_sizes = [sampler_pool_size];
+            let pool_sizes = [pool_size];
 
             let pool_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
@@ -164,8 +148,6 @@ impl NodeOverlayPipeline {
 
             overlays,
 
-            sampler,
-
             pipeline_layout,
             pipeline,
 
@@ -177,7 +159,6 @@ impl NodeOverlayPipeline {
         unsafe {
             self.device
                 .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
-            self.device.destroy_sampler(self.sampler, None);
 
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
@@ -196,6 +177,8 @@ pub struct NodeOverlay {
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
 
+    buffer_view: vk::BufferView,
+
     host_visible: bool,
 }
 
@@ -213,12 +196,25 @@ impl NodeOverlay {
 
         let (buffer, memory, size) = app.create_buffer(size, usage, mem_props)?;
 
+        let bufview_info = vk::BufferViewCreateInfo::builder()
+            .buffer(buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .build();
+
+        let device = app.vk_context().device();
+
+        let buffer_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
+
         Ok(Self {
             name: name.into(),
 
             buffer,
             memory,
             size,
+
+            buffer_view,
 
             host_visible: true,
         })
@@ -303,6 +299,15 @@ impl NodeOverlay {
             &pixels,
         )?;
 
+        let bufview_info = vk::BufferViewCreateInfo::builder()
+            .buffer(buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .build();
+
+        let buffer_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
+
         Ok(Self {
             name: name.into(),
 
@@ -310,12 +315,15 @@ impl NodeOverlay {
             memory,
             size: buffer_size,
 
+            buffer_view,
+
             host_visible: false,
         })
     }
 
     pub fn destroy(&self, device: &Device) {
         unsafe {
+            device.destroy_buffer_view(self.buffer_view, None);
             device.destroy_buffer(self.buffer, None);
             device.free_memory(self.memory, None);
         }
@@ -324,30 +332,19 @@ impl NodeOverlay {
     pub fn write_descriptor_set(
         &self,
         device: &Device,
-        sampler: vk::Sampler,
         descriptor_set: &vk::DescriptorSet,
     ) -> Result<()> {
-        let bufview_info = vk::BufferViewCreateInfo::builder()
-            .buffer(self.buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .build();
+        let buf_views = [self.buffer_view];
 
-        let buf_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
-
-        let buf_views = [buf_view];
-
-        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+        let descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(*descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
             .texel_buffer_view(&buf_views)
-            // .buffer_info(&buf_infos)
             .build();
 
-        let descriptor_writes = [sampler_descriptor_write];
+        let descriptor_writes = [descriptor_write];
 
         unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
 
