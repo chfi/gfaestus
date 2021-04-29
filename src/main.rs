@@ -8,6 +8,7 @@ use gfaestus::app::{App, AppConfigMsg, AppConfigState, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
+use gfaestus::overlays::*;
 use gfaestus::universe::*;
 use gfaestus::view::View;
 use gfaestus::vulkan::render_pass::Framebuffers;
@@ -198,6 +199,33 @@ fn main() {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
+    let mut snarl_overlay = SnarlOverlay::new(&gfaestus, graph_query.node_count()).unwrap();
+
+    let snarls = [(1, 10), (3, 7), (100, 200), (120, 180)];
+
+    for (a, b) in std::array::IntoIter::new(snarls) {
+        let device = gfaestus.vk_context().device();
+        let snarl = (NodeId::from(a), NodeId::from(b));
+
+        snarl_overlay.add_snarl(device, snarl).unwrap();
+    }
+    dbg!();
+
+    let overlay = snarl_overlay.into_overlay();
+    dbg!();
+    main_view
+        .node_draw_system
+        .overlay_pipeline
+        .update_overlay(0, overlay);
+
+    dbg!();
+    main_view
+        .node_draw_system
+        .overlay_pipeline
+        .set_active_overlay(Some(0))
+        .unwrap();
+
+    dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
@@ -388,6 +416,7 @@ fn main() {
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
+                                true,
                             )
                             .unwrap();
 
