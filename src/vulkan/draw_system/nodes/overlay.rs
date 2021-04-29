@@ -1,5 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
+use rustc_hash::FxHashMap;
 
 use std::ffi::CString;
 
@@ -18,19 +19,49 @@ use super::super::create_shader_module;
 use super::super::Vertex;
 
 pub struct NodeOverlayPipeline {
-    descriptor_pool: vk::DescriptorPool,
+    pub(super) descriptor_pool: vk::DescriptorPool,
 
-    descriptor_set_layout: vk::DescriptorSetLayout,
+    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
 
-    sampler: vk::Sampler,
+    pub(super) overlay_set: vk::DescriptorSet,
+    pub(super) overlay_set_id: Option<usize>,
 
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
+    pub(super) sampler: vk::Sampler,
 
-    device: Device,
+    pub(super) pipeline_layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+
+    pub(super) overlays: FxHashMap<usize, NodeOverlay>,
+
+    pub(super) device: Device,
 }
 
 impl NodeOverlayPipeline {
+    pub fn set_active_overlay(&mut self, overlay_id: Option<usize>) -> Option<()> {
+        if let Some(cur_id) = self.overlay_set_id {
+            if Some(cur_id) == overlay_id {
+                return Some(());
+            }
+        } else {
+            self.overlay_set_id = None;
+            return Some(());
+        }
+
+        let overlay_id = overlay_id?;
+
+        let overlay = self.overlays.get(&overlay_id)?;
+        self.overlay_set_id = Some(overlay_id);
+
+        overlay
+            .write_descriptor_set(&self.device, self.sampler, &self.overlay_set)
+            .expect(&format!(
+                "Error writing theme {} descriptor set",
+                overlay_id
+            ));
+
+        Some(())
+    }
+
     fn overlay_layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
 
@@ -66,8 +97,7 @@ impl NodeOverlayPipeline {
             device,
             msaa_samples,
             render_pass,
-            descriptor_set_layout,
-            selection_set_layout,
+            &[descriptor_set_layout, selection_set_layout],
             include_bytes!("../../../../shaders/nodes_overlay.frag.spv"),
         )
     }
@@ -77,7 +107,6 @@ impl NodeOverlayPipeline {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         selection_set_layout: vk::DescriptorSetLayout,
-        // image_count: usize,
     ) -> Result<Self> {
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
@@ -109,9 +138,27 @@ impl NodeOverlayPipeline {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let overlays = FxHashMap::default();
+
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
+
+            overlay_set: descriptor_sets[0],
+            overlay_set_id: None,
+
+            overlays,
 
             sampler,
 
@@ -139,6 +186,8 @@ impl NodeOverlayPipeline {
 }
 
 pub struct NodeOverlay {
+    name: String,
+
     descriptor_set: vk::DescriptorSet,
 
     buffer: vk::Buffer,
@@ -153,6 +202,7 @@ impl NodeOverlay {
     ///
     /// Uses host-visible and host-coherent memory
     pub fn new_empty(
+        name: &str,
         app: &GfaestusVk,
         pool: vk::DescriptorPool,
         layout: vk::DescriptorSetLayout,
@@ -203,6 +253,7 @@ impl NodeOverlay {
         }
 
         Ok(Self {
+            name: name.into(),
             descriptor_set: descriptor_sets[0],
 
             buffer,
@@ -251,6 +302,7 @@ impl NodeOverlay {
     ///
     /// Uses device memory if available
     pub fn new_static<F>(
+        name: &str,
         app: &GfaestusVk,
         pool: vk::DescriptorPool,
         layout: vk::DescriptorSetLayout,
@@ -327,6 +379,7 @@ impl NodeOverlay {
         }
 
         Ok(Self {
+            name: name.into(),
             descriptor_set: descriptor_sets[0],
 
             buffer,
@@ -342,5 +395,33 @@ impl NodeOverlay {
             device.destroy_buffer(self.buffer, None);
             device.free_memory(self.memory, None);
         }
+    }
+
+    pub fn write_descriptor_set(
+        &self,
+        device: &Device,
+        sampler: vk::Sampler,
+        descriptor_set: &vk::DescriptorSet,
+    ) -> Result<()> {
+        let buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+        let buf_infos = [buf_info];
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(*descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
+            .buffer_info(&buf_infos)
+            .build();
+
+        let descriptor_writes = [sampler_descriptor_write];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
     }
 }

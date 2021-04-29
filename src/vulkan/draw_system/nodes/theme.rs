@@ -40,10 +40,7 @@ impl NodeThemePipeline {
 
         theme
             .write_descriptor_set(&self.device, self.sampler, &self.theme_set)
-            .expect(&format!(
-                "Error writing theme {} descriptor set",
-                theme_id
-            ));
+            .expect(&format!("Error writing theme {} descriptor set", theme_id));
 
         Some(())
     }
@@ -67,9 +64,7 @@ impl NodeThemePipeline {
             .build()
     }
 
-    fn create_descriptor_set_layout(
-        device: &Device,
-    ) -> Result<vk::DescriptorSetLayout> {
+    fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayout> {
         let binding = Self::theme_layout_binding();
         let bindings = [binding];
 
@@ -77,8 +72,7 @@ impl NodeThemePipeline {
             .bindings(&bindings)
             .build();
 
-        let layout =
-            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+        let layout = unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
 
         Ok(layout)
     }
@@ -94,8 +88,7 @@ impl NodeThemePipeline {
             device,
             msaa_samples,
             render_pass,
-            descriptor_set_layout,
-            selection_set_layout,
+            &[descriptor_set_layout, selection_set_layout],
             include_bytes!("../../../../shaders/nodes_themed.frag.spv"),
         )
     }
@@ -177,10 +170,8 @@ impl NodeThemePipeline {
             }
             self.themes.clear();
 
-            self.device.destroy_descriptor_set_layout(
-                self.descriptor_set_layout,
-                None,
-            );
+            self.device
+                .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
             self.device.destroy_sampler(self.sampler, None);
 
             self.device
@@ -232,10 +223,7 @@ impl ThemeData {
         self.texture.destroy(device);
     }
 
-    pub fn from_theme_def(
-        app: &GfaestusVk,
-        theme_def: &ThemeDef,
-    ) -> Result<Self> {
+    pub fn from_theme_def(app: &GfaestusVk, theme_def: &ThemeDef) -> Result<Self> {
         let colors = &theme_def.node_colors;
 
         let texture = Texture1D::create_from_colors(

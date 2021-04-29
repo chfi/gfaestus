@@ -23,6 +23,284 @@ pub mod theme;
 pub use overlay::*;
 pub use theme::*;
 
+pub struct NodePipelines {
+    pub theme_pipeline: NodeThemePipeline,
+    pub overlay_pipeline: NodeOverlayPipeline,
+
+    selection_descriptors: SelectionDescriptors,
+
+    pub vertices: NodeVertices,
+}
+
+impl NodePipelines {
+    pub fn new(
+        app: &GfaestusVk,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        selection_buffer: vk::Buffer,
+    ) -> Result<Self> {
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let vertices = NodeVertices::new(device);
+
+        let selection_descriptors =
+            SelectionDescriptors::new(app, swapchain_props, selection_buffer, 1)?;
+
+        let theme_pipeline =
+            NodeThemePipeline::new(app, msaa_samples, render_pass, selection_descriptors.layout)?;
+        let overlay_pipeline = NodeOverlayPipeline::new(
+            device,
+            msaa_samples,
+            render_pass,
+            selection_descriptors.layout,
+        )?;
+
+        Ok(Self {
+            theme_pipeline,
+            overlay_pipeline,
+            vertices,
+            selection_descriptors,
+        })
+    }
+
+    pub fn device(&self) -> &Device {
+        &self.theme_pipeline.device
+    }
+
+    pub fn draw_themed(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+        view: View,
+        offset: Point,
+    ) -> Result<()> {
+        let device = &self.theme_pipeline.device;
+
+        let clear_values = {
+            let bg = self.theme_pipeline.active_background_color();
+            [
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [bg.r, bg.g, bg.b, 1.0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        uint32: [0, 0, 0, 0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+            ]
+        };
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.nodes)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertices.vertex_buffer];
+        let desc_sets = [
+            self.theme_pipeline.theme_set,
+            self.selection_descriptors.descriptor_set,
+        ];
+
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=1],
+                &null,
+            );
+        };
+
+        let push_constants =
+            NodePushConstants::new([offset.x, offset.y], viewport_dims, view, node_width, 7);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.theme_pipeline.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
+    pub fn draw_overlay(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+        view: View,
+        offset: Point,
+    ) -> Result<()> {
+        let device = &self.overlay_pipeline.device;
+
+        let clear_values = {
+            let bg = self.theme_pipeline.active_background_color();
+            [
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [bg.r, bg.g, bg.b, 1.0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        uint32: [0, 0, 0, 0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+            ]
+        };
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.nodes)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline,
+            )
+        };
+
+        let vx_bufs = [self.vertices.vertex_buffer];
+        let desc_sets = [
+            self.theme_pipeline.theme_set,
+            self.selection_descriptors.descriptor_set,
+        ];
+
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.theme_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=1],
+                &null,
+            );
+        };
+
+        let push_constants =
+            NodePushConstants::new([offset.x, offset.y], viewport_dims, view, node_width, 7);
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.theme_pipeline.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0) };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
+    pub fn destroy(&mut self) {
+        let device = &self.theme_pipeline.device;
+
+        unsafe {
+            device.destroy_descriptor_set_layout(self.selection_descriptors.layout, None);
+            device.destroy_descriptor_pool(self.selection_descriptors.pool, None);
+        }
+
+        self.vertices.destroy();
+        self.theme_pipeline.destroy();
+        self.overlay_pipeline.destroy();
+    }
+}
+
 pub struct SelectionDescriptors {
     pool: vk::DescriptorPool,
     layout: vk::DescriptorSetLayout,
@@ -314,175 +592,6 @@ impl NodeVertices {
     }
 }
 
-pub struct NodePipelines {
-    pub theme_pipeline: NodeThemePipeline,
-    pub overlay_pipeline: NodeOverlayPipeline,
-
-    selection_descriptors: SelectionDescriptors,
-
-    pub vertices: NodeVertices,
-}
-
-impl NodePipelines {
-    pub fn new(
-        app: &GfaestusVk,
-        swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
-        selection_buffer: vk::Buffer,
-    ) -> Result<Self> {
-        let vk_context = app.vk_context();
-        let device = vk_context.device();
-
-        let vertices = NodeVertices::new(device);
-
-        let selection_descriptors =
-            SelectionDescriptors::new(app, swapchain_props, selection_buffer, 1)?;
-
-        let theme_pipeline =
-            NodeThemePipeline::new(app, msaa_samples, render_pass, selection_descriptors.layout)?;
-        let overlay_pipeline = NodeOverlayPipeline::new(
-            device,
-            msaa_samples,
-            render_pass,
-            selection_descriptors.layout,
-        )?;
-
-        Ok(Self {
-            theme_pipeline,
-            overlay_pipeline,
-            vertices,
-            selection_descriptors,
-        })
-    }
-
-    pub fn device(&self) -> &Device {
-        &self.theme_pipeline.device
-    }
-
-    pub fn draw_themed(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffers: &Framebuffers,
-        viewport_dims: [f32; 2],
-        node_width: f32,
-        view: View,
-        offset: Point,
-    ) -> Result<()> {
-        let device = &self.theme_pipeline.device;
-
-        let clear_values = {
-            let bg = self.theme_pipeline.active_background_color();
-            [
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [bg.r, bg.g, bg.b, 1.0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        uint32: [0, 0, 0, 0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-            ]
-        };
-
-        let extent = vk::Extent2D {
-            width: viewport_dims[0] as u32,
-            height: viewport_dims[1] as u32,
-        };
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffers.nodes)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values)
-            .build();
-
-        unsafe {
-            device.cmd_begin_render_pass(
-                cmd_buf,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
-        };
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline,
-            )
-        };
-
-        let vx_bufs = [self.vertices.vertex_buffer];
-        let desc_sets = [
-            self.theme_pipeline.theme_set,
-            self.selection_descriptors.descriptor_set,
-        ];
-
-        let offsets = [0];
-        unsafe {
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline_layout,
-                0,
-                &desc_sets[0..=1],
-                &null,
-            );
-        };
-
-        let push_constants =
-            NodePushConstants::new([offset.x, offset.y], viewport_dims, view, node_width, 7);
-
-        let pc_bytes = push_constants.bytes();
-
-        unsafe {
-            use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                self.theme_pipeline.pipeline_layout,
-                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
-                0,
-                &pc_bytes,
-            )
-        };
-
-        unsafe { device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0) };
-
-        // End render pass
-        unsafe { device.cmd_end_render_pass(cmd_buf) };
-
-        Ok(())
-    }
-
-    pub fn destroy(&mut self) {
-        let device = &self.theme_pipeline.device;
-
-        unsafe {
-            device.destroy_descriptor_set_layout(self.selection_descriptors.layout, None);
-            device.destroy_descriptor_pool(self.selection_descriptors.pool, None);
-        }
-
-        self.vertices.destroy();
-        self.theme_pipeline.destroy();
-        self.overlay_pipeline.destroy();
-    }
-}
-
 pub struct NodePushConstants {
     view_transform: glm::Mat4,
     node_width: f32,
@@ -574,8 +683,7 @@ fn create_pipeline(
     device: &Device,
     msaa_samples: vk::SampleCountFlags,
     render_pass: vk::RenderPass,
-    descriptor_set_layout: vk::DescriptorSetLayout,
-    selection_set_layout: vk::DescriptorSetLayout,
+    layouts: &[vk::DescriptorSetLayout],
     frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
     let vert_src = crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
@@ -696,8 +804,6 @@ fn create_pipeline(
 
     let layout = {
         use vk::ShaderStageFlags as Flags;
-
-        let layouts = [descriptor_set_layout, selection_set_layout];
 
         let pc_range = vk::PushConstantRange::builder()
             .stage_flags(Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT)
