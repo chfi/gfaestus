@@ -16,16 +16,14 @@ use crate::view::{ScreenDims, View};
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
-    SystemInputBindings, WheelBind,
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
+    WheelBind,
 };
 use crate::input::MousePos;
 
 use crate::vulkan::{
     context::VkContext,
-    draw_system::nodes::{
-        NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices,
-    },
+    draw_system::nodes::{NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices},
     GfaestusVk, SwapchainProperties,
 };
 
@@ -44,6 +42,8 @@ pub struct MainView {
 
     view: Arc<AtomicCell<View>>,
     anim_handler_thread: AnimHandlerThread,
+
+    anim_handler_new: AnimHandlerNew,
 }
 
 impl MainView {
@@ -79,14 +79,12 @@ impl MainView {
             }
         };
 
-        let anim_handler_thread =
-            anim_handler_thread(anim_handler, screen_dims, view.clone());
+        let anim_handler_thread = anim_handler_thread(anim_handler, screen_dims, view.clone());
 
-        let node_id_buffer = NodeIdBuffer::new(
-            &app,
-            screen_dims.width as u32,
-            screen_dims.height as u32,
-        )?;
+        let node_id_buffer =
+            NodeIdBuffer::new(&app, screen_dims.width as u32, screen_dims.height as u32)?;
+
+        let anim_handler_new = AnimHandlerNew::new(view.clone(), Point::ZERO, screen_dims);
 
         let main_view = Self {
             node_draw_system,
@@ -97,6 +95,8 @@ impl MainView {
 
             view,
             anim_handler_thread,
+
+            anim_handler_new,
         };
 
         Ok(main_view)
@@ -170,10 +170,7 @@ impl MainView {
         )
     }
 
-    pub fn update_node_selection(
-        &mut self,
-        new_selection: &FxHashSet<NodeId>,
-    ) -> Result<()> {
+    pub fn update_node_selection(&mut self, new_selection: &FxHashSet<NodeId>) -> Result<()> {
         let device = self.node_draw_system.device();
         let selection = &mut self.selection_buffer;
 
@@ -248,16 +245,20 @@ impl MainView {
 
                 match payload {
                     In::KeyPanUp => {
-                        self.pan_const(None, Some(pan_delta(true)));
+                        self.anim_handler_new.pan_key(true, false, false, false);
+                        // self.pan_const(None, Some(pan_delta(true)));
                     }
                     In::KeyPanRight => {
-                        self.pan_const(Some(pan_delta(false)), None);
+                        self.anim_handler_new.pan_key(false, true, false, false);
+                        // self.pan_const(Some(pan_delta(false)), None);
                     }
                     In::KeyPanDown => {
-                        self.pan_const(None, Some(pan_delta(false)));
+                        self.anim_handler_new.pan_key(false, false, true, false);
+                        // self.pan_const(None, Some(pan_delta(false)));
                     }
                     In::KeyPanLeft => {
-                        self.pan_const(Some(pan_delta(true)), None);
+                        self.anim_handler_new.pan_key(false, false, false, true);
+                        // self.pan_const(Some(pan_delta(true)), None);
                     }
                     In::KeyResetView => {
                         if pressed {
@@ -287,10 +288,7 @@ impl MainView {
 
                         if let Some(node) = selected_node {
                             app_msg_tx
-                                .send(AppMsg::Selection(Select::One {
-                                    node,
-                                    clear: false,
-                                }))
+                                .send(AppMsg::Selection(Select::One { node, clear: false }))
                                 .unwrap();
                         }
                     }
@@ -534,9 +532,7 @@ impl AnimHandler {
         }
 
         let dxy = match (self.mouse_pan_screen_origin, mouse_pos) {
-            (Some(origin), Some(mouse_pos)) => {
-                (mouse_pos - origin) * settings.mouse_pan_mult * dt
-            }
+            (Some(origin), Some(mouse_pos)) => (mouse_pos - origin) * settings.mouse_pan_mult * dt,
             _ => (self.view_pan_const + self.view_pan_delta) * dt,
         };
 
@@ -661,10 +657,7 @@ impl BindableInput for MainViewInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
-        let mouse_binds: FxHashMap<
-            event::MouseButton,
-            Vec<MouseButtonBind<Input>>,
-        > = [(
+        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [(
             event::MouseButton::Left,
             vec![
                 MouseButtonBind::new(Input::ButtonMousePan),

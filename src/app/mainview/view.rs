@@ -1,5 +1,5 @@
-use crate::view::{ScreenDims, View};
 use crate::geometry::*;
+use crate::view::{ScreenDims, View};
 
 use std::time::{Duration, Instant};
 
@@ -55,8 +55,7 @@ impl AnimationDef {
     pub fn pan_key(h: isize, v: isize) -> Self {
         let kind = AnimationKind::Relative;
 
-        let center  =
-        {
+        let center = {
             use std::cmp::Ordering;
 
             let x = match h.cmp(&0) {
@@ -391,12 +390,32 @@ impl AnimHandlerNew {
             _join_handle,
             anim_tx,
         }
-
-
     }
 
-}
+    pub fn pan_key(&self, up: bool, right: bool, down: bool, left: bool) {
+        let h = if right {
+            1
+        } else if left {
+            -1
+        } else {
+            0
+        };
 
+        let v = if up {
+            -1
+        } else if down {
+            1
+        } else {
+            0
+        };
+
+        let anim_def = AnimationDef::pan_key(h, v);
+
+        // println!("{:#?}", anim_def);
+
+        self.anim_tx.send(anim_def).unwrap();
+    }
+}
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct KeyPanState {
