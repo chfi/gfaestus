@@ -271,7 +271,7 @@ fn main() {
                 // }
 
                 while let Ok(main_view_in) = main_view_rx.try_recv() {
-                    main_view.apply_input(screen_dims, &app_msg_tx, main_view_in);
+                    main_view.apply_input(screen_dims, app.mouse_pos(), &app_msg_tx, main_view_in);
                 }
 
                 while let Ok(app_msg) = app_msg_rx.try_recv() {
@@ -283,7 +283,9 @@ fn main() {
                 }
             }
             Event::MainEventsCleared => {
-                main_view.update_view_animation();
+                let screen_dims = app.dims();
+                let mouse_pos = app.mouse_pos();
+                main_view.update_view_animation(screen_dims, mouse_pos);
             }
             Event::RedrawEventsCleared => {
                 let frame_t = std::time::Instant::now();

@@ -372,7 +372,7 @@ impl AnimHandlerNew {
 
                 while let Ok(def) = anim_rx.try_recv() {
                     let view_anim: ViewAnimation<EasingExpoOut> =
-                        ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(1000));
+                        ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(100));
 
                     animation = Some(view_anim.boxed());
                     last_update = Instant::now();
@@ -581,15 +581,9 @@ impl MousePanState {
         screen_dims: D,
         cur_mouse_screen: Point,
         cur_mouse_world: Point,
-    ) -> AnimationDef {
+    ) -> Option<AnimationDef> {
         match self {
-            MousePanState::Inactive => {
-                let order = AnimationOrder::Translate {
-                    center: Point::ZERO,
-                };
-                let kind = AnimationKind::Relative;
-                AnimationDef { order, kind }
-            }
+            MousePanState::Inactive => None,
             MousePanState::Continuous {
                 mouse_screen_origin,
             } => {
@@ -607,48 +601,81 @@ impl MousePanState {
                 let kind = AnimationKind::Relative;
                 let order = AnimationOrder::Translate { center };
 
-                AnimationDef { order, kind }
+                Some(AnimationDef { order, kind })
             }
             MousePanState::ClickAndDrag {
                 view_center_start,
                 mouse_world_origin,
             } => {
-                let mouse_delta = cur_mouse_world - mouse_world_origin;
+                let mouse_delta = (cur_mouse_world - mouse_world_origin) * scale;
 
-                let center = mouse_delta;
+                let center = *view_center_start + mouse_delta;
 
-                let kind = AnimationKind::Relative;
+                let kind = AnimationKind::Absolute;
                 let order = AnimationOrder::Translate { center };
 
-                AnimationDef { order, kind }
+                Some(AnimationDef { order, kind })
             }
         }
     }
 }
 
+// pub struct MouseInputState {
+//     mouse_pan: Arc<AtomicCell<MousePanState>>,
+// }
+
 #[derive(Debug, Clone)]
 pub struct ViewInputState {
     pub key_pan: KeyPanState,
 
-    pub mouse_pan: MousePanState,
+    pub mouse_pan: Arc<AtomicCell<MousePanState>>,
 }
 
 impl std::default::Default for ViewInputState {
     fn default() -> Self {
         Self {
             key_pan: Default::default(),
-            mouse_pan: MousePanState::Inactive,
+            mouse_pan: Arc::new(AtomicCell::new(MousePanState::Inactive)),
         }
     }
 }
 
 impl ViewInputState {
-    pub fn animation_def(&self, view: View) -> Option<AnimationDef> {
-        if self.mouse_pan.active() {
+    pub fn animation_def<D: Into<ScreenDims>>(
+        &self,
+        view: View,
+        screen_dims: D,
+        cur_mouse_screen: Point,
+        cur_mouse_world: Point,
+    ) -> Option<AnimationDef> {
+        let mouse_pan = self.mouse_pan.load();
+        if mouse_pan.active() {
             // TODO
-            self.key_pan.animation_def(view.scale)
+            mouse_pan.animation_def(view.scale, screen_dims, cur_mouse_screen, cur_mouse_world)
+            // self.key_pan.animation_def(view.scale)
         } else {
             self.key_pan.animation_def(view.scale)
         }
+    }
+
+    pub fn start_mouse_pan(&self, view: View, screen_mouse_pos: Point) {
+        let pan_state = MousePanState::Continuous {
+            mouse_screen_origin: screen_mouse_pos,
+        };
+
+        self.mouse_pan.store(pan_state);
+    }
+
+    pub fn start_click_and_drag_pan(&self, view: View, world_mouse_pos: Point) {
+        let pan_state = MousePanState::ClickAndDrag {
+            view_center_start: view.center,
+            mouse_world_origin: world_mouse_pos,
+        };
+
+        self.mouse_pan.store(pan_state);
+    }
+
+    pub fn mouse_released(&self) {
+        self.mouse_pan.store(MousePanState::Inactive);
     }
 }

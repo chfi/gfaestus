@@ -225,8 +225,17 @@ impl MainView {
         self.anim_handler_thread.zoom_delta(dz)
     }
 
-    pub fn update_view_animation(&self) {
-        if let Some(anim_def) = self.view_input_state.animation_def(self.view.load()) {
+    pub fn update_view_animation<D: Into<ScreenDims>>(&self, screen_dims: D, mouse_pos: Point) {
+        let screen_dims = screen_dims.into();
+        let view = self.view.load();
+
+        let mouse_screen = mouse_pos;
+        let mouse_world = view.screen_point_to_world(screen_dims, mouse_screen);
+
+        if let Some(anim_def) =
+            self.view_input_state
+                .animation_def(view, screen_dims, mouse_screen, mouse_world)
+        {
             self.anim_handler_new.send_anim_def(anim_def);
         }
     }
@@ -234,6 +243,7 @@ impl MainView {
     pub fn apply_input<Dims: Into<ScreenDims>>(
         &self,
         screen_dims: Dims,
+        mouse_pos: Point,
         app_msg_tx: &channel::Sender<crate::app::AppMsg>,
         input: SystemInput<MainViewInput>,
     ) {
@@ -279,9 +289,10 @@ impl MainView {
                 match payload {
                     In::ButtonMousePan => {
                         if pressed {
-                            self.set_mouse_pan(Some(pos));
+                            self.view_input_state
+                                .start_mouse_pan(self.view.load(), mouse_pos);
                         } else {
-                            self.set_mouse_pan(None);
+                            self.view_input_state.mouse_released();
                         }
                     }
                     In::ButtonSelect => {
