@@ -289,8 +289,14 @@ impl MainView {
                 match payload {
                     In::ButtonMousePan => {
                         if pressed {
+                            let view = self.view.load();
+                            let mouse_world = view.screen_point_to_world(screen_dims, mouse_pos);
+
                             self.view_input_state
-                                .start_mouse_pan(self.view.load(), mouse_pos);
+                                .start_click_and_drag_pan(view, mouse_world);
+
+                            // self.view_input_state
+                            //     .start_mouse_pan(self.view.load(), mouse_pos);
                         } else {
                             self.view_input_state.mouse_released();
                         }

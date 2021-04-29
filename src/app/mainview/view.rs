@@ -236,17 +236,14 @@ where
 
 impl<E: EasingFunction> ViewAnimation<E> {
     pub fn from_anim_def(start: View, anim: AnimationDef, duration: Duration) -> Self {
-        let order_center = anim.order.center().unwrap_or(Point::ZERO);
-        let order_scale = anim.order.scale().unwrap_or(0.0);
-
         let end = match anim.kind {
             AnimationKind::Absolute => View {
-                center: order_center,
-                scale: order_scale,
+                center: anim.order.center().unwrap_or(start.center),
+                scale: anim.order.scale().unwrap_or(start.scale),
             },
             AnimationKind::Relative => View {
-                center: start.center + order_center,
-                scale: start.scale + order_scale,
+                center: start.center + anim.order.center().unwrap_or(Point::ZERO),
+                scale: start.scale + anim.order.scale().unwrap_or(0.0),
             },
         };
 
@@ -607,7 +604,7 @@ impl MousePanState {
                 view_center_start,
                 mouse_world_origin,
             } => {
-                let mouse_delta = (cur_mouse_world - mouse_world_origin) * scale;
+                let mouse_delta = *mouse_world_origin - cur_mouse_world;
 
                 let center = *view_center_start + mouse_delta;
 
@@ -619,10 +616,6 @@ impl MousePanState {
         }
     }
 }
-
-// pub struct MouseInputState {
-//     mouse_pan: Arc<AtomicCell<MousePanState>>,
-// }
 
 #[derive(Debug, Clone)]
 pub struct ViewInputState {
@@ -649,10 +642,9 @@ impl ViewInputState {
         cur_mouse_world: Point,
     ) -> Option<AnimationDef> {
         let mouse_pan = self.mouse_pan.load();
+
         if mouse_pan.active() {
-            // TODO
             mouse_pan.animation_def(view.scale, screen_dims, cur_mouse_screen, cur_mouse_world)
-            // self.key_pan.animation_def(view.scale)
         } else {
             self.key_pan.animation_def(view.scale)
         }
