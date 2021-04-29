@@ -38,16 +38,16 @@ pub struct NodeOverlayPipeline {
 
 impl NodeOverlayPipeline {
     pub fn set_active_overlay(&mut self, overlay_id: Option<usize>) -> Option<()> {
-        if let Some(cur_id) = self.overlay_set_id {
-            if Some(cur_id) == overlay_id {
-                return Some(());
-            }
-        } else {
+        if overlay_id.is_none() {
             self.overlay_set_id = None;
             return Some(());
         }
 
         let overlay_id = overlay_id?;
+
+        if let Some(overlay_id) = self.overlay_set_id {
+            return Some(());
+        }
 
         let overlay = self.overlays.get(&overlay_id)?;
         self.overlay_set_id = Some(overlay_id);
@@ -60,6 +60,10 @@ impl NodeOverlayPipeline {
             ));
 
         Some(())
+    }
+
+    pub fn update_overlay(&mut self, overlay_id: usize, overlay: NodeOverlay) {
+        self.overlays.insert(overlay_id, overlay);
     }
 
     fn overlay_layout_binding() -> vk::DescriptorSetLayoutBinding {
@@ -124,7 +128,7 @@ impl NodeOverlayPipeline {
 
         let descriptor_pool = {
             let sampler_pool_size = vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                ty: vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
                 descriptor_count: image_count,
             };
 
@@ -188,8 +192,6 @@ impl NodeOverlayPipeline {
 pub struct NodeOverlay {
     name: String,
 
-    descriptor_set: vk::DescriptorSet,
-
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
@@ -201,60 +203,18 @@ impl NodeOverlay {
     /// Create a new overlay that can be written to by the CPU after construction
     ///
     /// Uses host-visible and host-coherent memory
-    pub fn new_empty(
-        name: &str,
-        app: &GfaestusVk,
-        pool: vk::DescriptorPool,
-        layout: vk::DescriptorSetLayout,
-        node_count: usize,
-    ) -> Result<Self> {
-        let device = app.vk_context().device();
-
+    pub fn new_empty(name: &str, app: &GfaestusVk, node_count: usize) -> Result<Self> {
         let size = ((node_count * std::mem::size_of::<[u8; 4]>()) as u32) as vk::DeviceSize;
 
-        let usage = vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER | vk::BufferUsageFlags::TRANSFER_DST;
+        let usage = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER | vk::BufferUsageFlags::TRANSFER_DST;
 
         let mem_props =
             vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
 
         let (buffer, memory, size) = app.create_buffer(size, usage, mem_props)?;
 
-        let descriptor_sets = {
-            let layouts = vec![layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
-        for set in descriptor_sets.iter() {
-            let buf_info = vk::DescriptorBufferInfo::builder()
-                .buffer(buffer)
-                .offset(0)
-                .range(vk::WHOLE_SIZE)
-                .build();
-
-            let buf_infos = [buf_info];
-
-            let descriptor_write = vk::WriteDescriptorSet::builder()
-                .dst_set(*set)
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
-                .buffer_info(&buf_infos)
-                .build();
-
-            let descriptor_writes = [descriptor_write];
-
-            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
-        }
-
         Ok(Self {
             name: name.into(),
-            descriptor_set: descriptor_sets[0],
 
             buffer,
             memory,
@@ -304,8 +264,6 @@ impl NodeOverlay {
     pub fn new_static<F>(
         name: &str,
         app: &GfaestusVk,
-        pool: vk::DescriptorPool,
-        layout: vk::DescriptorSetLayout,
         graph: crate::graph_query::GraphQuery,
         mut overlay_fn: F,
     ) -> Result<Self>
@@ -341,46 +299,12 @@ impl NodeOverlay {
         }
 
         let (buffer, memory) = app.create_device_local_buffer_with_data::<[u8; 4], _>(
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::STORAGE_TEXEL_BUFFER,
+            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
             &pixels,
         )?;
 
-        let descriptor_sets = {
-            let layouts = vec![layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
-        for set in descriptor_sets.iter() {
-            let buf_info = vk::DescriptorBufferInfo::builder()
-                .buffer(buffer)
-                .offset(0)
-                .range(vk::WHOLE_SIZE)
-                .build();
-
-            let buf_infos = [buf_info];
-
-            let descriptor_write = vk::WriteDescriptorSet::builder()
-                .dst_set(*set)
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
-                .buffer_info(&buf_infos)
-                .build();
-
-            let descriptor_writes = [descriptor_write];
-
-            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
-        }
-
         Ok(Self {
             name: name.into(),
-            descriptor_set: descriptor_sets[0],
 
             buffer,
             memory,
@@ -403,19 +327,24 @@ impl NodeOverlay {
         sampler: vk::Sampler,
         descriptor_set: &vk::DescriptorSet,
     ) -> Result<()> {
-        let buf_info = vk::DescriptorBufferInfo::builder()
+        let bufview_info = vk::BufferViewCreateInfo::builder()
             .buffer(self.buffer)
             .offset(0)
             .range(vk::WHOLE_SIZE)
+            .format(vk::Format::R8G8B8A8_UNORM)
             .build();
-        let buf_infos = [buf_info];
+
+        let buf_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
+
+        let buf_views = [buf_view];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
             .dst_set(*descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_TEXEL_BUFFER)
-            .buffer_info(&buf_infos)
+            .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
+            .texel_buffer_view(&buf_views)
+            // .buffer_info(&buf_infos)
             .build();
 
         let descriptor_writes = [sampler_descriptor_write];

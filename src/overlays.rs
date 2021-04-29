@@ -26,12 +26,7 @@ pub struct SnarlOverlay {
 }
 
 impl SnarlOverlay {
-    pub fn new(
-        app: &GfaestusVk,
-        pool: vk::DescriptorPool,
-        layout: vk::DescriptorSetLayout,
-        node_count: usize,
-    ) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
         let default_color = rgb::RGB::new(0.3, 0.3, 0.3);
 
         let colors = vec![
@@ -46,8 +41,7 @@ impl SnarlOverlay {
 
         let snarls: Vec<(u32, u32)> = Vec::new();
 
-        let mut overlay =
-            NodeOverlay::new_empty(app, pool, layout, node_count)?;
+        let mut overlay = NodeOverlay::new_empty("snarl_overlay", app, node_count)?;
 
         let node_colors = (0..node_count)
             .into_iter()
@@ -65,11 +59,7 @@ impl SnarlOverlay {
         })
     }
 
-    pub fn add_snarl(
-        &mut self,
-        device: &Device,
-        snarl: (NodeId, NodeId),
-    ) -> Result<()> {
+    pub fn add_snarl(&mut self, device: &Device, snarl: (NodeId, NodeId)) -> Result<()> {
         let next_ix = self.snarls.len();
 
         let color = self.colors[next_ix % self.colors.len()];
@@ -77,5 +67,9 @@ impl SnarlOverlay {
         let new_colors = vec![(snarl.0, color), (snarl.1, color)];
 
         self.overlay.update_overlay(device, new_colors)
+    }
+
+    pub fn into_overlay(self) -> NodeOverlay {
+        self.overlay
     }
 }

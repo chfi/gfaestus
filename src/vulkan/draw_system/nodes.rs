@@ -69,6 +69,10 @@ impl NodePipelines {
         &self.theme_pipeline.device
     }
 
+    pub fn has_overlay(&self) -> bool {
+        self.overlay_pipeline.overlay_set_id.is_some()
+    }
+
     pub fn draw_themed(
         &self,
         cmd_buf: vk::CommandBuffer,
@@ -238,13 +242,13 @@ impl NodePipelines {
             device.cmd_bind_pipeline(
                 cmd_buf,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline,
+                self.overlay_pipeline.pipeline,
             )
         };
 
         let vx_bufs = [self.vertices.vertex_buffer];
         let desc_sets = [
-            self.theme_pipeline.theme_set,
+            self.overlay_pipeline.overlay_set,
             self.selection_descriptors.descriptor_set,
         ];
 
@@ -256,7 +260,7 @@ impl NodePipelines {
             device.cmd_bind_descriptor_sets(
                 cmd_buf,
                 vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline_layout,
+                self.overlay_pipeline.pipeline_layout,
                 0,
                 &desc_sets[0..=1],
                 &null,
@@ -272,7 +276,7 @@ impl NodePipelines {
             use vk::ShaderStageFlags as Flags;
             device.cmd_push_constants(
                 cmd_buf,
-                self.theme_pipeline.pipeline_layout,
+                self.overlay_pipeline.pipeline_layout,
                 Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
                 0,
                 &pc_bytes,
