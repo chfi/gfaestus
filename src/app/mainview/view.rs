@@ -617,11 +617,65 @@ impl MousePanState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ScrollZoomState {
+    view_start: View,
+    mouse_screen_pos: Point,
+    scroll_delta: f32,
+}
+
+impl ScrollZoomState {
+    pub fn zoom_to_cursor(view: View, mouse_screen_pos: Point, scroll_delta: f32) -> Self {
+        Self {
+            view_start: view,
+            mouse_screen_pos,
+            scroll_delta,
+        }
+    }
+
+    pub fn add_scroll_delta(&self, scroll_delta: f32) -> Self {
+        Self {
+            scroll_delta: self.scroll_delta + scroll_delta,
+            ..*self
+        }
+    }
+
+    pub fn animation_def<D: Into<ScreenDims>>(&self, screen_dims: D) -> AnimationDef {
+        let dims = screen_dims.into();
+
+        let start = self.view_start;
+
+        let mut end = self.view_start;
+
+        let mult = 1.0;
+
+        let scroll_delta = 1.0 + (self.scroll_delta * mult);
+
+        end.scale *= 1.0 + (self.scroll_delta * mult);
+
+        let start_mouse_world = start.screen_point_to_world(dims, self.mouse_screen_pos);
+        let end_mouse_world = end.screen_point_to_world(dims, self.mouse_screen_pos);
+
+        let mouse_diff = end_mouse_world - start_mouse_world;
+
+        let center = start.center - mouse_diff;
+        let scale = end.scale;
+
+        let kind = AnimationKind::Absolute;
+
+        let order = AnimationOrder::Transform { center, scale };
+
+        AnimationDef { kind, order }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ViewInputState {
     pub key_pan: KeyPanState,
 
     pub mouse_pan: Arc<AtomicCell<MousePanState>>,
+
+    scroll_zoom: Arc<AtomicCell<Option<ScrollZoomState>>>,
 }
 
 impl std::default::Default for ViewInputState {
@@ -629,6 +683,7 @@ impl std::default::Default for ViewInputState {
         Self {
             key_pan: Default::default(),
             mouse_pan: Arc::new(AtomicCell::new(MousePanState::Inactive)),
+            scroll_zoom: Arc::new(AtomicCell::new(None)),
         }
     }
 }
@@ -643,7 +698,11 @@ impl ViewInputState {
     ) -> Option<AnimationDef> {
         let mouse_pan = self.mouse_pan.load();
 
-        if mouse_pan.active() {
+        if let Some(scroll_zoom) = self.scroll_zoom.load() {
+            let anim_def = Some(scroll_zoom.animation_def(screen_dims));
+            self.scroll_zoom.store(None);
+            anim_def
+        } else if mouse_pan.active() {
             mouse_pan.animation_def(view.scale, screen_dims, cur_mouse_screen, cur_mouse_world)
         } else {
             self.key_pan.animation_def(view.scale)
@@ -669,5 +728,10 @@ impl ViewInputState {
 
     pub fn mouse_released(&self) {
         self.mouse_pan.store(MousePanState::Inactive);
+    }
+
+    pub fn scroll_zoom(&self, view: View, cur_mouse_screen: Point, scroll_delta: f32) {
+        let scroll_zoom = ScrollZoomState::zoom_to_cursor(view, cur_mouse_screen, scroll_delta);
+        self.scroll_zoom.store(Some(scroll_zoom));
     }
 }

@@ -320,7 +320,8 @@ impl MainView {
             }
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelZoom = payload {
-                    self.zoom_delta(delta);
+                    self.view_input_state
+                        .scroll_zoom(self.view.load(), mouse_pos, delta);
                 }
             }
         }
