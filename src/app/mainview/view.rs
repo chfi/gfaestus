@@ -161,7 +161,6 @@ pub struct ViewLerp {
 
 impl ViewLerp {
     pub fn new(start: View, end: View) -> Self {
-
         let origin_delta = end.center - start.center;
         let scale_delta = end.scale - start.scale;
 
@@ -416,6 +415,10 @@ impl AnimHandlerNew {
         }
     }
 
+    pub fn send_anim_def(&self, anim_def: AnimationDef) {
+        self.anim_tx.send(anim_def).unwrap();
+    }
+
     pub fn pan_key(&self, scale: f32, up: bool, right: bool, down: bool, left: bool) {
         let h = if right {
             1
@@ -439,58 +442,126 @@ impl AnimHandlerNew {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct KeyPanState {
-    up: bool,
-    right: bool,
-    down: bool,
-    left: bool,
-
-    drift: Option<Point>,
+    up: Arc<AtomicCell<bool>>,
+    right: Arc<AtomicCell<bool>>,
+    down: Arc<AtomicCell<bool>>,
+    left: Arc<AtomicCell<bool>>,
+    drift: Arc<AtomicCell<Option<Point>>>,
 }
 
 impl KeyPanState {
-    pub fn drifting(&self) -> bool {
-        !(self.up || self.right || self.down || self.left)
+    pub fn up(&self) -> bool {
+        self.up.load()
     }
 
-    pub fn animation_def(&self) -> AnimationDef {
+    pub fn right(&self) -> bool {
+        self.right.load()
+    }
+
+    pub fn down(&self) -> bool {
+        self.down.load()
+    }
+
+    pub fn left(&self) -> bool {
+        self.left.load()
+    }
+
+    pub fn active(&self) -> bool {
+        self.up() || self.right() || self.down() || self.left()
+    }
+
+    pub fn animation_def(&self, scale: f32) -> Option<AnimationDef> {
+        if !self.active() {
+            return None;
+        }
+
         let kind = AnimationKind::Relative;
 
-        if self.drifting() {
-            let center = self.drift.unwrap_or_default();
+        if let Some(center) = self.drift.load() {
+            // let center = self.drift.load().unwrap_or_default();
 
             let order = AnimationOrder::Translate { center };
 
-            return AnimationDef { kind, order };
+            return Some(AnimationDef { kind, order });
         }
 
-        let d_x = match (self.left, self.right) {
+        let d_x = match (self.left(), self.right()) {
             (true, false) => -1.0,
             (false, true) => 1.0,
             _ => 0.0,
         };
 
-        let d_y = match (self.up, self.down) {
+        let d_y = match (self.up(), self.down()) {
             (true, false) => -1.0,
             (false, true) => 1.0,
             _ => 0.0,
         };
 
-        let center = Point::new(d_x, d_y);
+        let mult = 10.0;
+
+        let center = Point::new(d_x * mult * scale, d_y * mult * scale);
 
         let order = AnimationOrder::Translate { center };
 
-        AnimationDef { kind, order }
+        Some(AnimationDef { kind, order })
+    }
+
+    pub fn reset(&mut self) {
+        self.up.store(false);
+        self.right.store(false);
+        self.down.store(false);
+        self.left.store(false);
+
+        self.drift.store(None);
+    }
+
+    pub fn set_up(&self, pressed: bool) {
+        self.up.store(pressed);
+    }
+
+    pub fn set_right(&self, pressed: bool) {
+        self.right.store(pressed);
+    }
+
+    pub fn set_down(&self, pressed: bool) {
+        self.down.store(pressed);
+    }
+
+    pub fn set_left(&self, pressed: bool) {
+        self.left.store(pressed);
+    }
+
+    pub fn drift(&self) {
+        let d_x = match (self.left(), self.right()) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+
+        let d_y = match (self.up(), self.down()) {
+            (true, false) => -1.0,
+            (false, true) => 1.0,
+            _ => 0.0,
+        };
+
+        if d_x != 0.0 && d_y != 0.0 {
+            self.drift.store(Some(Point::new(d_x, d_y)));
+        }
     }
 }
 
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MousePanState {
     Inactive,
-    Continuous { mouse_screen_origin: Point },
-    ClickAndDrag { mouse_world_origin: Point },
+    Continuous {
+        mouse_screen_origin: Point,
+    },
+    ClickAndDrag {
+        view_center_start: Point,
+        mouse_world_origin: Point,
+    },
 }
 
 impl std::default::Default for MousePanState {
@@ -500,6 +571,10 @@ impl std::default::Default for MousePanState {
 }
 
 impl MousePanState {
+    pub fn active(&self) -> bool {
+        *self != Self::Inactive
+    }
+
     pub fn animation_def<D: Into<ScreenDims>>(
         &self,
         scale: f32,
@@ -509,12 +584,15 @@ impl MousePanState {
     ) -> AnimationDef {
         match self {
             MousePanState::Inactive => {
-                let order = AnimationOrder::Translate { center: Point::ZERO };
+                let order = AnimationOrder::Translate {
+                    center: Point::ZERO,
+                };
                 let kind = AnimationKind::Relative;
                 AnimationDef { order, kind }
             }
-            MousePanState::Continuous { mouse_screen_origin } => {
-
+            MousePanState::Continuous {
+                mouse_screen_origin,
+            } => {
                 let dims = screen_dims.into();
 
                 let mouse_delta = cur_mouse_screen - mouse_screen_origin;
@@ -531,13 +609,10 @@ impl MousePanState {
 
                 AnimationDef { order, kind }
             }
-            MousePanState::ClickAndDrag { mouse_world_origin } => {
-                // TODO click and drag origin has to be zeroed/updated
-                // to the new relative position, at some point
-
-                // ooor there may be a way to make it idempotent --
-                // feels like it
-
+            MousePanState::ClickAndDrag {
+                view_center_start,
+                mouse_world_origin,
+            } => {
                 let mouse_delta = cur_mouse_world - mouse_world_origin;
 
                 let center = mouse_delta;
@@ -551,11 +626,11 @@ impl MousePanState {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ViewInputState {
-    key_pan: KeyPanState,
+    pub key_pan: KeyPanState,
 
-    mouse_pan: MousePanState,
+    pub mouse_pan: MousePanState,
 }
 
 impl std::default::Default for ViewInputState {
@@ -563,6 +638,17 @@ impl std::default::Default for ViewInputState {
         Self {
             key_pan: Default::default(),
             mouse_pan: MousePanState::Inactive,
+        }
+    }
+}
+
+impl ViewInputState {
+    pub fn animation_def(&self, view: View) -> Option<AnimationDef> {
+        if self.mouse_pan.active() {
+            // TODO
+            self.key_pan.animation_def(view.scale)
+        } else {
+            self.key_pan.animation_def(view.scale)
         }
     }
 }

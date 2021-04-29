@@ -77,8 +77,7 @@ fn main() {
 
     let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
 
-    let (universe, stats) =
-        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
+    let (universe, stats) = universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
@@ -118,8 +117,7 @@ fn main() {
 
     let mut gfaestus = gfaestus.unwrap();
 
-    let (winit_tx, winit_rx) =
-        crossbeam::channel::unbounded::<WindowEvent<'static>>();
+    let (winit_tx, winit_rx) = crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let input_manager = InputManager::new(winit_rx);
 
@@ -127,8 +125,8 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
-        .expect("error when creating App");
+    let mut app =
+        App::new(input_manager.clone_mouse_pos(), (100.0, 100.0)).expect("error when creating App");
 
     let node_vertices = universe.new_vertices();
 
@@ -164,17 +162,12 @@ fn main() {
         .unwrap();
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
-    let (cfg_msg_tx, cfg_msg_rx) =
-        crossbeam::channel::unbounded::<AppConfigMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) = crossbeam::channel::unbounded::<AppConfigMsg>();
 
-    let (opts_to_gui, opts_from_app) =
-        crossbeam::channel::unbounded::<AppConfigState>();
+    let (opts_to_gui, opts_from_app) = crossbeam::channel::unbounded::<AppConfigState>();
 
     app.themes
-        .upload_to_gpu(
-            &gfaestus,
-            &mut main_view.node_draw_system.theme_pipeline,
-        )
+        .upload_to_gpu(&gfaestus, &mut main_view.node_draw_system.theme_pipeline)
         .unwrap();
 
     main_view
@@ -225,12 +218,10 @@ fn main() {
 
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-
         let screen_dims = app.dims();
 
         match event {
             Event::NewEvents(_) => {
-
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
                 input_manager.set_mouse_over_gui(gui.pointer_over_gui());
@@ -254,11 +245,15 @@ fn main() {
                     let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                     nodes.sort();
 
-                    gui.app_view_state().node_list().send(NodeListMsg::SetFiltered(nodes));
+                    gui.app_view_state()
+                        .node_list()
+                        .send(NodeListMsg::SetFiltered(nodes));
 
                     main_view.update_node_selection(selected).unwrap();
                 } else {
-                    gui.app_view_state().node_list().send(NodeListMsg::SetFiltered(Vec::new()));
+                    gui.app_view_state()
+                        .node_list()
+                        .send(NodeListMsg::SetFiltered(Vec::new()));
 
                     main_view.clear_node_selection().unwrap();
                 }
@@ -287,19 +282,16 @@ fn main() {
                     app.apply_app_config_msg(&cfg_msg);
                 }
             }
-            // Event::MainEventsCleared => {
-            // }
+            Event::MainEventsCleared => {
+                main_view.update_view_animation();
+            }
             Event::RedrawEventsCleared => {
-
                 let frame_t = std::time::Instant::now();
 
                 if dirty_swapchain {
                     let size = window.inner_size();
                     if size.width > 0 && size.height > 0 {
-                        app.update_dims([
-                            size.width as f32,
-                            size.height as f32,
-                        ]);
+                        app.update_dims([size.width as f32, size.height as f32]);
                         gfaestus
                             .recreate_swapchain(Some([size.width, size.height]))
                             .unwrap();
@@ -315,11 +307,7 @@ fn main() {
                         );
 
                         main_view
-                            .recreate_node_id_buffer(
-                                &gfaestus,
-                                size.width,
-                                size.height,
-                            )
+                            .recreate_node_id_buffer(&gfaestus, size.width, size.height)
                             .unwrap();
                     } else {
                         return;
@@ -349,7 +337,6 @@ fn main() {
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
-
                 main_view
                     .node_draw_system
                     .theme_pipeline
@@ -357,18 +344,12 @@ fn main() {
                     .unwrap();
 
                 let draw =
-                    |device: &Device,
-                     cmd_buf: vk::CommandBuffer,
-                     framebuffers: &Framebuffers| {
+                    |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
-
-
 
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
-                                .src_access_mask(
-                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                                )
+                                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                                 .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                                 .new_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
@@ -417,9 +398,7 @@ fn main() {
                             //     );
 
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
-                                .src_access_mask(
-                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                                )
+                                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                                 .old_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
                                 .new_layout(vk::ImageLayout::TRANSFER_SRC_OPTIMAL)
@@ -449,15 +428,19 @@ fn main() {
                             );
                         }
 
-                        selection_edge.draw(&device, cmd_buf, edge_pass, framebuffers,
-                            [size.width as f32, size.height as f32]).unwrap();
-
+                        selection_edge
+                            .draw(
+                                &device,
+                                cmd_buf,
+                                edge_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                            )
+                            .unwrap();
 
                         unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
-                                .src_access_mask(
-                                    vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-                                )
+                                .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
                                 .old_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
                                 .new_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
@@ -522,11 +505,10 @@ fn main() {
                         height: screen_dims.height as u32,
                     },
                 )
-                    .unwrap();
+                .unwrap();
 
                 let frame_time = frame_t.elapsed().as_secs_f32();
-                frame_time_history[frame % frame_time_history.len()] =
-                    frame_time;
+                frame_time_history[frame % frame_time_history.len()] = frame_time;
 
                 if frame > FRAME_HISTORY_LEN && frame % FRAME_HISTORY_LEN == 0 {
                     let ft_sum: f32 = frame_time_history.iter().sum();
@@ -542,7 +524,6 @@ fn main() {
                 }
 
                 frame += 1;
-
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {

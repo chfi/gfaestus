@@ -44,6 +44,8 @@ pub struct MainView {
     anim_handler_thread: AnimHandlerThread,
 
     anim_handler_new: AnimHandlerNew,
+
+    view_input_state: ViewInputState,
 }
 
 impl MainView {
@@ -97,6 +99,8 @@ impl MainView {
             anim_handler_thread,
 
             anim_handler_new,
+
+            view_input_state: Default::default(),
         };
 
         Ok(main_view)
@@ -221,6 +225,12 @@ impl MainView {
         self.anim_handler_thread.zoom_delta(dz)
     }
 
+    pub fn update_view_animation(&self) {
+        if let Some(anim_def) = self.view_input_state.animation_def(self.view.load()) {
+            self.anim_handler_new.send_anim_def(anim_def);
+        }
+    }
+
     pub fn apply_input<Dims: Into<ScreenDims>>(
         &self,
         screen_dims: Dims,
@@ -243,28 +253,18 @@ impl MainView {
                     }
                 };
 
-                let view = self.view.load();
-
                 match payload {
                     In::KeyPanUp => {
-                        self.anim_handler_new
-                            .pan_key(view.scale, true, false, false, false);
-                        // self.pan_const(None, Some(pan_delta(true)));
+                        self.view_input_state.key_pan.set_up(pressed);
                     }
                     In::KeyPanRight => {
-                        self.anim_handler_new
-                            .pan_key(view.scale, false, true, false, false);
-                        // self.pan_const(Some(pan_delta(false)), None);
+                        self.view_input_state.key_pan.set_right(pressed);
                     }
                     In::KeyPanDown => {
-                        self.anim_handler_new
-                            .pan_key(view.scale, false, false, true, false);
-                        // self.pan_const(None, Some(pan_delta(false)));
+                        self.view_input_state.key_pan.set_down(pressed);
                     }
                     In::KeyPanLeft => {
-                        self.anim_handler_new
-                            .pan_key(view.scale, false, false, false, true);
-                        // self.pan_const(Some(pan_delta(true)), None);
+                        self.view_input_state.key_pan.set_left(pressed);
                     }
                     In::KeyResetView => {
                         if pressed {
