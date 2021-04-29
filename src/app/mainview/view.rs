@@ -52,8 +52,10 @@ pub struct AnimationDef {
 }
 
 impl AnimationDef {
-    pub fn pan_key(h: isize, v: isize) -> Self {
+    pub fn pan_key(scale: f32, h: isize, v: isize) -> Self {
         let kind = AnimationKind::Relative;
+
+        let mult = 10.0f32;
 
         let center = {
             use std::cmp::Ordering;
@@ -72,6 +74,8 @@ impl AnimationDef {
 
             Point { x, y }
         };
+
+        let center = center * (mult * scale);
 
         let order = AnimationOrder::Translate { center };
 
@@ -200,8 +204,11 @@ impl ViewAnimationBoxed {
     pub fn update(&mut self, delta: Duration) {
         self.now += delta;
     }
-}
 
+    pub fn is_done(&self) -> bool {
+        self.now >= self.duration
+    }
+}
 
 pub struct ViewAnimation<E>
 where
@@ -364,11 +371,19 @@ impl AnimHandlerNew {
                 let delta: Duration = now.duration_since(last_update);
 
                 if delta >= update_delay {
+                    let mut anim_done = false;
+
                     if let Some(anim) = animation.as_mut() {
                         println!("delta: {:?}", delta);
                         anim.update(delta);
-                        // println!("{:#?}", anim.current_view());
+
                         view.store(anim.current_view());
+
+                        anim_done = anim.is_done();
+                    }
+
+                    if anim_done {
+                        animation.take();
                     }
 
                     last_update = Instant::now();
@@ -388,7 +403,7 @@ impl AnimHandlerNew {
         }
     }
 
-    pub fn pan_key(&self, up: bool, right: bool, down: bool, left: bool) {
+    pub fn pan_key(&self, scale: f32, up: bool, right: bool, down: bool, left: bool) {
         let h = if right {
             1
         } else if left {
@@ -405,9 +420,7 @@ impl AnimHandlerNew {
             0
         };
 
-        let anim_def = AnimationDef::pan_key(h, v);
-
-        // println!("{:#?}", anim_def);
+        let anim_def = AnimationDef::pan_key(scale, h, v);
 
         self.anim_tx.send(anim_def).unwrap();
     }

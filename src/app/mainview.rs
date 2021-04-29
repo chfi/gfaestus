@@ -243,21 +243,27 @@ impl MainView {
                     }
                 };
 
+                let view = self.view.load();
+
                 match payload {
                     In::KeyPanUp => {
-                        self.anim_handler_new.pan_key(true, false, false, false);
+                        self.anim_handler_new
+                            .pan_key(view.scale, true, false, false, false);
                         // self.pan_const(None, Some(pan_delta(true)));
                     }
                     In::KeyPanRight => {
-                        self.anim_handler_new.pan_key(false, true, false, false);
+                        self.anim_handler_new
+                            .pan_key(view.scale, false, true, false, false);
                         // self.pan_const(Some(pan_delta(false)), None);
                     }
                     In::KeyPanDown => {
-                        self.anim_handler_new.pan_key(false, false, true, false);
+                        self.anim_handler_new
+                            .pan_key(view.scale, false, false, true, false);
                         // self.pan_const(None, Some(pan_delta(false)));
                     }
                     In::KeyPanLeft => {
-                        self.anim_handler_new.pan_key(false, false, false, true);
+                        self.anim_handler_new
+                            .pan_key(view.scale, false, false, false, true);
                         // self.pan_const(Some(pan_delta(true)), None);
                     }
                     In::KeyResetView => {
