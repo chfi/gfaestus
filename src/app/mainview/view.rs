@@ -44,11 +44,11 @@ impl AnimationOrder {
     }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AnimationDef {
     kind: AnimationKind,
     order: AnimationOrder,
+    // instant: bool,
 }
 
 impl AnimationDef {
@@ -73,14 +73,9 @@ impl AnimationDef {
             Point { x, y }
         };
 
-        let order = AnimationOrder::Translate {
-            center,
-        };
+        let order = AnimationOrder::Translate { center };
 
-        Self {
-            kind,
-            order
-        }
+        Self { kind, order }
     }
 }
 
@@ -121,7 +116,6 @@ impl EasingFunction for EasingElasticOut {
 pub struct EasingCirc {}
 
 impl EasingFunction for EasingCirc {
-
     #[inline]
     fn value_at_normalized_time(time: f64) -> f64 {
         if time < 0.5 {
@@ -158,7 +152,7 @@ impl ViewLerp {
             start,
             end,
             origin_delta,
-            scale_delta
+            scale_delta,
         }
     }
 
@@ -186,7 +180,14 @@ pub struct ViewAnimationBoxed {
 
 impl ViewAnimationBoxed {
     pub fn view_at_time(&self, time: Duration) -> View {
-        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
+        let duration = self.duration.as_secs_f64();
+
+        let norm_time = if time > self.duration {
+            1.0
+        } else {
+            time.as_secs_f64() / duration
+        };
+
         let anim_time = (self.easing)(norm_time);
 
         self.view_lerp.lerp(anim_time)
@@ -203,7 +204,8 @@ impl ViewAnimationBoxed {
 
 
 pub struct ViewAnimation<E>
-where E: EasingFunction,
+where
+    E: EasingFunction,
 {
     view_lerp: ViewLerp,
     duration: Duration,
@@ -214,20 +216,19 @@ where E: EasingFunction,
 }
 
 impl<E: EasingFunction> ViewAnimation<E> {
-
     pub fn from_anim_def(start: View, anim: AnimationDef, duration: Duration) -> Self {
         let order_center = anim.order.center().unwrap_or(Point::ZERO);
         let order_scale = anim.order.scale().unwrap_or(0.0);
 
         let end = match anim.kind {
-            AnimationKind::Absolute => {
-                View { center: order_center,
-                       scale: order_scale }
-            }
-            AnimationKind::Relative => {
-                View { center: start.center + order_center,
-                       scale: start.scale + order_scale }
-            }
+            AnimationKind::Absolute => View {
+                center: order_center,
+                scale: order_scale,
+            },
+            AnimationKind::Relative => View {
+                center: start.center + order_center,
+                scale: start.scale + order_scale,
+            },
         };
 
         let view_lerp = ViewLerp::new(start, end);
@@ -260,7 +261,6 @@ impl<E: EasingFunction> ViewAnimation<E> {
     }
 
     pub fn new(start: View, end: View, duration: Duration) -> Self {
-
         let view_lerp = ViewLerp::new(start, end);
 
         let now = Duration::new(0, 0);
@@ -276,7 +276,11 @@ impl<E: EasingFunction> ViewAnimation<E> {
     }
 
     pub fn view_at_time(&self, time: Duration) -> View {
-        let norm_time = self.duration.as_secs_f64() / time.as_secs_f64();
+        let norm_time = if time >= self.duration {
+            1.0
+        } else {
+            time.as_secs_f64() / self.duration.as_secs_f64()
+        };
 
         let anim_time = E::value_at_normalized_time(norm_time);
 
@@ -292,23 +296,18 @@ impl<E: EasingFunction> ViewAnimation<E> {
     }
 }
 
-use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-
-
+use std::sync::Arc;
 
 pub struct AnimHandlerNew {
     // settings: Arc<AtomicCell<AnimSettings>>,
-
-
     screen_dims: Arc<AtomicCell<ScreenDims>>,
     initial_view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Point>>,
 
     _join_handle: std::thread::JoinHandle<()>,
-    anim_tx: channel::Sender::<AnimationDef>,
-
+    anim_tx: channel::Sender<AnimationDef>,
     // animation: Option<ViewAnimationBoxed>,
     // animation: Option<Box<dyn
     // mouse_pan_screen_origin: Origin<Point>,
@@ -322,7 +321,6 @@ impl AnimHandlerNew {
         mouse_pos: Point,
         screen_dims: D,
     ) -> Self {
-
         let screen_dims_ = Arc::new(AtomicCell::new(screen_dims.into()));
         let screen_dims = screen_dims_.clone();
 
@@ -335,11 +333,9 @@ impl AnimHandlerNew {
         let mouse_pos_ = Arc::new(AtomicCell::new(mouse_pos));
         let mouse_pos = mouse_pos_.clone();
 
-
         let (anim_tx, anim_rx) = channel::unbounded::<AnimationDef>();
 
         let _join_handle = std::thread::spawn(move || {
-
             let update_delay = std::time::Duration::from_millis(5);
             let sleep_delay = std::time::Duration::from_micros(2500);
 
@@ -353,11 +349,11 @@ impl AnimHandlerNew {
             let mut last_update = Instant::now();
 
             loop {
-
                 let cur_view = view.load();
 
                 while let Ok(def) = anim_rx.try_recv() {
-                    let view_anim: ViewAnimation<EasingCirc> = ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(1000));
+                    let view_anim: ViewAnimation<EasingCirc> =
+                        ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(1000));
 
                     animation = Some(view_anim.boxed());
                     last_update = Instant::now();
@@ -368,9 +364,10 @@ impl AnimHandlerNew {
                 let delta: Duration = now.duration_since(last_update);
 
                 if delta >= update_delay {
-
                     if let Some(anim) = animation.as_mut() {
+                        println!("delta: {:?}", delta);
                         anim.update(delta);
+                        // println!("{:#?}", anim.current_view());
                         view.store(anim.current_view());
                     }
 
@@ -380,7 +377,6 @@ impl AnimHandlerNew {
                 }
             }
         });
-
 
         Self {
             screen_dims,
@@ -427,15 +423,12 @@ pub struct KeyPanState {
     drift: Option<Point>,
 }
 
-
 impl KeyPanState {
-
     pub fn drifting(&self) -> bool {
         !(self.up || self.right || self.down || self.left)
     }
 
     pub fn animation_def(&self) -> AnimationDef {
-
         let kind = AnimationKind::Relative;
 
         if self.drifting() {
@@ -448,14 +441,13 @@ impl KeyPanState {
 
         let d_x = match (self.left, self.right) {
             (true, false) => -1.0,
-            (false, true) =>  1.0,
+            (false, true) => 1.0,
             _ => 0.0,
         };
 
-
         let d_y = match (self.up, self.down) {
             (true, false) => -1.0,
-            (false, true) =>  1.0,
+            (false, true) => 1.0,
             _ => 0.0,
         };
 
@@ -480,7 +472,6 @@ impl std::default::Default for MousePanState {
         Self::Inactive
     }
 }
-
 
 impl MousePanState {
     pub fn animation_def<D: Into<ScreenDims>>(
@@ -532,11 +523,7 @@ impl MousePanState {
             }
         }
     }
-
 }
-
-
-
 
 #[derive(Debug, Clone, Copy)]
 pub struct ViewInputState {
