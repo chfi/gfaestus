@@ -7,7 +7,10 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use handlegraph::packedgraph::PackedGraph;
+use handlegraph::{
+    packedgraph::{paths::StepPtr, PackedGraph},
+    path_position::PathPositionMap,
+};
 
 use crossbeam::channel;
 
@@ -17,6 +20,7 @@ use anyhow::Result;
 
 pub struct GraphQuery {
     graph: Arc<PackedGraph>,
+    path_positions: Arc<PathPositionMap>,
     query_thread: QueryThread,
 }
 
@@ -24,26 +28,26 @@ impl GraphQuery {
     pub fn load_gfa(gfa_path: &str) -> Result<Self> {
         let mut mmap = gfa::mmap::MmapGFA::new(gfa_path)?;
         let graph = crate::gfa::load::packed_graph_from_mmap(&mut mmap)?;
-        Ok(Self::new(graph))
+        let path_positions = PathPositionMap::index_paths(&graph);
+        Ok(Self::new(graph, path_positions))
     }
 
     pub fn node_count(&self) -> usize {
         self.graph.node_count()
     }
 
-    pub fn new(graph: PackedGraph) -> Self {
+    pub fn new(graph: PackedGraph, path_positions: PathPositionMap) -> Self {
         let graph = Arc::new(graph);
+        let path_positions = Arc::new(path_positions);
         let query_thread = QueryThread::new(graph.clone());
         Self {
             graph,
+            path_positions,
             query_thread,
         }
     }
 
-    pub fn query_request_blocking(
-        &self,
-        request: GraphQueryRequest,
-    ) -> GraphQueryResp {
+    pub fn query_request_blocking(&self, request: GraphQueryRequest) -> GraphQueryResp {
         self.query_thread.request_blocking(request)
     }
 
@@ -66,6 +70,10 @@ impl GraphQuery {
         }
 
         result
+    }
+
+    pub fn handle_positions(&self, handle: Handle) -> Option<Vec<(PathId, StepPtr, usize)>> {
+        self.path_positions.handle_positions(&self.graph, handle)
     }
 }
 
@@ -125,8 +133,7 @@ impl QueryThread {
                         }
                     }
                     Req::NodeSeq(node_id) => {
-                        let seq =
-                            graph.sequence_vec(Handle::pack(node_id, false));
+                        let seq = graph.sequence_vec(Handle::pack(node_id, false));
                         let len = seq.len();
 
                         Resp::NodeSeq { node_id, seq, len }
