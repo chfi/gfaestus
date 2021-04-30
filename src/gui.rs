@@ -27,8 +27,8 @@ use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
 use crate::graph_query::GraphQuery;
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
-    SystemInputBindings, WheelBind,
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
+    WheelBind,
 };
 use crate::input::MousePos;
 
@@ -154,10 +154,8 @@ impl AppViewState {
 
         let path_list_state = NodeList::new(graph_query, 15);
 
-        let node_list =
-            ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
-        let path_list =
-            ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
+        let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
+        let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
         Self {
             fps: Default::default(),
@@ -456,11 +454,7 @@ impl Gui {
         &self.view_state
     }
 
-    pub fn begin_frame(
-        &mut self,
-        screen_rect: Option<Point>,
-        graph_query: &GraphQuery,
-    ) {
+    pub fn begin_frame(&mut self, screen_rect: Option<Point>, graph_query: &GraphQuery) {
         let mut raw_input = self.frame_input.into_raw_input();
 
         let screen_rect = screen_rect.map(|p| egui::Rect {
@@ -474,10 +468,7 @@ impl Gui {
         MenuBar::ui(&self.ctx, &mut self.open_windows);
 
         if let Some(node_id) = self.hover_node_id {
-            egui::containers::popup::show_tooltip_text(
-                &self.ctx,
-                node_id.0.to_string(),
-            )
+            egui::containers::popup::show_tooltip_text(&self.ctx, node_id.0.to_string())
         }
 
         self.view_state.apply_received();
@@ -498,11 +489,10 @@ impl Gui {
         }
 
         if self.open_windows.graph_stats {
-            view_state.graph_stats.state.ui(
-                &self.ctx,
-                Point { x: 12.0, y: 40.0 },
-                None,
-            );
+            view_state
+                .graph_stats
+                .state
+                .ui(&self.ctx, Point { x: 12.0, y: 40.0 }, None);
         }
 
         if self.open_windows.nodes {
@@ -524,8 +514,7 @@ impl Gui {
         }
 
         if self.open_windows.egui_memory {
-            egui::Window::new("egui_memory_ui_window")
-                .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+            egui::Window::new("egui_memory_ui_window").show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
     }
 
@@ -535,8 +524,7 @@ impl Gui {
     }
 
     pub fn active_views(&self) -> Vec<Views> {
-        let mut views: Vec<_> =
-            self.windows_active_view.values().copied().collect();
+        let mut views: Vec<_> = self.windows_active_view.values().copied().collect();
         views.sort();
         views
     }
@@ -599,12 +587,8 @@ impl Gui {
                         Windows::Paths => &mut open_windows.paths,
                         Windows::Themes => &mut open_windows.themes,
                         Windows::Overlays => &mut open_windows.overlays,
-                        Windows::EguiInspection => {
-                            &mut open_windows.egui_inspection
-                        }
-                        Windows::EguiSettings => {
-                            &mut open_windows.egui_settings
-                        }
+                        Windows::EguiInspection => &mut open_windows.egui_inspection,
+                        Windows::EguiSettings => &mut open_windows.egui_settings,
                         Windows::EguiMemory => &mut open_windows.egui_memory,
                     };
 
@@ -672,12 +656,8 @@ impl Gui {
                             use crate::app::RenderConfigOpts as Opts;
 
                             let cfg_msg = match opt {
-                                Opts::SelOutlineEdge => {
-                                    Msg::ToggleSelectionEdgeDetect
-                                }
-                                Opts::SelOutlineBlur => {
-                                    Msg::ToggleSelectionEdgeBlur
-                                }
+                                Opts::SelOutlineEdge => Msg::ToggleSelectionEdgeDetect,
+                                Opts::SelOutlineBlur => Msg::ToggleSelectionEdgeBlur,
                                 Opts::SelOutline => Msg::ToggleSelectionOutline,
                                 Opts::NodesColor => Msg::ToggleNodesColor,
                             };
@@ -693,9 +673,7 @@ impl Gui {
 
                 let button = match payload {
                     GuiInput::ButtonLeft => Some(egui::PointerButton::Primary),
-                    GuiInput::ButtonRight => {
-                        Some(egui::PointerButton::Secondary)
-                    }
+                    GuiInput::ButtonRight => Some(egui::PointerButton::Secondary),
 
                     _ => None,
                 };
@@ -806,10 +784,7 @@ impl BindableInput for GuiInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
-        let mouse_binds: FxHashMap<
-            event::MouseButton,
-            Vec<MouseButtonBind<Input>>,
-        > = [
+        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [
             (
                 event::MouseButton::Left,
                 vec![MouseButtonBind::new(Input::ButtonLeft)],
