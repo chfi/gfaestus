@@ -416,7 +416,7 @@ fn main() {
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
-                                true,
+                                false,
                             )
                             .unwrap();
 

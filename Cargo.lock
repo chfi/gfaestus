@@ -608,6 +608,7 @@ dependencies = [
  "anyhow",
  "ash 0.31.0",
  "ash-window",
+ "bstr",
  "crossbeam",
  "egui",
  "gfa",
@@ -635,9 +636,9 @@ dependencies = [
 
 [[package]]
 name = "handlegraph"
-version = "0.7.0-alpha.3"
+version = "0.7.0-alpha.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ffde3a435947679f40aa4f5b3332deb3f4d1a080df70502eaa8c550340133ab"
+checksum = "e5cf1314e3b502802562771ddce07b53e8e220a0d309758773dc6da2c9cce112"
 dependencies = [
  "anyhow",
  "boomphf",

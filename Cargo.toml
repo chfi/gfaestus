@@ -29,11 +29,13 @@ nalgebra = "0.24"
 nalgebra-glm = "0.10"
 
 gfa = { version = "0.10" }
-handlegraph = "0.7.0-alpha.2"
+handlegraph = "0.7.0-alpha.4"
 
 anyhow = "1.0"
 
 rustc-hash = "1.1"
+
+bstr = "0.2"
 
 
 [profile.dev]
