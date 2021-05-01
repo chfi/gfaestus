@@ -5,6 +5,7 @@ use handlegraph::{
     handlegraph::*,
     mutablehandlegraph::*,
     packed::*,
+    packedgraph::index::OneBasedIndex,
     packedgraph::*,
     path_position::*,
     pathhandlegraph::*,
@@ -12,9 +13,139 @@ use handlegraph::{
 
 use crossbeam::atomic::AtomicCell;
 
+use bstr::{BStr, ByteSlice};
+
 use crate::geometry::*;
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
+
+#[derive(Debug, Clone)]
+pub struct NodeDetails {
+    node_id: Option<NodeId>,
+    sequence: Vec<u8>,
+    degree: (usize, usize),
+    paths: Vec<(PathId, StepPtr, usize)>,
+
+    need_fetch: bool,
+}
+
+impl std::default::Default for NodeDetails {
+    fn default() -> Self {
+        Self {
+            node_id: None,
+            sequence: Vec::new(),
+            degree: (0, 0),
+            paths: Vec::new(),
+            need_fetch: false,
+        }
+    }
+}
+
+pub enum NodeDetailsMsg {
+    SetNode(NodeId),
+    NoNode,
+}
+
+impl NodeDetails {
+    const ID: &'static str = "node_details_window";
+
+    pub fn apply_msg(&mut self, msg: NodeDetailsMsg) {
+        match msg {
+            NodeDetailsMsg::SetNode(node_id) => {
+                self.node_id = Some(node_id);
+                self.need_fetch = true;
+            }
+            NodeDetailsMsg::NoNode => {
+                self.node_id = None;
+                self.sequence.clear();
+                self.degree = (0, 0);
+                self.paths.clear();
+                self.need_fetch = false;
+            }
+        }
+    }
+
+    pub fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
+        if !self.need_fetch {
+            return None;
+        }
+
+        let node_id = self.node_id?;
+
+        self.sequence.clear();
+        self.degree = (0, 0);
+        self.paths.clear();
+        self.need_fetch = false;
+
+        let graph = graph_query.graph();
+
+        let handle = Handle::pack(node_id, false);
+
+        self.sequence.extend(graph.sequence(handle));
+
+        let degree_l = graph.neighbors(handle, Direction::Left).count();
+        let degree_r = graph.neighbors(handle, Direction::Right).count();
+
+        self.degree = (degree_l, degree_r);
+
+        let paths_fwd = graph_query.handle_positions(Handle::pack(node_id, false));
+        let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
+
+        if let Some(p) = paths_fwd {
+            self.paths.extend_from_slice(&p);
+        }
+        if let Some(p) = paths_rev {
+            self.paths.extend_from_slice(&p);
+        }
+
+        Some(())
+    }
+
+    pub fn ui(
+        &mut self,
+        graph_query: &GraphQuery,
+        ctx: &egui::CtxRef,
+        // show: &mut bool
+    ) -> Option<egui::Response> {
+        if self.need_fetch {
+            self.fetch(graph_query);
+        }
+
+        egui::Window::new("Node details")
+            .id(egui::Id::new(Self::ID))
+            .show(ctx, |ui| {
+                if let Some(node_id) = self.node_id {
+                    ui.label(format!("Node {}", node_id));
+
+                    ui.separator();
+
+                    if self.sequence.len() < 50 {
+                        ui.label(format!("Seq: {}", self.sequence.as_bstr()));
+                    } else {
+                        ui.label(format!("Seq len: {}", self.sequence.len()));
+                    }
+
+                    ui.separator();
+
+                    ui.label(format!("Degree ({}, {})", self.degree.0, self.degree.1));
+
+                    ui.separator();
+
+                    ui.label("Path\tStep\tBase pos");
+                    for (path_id, step_ptr, pos) in self.paths.iter() {
+                        ui.label(format!(
+                            "{}\t{}\t{}",
+                            path_id.0,
+                            step_ptr.to_vector_value(),
+                            pos
+                        ));
+                    }
+                } else {
+                    ui.label("No node");
+                }
+            })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct NodeListSlot {
