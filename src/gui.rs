@@ -59,6 +59,8 @@ pub enum Windows {
     GraphStats,
     // ViewInfo,
     Nodes,
+    NodeDetails,
+
     Paths,
 
     Themes,
@@ -126,7 +128,8 @@ pub struct AppViewState {
 
     // view_info: ViewStateChannel<ViewInfo, ViewInfoMsg>,
     node_list: ViewStateChannel<NodeList, NodeListMsg>,
-    // node_details: NodeList,
+    node_details: ViewStateChannel<NodeDetails, NodeDetailsMsg>,
+
     path_list: ViewStateChannel<NodeList, NodeListMsg>,
     // path_details: PathList,
 
@@ -150,11 +153,13 @@ impl AppViewState {
             total_len: graph.total_length(),
         };
 
-        let node_list_state = NodeList::new(graph_query, 15);
+        let node_details_state = NodeDetails::default();
+        let node_details = ViewStateChannel::<NodeDetails, NodeDetailsMsg>::new(node_details_state);
 
-        let path_list_state = NodeList::new(graph_query, 15);
-
+        let node_list_state = NodeList::new(graph_query, 15, node_details.clone_tx());
         let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
+
+        let path_list_state = NodeList::new(graph_query, 15, node_details.clone_tx());
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
         Self {
@@ -162,6 +167,7 @@ impl AppViewState {
             graph_stats: ViewStateChannel::new(stats),
 
             node_list,
+            node_details,
 
             path_list,
         }
@@ -179,6 +185,10 @@ impl AppViewState {
         &self.node_list
     }
 
+    pub fn node_details(&self) -> &ViewStateChannel<NodeDetails, NodeDetailsMsg> {
+        &self.node_details
+    }
+
     pub fn apply_received(&mut self) {
         self.fps.apply_received(|state, msg| {
             *state = FrameRate::apply_msg(state, msg);
@@ -189,6 +199,10 @@ impl AppViewState {
         });
 
         self.node_list.apply_received(|state, msg| {
+            state.apply_msg(msg);
+        });
+
+        self.node_details.apply_received(|state, msg| {
             state.apply_msg(msg);
         });
 
@@ -232,6 +246,8 @@ impl Windows {
             Windows::GraphStats => "Graph Stats",
 
             Windows::Nodes => "Nodes",
+            Windows::NodeDetails => "Node Details",
+
             Windows::Paths => "Paths",
 
             Windows::Themes => "Themes",
@@ -250,7 +266,9 @@ impl Windows {
             Windows::FPS => vec![Views::FPS],
             Windows::GraphStats => vec![Views::GraphStats],
 
-            Windows::Nodes => vec![Views::NodeList, Views::NodeDetails],
+            Windows::Nodes => vec![Views::NodeList],
+            Windows::NodeDetails => vec![Views::NodeDetails],
+
             Windows::Paths => vec![Views::PathList, Views::PathDetails],
 
             Windows::Themes => vec![Views::ThemeEditor, Views::ThemeList],
@@ -307,6 +325,8 @@ pub struct OpenWindows {
     graph_stats: bool,
 
     nodes: bool,
+    node_details: bool,
+
     paths: bool,
 
     themes: bool,
@@ -326,6 +346,8 @@ impl std::default::Default for OpenWindows {
             graph_stats: true,
 
             nodes: true,
+            node_details: true,
+
             paths: false,
 
             themes: false,
@@ -503,6 +525,10 @@ impl Gui {
                 .ui(graph_query, &self.ctx, &mut x);
         }
 
+        if self.open_windows.node_details {
+            view_state.node_details.state.ui(graph_query, &self.ctx);
+        }
+
         if self.open_windows.egui_inspection {
             egui::Window::new("egui_inspection_ui_window")
                 .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
@@ -584,6 +610,7 @@ impl Gui {
                         Windows::FPS => &mut open_windows.fps,
                         Windows::GraphStats => &mut open_windows.graph_stats,
                         Windows::Nodes => &mut open_windows.nodes,
+                        Windows::NodeDetails => &mut open_windows.node_details,
                         Windows::Paths => &mut open_windows.paths,
                         Windows::Themes => &mut open_windows.themes,
                         Windows::Overlays => &mut open_windows.overlays,

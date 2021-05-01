@@ -218,6 +218,8 @@ pub struct NodeList {
     update_slots: bool,
 
     apply_filter: AtomicCell<bool>,
+
+    node_details_tx: crossbeam::channel::Sender<NodeDetailsMsg>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,7 +273,11 @@ impl NodeList {
         }
     }
 
-    pub fn new(graph_query: &GraphQuery, page_size: usize) -> Self {
+    pub fn new(
+        graph_query: &GraphQuery,
+        page_size: usize,
+        node_details_tx: crossbeam::channel::Sender<NodeDetailsMsg>,
+    ) -> Self {
         let graph = graph_query.graph();
         let node_count = graph.node_count();
 
@@ -303,6 +309,8 @@ impl NodeList {
             update_slots: false,
 
             apply_filter: AtomicCell::new(false),
+
+            node_details_tx,
         }
     }
 
@@ -400,7 +408,11 @@ impl NodeList {
                             slot.paths.len()
                         );
 
-                        ui.label(label);
+                        if ui.selectable_label(false, label).clicked() {
+                            self.node_details_tx
+                                .send(NodeDetailsMsg::SetNode(slot.node_id))
+                                .unwrap();
+                        }
                     }
                 }
 
