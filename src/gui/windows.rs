@@ -15,7 +15,9 @@ use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
 
 pub mod graph_details;
+pub mod main_view_settings;
 pub mod theme;
 
 pub use graph_details::*;
+pub use main_view_settings::*;
 use theme::*;
