@@ -15,12 +15,7 @@ use crate::view::View;
 pub trait Widget {
     fn id() -> &'static str;
 
-    fn ui(
-        &self,
-        ctx: &egui::CtxRef,
-        pos: Point,
-        size: Option<Point>,
-    ) -> Option<egui::Response>;
+    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response>;
 }
 
 pub struct MenuBar {}
@@ -28,10 +23,7 @@ pub struct MenuBar {}
 impl MenuBar {
     pub const ID: &'static str = "app_menu_bar";
 
-    pub fn ui<'a>(
-        ctx: &egui::CtxRef,
-        open_windows: &'a mut super::OpenWindows,
-    ) {
+    pub fn ui<'a>(ctx: &egui::CtxRef, open_windows: &'a mut super::OpenWindows) {
         let settings = &mut open_windows.settings;
 
         let fps = &mut open_windows.fps;
@@ -63,6 +55,10 @@ impl MenuBar {
 
                 if ui.selectable_label(*fps, "FPS").clicked() {
                     *fps = !*fps;
+                }
+
+                if ui.selectable_label(*settings, "Settings").clicked() {
+                    *settings = !*settings;
                 }
             });
         });
@@ -106,12 +102,7 @@ impl Widget for NodeSelection {
         "node_select_info"
     }
 
-    fn ui(
-        &self,
-        ctx: &egui::CtxRef,
-        pos: Point,
-        size: Option<Point>,
-    ) -> Option<egui::Response> {
+    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
         let size = size.unwrap_or(Point {
@@ -135,16 +126,12 @@ impl Widget for NodeSelection {
                     NodeSelection::One { info } => {
                         let node_info = info;
 
-                        let label =
-                            format!("Selected node: {}", node_info.node_id.0);
+                        let label = format!("Selected node: {}", node_info.node_id.0);
                         ui.label(label);
                         let lb_len = format!("Length: {}", node_info.len);
-                        let lb_deg = format!(
-                            "Degree: ({}, {})",
-                            node_info.degree.0, node_info.degree.1
-                        );
-                        let lb_cov =
-                            format!("Coverage: {}", node_info.coverage);
+                        let lb_deg =
+                            format!("Degree: ({}, {})", node_info.degree.0, node_info.degree.1);
+                        let lb_cov = format!("Coverage: {}", node_info.coverage);
 
                         ui.label(lb_len);
                         ui.label(lb_deg);
@@ -180,12 +167,7 @@ impl Widget for FrameRate {
         "frame_rate_box"
     }
 
-    fn ui(
-        &self,
-        ctx: &egui::CtxRef,
-        pos: Point,
-        size: Option<Point>,
-    ) -> Option<egui::Response> {
+    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
         let size = size.unwrap_or(Point {
@@ -233,12 +215,7 @@ impl Widget for GraphStats {
         "graph_stats_box"
     }
 
-    fn ui(
-        &self,
-        ctx: &egui::CtxRef,
-        pos: Point,
-        _size: Option<Point>,
-    ) -> Option<egui::Response> {
+    fn ui(&self, ctx: &egui::CtxRef, pos: Point, _size: Option<Point>) -> Option<egui::Response> {
         egui::Window::new(Self::id())
             .title_bar(false)
             .collapsible(false)

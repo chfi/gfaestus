@@ -13,7 +13,7 @@ use anyhow::Result;
 
 use rustc_hash::FxHashMap;
 
-use crossbeam::channel;
+use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
 // mod theme_editor;
@@ -121,6 +121,7 @@ where
 }
 
 pub struct AppViewState {
+    settings: MainViewSettings,
     // settings: (),
     fps: ViewStateChannel<FrameRate, FrameRateMsg>,
 
@@ -141,7 +142,7 @@ pub struct AppViewState {
 }
 
 impl AppViewState {
-    pub fn new(graph_query: &GraphQuery) -> Self {
+    pub fn new(graph_query: &GraphQuery, node_width: Arc<AtomicCell<f32>>) -> Self {
         // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
 
         let graph = graph_query.graph();
@@ -153,6 +154,8 @@ impl AppViewState {
             total_len: graph.total_length(),
         };
 
+        let settings = MainViewSettings::new(node_width);
+
         let node_details_state = NodeDetails::default();
         let node_details = ViewStateChannel::<NodeDetails, NodeDetailsMsg>::new(node_details_state);
 
@@ -163,6 +166,8 @@ impl AppViewState {
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
         Self {
+            settings,
+
             fps: Default::default(),
             graph_stats: ViewStateChannel::new(stats),
 
@@ -393,6 +398,7 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
+        node_width: Arc<AtomicCell<f32>>,
         graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
@@ -441,7 +447,7 @@ impl Gui {
 
         let (gui_msg_tx, gui_msg_rx) = channel::unbounded::<GuiMsg>();
 
-        let view_state = AppViewState::new(graph_query);
+        let view_state = AppViewState::new(graph_query, node_width);
 
         let gui = Self {
             ctx,
@@ -498,6 +504,10 @@ impl Gui {
         let scr = self.ctx.input().screen_rect();
 
         let view_state = &mut self.view_state;
+
+        if self.open_windows.settings {
+            view_state.settings.ui(&self.ctx);
+        }
 
         if self.open_windows.fps {
             view_state.fps.state.ui(

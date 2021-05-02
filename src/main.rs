@@ -142,6 +142,7 @@ fn main() {
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
+        main_view.node_width().clone(),
         &graph_query,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,

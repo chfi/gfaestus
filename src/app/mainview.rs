@@ -38,7 +38,7 @@ pub struct MainView {
     pub node_id_buffer: NodeIdBuffer,
     pub selection_buffer: SelectionBuffer,
 
-    base_node_width: f32,
+    base_node_width: Arc<AtomicCell<f32>>,
 
     view: Arc<AtomicCell<View>>,
     anim_handler_thread: AnimHandlerThread,
@@ -66,7 +66,7 @@ impl MainView {
             selection_buffer.buffer,
         )?;
 
-        let base_node_width = 100.0;
+        let base_node_width = Arc::new(AtomicCell::new(100.0));
 
         let view = View::default();
 
@@ -104,6 +104,10 @@ impl MainView {
         };
 
         Ok(main_view)
+    }
+
+    pub fn node_width(&self) -> &Arc<AtomicCell<f32>> {
+        &self.base_node_width
     }
 
     pub fn view(&self) -> View {
@@ -157,7 +161,7 @@ impl MainView {
         let view = self.view.load();
 
         let node_width = {
-            let mut width = self.base_node_width;
+            let mut width = self.base_node_width.load();
             if view.scale > 100.0 {
                 width *= view.scale / 100.0;
             }
@@ -384,11 +388,6 @@ impl MainView {
 */
 
 // }
-
-pub enum DisplayLayer {
-    Grid,
-    Graph,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum AnimMsg {
