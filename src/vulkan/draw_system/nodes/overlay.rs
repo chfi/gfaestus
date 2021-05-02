@@ -260,7 +260,7 @@ impl NodeOverlay {
     pub fn new_static<F>(
         name: &str,
         app: &GfaestusVk,
-        graph: crate::graph_query::GraphQuery,
+        graph: &crate::graph_query::GraphQuery,
         mut overlay_fn: F,
     ) -> Result<Self>
     where

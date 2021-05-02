@@ -1,3 +1,4 @@
+use draw_system::nodes::NodeOverlay;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::unix::*;
@@ -180,6 +181,8 @@ fn main() {
 
     let mut dirty_swapchain = false;
 
+    let mut gluonvm = gfaestus::gluon::GluonVM::new();
+
     let mut selection_edge = SelectionOutlineEdgePipeline::new(
         &gfaestus,
         1,
@@ -219,11 +222,33 @@ fn main() {
         .overlay_pipeline
         .update_overlay(0, overlay);
 
+    let overlay_colors = gluonvm.example_overlay(graph_query.node_count()).unwrap();
+
+    println!("built overlay colors for {} nodes", overlay_colors.len());
+
+    let mut overlay_2 =
+        NodeOverlay::new_empty("gluon_overlay", &gfaestus, graph_query.node_count()).unwrap();
+
+    overlay_2
+        .update_overlay(
+            gfaestus.vk_context().device(),
+            overlay_colors
+                .iter()
+                .enumerate()
+                .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
+        )
+        .unwrap();
+
+    main_view
+        .node_draw_system
+        .overlay_pipeline
+        .update_overlay(1, overlay_2);
+
     dbg!();
     main_view
         .node_draw_system
         .overlay_pipeline
-        .set_active_overlay(Some(0))
+        .set_active_overlay(Some(1))
         .unwrap();
 
     dbg!();
@@ -417,7 +442,7 @@ fn main() {
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
-                                false,
+                                true,
                             )
                             .unwrap();
 
