@@ -227,7 +227,7 @@ fn main() {
 
     gluonvm.test_graph_handle(&graph_handle);
 
-    let overlay_colors = gluonvm.example_overlay(graph_query.node_count()).unwrap();
+    let overlay_colors = gluonvm.example_overlay(&graph_handle).unwrap();
 
     println!("built overlay colors for {} nodes", overlay_colors.len());
 
