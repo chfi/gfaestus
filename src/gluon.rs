@@ -80,7 +80,8 @@ gfaestus.node_count
         // "#;
         let script = r#"
 let gfaestus = import! gfaestus
-gfaestus.hash_node_color
+let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_paths g x)
+node_color
 "#;
 
         let node_count = graph.graph.node_count();
@@ -146,8 +147,23 @@ fn hash_node_seq(graph: &GraphHandle, node_id: u64) -> u64 {
     hasher.finish()
 }
 
-fn hash_node_color(graph: &GraphHandle, node_id: u64) -> (f32, f32, f32) {
-    let hash = hash_node_seq(graph, node_id);
+fn hash_node_paths(graph: &GraphHandle, node_id: u64) -> u64 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    if let Some(steps) = graph.graph.steps_on_handle(Handle::pack(node_id, false)) {
+        let mut hasher = DefaultHasher::default();
+
+        for (path, _) in steps {
+            path.hash(&mut hasher);
+        }
+
+        hasher.finish()
+    } else {
+        0
+    }
+}
+
+fn hash_node_color(hash: u64) -> (f32, f32, f32) {
     let r_u16 = ((hash >> 32) & 0xFFFFFFFF) as u16;
     let g_u16 = ((hash >> 16) & 0xFFFFFFFF) as u16;
     let b_u16 = (hash & 0xFFFFFFFF) as u16;
@@ -166,8 +182,9 @@ fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
         type GraphHandle => GraphHandle,
         node_count => primitive!(1, node_count),
         sequence_len => primitive!(2, sequence_len),
-        hash_node => primitive!(2, hash_node_seq),
-        hash_node_color => primitive!(2, hash_node_color),
+        hash_node_seq => primitive!(2, hash_node_seq),
+        hash_node_paths => primitive!(2, hash_node_paths),
+        hash_node_color => primitive!(1, hash_node_color),
     };
 
     ExternModule::new(thread, module)
