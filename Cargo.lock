@@ -888,6 +888,7 @@ dependencies = [
  "egui",
  "gfa",
  "gluon",
+ "gluon_codegen",
  "handlegraph",
  "image",
  "nalgebra",

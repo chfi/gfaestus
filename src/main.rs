@@ -181,7 +181,7 @@ fn main() {
 
     let mut dirty_swapchain = false;
 
-    let mut gluonvm = gfaestus::gluon::GluonVM::new();
+    let mut gluonvm = gfaestus::gluon::GluonVM::new().unwrap();
 
     let mut selection_edge = SelectionOutlineEdgePipeline::new(
         &gfaestus,
