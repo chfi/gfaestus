@@ -408,9 +408,7 @@ impl Gui {
 
         let ctx = egui::CtxRef::default();
 
-        let mut style: egui::Style = (*ctx.style()).clone();
-        style.visuals.window_corner_radius = 0.0;
-        ctx.set_style(style);
+        Self::dark_mode(&ctx);
 
         let font_defs = {
             use egui::FontFamily as Family;
@@ -636,16 +634,10 @@ impl Gui {
                     }
                 }
                 GuiMsg::SetLightMode => {
-                    let mut style: egui::Style = (*self.ctx.style()).clone();
-                    style.visuals = egui::style::Visuals::light();
-                    style.visuals.window_corner_radius = 0.0;
-                    self.ctx.set_style(style);
+                    Self::light_mode(&self.ctx);
                 }
                 GuiMsg::SetDarkMode => {
-                    let mut style: egui::Style = (*self.ctx.style()).clone();
-                    style.visuals = egui::style::Visuals::dark();
-                    style.visuals.window_corner_radius = 0.0;
-                    self.ctx.set_style(style);
+                    Self::dark_mode(&self.ctx);
                 }
             }
         }
@@ -732,6 +724,22 @@ impl Gui {
                 }
             }
         }
+    }
+
+    fn set_style(ctx: &egui::CtxRef, visuals: egui::style::Visuals) {
+        let mut style: egui::Style = (*ctx.style()).clone();
+        style.visuals = visuals;
+        style.visuals.window_corner_radius = 0.0;
+        style.visuals.window_shadow.extrusion = 0.0;
+        ctx.set_style(style);
+    }
+
+    fn light_mode(ctx: &egui::CtxRef) {
+        Self::set_style(ctx, egui::style::Visuals::light());
+    }
+
+    fn dark_mode(ctx: &egui::CtxRef) {
+        Self::set_style(ctx, egui::style::Visuals::dark());
     }
 }
 
