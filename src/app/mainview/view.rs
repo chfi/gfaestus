@@ -552,13 +552,8 @@ impl KeyPanState {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MousePanState {
     Inactive,
-    Continuous {
-        mouse_screen_origin: Point,
-    },
-    ClickAndDrag {
-        view_center_start: Point,
-        mouse_world_origin: Point,
-    },
+    Continuous { mouse_screen_origin: Point },
+    ClickAndDrag { mouse_world_origin: Point },
 }
 
 impl std::default::Default for MousePanState {
@@ -600,15 +595,12 @@ impl MousePanState {
 
                 Some(AnimationDef { order, kind })
             }
-            MousePanState::ClickAndDrag {
-                view_center_start,
-                mouse_world_origin,
-            } => {
+            MousePanState::ClickAndDrag { mouse_world_origin } => {
                 let mouse_delta = *mouse_world_origin - cur_mouse_world;
 
-                let center = *view_center_start + mouse_delta;
+                let center = mouse_delta;
 
-                let kind = AnimationKind::Absolute;
+                let kind = AnimationKind::Relative;
                 let order = AnimationOrder::Translate { center };
 
                 Some(AnimationDef { order, kind })
@@ -719,7 +711,6 @@ impl ViewInputState {
 
     pub fn start_click_and_drag_pan(&self, view: View, world_mouse_pos: Point) {
         let pan_state = MousePanState::ClickAndDrag {
-            view_center_start: view.center,
             mouse_world_origin: world_mouse_pos,
         };
 

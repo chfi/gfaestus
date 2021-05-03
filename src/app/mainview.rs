@@ -313,9 +313,6 @@ impl MainView {
 
                             self.view_input_state
                                 .start_click_and_drag_pan(view, mouse_world);
-
-                            // self.view_input_state
-                            //     .start_mouse_pan(self.view.load(), mouse_pos);
                         } else {
                             self.view_input_state.mouse_released();
                         }
