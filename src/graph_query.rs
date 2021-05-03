@@ -51,6 +51,10 @@ impl GraphQuery {
         self.query_thread.request_blocking(request)
     }
 
+    pub fn graph_arc(&self) -> &Arc<PackedGraph> {
+        &self.graph
+    }
+
     pub fn graph(&self) -> &PackedGraph {
         &self.graph
     }

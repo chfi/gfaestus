@@ -2,7 +2,10 @@ use std::sync::Arc;
 
 use gluon_codegen::*;
 
-use gluon::vm::{api::FunctionRef, ExternModule};
+use gluon::vm::{
+    api::{FunctionRef, Hole, OpaqueValue},
+    ExternModule,
+};
 use gluon::*;
 use gluon::{base::types::ArcType, import::add_extern_module};
 
@@ -32,7 +35,10 @@ pub type RGBTuple = (f32, f32, f32, f32);
 impl GluonVM {
     pub fn new() -> Result<Self> {
         let vm = new_vm();
-        packedgraph_module(&vm)?;
+        gluon::import::add_extern_module(&vm, "gfaestus", packedgraph_module);
+
+        vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+
         Ok(Self { vm })
     }
 
@@ -46,6 +52,22 @@ impl GluonVM {
                 anyhow::bail!(err)
             }
         }
+    }
+
+    pub fn test_graph_handle(&self, graph: &GraphHandle) {
+        let script = r#"
+let gfaestus = import! gfaestus
+gfaestus.node_count
+"#;
+
+        let (mut node_count_fn, _) = self
+            .vm
+            .run_expr::<FunctionRef<fn(GraphHandle) -> usize>>("node_count_test", script)
+            .unwrap();
+
+        let node_count = node_count_fn.call(graph.clone()).unwrap();
+
+        println!("gluon node count: {}", node_count);
     }
 
     pub fn example_overlay(&self, node_count: usize) -> gluon::Result<Vec<rgb::RGB<f32>>> {
@@ -73,23 +95,33 @@ color_fn
     }
 }
 
-#[derive(Debug, Trace, Userdata)]
+#[derive(Debug, Clone, Trace, Userdata, VmType)]
+#[gluon_userdata(clone)]
 #[gluon_trace(skip)]
+#[gluon(vm_type = "GraphHandle")]
 pub struct GraphHandle {
     graph: Arc<PackedGraph>,
 }
 
+impl GraphHandle {
+    pub fn new(graph: Arc<PackedGraph>) -> Self {
+        Self { graph }
+    }
+}
+
+/*
 impl gluon::vm::api::VmType for GraphHandle {
     type Type = Self;
 
     fn make_type(thread: &Thread) -> ArcType {
         thread
-            .find_type_info("packedgraph.PackedGraph")
+            .find_type_info("GraphHandle")
             .unwrap_or_else(|err| panic!("{}", err))
             .clone()
             .into_type()
     }
 }
+*/
 
 fn node_count(graph: &GraphHandle) -> usize {
     graph.graph.node_count()
@@ -100,7 +132,7 @@ fn sequence_len(graph: &GraphHandle, node_id: u64) -> usize {
 }
 
 fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
-    // thread.register_type::<PackedGraph>("PackedGraph", &[])?;
+    thread.register_type::<GraphHandle>("GraphHandle", &[])?;
 
     // type PackedGraph => PackedGraph,
     let module = record! {

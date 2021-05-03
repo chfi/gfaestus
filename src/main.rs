@@ -222,6 +222,11 @@ fn main() {
         .overlay_pipeline
         .update_overlay(0, overlay);
 
+    let graph_arc = graph_query.graph_arc().clone();
+    let graph_handle = gfaestus::gluon::GraphHandle::new(graph_arc);
+
+    gluonvm.test_graph_handle(&graph_handle);
+
     let overlay_colors = gluonvm.example_overlay(graph_query.node_count()).unwrap();
 
     println!("built overlay colors for {} nodes", overlay_colors.len());
