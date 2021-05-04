@@ -115,6 +115,8 @@ impl NodeDetails {
             .id(egui::Id::new(Self::ID))
             .show(ctx, |mut ui| {
                 if let Some(node_id) = self.node_id {
+                    ui.set_min_height(400.0);
+
                     ui.label(format!("Node {}", node_id));
 
                     ui.separator();
@@ -407,8 +409,8 @@ impl NodeList {
         egui::Window::new("Nodes")
             // .enabled(*show)
             .id(egui::Id::new(Self::ID))
-            .show(ctx, |ui| {
-                ui.set_min_width(200.0);
+            .show(ctx, |mut ui| {
+                ui.set_min_height(400.0);
 
                 if ui.selectable_label(filter, "Filter").clicked() {
                     self.apply_filter.store(!filter);
@@ -417,49 +419,62 @@ impl NodeList {
 
                 let tx_chn = &self.node_details_tx;
 
-                ui.columns(4, |columns| {
-                    columns[0].label("Node");
-                    columns[1].label("Degree");
-                    columns[2].label("Seq. len");
-                    columns[3].label("Paths");
+                let page = &mut self.page;
+                let page_count = self.page_count;
+                let update_slots = &mut self.update_slots;
 
-                    for slot in self.slots.iter() {
-                        if slot.visible {
-                            let id_label =
-                                columns[0].selectable_label(false, format!("{}", slot.node_id));
-                            columns[1].label(format!("({}, {})", slot.degree.0, slot.degree.1));
-                            columns[2].label(format!("{}", slot.sequence.len()));
-                            columns[3].label(format!("{}", slot.paths.len()));
-                            // let label = format!(
-                            //     "{} - ({}, {}) - {} - {}",
-                            //     slot.node_id,
-                            //     slot.degree.0,
-                            //     slot.degree.1,
-                            //     slot.sequence.len(),
-                            //     slot.paths.len()
-                            // );
+                ui.horizontal(|ui| {
+                    if ui.button("Prev").clicked() {
+                        if *page > 0 {
+                            *page -= 1;
+                            *update_slots = true;
+                        }
+                    }
 
-                            if id_label.clicked() {
-                                // self.node_details_tx
-                                tx_chn.send(NodeDetailsMsg::SetNode(slot.node_id)).unwrap();
-                            }
+                    if ui.button("Next").clicked() {
+                        if *page < page_count {
+                            *page += 1;
+                            *update_slots = true;
                         }
                     }
                 });
 
-                if ui.button("Prev").clicked() {
-                    if self.page > 0 {
-                        self.page -= 1;
-                        self.update_slots = true;
-                    }
-                }
+                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                    egui::Grid::new("node_list_grid")
+                        .striped(true)
+                        .show(&mut ui, |ui| {
+                            ui.label("Node");
+                            ui.separator();
+                            ui.label("Degree");
+                            ui.separator();
+                            ui.label("Seq. len");
+                            ui.separator();
+                            ui.label("Path count");
+                            ui.end_row();
 
-                if ui.button("Next").clicked() {
-                    if self.page < self.page_count {
-                        self.page += 1;
-                        self.update_slots = true;
-                    }
-                }
+                            for slot in self.slots.iter() {
+                                if slot.visible {
+                                    let mut row = ui.label(format!("{}", slot.node_id));
+
+                                    row = row.union(ui.separator());
+                                    row = row.union(
+                                        ui.label(format!("({}, {})", slot.degree.0, slot.degree.1)),
+                                    );
+
+                                    row = row.union(ui.separator());
+                                    row = row.union(ui.label(format!("{}", slot.sequence.len())));
+
+                                    row = row.union(ui.separator());
+                                    row = row.union(ui.label(format!("{}", slot.paths.len())));
+                                    if row.clicked() {
+                                        tx_chn.send(NodeDetailsMsg::SetNode(slot.node_id)).unwrap();
+                                    }
+
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                });
             })
     }
 }
