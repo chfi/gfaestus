@@ -20,7 +20,10 @@ impl MainViewSettings {
 
                 ui.label("Node width");
                 if ui
-                    .add(egui::Slider::f32(&mut node_width_local, 10.0..=300.0))
+                    .add(egui::Slider::new::<f32>(
+                        &mut node_width_local,
+                        10.0..=300.0,
+                    ))
                     .drag_released()
                 {
                     self.node_width.store(node_width_local);

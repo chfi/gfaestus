@@ -640,9 +640,9 @@ checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
 
 [[package]]
 name = "egui"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0e0733d89ca8ea4bc10b83563c5efe9397726efb3cce32892107ae802dbd18b4"
+checksum = "2d7d6535c3ecdc8627a72c1c52d052d66cd9f71c238428690cc46bef9d1f2bce"
 dependencies = [
  "epaint",
 ]
@@ -655,9 +655,9 @@ checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
 name = "emath"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7861866ceff7d4fe55c0dc34dc45102d9d16ac567e4674e2cc36f71b79693cf"
+checksum = "a4ed72c14666517e5c0198490864adea871081abe4f5523af8c3f4f56595142e"
 
 [[package]]
 name = "ena"
@@ -670,13 +670,14 @@ dependencies = [
 
 [[package]]
 name = "epaint"
-version = "0.9.0"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2c8ff3363987df86b1358bf1ed57a20fd80cf88164b2be05fd5dd309993c14e"
+checksum = "2a19eff631454edbe5abe4693be00be0c1ea9832d727dc385c16841caa2d0162"
 dependencies = [
  "ahash 0.7.0",
  "atomic_refcell",
  "emath",
+ "ordered-float",
  "rusttype",
 ]
 

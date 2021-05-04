@@ -494,7 +494,11 @@ impl Gui {
         MenuBar::ui(&self.ctx, &mut self.open_windows);
 
         if let Some(node_id) = self.hover_node_id {
-            egui::containers::popup::show_tooltip_text(&self.ctx, node_id.0.to_string())
+            egui::containers::popup::show_tooltip_text(
+                &self.ctx,
+                egui::Id::new("hover_node_id_tooltip"),
+                node_id.0.to_string(),
+            )
         }
 
         self.view_state.apply_received();
