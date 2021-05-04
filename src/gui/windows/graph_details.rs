@@ -115,7 +115,7 @@ impl NodeDetails {
             .id(egui::Id::new(Self::ID))
             .show(ctx, |ui| {
                 if let Some(node_id) = self.node_id {
-                    ui.set_min_width(600.0);
+                    ui.set_min_width(500.0);
 
                     ui.label(format!("Node {}", node_id));
 
@@ -132,6 +132,33 @@ impl NodeDetails {
                     ui.label(format!("Degree ({}, {})", self.degree.0, self.degree.1));
 
                     ui.separator();
+
+                    /*
+                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
+                        for (path_id, step_ptr, pos) in self.paths.iter() {
+                            ui.horizontal(|ui| {
+                                let path_name = graph_query.graph().get_path_name_vec(*path_id);
+
+                                if let Some(name) = path_name {
+                                    ui.label(format!("{}", name.as_bstr()));
+                                } else {
+                                    ui.label(format!("Path ID {}", path_id.0));
+                                }
+
+                                ui.separator();
+
+                                ui.label(format!("{}", step_ptr.to_vector_value()));
+                                ui.separator();
+                                ui.label(format!("{}", pos));
+                            });
+
+                            // ui.end_row();
+                        }
+                    });
+                    */
+
+                    // NB: The columns() method makes columns of equal
+                    // width, which we don't want
 
                     ui.columns(3, |columns| {
                         columns[0].label("Path");
@@ -400,32 +427,44 @@ impl NodeList {
             // .enabled(*show)
             .id(egui::Id::new(Self::ID))
             .show(ctx, |ui| {
+                ui.set_min_width(200.0);
+
                 if ui.selectable_label(filter, "Filter").clicked() {
                     self.apply_filter.store(!filter);
                     self.update_slots = true;
                 }
 
-                let label = format!("Node - Degree - Seq. len - Paths");
-                ui.label(label);
+                let tx_chn = &self.node_details_tx;
 
-                for slot in self.slots.iter() {
-                    if slot.visible {
-                        let label = format!(
-                            "{} - ({}, {}) - {} - {}",
-                            slot.node_id,
-                            slot.degree.0,
-                            slot.degree.1,
-                            slot.sequence.len(),
-                            slot.paths.len()
-                        );
+                ui.columns(4, |columns| {
+                    columns[0].label("Node");
+                    columns[1].label("Degree");
+                    columns[2].label("Seq. len");
+                    columns[3].label("Paths");
 
-                        if ui.selectable_label(false, label).clicked() {
-                            self.node_details_tx
-                                .send(NodeDetailsMsg::SetNode(slot.node_id))
-                                .unwrap();
+                    for slot in self.slots.iter() {
+                        if slot.visible {
+                            let id_label =
+                                columns[0].selectable_label(false, format!("{}", slot.node_id));
+                            columns[1].label(format!("({}, {})", slot.degree.0, slot.degree.1));
+                            columns[2].label(format!("{}", slot.sequence.len()));
+                            columns[3].label(format!("{}", slot.paths.len()));
+                            // let label = format!(
+                            //     "{} - ({}, {}) - {} - {}",
+                            //     slot.node_id,
+                            //     slot.degree.0,
+                            //     slot.degree.1,
+                            //     slot.sequence.len(),
+                            //     slot.paths.len()
+                            // );
+
+                            if id_label.clicked() {
+                                // self.node_details_tx
+                                tx_chn.send(NodeDetailsMsg::SetNode(slot.node_id)).unwrap();
+                            }
                         }
                     }
-                }
+                });
 
                 if ui.button("Prev").clicked() {
                     if self.page > 0 {
