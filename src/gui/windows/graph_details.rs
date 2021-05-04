@@ -115,6 +115,8 @@ impl NodeDetails {
             .id(egui::Id::new(Self::ID))
             .show(ctx, |ui| {
                 if let Some(node_id) = self.node_id {
+                    ui.set_min_width(600.0);
+
                     ui.label(format!("Node {}", node_id));
 
                     ui.separator();
@@ -125,21 +127,30 @@ impl NodeDetails {
                         ui.label(format!("Seq len: {}", self.sequence.len()));
                     }
 
-                    ui.separator();
+                    // ui.separator();
 
                     ui.label(format!("Degree ({}, {})", self.degree.0, self.degree.1));
 
                     ui.separator();
 
-                    ui.label("Path\tStep\tBase pos");
-                    for (path_id, step_ptr, pos) in self.paths.iter() {
-                        ui.label(format!(
-                            "{}\t{}\t{}",
-                            path_id.0,
-                            step_ptr.to_vector_value(),
-                            pos
-                        ));
-                    }
+                    ui.columns(3, |columns| {
+                        columns[0].label("Path");
+                        columns[1].label("Step");
+                        columns[2].label("Base pos");
+
+                        for (path_id, step_ptr, pos) in self.paths.iter() {
+                            let path_name = graph_query.graph().get_path_name_vec(*path_id);
+
+                            if let Some(name) = path_name {
+                                columns[0].label(format!("{}", name.as_bstr()));
+                            } else {
+                                columns[0].label(format!("Path ID {}", path_id.0));
+                            }
+
+                            columns[1].label(format!("{}", step_ptr.to_vector_value()));
+                            columns[2].label(format!("{}", pos));
+                        }
+                    });
                 } else {
                     ui.label("No node");
                 }
