@@ -115,8 +115,6 @@ impl NodeDetails {
             .id(egui::Id::new(Self::ID))
             .show(ctx, |mut ui| {
                 if let Some(node_id) = self.node_id {
-                    ui.set_min_width(500.0);
-
                     ui.label(format!("Node {}", node_id));
 
                     ui.separator();
@@ -131,40 +129,36 @@ impl NodeDetails {
 
                     ui.separator();
 
-                    egui::Grid::new("node_details_path_list")
-                        .striped(true)
-                        // .max_col_
-                        .show(&mut ui, |ui| {
-                            ui.label("Path");
-                            ui.separator();
-                            ui.horizontal(|ui| {
+                    egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                        egui::Grid::new("node_details_path_list")
+                            .striped(true)
+                            .show(&mut ui, |ui| {
+                                ui.label("Path");
+                                ui.separator();
                                 ui.label("Step");
                                 ui.separator();
                                 ui.label("Base pos");
-                            });
-                            ui.end_row();
+                                ui.end_row();
 
-                            for (path_id, step_ptr, pos) in self.paths.iter() {
-                                // ui.horizontal(|ui| {
-                                let path_name = graph_query.graph().get_path_name_vec(*path_id);
+                                for (path_id, step_ptr, pos) in self.paths.iter() {
+                                    let path_name = graph_query.graph().get_path_name_vec(*path_id);
 
-                                if let Some(name) = path_name {
-                                    ui.label(format!("{}", name.as_bstr()));
-                                } else {
-                                    ui.label(format!("Path ID {}", path_id.0));
-                                }
+                                    if let Some(name) = path_name {
+                                        ui.label(format!("{}", name.as_bstr()));
+                                    } else {
+                                        ui.label(format!("Path ID {}", path_id.0));
+                                    }
 
-                                ui.separator();
+                                    ui.separator();
 
-                                ui.horizontal(|ui| {
                                     ui.label(format!("{}", step_ptr.to_vector_value()));
                                     ui.separator();
                                     ui.label(format!("{}", pos));
-                                });
 
-                                ui.end_row();
-                            }
-                        });
+                                    ui.end_row();
+                                }
+                            });
+                    });
                 } else {
                     ui.label("No node");
                 }

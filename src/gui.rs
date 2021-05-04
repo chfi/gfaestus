@@ -724,7 +724,7 @@ impl Gui {
             }
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelScroll = payload {
-                    self.frame_input.scroll_delta = delta;
+                    self.frame_input.scroll_delta += delta;
                 }
             }
         }
