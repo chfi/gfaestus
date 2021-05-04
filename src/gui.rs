@@ -20,8 +20,8 @@ use parking_lot::Mutex;
 
 // use theme_editor::*;
 
-use crate::geometry::*;
 use crate::view::View;
+use crate::{app::OverlayState, geometry::*};
 use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
 
 use crate::graph_query::GraphQuery;
@@ -388,6 +388,8 @@ pub struct Gui {
 
     gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
     gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
+
+    menu_bar: MenuBar,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -398,6 +400,7 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
+        overlay_state: OverlayState,
         node_width: Arc<AtomicCell<f32>>,
         graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
@@ -447,6 +450,8 @@ impl Gui {
 
         let view_state = AppViewState::new(graph_query, node_width);
 
+        let menu_bar = MenuBar::new(overlay_state);
+
         let gui = Self {
             ctx,
             frame_input,
@@ -463,6 +468,8 @@ impl Gui {
 
             gui_msg_tx,
             gui_msg_rx,
+
+            menu_bar,
         };
 
         Ok((gui, receiver))
@@ -491,7 +498,7 @@ impl Gui {
 
         self.ctx.begin_frame(raw_input);
 
-        MenuBar::ui(&self.ctx, &mut self.open_windows);
+        self.menu_bar.ui(&self.ctx, &mut self.open_windows);
 
         if let Some(node_id) = self.hover_node_id {
             egui::containers::popup::show_tooltip_text(

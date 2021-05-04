@@ -9,8 +9,8 @@ use handlegraph::{
 
 use rustc_hash::FxHashMap;
 
-use crate::geometry::*;
 use crate::view::View;
+use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
     fn id() -> &'static str;
@@ -18,12 +18,18 @@ pub trait Widget {
     fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response>;
 }
 
-pub struct MenuBar {}
+pub struct MenuBar {
+    overlay_state: OverlayState,
+}
 
 impl MenuBar {
     pub const ID: &'static str = "app_menu_bar";
 
-    pub fn ui<'a>(ctx: &egui::CtxRef, open_windows: &'a mut super::OpenWindows) {
+    pub fn new(overlay_state: OverlayState) -> Self {
+        Self { overlay_state }
+    }
+
+    pub fn ui<'a>(&self, ctx: &egui::CtxRef, open_windows: &'a mut super::OpenWindows) {
         let settings = &mut open_windows.settings;
 
         let fps = &mut open_windows.fps;
@@ -59,6 +65,10 @@ impl MenuBar {
 
                 if ui.selectable_label(*settings, "Settings").clicked() {
                     *settings = !*settings;
+                }
+
+                if ui.button("Toggle overlay").clicked() {
+                    self.overlay_state.toggle_overlay()
                 }
             });
         });
