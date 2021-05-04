@@ -113,7 +113,7 @@ impl NodeDetails {
 
         egui::Window::new("Node details")
             .id(egui::Id::new(Self::ID))
-            .show(ctx, |ui| {
+            .show(ctx, |mut ui| {
                 if let Some(node_id) = self.node_id {
                     ui.set_min_width(500.0);
 
@@ -127,16 +127,25 @@ impl NodeDetails {
                         ui.label(format!("Seq len: {}", self.sequence.len()));
                     }
 
-                    // ui.separator();
-
                     ui.label(format!("Degree ({}, {})", self.degree.0, self.degree.1));
 
                     ui.separator();
 
-                    /*
-                    ui.with_layout(egui::Layout::top_down_justified(egui::Align::Min), |ui| {
-                        for (path_id, step_ptr, pos) in self.paths.iter() {
+                    egui::Grid::new("node_details_path_list")
+                        .striped(true)
+                        // .max_col_
+                        .show(&mut ui, |ui| {
+                            ui.label("Path");
+                            ui.separator();
                             ui.horizontal(|ui| {
+                                ui.label("Step");
+                                ui.separator();
+                                ui.label("Base pos");
+                            });
+                            ui.end_row();
+
+                            for (path_id, step_ptr, pos) in self.paths.iter() {
+                                // ui.horizontal(|ui| {
                                 let path_name = graph_query.graph().get_path_name_vec(*path_id);
 
                                 if let Some(name) = path_name {
@@ -147,37 +156,15 @@ impl NodeDetails {
 
                                 ui.separator();
 
-                                ui.label(format!("{}", step_ptr.to_vector_value()));
-                                ui.separator();
-                                ui.label(format!("{}", pos));
-                            });
+                                ui.horizontal(|ui| {
+                                    ui.label(format!("{}", step_ptr.to_vector_value()));
+                                    ui.separator();
+                                    ui.label(format!("{}", pos));
+                                });
 
-                            // ui.end_row();
-                        }
-                    });
-                    */
-
-                    // NB: The columns() method makes columns of equal
-                    // width, which we don't want
-
-                    ui.columns(3, |columns| {
-                        columns[0].label("Path");
-                        columns[1].label("Step");
-                        columns[2].label("Base pos");
-
-                        for (path_id, step_ptr, pos) in self.paths.iter() {
-                            let path_name = graph_query.graph().get_path_name_vec(*path_id);
-
-                            if let Some(name) = path_name {
-                                columns[0].label(format!("{}", name.as_bstr()));
-                            } else {
-                                columns[0].label(format!("Path ID {}", path_id.0));
+                                ui.end_row();
                             }
-
-                            columns[1].label(format!("{}", step_ptr.to_vector_value()));
-                            columns[2].label(format!("{}", pos));
-                        }
-                    });
+                        });
                 } else {
                     ui.label("No node");
                 }
