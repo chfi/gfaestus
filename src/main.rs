@@ -143,6 +143,7 @@ fn main() {
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
+        app.overlay_state.clone(),
         main_view.node_width().clone(),
         &graph_query,
         gfaestus.swapchain_props,
@@ -404,6 +405,8 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
+                let use_overlay = app.overlay_state.use_overlay();
+
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
@@ -447,7 +450,7 @@ fn main() {
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
-                                false, // use overlay
+                                use_overlay,
                             )
                             .unwrap();
 

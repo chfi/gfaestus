@@ -3,6 +3,7 @@ pub mod node_flags;
 pub mod settings;
 pub mod theme;
 
+use crossbeam::atomic::AtomicCell;
 use std::sync::Arc;
 
 use crossbeam::channel;
@@ -36,7 +37,47 @@ pub struct App {
     pub selection_edge: bool,
     pub nodes_color: bool,
 
-    pub use_overlay: bool,
+    pub overlay_state: OverlayState,
+}
+
+#[derive(Debug, Clone)]
+pub struct OverlayState {
+    use_overlay: Arc<AtomicCell<bool>>,
+    current_overlay: Arc<AtomicCell<Option<usize>>>,
+}
+
+impl OverlayState {
+    pub fn use_overlay(&self) -> bool {
+        self.use_overlay.load()
+    }
+
+    pub fn current_overlay(&self) -> Option<usize> {
+        self.current_overlay.load()
+    }
+
+    pub fn set_use_overlay(&self, use_overlay: bool) {
+        self.use_overlay.store(use_overlay);
+    }
+
+    pub fn toggle_overlay(&self) {
+        self.use_overlay.fetch_xor(true);
+    }
+
+    pub fn set_current_overlay(&self, overlay_id: Option<usize>) {
+        self.current_overlay.store(overlay_id);
+    }
+}
+
+impl std::default::Default for OverlayState {
+    fn default() -> Self {
+        let use_overlay = Arc::new(AtomicCell::new(false));
+        let current_overlay = Arc::new(AtomicCell::new(None));
+
+        Self {
+            use_overlay,
+            current_overlay,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -105,10 +146,7 @@ pub enum RenderConfigOpts {
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(
-        mouse_pos: MousePos,
-        screen_dims: Dims,
-    ) -> Result<Self> {
+    pub fn new<Dims: Into<ScreenDims>>(mouse_pos: MousePos, screen_dims: Dims) -> Result<Self> {
         // let themes = Themes::new_from_primary_and_secondary(
         //     queue.clone(),
         //     &dark_default(),
@@ -131,7 +169,7 @@ impl App {
             selection_edge: true,
             nodes_color: true,
 
-            use_overlay: false,
+            overlay_state: OverlayState::default(),
         })
     }
 
@@ -229,12 +267,8 @@ impl App {
             AppConfigMsg::ToggleSelectionEdgeBlur => {
                 self.selection_edge_blur = !self.selection_edge_blur
             }
-            AppConfigMsg::ToggleSelectionOutline => {
-                self.selection_edge = !self.selection_edge
-            }
-            AppConfigMsg::ToggleNodesColor => {
-                self.nodes_color = !self.nodes_color
-            }
+            AppConfigMsg::ToggleSelectionOutline => self.selection_edge = !self.selection_edge,
+            AppConfigMsg::ToggleNodesColor => self.nodes_color = !self.nodes_color,
         }
     }
 
@@ -254,7 +288,7 @@ impl App {
                 }
                 AppInput::KeyToggleOverlay => {
                     if state.pressed() {
-                        self.use_overlay = !self.use_overlay;
+                        self.overlay_state.toggle_overlay();
                     }
                 }
             }
@@ -267,7 +301,7 @@ impl App {
             //     self.themes.replace_theme_def(id, def).unwrap();
             // }
             AppConfigState::ToggleOverlay => {
-                self.use_overlay = !self.use_overlay;
+                self.overlay_state.toggle_overlay();
             }
         }
     }
