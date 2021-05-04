@@ -12,6 +12,7 @@ use handlegraph::{
 };
 
 use crossbeam::atomic::AtomicCell;
+use std::sync::Arc;
 
 use bstr::{BStr, ByteSlice};
 
@@ -21,22 +22,22 @@ use crate::view::View;
 
 #[derive(Debug, Clone)]
 pub struct NodeDetails {
-    node_id: Option<NodeId>,
+    node_id: Arc<AtomicCell<Option<NodeId>>>,
+    fetched_node: Option<NodeId>,
+
     sequence: Vec<u8>,
     degree: (usize, usize),
     paths: Vec<(PathId, StepPtr, usize)>,
-
-    need_fetch: bool,
 }
 
 impl std::default::Default for NodeDetails {
     fn default() -> Self {
         Self {
-            node_id: None,
+            node_id: Arc::new(AtomicCell::new(None)),
+            fetched_node: None,
             sequence: Vec::new(),
             degree: (0, 0),
             paths: Vec::new(),
-            need_fetch: false,
         }
     }
 }
@@ -49,33 +50,39 @@ pub enum NodeDetailsMsg {
 impl NodeDetails {
     const ID: &'static str = "node_details_window";
 
+    pub fn node_id_cell(&self) -> &Arc<AtomicCell<Option<NodeId>>> {
+        &self.node_id
+    }
+
     pub fn apply_msg(&mut self, msg: NodeDetailsMsg) {
         match msg {
             NodeDetailsMsg::SetNode(node_id) => {
-                self.node_id = Some(node_id);
-                self.need_fetch = true;
+                self.node_id.store(Some(node_id));
             }
             NodeDetailsMsg::NoNode => {
-                self.node_id = None;
+                self.node_id.store(None);
                 self.sequence.clear();
                 self.degree = (0, 0);
                 self.paths.clear();
-                self.need_fetch = false;
             }
         }
     }
 
+    pub fn need_fetch(&self) -> bool {
+        let to_show = self.node_id.load();
+        to_show != self.fetched_node
+    }
+
     pub fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
-        if !self.need_fetch {
+        if !self.need_fetch() {
             return None;
         }
 
-        let node_id = self.node_id?;
+        let node_id = self.node_id.load()?;
 
         self.sequence.clear();
         self.degree = (0, 0);
         self.paths.clear();
-        self.need_fetch = false;
 
         let graph = graph_query.graph();
 
@@ -98,6 +105,8 @@ impl NodeDetails {
             self.paths.extend_from_slice(&p);
         }
 
+        self.fetched_node = Some(node_id);
+
         Some(())
     }
 
@@ -107,15 +116,16 @@ impl NodeDetails {
         ctx: &egui::CtxRef,
         // show: &mut bool
     ) -> Option<egui::Response> {
-        if self.need_fetch {
+        if self.need_fetch() {
             self.fetch(graph_query);
         }
 
         egui::Window::new("Node details")
             .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(400.0, 100.0))
             .show(ctx, |mut ui| {
-                if let Some(node_id) = self.node_id {
-                    ui.set_min_height(400.0);
+                if let Some(node_id) = self.node_id.load() {
+                    ui.set_min_height(300.0);
 
                     ui.label(format!("Node {}", node_id));
 
@@ -240,7 +250,7 @@ pub struct NodeList {
 
     apply_filter: AtomicCell<bool>,
 
-    node_details_tx: crossbeam::channel::Sender<NodeDetailsMsg>,
+    node_details_id: Arc<AtomicCell<Option<NodeId>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,7 +307,7 @@ impl NodeList {
     pub fn new(
         graph_query: &GraphQuery,
         page_size: usize,
-        node_details_tx: crossbeam::channel::Sender<NodeDetailsMsg>,
+        node_details_id: Arc<AtomicCell<Option<NodeId>>>,
     ) -> Self {
         let graph = graph_query.graph();
         let node_count = graph.node_count();
@@ -331,7 +341,7 @@ impl NodeList {
 
             apply_filter: AtomicCell::new(false),
 
-            node_details_tx,
+            node_details_id,
         }
     }
 
@@ -417,7 +427,8 @@ impl NodeList {
                     self.update_slots = true;
                 }
 
-                let tx_chn = &self.node_details_tx;
+                // let tx_chn = &self.node_details_tx;
+                let node_id_cell = &self.node_details_id;
 
                 let page = &mut self.page;
                 let page_count = self.page_count;
@@ -452,7 +463,7 @@ impl NodeList {
                             ui.label("Path count");
                             ui.end_row();
 
-                            for slot in self.slots.iter() {
+                            for (ix, slot) in self.slots.iter().enumerate() {
                                 if slot.visible {
                                     let mut row = ui.label(format!("{}", slot.node_id));
 
@@ -466,8 +477,15 @@ impl NodeList {
 
                                     row = row.union(ui.separator());
                                     row = row.union(ui.label(format!("{}", slot.paths.len())));
-                                    if row.clicked() {
-                                        tx_chn.send(NodeDetailsMsg::SetNode(slot.node_id)).unwrap();
+
+                                    let row_interact = ui.interact(
+                                        row.rect,
+                                        egui::Id::new(ui.id().with(ix)),
+                                        egui::Sense::click(),
+                                    );
+
+                                    if row_interact.clicked() {
+                                        node_id_cell.store(Some(slot.node_id));
                                     }
 
                                     ui.end_row();

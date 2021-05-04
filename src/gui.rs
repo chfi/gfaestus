@@ -157,12 +157,13 @@ impl AppViewState {
         let settings = MainViewSettings::new(node_width);
 
         let node_details_state = NodeDetails::default();
+        let node_id_cell = node_details_state.node_id_cell().clone();
         let node_details = ViewStateChannel::<NodeDetails, NodeDetailsMsg>::new(node_details_state);
 
-        let node_list_state = NodeList::new(graph_query, 15, node_details.clone_tx());
+        let node_list_state = NodeList::new(graph_query, 15, node_id_cell.clone());
         let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
-        let path_list_state = NodeList::new(graph_query, 15, node_details.clone_tx());
+        let path_list_state = NodeList::new(graph_query, 15, node_id_cell);
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
         Self {
