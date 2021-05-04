@@ -80,9 +80,7 @@ impl InputManager {
         self.app.clone_rx()
     }
 
-    pub fn clone_main_view_rx(
-        &self,
-    ) -> channel::Receiver<SystemInput<MainViewInput>> {
+    pub fn clone_main_view_rx(&self) -> channel::Receiver<SystemInput<MainViewInput>> {
         self.main_view.clone_rx()
     }
 
@@ -113,29 +111,24 @@ impl InputManager {
 
             let mouse_pos = self.mouse_screen_pos.read();
 
-            if let Some(app_inputs) =
-                self.app.bindings.apply(&winit_ev, mouse_pos)
-            {
+            if let Some(app_inputs) = self.app.bindings.apply(&winit_ev, mouse_pos) {
                 for input in app_inputs {
                     self.app.tx.send(input).unwrap();
                 }
             }
 
-            if let Some(gui_inputs) =
-                self.gui.bindings.apply(&winit_ev, mouse_pos)
-            {
+            if let Some(gui_inputs) = self.gui.bindings.apply(&winit_ev, mouse_pos) {
                 for input in gui_inputs {
                     self.gui.tx.send(input).unwrap();
                 }
             }
 
-            if let Some(main_view_inputs) =
-                self.main_view.bindings.apply(&winit_ev, mouse_pos)
-            {
+            if let Some(main_view_inputs) = self.main_view.bindings.apply(&winit_ev, mouse_pos) {
                 let mouse_over_gui = self.mouse_over_gui.load();
                 for input in main_view_inputs {
                     if input.is_keyboard()
                         || (input.is_mouse() && !mouse_over_gui)
+                        || input.is_mouse_up()
                     {
                         self.main_view.tx.send(input).unwrap();
                     }
@@ -144,9 +137,7 @@ impl InputManager {
         }
     }
 
-    pub fn new(
-        winit_rx: channel::Receiver<event::WindowEvent<'static>>,
-    ) -> Self {
+    pub fn new(winit_rx: channel::Receiver<event::WindowEvent<'static>>) -> Self {
         let mouse_screen_pos = MousePos::new(Point::ZERO);
         let mouse_over_gui = Arc::new(AtomicCell::new(false));
 

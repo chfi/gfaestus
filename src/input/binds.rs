@@ -8,15 +8,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
 
-pub trait InputPayload:
-    Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash
-{
-}
+pub trait InputPayload: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash {}
 
-impl<T> InputPayload for T where
-    T: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash
-{
-}
+impl<T> InputPayload for T where T: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash {}
 
 /// Trait for app subsystem inputs that can be bound to keys and other user input
 pub trait BindableInput: InputPayload {
@@ -157,6 +151,14 @@ impl<T: InputPayload> SystemInput<T> {
             SystemInput::Wheel { .. } => true,
         }
     }
+
+    pub fn is_mouse_up(&self) -> bool {
+        match self {
+            SystemInput::Keyboard { .. } => false,
+            SystemInput::MouseButton { state, .. } => state.released(),
+            SystemInput::Wheel { .. } => true,
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -208,10 +210,7 @@ where
 impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
     pub fn new(
         key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Inputs>>>,
-        mouse_binds: FxHashMap<
-            event::MouseButton,
-            Vec<MouseButtonBind<Inputs>>,
-        >,
+        mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Inputs>>>,
         wheel_bind: Option<WheelBind<Inputs>>,
     ) -> Self {
         Self {
@@ -284,14 +283,12 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                     }
 
                     let delta = match delta {
-                        event::MouseScrollDelta::LineDelta(_x, y) =>
-                        {
+                        event::MouseScrollDelta::LineDelta(_x, y) => {
                             // eprintln!("LineDelta({}, {}", x, y);
                             *y
                         }
                         event::MouseScrollDelta::PixelDelta(pos) => {
                             // eprintln!("PixelDelta({:.4}, {:.4})", pos.x, pos.y);
-
 
                             // PixelDelta events seem to differ in
                             // frequency as well as magnitude; a more
