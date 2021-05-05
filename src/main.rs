@@ -143,6 +143,7 @@ fn main() {
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
+        input_manager.gui_focus_state().clone(),
         app.overlay_state.clone(),
         main_view.node_width().clone(),
         &graph_query,

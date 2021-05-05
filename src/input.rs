@@ -73,9 +73,15 @@ pub struct InputManager {
     app: SubsystemInput<AppInput>,
     main_view: SubsystemInput<MainViewInput>,
     gui: SubsystemInput<GuiInput>,
+
+    gui_focus_state: crate::gui::GuiFocusState,
 }
 
 impl InputManager {
+    pub fn gui_focus_state(&self) -> &crate::gui::GuiFocusState {
+        &self.gui_focus_state
+    }
+
     pub fn clone_app_rx(&self) -> channel::Receiver<SystemInput<AppInput>> {
         self.app.clone_rx()
     }
@@ -153,6 +159,8 @@ impl InputManager {
             app,
             main_view,
             gui,
+
+            gui_focus_state: Default::default(),
         }
     }
 }

@@ -379,6 +379,27 @@ pub enum GuiMsg {
     SetDarkMode,
 }
 
+#[derive(Debug, Default, Clone)]
+pub struct GuiFocusState {
+    mouse_over_gui: Arc<AtomicCell<bool>>,
+    wants_keyboard_input: Arc<AtomicCell<bool>>,
+    wants_pointer_input: Arc<AtomicCell<bool>>,
+}
+
+impl GuiFocusState {
+    pub fn mouse_over_gui(&self) -> bool {
+        self.mouse_over_gui.load()
+    }
+
+    pub fn wants_keyboard_input(&self) -> bool {
+        self.wants_keyboard_input.load()
+    }
+
+    pub fn wants_pointer_input(&self) -> bool {
+        self.wants_pointer_input.load()
+    }
+}
+
 pub struct Gui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
@@ -397,6 +418,8 @@ pub struct Gui {
     gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
 
     menu_bar: MenuBar,
+
+    gui_focus_state: GuiFocusState,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -408,6 +431,7 @@ impl Gui {
     pub fn new(
         app: &GfaestusVk,
         overlay_state: OverlayState,
+        gui_focus_state: GuiFocusState,
         node_width: Arc<AtomicCell<f32>>,
         graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
@@ -477,6 +501,8 @@ impl Gui {
             gui_msg_rx,
 
             menu_bar,
+
+            gui_focus_state,
         };
 
         Ok((gui, receiver))
@@ -513,6 +539,16 @@ impl Gui {
         raw_input.screen_rect = screen_rect;
 
         self.ctx.begin_frame(raw_input);
+
+        self.gui_focus_state
+            .mouse_over_gui
+            .store(self.ctx.is_pointer_over_area());
+        self.gui_focus_state
+            .wants_keyboard_input
+            .store(self.ctx.wants_keyboard_input());
+        self.gui_focus_state
+            .wants_pointer_input
+            .store(self.ctx.wants_pointer_input());
 
         self.menu_bar.ui(&self.ctx, &mut self.open_windows);
 
