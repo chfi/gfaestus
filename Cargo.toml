@@ -42,8 +42,3 @@ gluon_codegen = "0.17.2"
 
 [profile.dev]
 opt-level = 2
-
-[profile.release]
-debug = true
-# overflow-checks = true
-debug-assertions = true
