@@ -383,7 +383,7 @@ impl AnimHandlerNew {
                     let mut anim_done = false;
 
                     if let Some(anim) = animation.as_mut() {
-                        println!("delta: {:?}", delta);
+                        // println!("delta: {:?}", delta);
                         anim.update(delta);
 
                         view.store(anim.current_view());

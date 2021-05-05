@@ -27,6 +27,7 @@ pub enum OverlayListMsg {
 
 pub struct OverlayCreator {
     name: String,
+    script_path_input: String,
     script_path: PathBuf,
 
     script_error: String,
@@ -47,6 +48,7 @@ impl OverlayCreator {
 
         Ok(Self {
             name: String::new(),
+            script_path_input: String::new(),
 
             script_path: PathBuf::new(),
             script_error: String::new(),
@@ -74,7 +76,7 @@ impl OverlayCreator {
                     ui.text_edit_singleline(name)
                 });
 
-                let mut path_str = String::new();
+                let mut path_str = &mut self.script_path_input;
 
                 let path_box = ui.horizontal(|ui| {
                     ui.label("Script path");
@@ -85,9 +87,7 @@ impl OverlayCreator {
                 let run_script = ui.button("Load and execute");
 
                 if run_script.clicked() {
-                    // let path = PathBuf::from(path_str);
-                    // TODO: Need to handle the text input -- characters aren't being sent to egui yet
-                    let path = PathBuf::from("./hash_seq.glu");
+                    let path = PathBuf::from(path_str.as_str());
                     println!("loading gluon script from path {:?}", path.to_str());
 
                     let result = self.gluon.load_overlay_per_node_expr(graph, &path);
@@ -95,12 +95,10 @@ impl OverlayCreator {
                     match result {
                         Ok(colors) => {
                             let msg = OverlayCreatorMsg::NewOverlay {
-                                name: String::from("hash seq"),
-                                // name: name.to_owned(),
+                                name: name.to_owned(),
                                 colors,
                             };
                             self.new_overlay_tx.send(msg).unwrap();
-                            println!("success!");
                         }
                         Err(err) => {
                             eprintln!("Script error:\n{:?}", err);

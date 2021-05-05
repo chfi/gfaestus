@@ -1,0 +1,3 @@
+let gfaestus = import! gfaestus
+let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_paths g x)
+node_color

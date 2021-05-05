@@ -121,18 +121,20 @@ impl InputManager {
             let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
 
             if gui_wants_keyboard {
-                if let event::WindowEvent::ReceivedCharacter(c) = winit_ev {
-                    println!("received character '{}'", c);
-                    let event = received_char_to_egui_text(c);
-                    gui_msg_tx
-                        .send(crate::gui::GuiMsg::EguiEvent(event))
-                        .unwrap();
-                } else if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
+                if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
                     if let Some(event) = input
                         .virtual_keycode
                         .and_then(|key| winit_to_egui_text_event(input.state, key))
                     {
-                        println!("received key event");
+                        gui_msg_tx
+                            .send(crate::gui::GuiMsg::EguiEvent(event))
+                            .unwrap();
+                    }
+                }
+
+                if let event::WindowEvent::ReceivedCharacter(c) = winit_ev {
+                    if !c.is_ascii_control() {
+                        let event = received_char_to_egui_text(c);
                         gui_msg_tx
                             .send(crate::gui::GuiMsg::EguiEvent(event))
                             .unwrap();
