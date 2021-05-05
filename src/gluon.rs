@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use gluon_codegen::*;
 
@@ -54,6 +54,52 @@ impl GluonVM {
         }
     }
 
+    pub fn load_overlay_expr(&self, script_path: &Path) -> Result<Vec<RGBTuple>> {
+        use std::{fs::File, io::Read};
+
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        self.vm.run_io(true);
+        let (res, _arc) = self.vm.run_expr("overlay_expr", &source)?;
+        self.vm.run_io(false);
+        match res {
+            vm::api::IO::Value(v) => Ok(v),
+            vm::api::IO::Exception(err) => {
+                anyhow::bail!(err)
+            }
+        }
+    }
+
+    pub fn load_overlay_per_node_expr(
+        &self,
+        graph: &GraphHandle,
+        script_path: &Path,
+    ) -> Result<Vec<rgb::RGB<f32>>> {
+        use std::{fs::File, io::Read};
+
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        let node_count = graph.graph.node_count();
+
+        let (mut node_color, _): (FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>, _) =
+            self.vm.run_expr("node_color_fun", &source)?;
+
+        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+
+        for node_id in 0..node_count {
+            let node_id = (node_id + 1) as u64;
+            let (r, g, b) = node_color.call(graph.clone(), node_id)?;
+
+            colors.push(rgb::RGB::new(r, g, b));
+        }
+
+        Ok(colors)
+    }
+
     pub fn test_graph_handle(&self, graph: &GraphHandle) {
         let script = r#"
 let gfaestus = import! gfaestus
@@ -71,13 +117,6 @@ gfaestus.node_count
     }
 
     pub fn example_overlay(&self, graph: &GraphHandle) -> gluon::Result<Vec<rgb::RGB<f32>>> {
-        //         let script = r#"
-        // let int = import! std.int
-
-        // let color_fn node_id =
-        //     if int.rem node_id 2 == 0 then (0.5, 0.5, 0.5) else (0.8, 0.3, 0.3)
-        // color_fn
-        // "#;
         let script = r#"
 let gfaestus = import! gfaestus
 let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_paths g x)

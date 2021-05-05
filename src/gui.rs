@@ -20,9 +20,9 @@ use parking_lot::Mutex;
 
 // use theme_editor::*;
 
-use crate::view::View;
 use crate::{app::OverlayState, geometry::*};
 use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
+use crate::{gluon::GraphHandle, view::View};
 
 use crate::graph_query::GraphQuery;
 
@@ -136,7 +136,7 @@ pub struct AppViewState {
 
     // theme_editor: ThemeEditor,
     // theme_list: ThemeList,
-
+    overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
     // overlay_editor: OverlayEditor,
     // overlay_list: OverlayList,
 }
@@ -166,6 +166,10 @@ impl AppViewState {
         let path_list_state = NodeList::new(graph_query, 15, node_id_cell);
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
+        let overlay_creator_state = OverlayCreator::new().unwrap();
+        let overlay_creator =
+            ViewStateChannel::<OverlayCreator, OverlayCreatorMsg>::new(overlay_creator_state);
+
         Self {
             settings,
 
@@ -176,6 +180,8 @@ impl AppViewState {
             node_details,
 
             path_list,
+
+            overlay_creator,
         }
     }
 
@@ -357,7 +363,7 @@ impl std::default::Default for OpenWindows {
             paths: false,
 
             themes: false,
-            overlays: false,
+            overlays: true,
 
             egui_inspection: false,
             egui_settings: false,
@@ -488,7 +494,16 @@ impl Gui {
         &self.view_state
     }
 
-    pub fn begin_frame(&mut self, screen_rect: Option<Point>, graph_query: &GraphQuery) {
+    pub fn new_overlay_rx(&self) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
+        &self.view_state.overlay_creator.state.new_overlay_rx()
+    }
+
+    pub fn begin_frame(
+        &mut self,
+        screen_rect: Option<Point>,
+        graph_query: &GraphQuery,
+        graph_handle: &GraphHandle,
+    ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
         let screen_rect = screen_rect.map(|p| egui::Rect {
@@ -514,6 +529,10 @@ impl Gui {
         let scr = self.ctx.input().screen_rect();
 
         let view_state = &mut self.view_state;
+
+        if self.open_windows.overlays {
+            view_state.overlay_creator.state.ui(graph_handle, &self.ctx);
+        }
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);

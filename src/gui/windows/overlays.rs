@@ -88,7 +88,7 @@ impl OverlayCreator {
                     let path = PathBuf::from(path_str);
                     println!("loading gluon script from path {:?}", path.to_str());
 
-                    let result = todo!();
+                    let result = self.gluon.load_overlay_per_node_expr(graph, &path);
 
                     match result {
                         Ok(colors) => {
