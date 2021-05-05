@@ -16,8 +16,10 @@ use crate::view::View;
 
 pub mod graph_details;
 pub mod main_view_settings;
+pub mod overlays;
 pub mod theme;
 
 pub use graph_details::*;
 pub use main_view_settings::*;
+pub use overlays::*;
 use theme::*;
