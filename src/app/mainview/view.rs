@@ -641,9 +641,13 @@ impl ScrollZoomState {
 
         let mult = 1.0;
 
-        let scroll_delta = 1.0 + (self.scroll_delta * mult);
+        let scroll_delta = if self.scroll_delta < 0.0 {
+            (1.0 / (1.0 + self.scroll_delta.abs())) * mult
+        } else {
+            1.0 + (self.scroll_delta * mult)
+        };
 
-        end.scale *= 1.0 + (self.scroll_delta * mult);
+        end.scale *= scroll_delta;
 
         let start_mouse_world = start.screen_point_to_world(dims, self.mouse_screen_pos);
         let end_mouse_world = end.screen_point_to_world(dims, self.mouse_screen_pos);

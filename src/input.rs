@@ -110,7 +110,6 @@ impl InputManager {
     pub fn handle_events(&self, gui_msg_tx: &channel::Sender<GuiMsg>) {
         while let Ok(winit_ev) = self.winit_rx.try_recv() {
             if let event::WindowEvent::CursorMoved { position, .. } = winit_ev {
-                println!("cursor moved ({}, {})", position.x, position.y);
                 self.mouse_screen_pos.store(Point {
                     x: position.x as f32,
                     y: position.y as f32,
