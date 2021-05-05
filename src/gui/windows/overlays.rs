@@ -85,7 +85,9 @@ impl OverlayCreator {
                 let run_script = ui.button("Load and execute");
 
                 if run_script.clicked() {
-                    let path = PathBuf::from(path_str);
+                    // let path = PathBuf::from(path_str);
+                    // TODO: Need to handle the text input -- characters aren't being sent to egui yet
+                    let path = PathBuf::from("./hash_seq.glu");
                     println!("loading gluon script from path {:?}", path.to_str());
 
                     let result = self.gluon.load_overlay_per_node_expr(graph, &path);
@@ -93,7 +95,8 @@ impl OverlayCreator {
                     match result {
                         Ok(colors) => {
                             let msg = OverlayCreatorMsg::NewOverlay {
-                                name: name.to_owned(),
+                                name: String::from("hash seq"),
+                                // name: name.to_owned(),
                                 colors,
                             };
                             self.new_overlay_tx.send(msg).unwrap();

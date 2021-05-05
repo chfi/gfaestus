@@ -152,6 +152,8 @@ fn main() {
     )
     .unwrap();
 
+    let new_overlay_rx = gui.new_overlay_rx().clone();
+
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
         edge_count: Some(stats.edge_count),
@@ -257,6 +259,8 @@ fn main() {
         .set_active_overlay(Some(1))
         .unwrap();
 
+    let mut next_overlay_id = 2;
+
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
@@ -341,6 +345,41 @@ fn main() {
                 while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
                     app.apply_app_config_msg(&cfg_msg);
                 }
+
+                while let Ok(new_overlay) = new_overlay_rx.try_recv() {
+                    match new_overlay {
+                        OverlayCreatorMsg::NewOverlay { name, colors } => {
+                            println!("Received new overlay");
+                            let mut overlay =
+                                NodeOverlay::new_empty(&name, &gfaestus, graph_query.node_count())
+                                    .unwrap();
+
+                            overlay
+                                .update_overlay(
+                                    gfaestus.vk_context().device(),
+                                    colors
+                                        .iter()
+                                        .enumerate()
+                                        .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
+                                )
+                                .unwrap();
+
+                            main_view
+                                .node_draw_system
+                                .overlay_pipeline
+                                .update_overlay(next_overlay_id, overlay);
+                            //
+
+                            main_view
+                                .node_draw_system
+                                .overlay_pipeline
+                                .set_active_overlay(Some(1))
+                                .unwrap();
+
+                            next_overlay_id += 1;
+                        }
+                    }
+                }
             }
             Event::MainEventsCleared => {
                 let screen_dims = app.dims();
@@ -376,7 +415,7 @@ fn main() {
                     }
                 }
 
-                gui.begin_frame(Some(app.dims().into()), &graph_query);
+                gui.begin_frame(Some(app.dims().into()), &graph_query, &graph_handle);
 
                 let meshes = gui.end_frame();
 
