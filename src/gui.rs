@@ -377,6 +377,7 @@ pub enum GuiMsg {
     SetWindowOpen { window: Windows, open: Option<bool> },
     SetLightMode,
     SetDarkMode,
+    EguiEvent(egui::Event),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -550,6 +551,21 @@ impl Gui {
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 
+        egui::Window::new("gui_focus_state_info").show(&self.ctx, |ui| {
+            ui.label(format!(
+                "Mouse over GUI: {}",
+                self.gui_focus_state.mouse_over_gui.load()
+            ));
+            ui.label(format!(
+                "Wants keyboard: {}",
+                self.gui_focus_state.wants_keyboard_input.load()
+            ));
+            ui.label(format!(
+                "Wants pointer: {}",
+                self.gui_focus_state.wants_pointer_input.load()
+            ));
+        });
+
         self.menu_bar.ui(&self.ctx, &mut self.open_windows);
 
         if let Some(node_id) = self.hover_node_id {
@@ -705,6 +721,10 @@ impl Gui {
                 }
                 GuiMsg::SetDarkMode => {
                     Self::dark_mode(&self.ctx);
+                }
+                GuiMsg::EguiEvent(event) => {
+                    println!("received egui event");
+                    self.frame_input.events.push(event);
                 }
             }
         }

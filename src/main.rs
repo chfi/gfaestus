@@ -143,8 +143,8 @@ fn main() {
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
-        input_manager.gui_focus_state().clone(),
         app.overlay_state.clone(),
+        input_manager.gui_focus_state().clone(),
         main_view.node_width().clone(),
         &graph_query,
         gfaestus.swapchain_props,
@@ -290,7 +290,7 @@ fn main() {
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
                 input_manager.set_mouse_over_gui(gui.pointer_over_gui());
-                input_manager.handle_events();
+                input_manager.handle_events(&gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();
 
@@ -330,6 +330,8 @@ fn main() {
                 while let Ok(gui_in) = gui_rx.try_recv() {
                     gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
                 }
+
+                gui.apply_received_gui_msgs();
 
                 // while let Ok(opt_in) = opts_from_gui.try_recv() {
                 //     app.apply_app_config_state(opt_in);

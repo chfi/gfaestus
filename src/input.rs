@@ -1,3 +1,4 @@
+use winit::event::VirtualKeyCode;
 #[allow(unused_imports)]
 use winit::{
     event::{self, Event, KeyboardInput, WindowEvent},
@@ -8,10 +9,10 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
-use crate::app::mainview::MainViewInput;
 use crate::app::AppInput;
 use crate::geometry::*;
 use crate::gui::GuiInput;
+use crate::{app::mainview::MainViewInput, gui::GuiMsg};
 
 pub mod binds;
 
@@ -106,7 +107,7 @@ impl InputManager {
         self.mouse_screen_pos.clone()
     }
 
-    pub fn handle_events(&self) {
+    pub fn handle_events(&self, gui_msg_tx: &channel::Sender<GuiMsg>) {
         while let Ok(winit_ev) = self.winit_rx.try_recv() {
             if let event::WindowEvent::CursorMoved { position, .. } = winit_ev {
                 self.mouse_screen_pos.store(Point {
@@ -117,9 +118,34 @@ impl InputManager {
 
             let mouse_pos = self.mouse_screen_pos.read();
 
+            let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
+
+            if gui_wants_keyboard {
+                if let event::WindowEvent::ReceivedCharacter(c) = winit_ev {
+                    println!("received character '{}'", c);
+                    let event = received_char_to_egui_text(c);
+                    gui_msg_tx
+                        .send(crate::gui::GuiMsg::EguiEvent(event))
+                        .unwrap();
+                } else if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
+                    if let Some(event) = input
+                        .virtual_keycode
+                        .and_then(|key| winit_to_egui_text_event(input.state, key))
+                    {
+                        println!("received key event");
+                        gui_msg_tx
+                            .send(crate::gui::GuiMsg::EguiEvent(event))
+                            .unwrap();
+                    }
+                }
+            } else {
+            }
+
             if let Some(app_inputs) = self.app.bindings.apply(&winit_ev, mouse_pos) {
                 for input in app_inputs {
-                    self.app.tx.send(input).unwrap();
+                    if !(input.is_keyboard() && gui_wants_keyboard) {
+                        self.app.tx.send(input).unwrap();
+                    }
                 }
             }
 
@@ -131,8 +157,9 @@ impl InputManager {
 
             if let Some(main_view_inputs) = self.main_view.bindings.apply(&winit_ev, mouse_pos) {
                 let mouse_over_gui = self.mouse_over_gui.load();
+
                 for input in main_view_inputs {
-                    if input.is_keyboard()
+                    if (input.is_keyboard() && !gui_wants_keyboard)
                         || (input.is_mouse() && !mouse_over_gui)
                         || input.is_mouse_up()
                     {
@@ -165,18 +192,21 @@ impl InputManager {
     }
 }
 
+fn received_char_to_egui_text(c: char) -> egui::Event {
+    egui::Event::Text(c.into())
+}
+
 fn winit_to_egui_text_event(
-    modifiers: winit::event::ModifiersState,
     state: winit::event::ElementState,
     key_code: winit::event::VirtualKeyCode,
 ) -> Option<egui::Event> {
+    // TODO track modifiers with winit's ModifiersChanged event
     let modifiers = egui::Modifiers {
-        alt: modifiers.alt(),
-        ctrl: modifiers.ctrl(),
-        shift: modifiers.shift(),
-        // TODO this has to be fixed according to the egui docs
-        mac_cmd: modifiers.logo(),
-        command: modifiers.ctrl(),
+        alt: false,
+        ctrl: false,
+        shift: false,
+        mac_cmd: false,
+        command: false,
     };
 
     let pressed = matches!(state, winit::event::ElementState::Pressed);
@@ -196,6 +226,7 @@ fn winit_to_egui_text_event(
     use egui::Key;
 
     let egui_event = match key_code {
+        /*
         VirtualKeyCode::Key1 => key_event(Key::Num1),
         VirtualKeyCode::Key2 => key_event(Key::Num2),
         VirtualKeyCode::Key3 => key_event(Key::Num3),
@@ -232,6 +263,7 @@ fn winit_to_egui_text_event(
         VirtualKeyCode::X => key_event(Key::X),
         VirtualKeyCode::Y => key_event(Key::Y),
         VirtualKeyCode::Z => key_event(Key::Z),
+        */
         VirtualKeyCode::Escape => key_event(Key::Escape),
         VirtualKeyCode::Insert => key_event(Key::Insert),
         VirtualKeyCode::Home => key_event(Key::Home),
@@ -245,6 +277,8 @@ fn winit_to_egui_text_event(
         VirtualKeyCode::Down => key_event(Key::ArrowDown),
         VirtualKeyCode::Back => key_event(Key::Backspace),
         VirtualKeyCode::Return => key_event(Key::Enter),
+        VirtualKeyCode::Tab => key_event(Key::Tab),
+        /*
         VirtualKeyCode::Space => key_event(Key::Space),
         VirtualKeyCode::Numpad0 => key_event(Key::Num0),
         VirtualKeyCode::Numpad1 => key_event(Key::Num1),
@@ -278,11 +312,168 @@ fn winit_to_egui_text_event(
         VirtualKeyCode::Plus => text_event('+'),
         VirtualKeyCode::Semicolon => text_event(';'),
         VirtualKeyCode::Slash => text_event('/'),
-        VirtualKeyCode::Tab => key_event(Key::Tab),
         VirtualKeyCode::Underline => text_event('_'),
+        */
         _ => None,
     };
 
     egui_event
 }
 
+/*
+fn winit_to_egui_keyboard_input(
+    modifiers: winit::event::ModifiersState,
+    state: winit::event::ElementState,
+    key_code: winit::event::VirtualKeyCode,
+) -> Option<egui::Event> {
+
+    let modifiers = egui::Modifiers {
+        alt: modifiers.alt(),
+        ctrl: modifiers.ctrl(),
+        shift: modifiers.shift(),
+        // TODO this has to be fixed according to the egui docs
+        mac_cmd: modifiers.logo(),
+        command: modifiers.ctrl(),
+    };
+
+
+    let pressed = matches!(state, winit::event::ElementState::Pressed);
+
+    let key = match key_code {
+        VirtualKeyCode::Key1 => {}
+        VirtualKeyCode::Key2 => {}
+        VirtualKeyCode::Key3 => {}
+        VirtualKeyCode::Key4 => {}
+        VirtualKeyCode::Key5 => {}
+        VirtualKeyCode::Key6 => {}
+        VirtualKeyCode::Key7 => {}
+        VirtualKeyCode::Key8 => {}
+        VirtualKeyCode::Key9 => {}
+        VirtualKeyCode::Key0 => {}
+        VirtualKeyCode::A => {}
+        VirtualKeyCode::B => {}
+        VirtualKeyCode::C => {}
+        VirtualKeyCode::D => {}
+        VirtualKeyCode::E => {}
+        VirtualKeyCode::F => {}
+        VirtualKeyCode::G => {}
+        VirtualKeyCode::H => {}
+        VirtualKeyCode::I => {}
+        VirtualKeyCode::J => {}
+        VirtualKeyCode::K => {}
+        VirtualKeyCode::L => {}
+        VirtualKeyCode::M => {}
+        VirtualKeyCode::N => {}
+        VirtualKeyCode::O => {}
+        VirtualKeyCode::P => {}
+        VirtualKeyCode::Q => {}
+        VirtualKeyCode::R => {}
+        VirtualKeyCode::S => {}
+        VirtualKeyCode::T => {}
+        VirtualKeyCode::U => {}
+        VirtualKeyCode::V => {}
+        VirtualKeyCode::W => {}
+        VirtualKeyCode::X => {}
+        VirtualKeyCode::Y => {}
+        VirtualKeyCode::Z => {}
+        VirtualKeyCode::Escape => {}
+        VirtualKeyCode::Insert => {}
+        VirtualKeyCode::Home => {}
+        VirtualKeyCode::Delete => {}
+        VirtualKeyCode::End => {}
+        VirtualKeyCode::PageDown => {}
+        VirtualKeyCode::PageUp => {}
+        VirtualKeyCode::Left => {}
+        VirtualKeyCode::Up => {}
+        VirtualKeyCode::Right => {}
+        VirtualKeyCode::Down => {}
+        VirtualKeyCode::Back => {}
+        VirtualKeyCode::Return => {}
+        VirtualKeyCode::Space => {}
+        VirtualKeyCode::Numpad0 => {}
+        VirtualKeyCode::Numpad1 => {}
+        VirtualKeyCode::Numpad2 => {}
+        VirtualKeyCode::Numpad3 => {}
+        VirtualKeyCode::Numpad4 => {}
+        VirtualKeyCode::Numpad5 => {}
+        VirtualKeyCode::Numpad6 => {}
+        VirtualKeyCode::Numpad7 => {}
+        VirtualKeyCode::Numpad8 => {}
+        VirtualKeyCode::Numpad9 => {}
+        VirtualKeyCode::NumpadAdd => {}
+        VirtualKeyCode::NumpadDivide => {}
+        VirtualKeyCode::NumpadDecimal => {}
+        VirtualKeyCode::NumpadComma => {}
+        VirtualKeyCode::NumpadEnter => {}
+        VirtualKeyCode::NumpadEquals => {}
+        VirtualKeyCode::NumpadMultiply => {}
+        VirtualKeyCode::NumpadSubtract => {}
+        VirtualKeyCode::AbntC1 => {}
+        VirtualKeyCode::AbntC2 => {}
+        VirtualKeyCode::Apostrophe => {}
+        VirtualKeyCode::Apps => {}
+        VirtualKeyCode::Asterisk => {}
+        VirtualKeyCode::At => {}
+        VirtualKeyCode::Ax => {}
+        VirtualKeyCode::Backslash => {}
+        VirtualKeyCode::Calculator => {}
+        VirtualKeyCode::Capital => {}
+        VirtualKeyCode::Colon => {}
+        VirtualKeyCode::Comma => {}
+        VirtualKeyCode::Convert => {}
+        VirtualKeyCode::Equals => {}
+        VirtualKeyCode::Grave => {}
+        VirtualKeyCode::Kana => {}
+        VirtualKeyCode::Kanji => {}
+        VirtualKeyCode::LAlt => {}
+        VirtualKeyCode::LBracket => {}
+        VirtualKeyCode::LControl => {}
+        VirtualKeyCode::LShift => {}
+        VirtualKeyCode::LWin => {}
+        VirtualKeyCode::Mail => {}
+        VirtualKeyCode::MediaSelect => {}
+        VirtualKeyCode::MediaStop => {}
+        VirtualKeyCode::Minus => {}
+        VirtualKeyCode::Mute => {}
+        VirtualKeyCode::MyComputer => {}
+        VirtualKeyCode::NavigateForward => {}
+        VirtualKeyCode::NavigateBackward => {}
+        VirtualKeyCode::NextTrack => {}
+        VirtualKeyCode::NoConvert => {}
+        VirtualKeyCode::OEM102 => {}
+        VirtualKeyCode::Period => {}
+        VirtualKeyCode::PlayPause => {}
+        VirtualKeyCode::Plus => {}
+        VirtualKeyCode::Power => {}
+        VirtualKeyCode::PrevTrack => {}
+        VirtualKeyCode::RAlt => {}
+        VirtualKeyCode::RBracket => {}
+        VirtualKeyCode::RControl => {}
+        VirtualKeyCode::RShift => {}
+        VirtualKeyCode::RWin => {}
+        VirtualKeyCode::Semicolon => {}
+        VirtualKeyCode::Slash => {}
+        VirtualKeyCode::Sleep => {}
+        VirtualKeyCode::Stop => {}
+        VirtualKeyCode::Sysrq => {}
+        VirtualKeyCode::Tab => {}
+        VirtualKeyCode::Underline => {}
+        VirtualKeyCode::Unlabeled => {}
+        VirtualKeyCode::VolumeDown => {}
+        VirtualKeyCode::VolumeUp => {}
+        VirtualKeyCode::Wake => {}
+        VirtualKeyCode::WebBack => {}
+        VirtualKeyCode::WebFavorites => {}
+        VirtualKeyCode::WebForward => {}
+        VirtualKeyCode::WebHome => {}
+        VirtualKeyCode::WebRefresh => {}
+        VirtualKeyCode::WebSearch => {}
+        VirtualKeyCode::WebStop => {}
+        VirtualKeyCode::Yen => {}
+        VirtualKeyCode::Copy => {}
+        VirtualKeyCode::Paste => {}
+        VirtualKeyCode::Cut => {}
+    };
+
+}
+*/
