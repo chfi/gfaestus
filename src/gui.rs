@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 #[allow(unused_imports)]
 use handlegraph::{
@@ -142,7 +142,11 @@ pub struct AppViewState {
 }
 
 impl AppViewState {
-    pub fn new(graph_query: &GraphQuery, node_width: Arc<AtomicCell<f32>>) -> Self {
+    pub fn new(
+        graph_query: &GraphQuery,
+        node_width: Arc<AtomicCell<f32>>,
+        dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+    ) -> Self {
         // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
 
         let graph = graph_query.graph();
@@ -166,7 +170,7 @@ impl AppViewState {
         let path_list_state = NodeList::new(graph_query, 15, node_id_cell);
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
-        let overlay_creator_state = OverlayCreator::new().unwrap();
+        let overlay_creator_state = OverlayCreator::new(dropped_file).unwrap();
         let overlay_creator =
             ViewStateChannel::<OverlayCreator, OverlayCreatorMsg>::new(overlay_creator_state);
 
@@ -374,17 +378,11 @@ impl std::default::Default for OpenWindows {
 
 pub enum GuiMsg {
     EnableView(Views),
-    SetWindowOpen {
-        window: Windows,
-        open: Option<bool>,
-    },
+    SetWindowOpen { window: Windows, open: Option<bool> },
     SetLightMode,
     SetDarkMode,
     EguiEvent(egui::Event),
-    FileDropped {
-        mouse_pos: Point,
-        path: std::path::PathBuf,
-    },
+    FileDropped { path: std::path::PathBuf },
 }
 
 #[derive(Debug, Default, Clone)]
@@ -428,6 +426,8 @@ pub struct Gui {
     menu_bar: MenuBar,
 
     gui_focus_state: GuiFocusState,
+
+    dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -487,7 +487,9 @@ impl Gui {
 
         let (gui_msg_tx, gui_msg_rx) = channel::unbounded::<GuiMsg>();
 
-        let view_state = AppViewState::new(graph_query, node_width);
+        let dropped_file = Arc::new(std::sync::Mutex::new(None));
+
+        let view_state = AppViewState::new(graph_query, node_width, dropped_file.clone());
 
         let menu_bar = MenuBar::new(overlay_state);
 
@@ -511,6 +513,8 @@ impl Gui {
             menu_bar,
 
             gui_focus_state,
+
+            dropped_file,
         };
 
         Ok((gui, receiver))
@@ -733,13 +737,10 @@ impl Gui {
                     println!("received egui event");
                     self.frame_input.events.push(event);
                 }
-                GuiMsg::FileDropped { mouse_pos, path } => {
-                    if let Some(layer_id) = self.ctx.layer_id_at(mouse_pos.into()) {
-                        if layer_id.id == egui::Id::new(OverlayCreator::ID) {
-                            println!("Dropped file {:?} on overlay creator", path.to_str());
-                        } else {
-                            println!("Dropped file {:?} outside overlay creator", path.to_str());
-                        }
+                GuiMsg::FileDropped { path } => {
+                    if let Ok(mut guard) = self.dropped_file.lock() {
+                        println!("Updated dropped file with {:?}", path.to_str());
+                        *guard = Some(path);
                     }
                 }
             }

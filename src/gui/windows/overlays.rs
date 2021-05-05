@@ -36,12 +36,14 @@ pub struct OverlayCreator {
 
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     new_overlay_rx: Receiver<OverlayCreatorMsg>,
+
+    dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 }
 
 impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
-    pub fn new() -> Result<Self> {
+    pub fn new(dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>) -> Result<Self> {
         let (new_overlay_tx, new_overlay_rx) = crossbeam::channel::unbounded::<OverlayCreatorMsg>();
 
         let gluonvm = crate::gluon::GluonVM::new()?;
@@ -57,6 +59,8 @@ impl OverlayCreator {
 
             new_overlay_tx,
             new_overlay_rx,
+
+            dropped_file,
         })
     }
 
@@ -84,6 +88,23 @@ impl OverlayCreator {
                     ui.text_edit_singleline(&mut path_str)
                 });
 
+                if path_box.response.hovered() {
+                    if let Ok(mut guard) = self.dropped_file.lock() {
+                        let mut retrieved = false;
+                        if let Some(path) = guard.as_mut() {
+                            println!("Retrieved dropped file with {:?}", path.to_str());
+                            if let Some(p) = path.to_str() {
+                                *path_str = p.to_string();
+                            }
+                            retrieved = true;
+                        }
+
+                        if retrieved {
+                            *guard = None;
+                        }
+                    }
+                }
+
                 let run_script = ui.button("Load and execute");
 
                 if run_script.clicked() {
@@ -98,6 +119,9 @@ impl OverlayCreator {
                                 name: name.to_owned(),
                                 colors,
                             };
+                            self.script_path_input.clear();
+                            self.name.clear();
+
                             self.new_overlay_tx.send(msg).unwrap();
                         }
                         Err(err) => {
