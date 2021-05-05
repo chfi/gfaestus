@@ -164,3 +164,125 @@ impl InputManager {
         }
     }
 }
+
+fn winit_to_egui_text_event(
+    modifiers: winit::event::ModifiersState,
+    state: winit::event::ElementState,
+    key_code: winit::event::VirtualKeyCode,
+) -> Option<egui::Event> {
+    let modifiers = egui::Modifiers {
+        alt: modifiers.alt(),
+        ctrl: modifiers.ctrl(),
+        shift: modifiers.shift(),
+        // TODO this has to be fixed according to the egui docs
+        mac_cmd: modifiers.logo(),
+        command: modifiers.ctrl(),
+    };
+
+    let pressed = matches!(state, winit::event::ElementState::Pressed);
+
+    fn text_event(c: char) -> Option<egui::Event> {
+        Some(egui::Event::Text(c.into()))
+    }
+
+    let key_event = |key: egui::Key| -> Option<egui::Event> {
+        Some(egui::Event::Key {
+            key,
+            pressed,
+            modifiers,
+        })
+    };
+
+    use egui::Key;
+
+    let egui_event = match key_code {
+        VirtualKeyCode::Key1 => key_event(Key::Num1),
+        VirtualKeyCode::Key2 => key_event(Key::Num2),
+        VirtualKeyCode::Key3 => key_event(Key::Num3),
+        VirtualKeyCode::Key4 => key_event(Key::Num4),
+        VirtualKeyCode::Key5 => key_event(Key::Num5),
+        VirtualKeyCode::Key6 => key_event(Key::Num6),
+        VirtualKeyCode::Key7 => key_event(Key::Num7),
+        VirtualKeyCode::Key8 => key_event(Key::Num8),
+        VirtualKeyCode::Key9 => key_event(Key::Num9),
+        VirtualKeyCode::Key0 => key_event(Key::Num0),
+        VirtualKeyCode::A => key_event(Key::A),
+        VirtualKeyCode::B => key_event(Key::B),
+        VirtualKeyCode::C => key_event(Key::C),
+        VirtualKeyCode::D => key_event(Key::D),
+        VirtualKeyCode::E => key_event(Key::E),
+        VirtualKeyCode::F => key_event(Key::F),
+        VirtualKeyCode::G => key_event(Key::G),
+        VirtualKeyCode::H => key_event(Key::H),
+        VirtualKeyCode::I => key_event(Key::I),
+        VirtualKeyCode::J => key_event(Key::J),
+        VirtualKeyCode::K => key_event(Key::K),
+        VirtualKeyCode::L => key_event(Key::L),
+        VirtualKeyCode::M => key_event(Key::M),
+        VirtualKeyCode::N => key_event(Key::N),
+        VirtualKeyCode::O => key_event(Key::O),
+        VirtualKeyCode::P => key_event(Key::P),
+        VirtualKeyCode::Q => key_event(Key::Q),
+        VirtualKeyCode::R => key_event(Key::R),
+        VirtualKeyCode::S => key_event(Key::S),
+        VirtualKeyCode::T => key_event(Key::T),
+        VirtualKeyCode::U => key_event(Key::U),
+        VirtualKeyCode::V => key_event(Key::V),
+        VirtualKeyCode::W => key_event(Key::W),
+        VirtualKeyCode::X => key_event(Key::X),
+        VirtualKeyCode::Y => key_event(Key::Y),
+        VirtualKeyCode::Z => key_event(Key::Z),
+        VirtualKeyCode::Escape => key_event(Key::Escape),
+        VirtualKeyCode::Insert => key_event(Key::Insert),
+        VirtualKeyCode::Home => key_event(Key::Home),
+        VirtualKeyCode::Delete => key_event(Key::Delete),
+        VirtualKeyCode::End => key_event(Key::End),
+        VirtualKeyCode::PageDown => key_event(Key::PageDown),
+        VirtualKeyCode::PageUp => key_event(Key::PageUp),
+        VirtualKeyCode::Left => key_event(Key::ArrowLeft),
+        VirtualKeyCode::Up => key_event(Key::ArrowUp),
+        VirtualKeyCode::Right => key_event(Key::ArrowRight),
+        VirtualKeyCode::Down => key_event(Key::ArrowDown),
+        VirtualKeyCode::Back => key_event(Key::Backspace),
+        VirtualKeyCode::Return => key_event(Key::Enter),
+        VirtualKeyCode::Space => key_event(Key::Space),
+        VirtualKeyCode::Numpad0 => key_event(Key::Num0),
+        VirtualKeyCode::Numpad1 => key_event(Key::Num1),
+        VirtualKeyCode::Numpad2 => key_event(Key::Num2),
+        VirtualKeyCode::Numpad3 => key_event(Key::Num3),
+        VirtualKeyCode::Numpad4 => key_event(Key::Num4),
+        VirtualKeyCode::Numpad5 => key_event(Key::Num5),
+        VirtualKeyCode::Numpad6 => key_event(Key::Num6),
+        VirtualKeyCode::Numpad7 => key_event(Key::Num7),
+        VirtualKeyCode::Numpad8 => key_event(Key::Num8),
+        VirtualKeyCode::Numpad9 => key_event(Key::Num9),
+        VirtualKeyCode::NumpadAdd => text_event('+'),
+        VirtualKeyCode::NumpadDivide => text_event('/'),
+        VirtualKeyCode::NumpadDecimal => text_event('.'),
+        VirtualKeyCode::NumpadComma => text_event(','),
+        VirtualKeyCode::NumpadEnter => key_event(Key::Enter),
+        VirtualKeyCode::NumpadEquals => text_event('='),
+        VirtualKeyCode::NumpadMultiply => text_event('*'),
+        VirtualKeyCode::NumpadSubtract => text_event('-'),
+        VirtualKeyCode::Apostrophe => text_event('\''),
+        VirtualKeyCode::Asterisk => text_event('*'),
+        VirtualKeyCode::At => text_event('@'),
+        // VirtualKeyCode::Ax => {}
+        VirtualKeyCode::Backslash => text_event('\\'),
+        VirtualKeyCode::Colon => text_event(':'),
+        VirtualKeyCode::Comma => text_event(','),
+        VirtualKeyCode::Equals => text_event('='),
+        // VirtualKeyCode::Grave => {}
+        VirtualKeyCode::Minus => text_event('-'),
+        VirtualKeyCode::Period => text_event('.'),
+        VirtualKeyCode::Plus => text_event('+'),
+        VirtualKeyCode::Semicolon => text_event(';'),
+        VirtualKeyCode::Slash => text_event('/'),
+        VirtualKeyCode::Tab => key_event(Key::Tab),
+        VirtualKeyCode::Underline => text_event('_'),
+        _ => None,
+    };
+
+    egui_event
+}
+
