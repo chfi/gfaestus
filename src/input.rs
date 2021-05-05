@@ -120,6 +120,20 @@ impl InputManager {
 
             let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
 
+            // if let event::WindowEvent::HoveredFile(ref path) = winit_ev {
+            //     println!("file hover");
+            // }
+
+            if let event::WindowEvent::DroppedFile(ref path) = winit_ev {
+                println!("file dropped");
+                gui_msg_tx
+                    .send(GuiMsg::FileDropped {
+                        mouse_pos,
+                        path: path.clone(),
+                    })
+                    .unwrap();
+            }
+
             if gui_wants_keyboard {
                 if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
                     if let Some(event) = input
@@ -140,7 +154,6 @@ impl InputManager {
                             .unwrap();
                     }
                 }
-            } else {
             }
 
             if let Some(app_inputs) = self.app.bindings.apply(&winit_ev, mouse_pos) {

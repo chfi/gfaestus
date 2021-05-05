@@ -374,10 +374,17 @@ impl std::default::Default for OpenWindows {
 
 pub enum GuiMsg {
     EnableView(Views),
-    SetWindowOpen { window: Windows, open: Option<bool> },
+    SetWindowOpen {
+        window: Windows,
+        open: Option<bool>,
+    },
     SetLightMode,
     SetDarkMode,
     EguiEvent(egui::Event),
+    FileDropped {
+        mouse_pos: Point,
+        path: std::path::PathBuf,
+    },
 }
 
 #[derive(Debug, Default, Clone)]
@@ -725,6 +732,15 @@ impl Gui {
                 GuiMsg::EguiEvent(event) => {
                     println!("received egui event");
                     self.frame_input.events.push(event);
+                }
+                GuiMsg::FileDropped { mouse_pos, path } => {
+                    if let Some(layer_id) = self.ctx.layer_id_at(mouse_pos.into()) {
+                        if layer_id.id == egui::Id::new(OverlayCreator::ID) {
+                            println!("Dropped file {:?} on overlay creator", path.to_str());
+                        } else {
+                            println!("Dropped file {:?} outside overlay creator", path.to_str());
+                        }
+                    }
                 }
             }
         }

@@ -39,7 +39,7 @@ pub struct OverlayCreator {
 }
 
 impl OverlayCreator {
-    const ID: &'static str = "overlay_creator_window";
+    pub const ID: &'static str = "overlay_creator_window";
 
     pub fn new() -> Result<Self> {
         let (new_overlay_tx, new_overlay_rx) = crossbeam::channel::unbounded::<OverlayCreatorMsg>();
