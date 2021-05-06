@@ -67,7 +67,6 @@ impl<T: InputPayload + BindableInput> SubsystemInput<T> {
 
 pub struct InputManager {
     mouse_screen_pos: MousePos,
-    mouse_over_gui: Arc<AtomicCell<bool>>,
 
     winit_rx: channel::Receiver<event::WindowEvent<'static>>,
 
@@ -95,10 +94,6 @@ impl InputManager {
         self.gui.clone_rx()
     }
 
-    pub fn set_mouse_over_gui(&self, is_over: bool) {
-        self.mouse_over_gui.store(is_over);
-    }
-
     pub fn read_mouse_pos(&self) -> Point {
         self.mouse_screen_pos.pos.load()
     }
@@ -119,13 +114,9 @@ impl InputManager {
             let mouse_pos = self.mouse_screen_pos.read();
 
             let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
-
-            // if let event::WindowEvent::HoveredFile(ref path) = winit_ev {
-            //     println!("file hover");
-            // }
+            let mouse_over_gui = self.gui_focus_state.mouse_over_gui();
 
             if let event::WindowEvent::DroppedFile(ref path) = winit_ev {
-                println!("file dropped");
                 gui_msg_tx
                     .send(GuiMsg::FileDropped { path: path.clone() })
                     .unwrap();
@@ -168,8 +159,6 @@ impl InputManager {
             }
 
             if let Some(main_view_inputs) = self.main_view.bindings.apply(&winit_ev, mouse_pos) {
-                let mouse_over_gui = self.mouse_over_gui.load();
-
                 for input in main_view_inputs {
                     if (input.is_keyboard() && !gui_wants_keyboard)
                         || (input.is_mouse() && !mouse_over_gui)
@@ -184,7 +173,6 @@ impl InputManager {
 
     pub fn new(winit_rx: channel::Receiver<event::WindowEvent<'static>>) -> Self {
         let mouse_screen_pos = MousePos::new(Point::ZERO);
-        let mouse_over_gui = Arc::new(AtomicCell::new(false));
 
         let app = SubsystemInput::<AppInput>::from_default_binds();
         let main_view = SubsystemInput::<MainViewInput>::from_default_binds();
@@ -192,7 +180,6 @@ impl InputManager {
 
         Self {
             mouse_screen_pos,
-            mouse_over_gui,
             winit_rx,
 
             app,

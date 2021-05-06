@@ -291,7 +291,6 @@ fn main() {
             Event::NewEvents(_) => {
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
-                input_manager.set_mouse_over_gui(gui.pointer_over_gui());
                 input_manager.handle_events(&gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();

@@ -156,7 +156,7 @@ impl<T: InputPayload> SystemInput<T> {
         match self {
             SystemInput::Keyboard { .. } => false,
             SystemInput::MouseButton { state, .. } => state.released(),
-            SystemInput::Wheel { .. } => true,
+            SystemInput::Wheel { .. } => false,
         }
     }
 }
