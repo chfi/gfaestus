@@ -34,23 +34,30 @@ impl OverlayList {
             .extend(names.map(|(x, n)| (x, n.to_string())));
     }
 
-    pub fn ui(&self, ctx: &egui::CtxRef) -> Option<egui::Response> {
+    pub fn ui(&self, open_creator: &mut bool, ctx: &egui::CtxRef) -> Option<egui::Response> {
         egui::Window::new("Overlay List")
             .id(egui::Id::new(Self::ID))
             .show(ctx, |mut ui| {
                 let use_overlay = self.overlay_state.use_overlay();
 
-                if ui
-                    .selectable_label(use_overlay, "Overlay enabled")
-                    .clicked()
-                {
-                    self.overlay_state.toggle_overlay();
-                }
+                ui.horizontal(|ui| {
+                    if ui
+                        .selectable_label(use_overlay, "Overlay enabled")
+                        .clicked()
+                    {
+                        self.overlay_state.toggle_overlay();
+                    }
+
+                    if ui
+                        .selectable_label(*open_creator, "Overlay creator")
+                        .clicked()
+                    {
+                        *open_creator = !*open_creator;
+                    }
+                });
 
                 egui::Grid::new("overlay_list_window_grid").show(&mut ui, |ui| {
-                    ui.label("Overlay name");
-                    ui.separator();
-                    ui.label("Active");
+                    ui.label("Active overlay");
                     ui.end_row();
 
                     let mut overlay_names = self.overlay_names.iter().collect::<Vec<_>>();
@@ -122,9 +129,20 @@ impl OverlayCreator {
         &self.new_overlay_rx
     }
 
-    pub fn ui(&mut self, graph: &GraphHandle, ctx: &egui::CtxRef) -> Option<egui::Response> {
+    pub fn ui(
+        &mut self,
+        open: &mut bool,
+        graph: &GraphHandle,
+        ctx: &egui::CtxRef,
+    ) -> Option<egui::Response> {
+        let scr = ctx.input().screen_rect();
+
+        let pos = egui::pos2(scr.center().x - 150.0, scr.center().y - 60.0);
+
         egui::Window::new("Create Overlay")
             .id(egui::Id::new(Self::ID))
+            .open(open)
+            .default_pos(pos)
             .show(ctx, |ui| {
                 let name = &mut self.name;
 

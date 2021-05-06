@@ -77,7 +77,10 @@ impl MenuBar {
                     *settings = !*settings;
                 }
 
-                if ui.button("Toggle overlay").clicked() {
+                if ui
+                    .selectable_label(self.overlay_state.use_overlay(), "Show overlay")
+                    .clicked()
+                {
                     self.overlay_state.toggle_overlay()
                 }
             });

@@ -375,7 +375,7 @@ impl std::default::Default for OpenWindows {
 
             themes: false,
             overlays: true,
-            overlay_creator: true,
+            overlay_creator: false,
 
             egui_inspection: false,
             egui_settings: false,
@@ -613,12 +613,18 @@ impl Gui {
 
         let view_state = &mut self.view_state;
 
-        if self.open_windows.overlays {
-            view_state.overlay_list.state.ui(&self.ctx);
-        }
+        {
+            let overlay_creator = &mut self.open_windows.overlay_creator;
+            let overlays = &self.open_windows.overlays;
 
-        if self.open_windows.overlay_creator {
-            view_state.overlay_creator.state.ui(graph_handle, &self.ctx);
+            if *overlays {
+                view_state.overlay_list.state.ui(overlay_creator, &self.ctx);
+            }
+
+            view_state
+                .overlay_creator
+                .state
+                .ui(overlay_creator, graph_handle, &self.ctx);
         }
 
         if self.open_windows.settings {
