@@ -141,6 +141,8 @@ fn main() {
     )
     .unwrap();
 
+    let mut initial_view: Option<View> = None;
+
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
         app.overlay_state.clone(),
@@ -268,6 +270,12 @@ fn main() {
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;
+
+    // hack to make the initial view correct -- we need to have the
+    // event loop run and get a resize event before we know the
+    // correct size, but we don't want to modify the current view
+    // whenever the window resizes, so we use a timeout instead
+    let initial_resize_timer = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -423,6 +431,21 @@ fn main() {
                         main_view
                             .recreate_node_id_buffer(&gfaestus, size.width, size.height)
                             .unwrap();
+
+                        let new_initial_view =
+                            View::from_dims_and_target(app.dims(), top_left, bottom_right);
+                        if initial_view.is_none()
+                            && initial_resize_timer.elapsed().as_millis() > 100
+                        {
+                            main_view.set_view(new_initial_view);
+
+                            initial_view = Some(new_initial_view);
+                        }
+
+                        main_view.set_initial_view(
+                            Some(new_initial_view.center),
+                            Some(new_initial_view.scale),
+                        );
                     } else {
                         return;
                     }

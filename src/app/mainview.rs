@@ -115,17 +115,20 @@ impl MainView {
     }
 
     pub fn set_initial_view(&self, center: Option<Point>, scale: Option<f32>) {
-        let old_init_view = self.anim_handler_thread.initial_view.load();
+        let old_init_view = self.anim_handler_new.initial_view.load();
         let center = center.unwrap_or(old_init_view.center);
         let scale = scale.unwrap_or(old_init_view.scale);
-        self.anim_handler_thread
+        self.anim_handler_new
             .initial_view
             .store(View { center, scale });
     }
 
     pub fn reset_view(&self) {
-        self.view
-            .store(self.anim_handler_thread.initial_view.load());
+        self.view.store(self.anim_handler_new.initial_view.load());
+    }
+
+    pub fn set_view(&self, view: View) {
+        self.view.store(view);
     }
 
     pub fn node_id_buffer(&self) -> vk::Buffer {

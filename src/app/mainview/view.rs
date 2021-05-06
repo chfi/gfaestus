@@ -319,7 +319,7 @@ use std::sync::Arc;
 pub struct AnimHandlerNew {
     // settings: Arc<AtomicCell<AnimSettings>>,
     screen_dims: Arc<AtomicCell<ScreenDims>>,
-    initial_view: Arc<AtomicCell<View>>,
+    pub initial_view: Arc<AtomicCell<View>>,
     mouse_pos: Arc<AtomicCell<Point>>,
 
     _join_handle: std::thread::JoinHandle<()>,
