@@ -626,21 +626,25 @@ impl Gui {
         }
 
         if self.open_windows.fps {
+            let top = self.menu_bar.height();
+
             view_state.fps.state.ui(
                 &self.ctx,
                 Point {
-                    x: 0.8 * scr.max.x,
-                    y: 30.0,
+                    x: 0.92 * scr.max.x,
+                    y: top,
                 },
                 None,
             );
         }
 
         if self.open_windows.graph_stats {
+            let top = self.menu_bar.height();
+
             view_state
                 .graph_stats
                 .state
-                .ui(&self.ctx, Point { x: 12.0, y: 40.0 }, None);
+                .ui(&self.ctx, Point { x: 0.0, y: top }, None);
         }
 
         if self.open_windows.nodes {

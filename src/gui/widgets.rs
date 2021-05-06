@@ -1,3 +1,4 @@
+use crossbeam::atomic::AtomicCell;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -20,13 +21,22 @@ pub trait Widget {
 
 pub struct MenuBar {
     overlay_state: OverlayState,
+
+    height: AtomicCell<f32>,
 }
 
 impl MenuBar {
     pub const ID: &'static str = "app_menu_bar";
 
     pub fn new(overlay_state: OverlayState) -> Self {
-        Self { overlay_state }
+        Self {
+            overlay_state,
+            height: AtomicCell::new(0.0),
+        }
+    }
+
+    pub fn height(&self) -> f32 {
+        self.height.load()
     }
 
     pub fn ui<'a>(&self, ctx: &egui::CtxRef, open_windows: &'a mut super::OpenWindows) {
@@ -41,7 +51,7 @@ impl MenuBar {
         let themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
 
-        egui::TopPanel::top(Self::ID).show(ctx, |ui| {
+        let resp = egui::TopPanel::top(Self::ID).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(*nodes, "Nodes").clicked() {
                     *nodes = !*nodes;
@@ -72,6 +82,9 @@ impl MenuBar {
                 }
             });
         });
+
+        let height = resp.response.rect.height();
+        self.height.store(height);
     }
 }
 
@@ -180,22 +193,23 @@ impl Widget for FrameRate {
     fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
-        let size = size.unwrap_or(Point {
-            x: pos.x + 200.0,
-            y: pos.y + scr.max.y,
-        });
-
         let rect = egui::Rect {
             min: pos.into(),
-            max: size.into(),
+            max: Point {
+                x: scr.max.x,
+                y: pos.y + 100.0,
+            }
+            .into(),
         };
 
         egui::Window::new(Self::id())
             .fixed_rect(rect)
             .title_bar(false)
             .show(ctx, |ui| {
+                ui.set_min_width(0.12 * scr.max.x);
+
                 ui.label(format!("FPS: {:.2}", self.fps));
-                ui.label(format!("update time: {:.2} ms", self.frame_time));
+                ui.label(format!("dt:  {:.2} ms", self.frame_time));
             })
     }
 }
@@ -229,6 +243,7 @@ impl Widget for GraphStats {
         egui::Window::new(Self::id())
             .title_bar(false)
             .collapsible(false)
+            .auto_sized()
             .fixed_pos(pos)
             .show(ctx, |ui| {
                 ui.label(format!("Nodes: {}", self.node_count));
