@@ -112,6 +112,7 @@ impl NodeDetails {
 
     pub fn ui(
         &mut self,
+        open_node_details: &mut bool,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
         // show: &mut bool
@@ -122,7 +123,8 @@ impl NodeDetails {
 
         egui::Window::new("Node details")
             .id(egui::Id::new(Self::ID))
-            .default_pos(egui::Pos2::new(500.0, 500.0))
+            .default_pos(egui::Pos2::new(450.0, 200.0))
+            .open(open_node_details)
             .show(ctx, |mut ui| {
                 if let Some(node_id) = self.node_id.load() {
                     ui.set_min_height(200.0);
@@ -367,9 +369,9 @@ impl NodeList {
 
     pub fn ui(
         &mut self,
+        open_node_details: &mut bool,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
-        show: &mut bool,
     ) -> Option<egui::Response> {
         let mut filter = self.apply_filter.load();
 
@@ -431,10 +433,24 @@ impl NodeList {
                 ui.set_min_height(300.0);
                 ui.set_max_width(200.0);
 
-                if ui.selectable_label(filter, "Filter").clicked() {
-                    self.apply_filter.store(!filter);
-                    self.update_slots = true;
-                }
+                ui.horizontal(|ui| {
+                    if ui.selectable_label(filter, "Filter").clicked() {
+                        self.apply_filter.store(!filter);
+                        self.update_slots = true;
+                    }
+
+                    // TODO not sure if there's an easy way to make a
+                    // selectable label right-justified in this
+                    // context
+                    ui.add_space(65.0);
+
+                    if ui
+                        .selectable_label(*open_node_details, "Node Details")
+                        .clicked()
+                    {
+                        *open_node_details = !*open_node_details;
+                    }
+                });
 
                 let node_id_cell = &self.node_details_id;
 

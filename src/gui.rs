@@ -369,12 +369,12 @@ impl std::default::Default for OpenWindows {
             graph_stats: true,
 
             nodes: true,
-            node_details: true,
+            node_details: false,
 
             paths: false,
 
             themes: false,
-            overlays: true,
+            overlays: false,
             overlay_creator: false,
 
             egui_inspection: false,
@@ -653,16 +653,23 @@ impl Gui {
                 .ui(&self.ctx, Point { x: 0.0, y: top }, None);
         }
 
-        if self.open_windows.nodes {
-            let mut x = false;
-            view_state
-                .node_list
-                .state
-                .ui(graph_query, &self.ctx, &mut x);
-        }
+        {
+            let node_list = &self.open_windows.nodes;
+            let node_details = &mut self.open_windows.node_details;
 
-        if self.open_windows.node_details {
-            view_state.node_details.state.ui(graph_query, &self.ctx);
+            if *node_list {
+                view_state
+                    .node_list
+                    .state
+                    .ui(node_details, graph_query, &self.ctx);
+            }
+
+            if *node_details {
+                view_state
+                    .node_details
+                    .state
+                    .ui(node_details, graph_query, &self.ctx);
+            }
         }
 
         if self.open_windows.egui_inspection {
