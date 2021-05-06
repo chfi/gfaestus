@@ -122,10 +122,11 @@ impl NodeDetails {
 
         egui::Window::new("Node details")
             .id(egui::Id::new(Self::ID))
-            .default_pos(egui::Pos2::new(400.0, 100.0))
+            .default_pos(egui::Pos2::new(500.0, 500.0))
             .show(ctx, |mut ui| {
                 if let Some(node_id) = self.node_id.load() {
-                    ui.set_min_height(300.0);
+                    ui.set_min_height(200.0);
+                    ui.set_max_width(200.0);
 
                     ui.label(format!("Node {}", node_id));
 
@@ -141,14 +142,19 @@ impl NodeDetails {
 
                     ui.separator();
 
+                    let separator = || egui::Separator::default().spacing(1.0);
+
                     egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
                         egui::Grid::new("node_details_path_list")
+                            .spacing(Point { x: 10.0, y: 5.0 })
                             .striped(true)
                             .show(&mut ui, |ui| {
                                 ui.label("Path");
-                                ui.separator();
+                                ui.add(separator());
+
                                 ui.label("Step");
-                                ui.separator();
+                                ui.add(separator());
+
                                 ui.label("Base pos");
                                 ui.end_row();
 
@@ -161,16 +167,17 @@ impl NodeDetails {
                                         ui.label(format!("Path ID {}", path_id.0));
                                     }
 
-                                    ui.separator();
+                                    ui.add(separator());
 
                                     ui.label(format!("{}", step_ptr.to_vector_value()));
-                                    ui.separator();
-                                    ui.label(format!("{}", pos));
+                                    ui.add(separator());
 
+                                    ui.label(format!("{}", pos));
                                     ui.end_row();
                                 }
                             });
                     });
+                    ui.shrink_width_to_current();
                 } else {
                     ui.label("No node");
                 }
@@ -419,15 +426,16 @@ impl NodeList {
         egui::Window::new("Nodes")
             // .enabled(*show)
             .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(200.0, 200.0))
             .show(ctx, |mut ui| {
-                ui.set_min_height(400.0);
+                ui.set_min_height(300.0);
+                ui.set_max_width(200.0);
 
                 if ui.selectable_label(filter, "Filter").clicked() {
                     self.apply_filter.store(!filter);
                     self.update_slots = true;
                 }
 
-                // let tx_chn = &self.node_details_tx;
                 let node_id_cell = &self.node_details_id;
 
                 let page = &mut self.page;
@@ -455,11 +463,8 @@ impl NodeList {
                         .striped(true)
                         .show(&mut ui, |ui| {
                             ui.label("Node");
-                            ui.separator();
                             ui.label("Degree");
-                            ui.separator();
                             ui.label("Seq. len");
-                            ui.separator();
                             ui.label("Path count");
                             ui.end_row();
 
@@ -467,15 +472,15 @@ impl NodeList {
                                 if slot.visible {
                                     let mut row = ui.label(format!("{}", slot.node_id));
 
-                                    row = row.union(ui.separator());
+                                    // row = row.union(ui.separator());
                                     row = row.union(
                                         ui.label(format!("({}, {})", slot.degree.0, slot.degree.1)),
                                     );
 
-                                    row = row.union(ui.separator());
+                                    // row = row.union(ui.separator());
                                     row = row.union(ui.label(format!("{}", slot.sequence.len())));
 
-                                    row = row.union(ui.separator());
+                                    // row = row.union(ui.separator());
                                     row = row.union(ui.label(format!("{}", slot.paths.len())));
 
                                     let row_interact = ui.interact(
@@ -493,33 +498,8 @@ impl NodeList {
                             }
                         });
                 });
+
+                ui.shrink_width_to_current();
             })
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ActiveDetails {
-    Overview,
-    NodeList,
-    // PathList,
-    // NodeDetails,
-    // PathDetails,
-}
-
-pub struct GraphDetails {
-    active: ActiveDetails,
-
-    filtered_nodes: Option<Vec<NodeId>>,
-    // filtered_paths: Option<Vec<PathId>>,
-
-    // node_details: Option<NodeId>,
-    // path_details: Option<PathId>,
-}
-
-impl GraphDetails {
-    const ID: &'static str = "graph_details_window";
-
-    pub fn ui(&self, ctx: &egui::CtxRef, show: &mut bool) -> Option<egui::Response> {
-        unimplemented!();
     }
 }
