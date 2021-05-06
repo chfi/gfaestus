@@ -179,6 +179,8 @@ impl OverlayCreator {
 
                 let run_script = ui.button("Load and execute");
 
+                let _script_error_msg = ui.label(&self.script_error);
+
                 if run_script.clicked() {
                     let path = PathBuf::from(path_str.as_str());
                     println!("loading gluon script from path {:?}", path.to_str());
@@ -194,9 +196,23 @@ impl OverlayCreator {
                             self.script_path_input.clear();
                             self.name.clear();
 
+                            self.script_error = "Success".to_string();
+
                             self.new_overlay_tx.send(msg).unwrap();
                         }
                         Err(err) => {
+                            let root_cause = err.root_cause();
+
+                            if let Some(io_err) = root_cause.downcast_ref::<std::io::Error>() {
+                                if let std::io::ErrorKind::NotFound = io_err.kind() {
+                                    self.script_error = "Script not found".to_string();
+                                }
+                            } else if let Some(_gluon_err) =
+                                root_cause.downcast_ref::<gluon::Error>()
+                            {
+                                self.script_error = "Gluon error, see console".to_string();
+                            }
+
                             eprintln!("Script error:\n{:?}", err);
                         }
                     }
