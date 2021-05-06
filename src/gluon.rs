@@ -1,5 +1,6 @@
 use std::{path::Path, sync::Arc};
 
+use bstr::ByteVec;
 use gluon_codegen::*;
 
 use gluon::vm::{
@@ -173,8 +174,43 @@ fn node_count(graph: &GraphHandle) -> usize {
     graph.graph.node_count()
 }
 
-fn sequence_len(graph: &GraphHandle, node_id: u64) -> usize {
+fn edge_count(graph: &GraphHandle) -> usize {
+    graph.graph.edge_count()
+}
+
+fn path_count(graph: &GraphHandle) -> usize {
+    graph.graph.path_count()
+}
+
+fn sequence(graph: &GraphHandle, node_id: u64, reverse: bool) -> String {
+    let seq = graph.graph.sequence_vec(Handle::pack(node_id, reverse));
+    seq.into_string_lossy()
+}
+fn node_len(graph: &GraphHandle, node_id: u64) -> usize {
     graph.graph.node_len(Handle::pack(node_id, false))
+}
+
+fn degree(graph: &GraphHandle, node_id: u64, reverse: bool) -> (usize, usize) {
+    let handle = Handle::pack(node_id, reverse);
+    let left = graph.graph.degree(handle, Direction::Left);
+    let right = graph.graph.degree(handle, Direction::Right);
+    (left, right)
+}
+
+fn has_node(graph: &GraphHandle, node_id: u64) -> bool {
+    graph.graph.has_node(node_id)
+}
+
+fn is_path_on_node(graph: &GraphHandle, path_id: u64, node_id: u64) -> bool {
+    if let Some(mut steps) = graph.graph.steps_on_handle(Handle::pack(node_id, false)) {
+        steps.any(|(path, _)| path.0 == path_id)
+    } else {
+        false
+    }
+}
+
+fn path_len(graph: &GraphHandle, path_id: u64) -> Option<usize> {
+    graph.graph.path_len(PathId(path_id))
 }
 
 fn hash_node_seq(graph: &GraphHandle, node_id: u64) -> u64 {
@@ -220,9 +256,20 @@ fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
     let module = record! {
         type GraphHandle => GraphHandle,
         node_count => primitive!(1, node_count),
-        sequence_len => primitive!(2, sequence_len),
+        edge_count => primitive!(1, edge_count),
+        path_count => primitive!(1, path_count),
+        has_node => primitive!(2, has_node),
+
+        sequence => primitive!(3, sequence),
+        node_len => primitive!(2, node_len),
+        degree => primitive!(3, degree),
+        is_path_on_node => primitive!(3, is_path_on_node),
+
+        path_len => primitive!(2, path_len),
+
         hash_node_seq => primitive!(2, hash_node_seq),
         hash_node_paths => primitive!(2, hash_node_paths),
+
         hash_node_color => primitive!(1, hash_node_color),
     };
 
