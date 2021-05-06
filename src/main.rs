@@ -262,6 +262,8 @@ fn main() {
 
     let mut next_overlay_id = 2;
 
+    gui.populate_overlay_list(main_view.node_draw_system.overlay_pipeline.overlay_names());
+
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
@@ -380,6 +382,10 @@ fn main() {
                                 .unwrap();
 
                             next_overlay_id += 1;
+
+                            gui.populate_overlay_list(
+                                main_view.node_draw_system.overlay_pipeline.overlay_names(),
+                            );
                         }
                     }
                 }
@@ -391,6 +397,11 @@ fn main() {
             }
             Event::RedrawEventsCleared => {
                 let frame_t = std::time::Instant::now();
+
+                main_view
+                    .node_draw_system
+                    .overlay_pipeline
+                    .set_active_overlay(app.overlay_state.current_overlay());
 
                 if dirty_swapchain {
                     let size = window.inner_size();

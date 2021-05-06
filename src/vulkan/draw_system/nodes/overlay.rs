@@ -23,6 +23,10 @@ pub struct NodeOverlayPipeline {
 }
 
 impl NodeOverlayPipeline {
+    pub fn overlay_names(&self) -> impl Iterator<Item = (usize, &str)> + '_ {
+        self.overlays.iter().map(|(id, ov)| (*id, ov.name.as_str()))
+    }
+
     pub fn set_active_overlay(&mut self, overlay_id: Option<usize>) -> Option<()> {
         if overlay_id.is_none() {
             self.overlay_set_id = None;

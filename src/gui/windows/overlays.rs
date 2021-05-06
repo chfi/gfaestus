@@ -4,8 +4,7 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{Receiver, Sender};
 
 use bstr::{BStr, ByteSlice};
-
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
@@ -16,7 +15,62 @@ use crate::gluon::GluonVM;
 pub struct OverlayList {
     overlay_state: OverlayState,
 
-    overlay_names: HashMap<usize, String>,
+    overlay_names: FxHashMap<usize, String>,
+}
+
+impl OverlayList {
+    pub const ID: &'static str = "overlay_list_window";
+
+    pub fn new(overlay_state: OverlayState) -> Self {
+        Self {
+            overlay_state,
+            overlay_names: Default::default(),
+        }
+    }
+
+    pub fn populate_names<'a>(&mut self, names: impl Iterator<Item = (usize, &'a str)>) {
+        self.overlay_names.clear();
+        self.overlay_names
+            .extend(names.map(|(x, n)| (x, n.to_string())));
+    }
+
+    pub fn ui(&self, ctx: &egui::CtxRef) -> Option<egui::Response> {
+        egui::Window::new("Overlay List")
+            .id(egui::Id::new(Self::ID))
+            .show(ctx, |mut ui| {
+                let use_overlay = self.overlay_state.use_overlay();
+
+                if ui
+                    .selectable_label(use_overlay, "Overlay enabled")
+                    .clicked()
+                {
+                    self.overlay_state.toggle_overlay();
+                }
+
+                egui::Grid::new("overlay_list_window_grid").show(&mut ui, |ui| {
+                    ui.label("Overlay name");
+                    ui.separator();
+                    ui.label("Active");
+                    ui.end_row();
+
+                    let mut overlay_names = self.overlay_names.iter().collect::<Vec<_>>();
+                    overlay_names.sort_by_key(|(id, _)| *id);
+
+                    let mut current_overlay = self.overlay_state.current_overlay();
+
+                    for (id, name) in overlay_names {
+                        if ui
+                            .radio_value(&mut current_overlay, Some(*id), name)
+                            .clicked()
+                        {
+                            self.overlay_state.set_current_overlay(current_overlay);
+                        }
+
+                        ui.end_row();
+                    }
+                });
+            })
+    }
 }
 
 #[derive(Debug, Clone)]

@@ -137,6 +137,7 @@ pub struct AppViewState {
     // theme_editor: ThemeEditor,
     // theme_list: ThemeList,
     overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
+    overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
     // overlay_editor: OverlayEditor,
     // overlay_list: OverlayList,
 }
@@ -145,6 +146,7 @@ impl AppViewState {
     pub fn new(
         graph_query: &GraphQuery,
         node_width: Arc<AtomicCell<f32>>,
+        overlay_state: OverlayState,
         dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
     ) -> Self {
         // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
@@ -170,6 +172,9 @@ impl AppViewState {
         let path_list_state = NodeList::new(graph_query, 15, node_id_cell);
         let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
 
+        let overlay_list_state = OverlayList::new(overlay_state);
+        let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(overlay_list_state);
+
         let overlay_creator_state = OverlayCreator::new(dropped_file).unwrap();
         let overlay_creator =
             ViewStateChannel::<OverlayCreator, OverlayCreatorMsg>::new(overlay_creator_state);
@@ -185,6 +190,7 @@ impl AppViewState {
 
             path_list,
 
+            overlay_list,
             overlay_creator,
         }
     }
@@ -347,6 +353,7 @@ pub struct OpenWindows {
 
     themes: bool,
     overlays: bool,
+    overlay_creator: bool,
 
     egui_inspection: bool,
     egui_settings: bool,
@@ -368,6 +375,7 @@ impl std::default::Default for OpenWindows {
 
             themes: false,
             overlays: true,
+            overlay_creator: true,
 
             egui_inspection: false,
             egui_settings: false,
@@ -489,7 +497,12 @@ impl Gui {
 
         let dropped_file = Arc::new(std::sync::Mutex::new(None));
 
-        let view_state = AppViewState::new(graph_query, node_width, dropped_file.clone());
+        let view_state = AppViewState::new(
+            graph_query,
+            node_width,
+            overlay_state.clone(),
+            dropped_file.clone(),
+        );
 
         let menu_bar = MenuBar::new(overlay_state);
 
@@ -532,6 +545,11 @@ impl Gui {
         &self.view_state
     }
 
+    // TODO this should be handled better
+    pub fn populate_overlay_list<'a>(&mut self, names: impl Iterator<Item = (usize, &'a str)>) {
+        self.view_state.overlay_list.state.populate_names(names);
+    }
+
     pub fn new_overlay_rx(&self) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
         &self.view_state.overlay_creator.state.new_overlay_rx()
     }
@@ -562,6 +580,7 @@ impl Gui {
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 
+        /*
         egui::Window::new("gui_focus_state_info").show(&self.ctx, |ui| {
             ui.label(format!(
                 "Mouse over GUI: {}",
@@ -576,6 +595,7 @@ impl Gui {
                 self.gui_focus_state.wants_pointer_input.load()
             ));
         });
+        */
 
         self.menu_bar.ui(&self.ctx, &mut self.open_windows);
 
@@ -594,6 +614,10 @@ impl Gui {
         let view_state = &mut self.view_state;
 
         if self.open_windows.overlays {
+            view_state.overlay_list.state.ui(&self.ctx);
+        }
+
+        if self.open_windows.overlay_creator {
             view_state.overlay_creator.state.ui(graph_handle, &self.ctx);
         }
 
