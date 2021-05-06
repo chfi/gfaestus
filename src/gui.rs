@@ -368,7 +368,7 @@ impl std::default::Default for OpenWindows {
             fps: true,
             graph_stats: true,
 
-            nodes: true,
+            nodes: false,
             node_details: false,
 
             paths: false,
@@ -620,7 +620,7 @@ impl Gui {
             view_state.fps.state.ui(
                 &self.ctx,
                 Point {
-                    x: 0.92 * scr.max.x,
+                    x: scr.max.x - 100.0,
                     y: top,
                 },
                 None,
@@ -869,27 +869,6 @@ impl Gui {
         Self::set_style(ctx, egui::style::Visuals::dark());
     }
 }
-
-// struct ActiveWindows {
-//     egui_inspection_ui: bool,
-//     egui_settings_ui: bool,
-//     egui_memory_ui: bool,
-
-//     graph_info: bool,
-
-//     selection_info: bool,
-
-//     theme_editor: bool,
-
-//     options: bool,
-// }
-
-// struct ActiveWidgets {
-//     fps: bool,
-//     graph_stats: bool,
-//     view_info: bool,
-//     selected_node: bool,
-// }
 
 /// Wrapper for input events that are fed into egui
 #[derive(Debug, Default, Clone)]

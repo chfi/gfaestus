@@ -316,22 +316,16 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
-pub struct AnimHandlerNew {
-    // settings: Arc<AtomicCell<AnimSettings>>,
-    screen_dims: Arc<AtomicCell<ScreenDims>>,
+pub struct AnimHandler {
+    pub screen_dims: Arc<AtomicCell<ScreenDims>>,
     pub initial_view: Arc<AtomicCell<View>>,
-    mouse_pos: Arc<AtomicCell<Point>>,
+    pub mouse_pos: Arc<AtomicCell<Point>>,
 
     _join_handle: std::thread::JoinHandle<()>,
     anim_tx: channel::Sender<AnimationDef>,
-    // animation: Option<ViewAnimationBoxed>,
-    // animation: Option<Box<dyn
-    // mouse_pan_screen_origin: Origin<Point>,
-
-    // animation: Option<Animation>,
 }
 
-impl AnimHandlerNew {
+impl AnimHandler {
     pub fn new<D: Into<ScreenDims>>(
         view: Arc<AtomicCell<View>>,
         mouse_pos: Point,

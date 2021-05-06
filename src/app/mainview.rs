@@ -41,9 +41,7 @@ pub struct MainView {
     base_node_width: Arc<AtomicCell<f32>>,
 
     view: Arc<AtomicCell<View>>,
-    anim_handler_thread: AnimHandlerThread,
-
-    anim_handler_new: AnimHandlerNew,
+    anim_handler: AnimHandler,
 
     view_input_state: ViewInputState,
 }
@@ -70,7 +68,6 @@ impl MainView {
 
         let view = View::default();
 
-        let anim_handler = AnimHandler::default();
         let view = Arc::new(AtomicCell::new(view));
 
         let screen_dims = {
@@ -81,12 +78,10 @@ impl MainView {
             }
         };
 
-        let anim_handler_thread = anim_handler_thread(anim_handler, screen_dims, view.clone());
-
         let node_id_buffer =
             NodeIdBuffer::new(&app, screen_dims.width as u32, screen_dims.height as u32)?;
 
-        let anim_handler_new = AnimHandlerNew::new(view.clone(), Point::ZERO, screen_dims);
+        let anim_handler = AnimHandler::new(view.clone(), Point::ZERO, screen_dims);
 
         let main_view = Self {
             node_draw_system,
@@ -96,9 +91,7 @@ impl MainView {
             base_node_width,
 
             view,
-            anim_handler_thread,
-
-            anim_handler_new,
+            anim_handler,
 
             view_input_state: Default::default(),
         };
@@ -115,16 +108,14 @@ impl MainView {
     }
 
     pub fn set_initial_view(&self, center: Option<Point>, scale: Option<f32>) {
-        let old_init_view = self.anim_handler_new.initial_view.load();
+        let old_init_view = self.anim_handler.initial_view.load();
         let center = center.unwrap_or(old_init_view.center);
         let scale = scale.unwrap_or(old_init_view.scale);
-        self.anim_handler_new
-            .initial_view
-            .store(View { center, scale });
+        self.anim_handler.initial_view.store(View { center, scale });
     }
 
     pub fn reset_view(&self) {
-        self.view.store(self.anim_handler_new.initial_view.load());
+        self.view.store(self.anim_handler.initial_view.load());
     }
 
     pub fn set_view(&self, view: View) {
@@ -223,30 +214,6 @@ impl MainView {
         self.view.store(view);
     }
 
-    pub fn set_screen_dims<D: Into<ScreenDims>>(&self, dims: D) {
-        self.anim_handler_thread.screen_dims.store(dims.into());
-    }
-
-    pub fn set_mouse_pos(&self, pos: Option<Point>) {
-        self.anim_handler_thread.mouse_pos.store(pos);
-    }
-
-    pub fn set_mouse_pan(&self, origin: Option<Point>) {
-        self.anim_handler_thread.set_mouse_pan(origin);
-    }
-
-    pub fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
-        self.anim_handler_thread.pan_const(dx, dy);
-    }
-
-    pub fn pan_delta(&self, dxy: Point) {
-        self.anim_handler_thread.pan_delta(dxy);
-    }
-
-    pub fn zoom_delta(&self, dz: f32) {
-        self.anim_handler_thread.zoom_delta(dz)
-    }
-
     pub fn update_view_animation<D: Into<ScreenDims>>(&self, screen_dims: D, mouse_pos: Point) {
         let screen_dims = screen_dims.into();
         let view = self.view.load();
@@ -258,7 +225,7 @@ impl MainView {
             self.view_input_state
                 .animation_def(view, screen_dims, mouse_screen, mouse_world)
         {
-            self.anim_handler_new.send_anim_def(anim_def);
+            self.anim_handler.send_anim_def(anim_def);
         }
     }
 
@@ -275,15 +242,6 @@ impl MainView {
         match input {
             SystemInput::Keyboard { state, .. } => {
                 let pressed = state.pressed();
-
-                let pan_delta = |invert: bool| {
-                    let delta = if pressed { 1.0 } else { 0.0 };
-                    if invert {
-                        -delta
-                    } else {
-                        delta
-                    }
-                };
 
                 match payload {
                     In::KeyPanUp => {
@@ -343,324 +301,6 @@ impl MainView {
                         .scroll_zoom(self.view.load(), mouse_pos, delta);
                 }
             }
-        }
-    }
-}
-
-// impl MainView {
-/*
-
-    pub fn build_overlay_cache<I>(
-        &self,
-        colors: I,
-    ) -> Result<(OverlayCache, Box<dyn GpuFuture>)>
-    where
-        I: Iterator<Item = rgb::RGB<f32>>,
-    {
-        self.node_draw_system.build_overlay_cache(colors)
-    }
-
-
-    pub fn read_node_id_at<Dims: Into<ScreenDims>>(
-        &self,
-        screen_dims: Dims,
-        point: Point,
-    ) -> Option<u32> {
-        self.node_draw_system.read_node_id_at(screen_dims, point)
-    }
-
-    pub fn add_lines(
-        &self,
-        lines: &[(Point, Point)],
-        color: RGB<f32>,
-    ) -> Result<(usize, Box<dyn GpuFuture>)> {
-        self.line_draw_system.add_lines(lines, color)
-    }
-
-    pub fn draw_lines(
-        &self,
-        dynamic_state: &DynamicState,
-    ) -> Result<AutoCommandBuffer> {
-        let view = self.view.load();
-        self.line_draw_system.draw_stored(dynamic_state, view)
-    }
-
-*/
-
-// }
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum AnimMsg {
-    SetMousePan(Option<Point>),
-    PanConst { dx: Option<f32>, dy: Option<f32> },
-    PanDelta { dxy: Point },
-    ZoomDelta { dz: f32 },
-}
-
-pub struct AnimHandlerThread {
-    settings: Arc<AtomicCell<AnimSettings>>,
-    screen_dims: Arc<AtomicCell<ScreenDims>>,
-    initial_view: Arc<AtomicCell<View>>,
-    mouse_pos: Arc<AtomicCell<Option<Point>>>,
-    _join_handle: std::thread::JoinHandle<()>,
-    msg_tx: channel::Sender<AnimMsg>,
-}
-
-impl AnimHandlerThread {
-    #[allow(dead_code)]
-    fn update_settings<F>(&self, f: F)
-    where
-        F: Fn(AnimSettings) -> AnimSettings,
-    {
-        let old = self.settings.load();
-        let new = f(old);
-        self.settings.store(new);
-    }
-
-    #[allow(dead_code)]
-    fn anim_settings(&self) -> AnimSettings {
-        self.settings.load()
-    }
-
-    fn set_mouse_pan(&self, origin: Option<Point>) {
-        self.msg_tx.send(AnimMsg::SetMousePan(origin)).unwrap();
-    }
-
-    fn pan_const(&self, dx: Option<f32>, dy: Option<f32>) {
-        let speed = self.settings.load().key_pan_speed;
-        let dx = dx.map(|x| x * speed);
-        let dy = dy.map(|x| x * speed);
-        self.msg_tx.send(AnimMsg::PanConst { dx, dy }).unwrap();
-    }
-
-    fn pan_delta(&self, dxy: Point) {
-        self.msg_tx.send(AnimMsg::PanDelta { dxy }).unwrap();
-    }
-
-    fn zoom_delta(&self, dz: f32) {
-        self.msg_tx.send(AnimMsg::ZoomDelta { dz }).unwrap();
-    }
-}
-
-fn anim_handler_thread<D: Into<ScreenDims>>(
-    anim_handler: AnimHandler,
-    screen_dims: D,
-    view: Arc<AtomicCell<View>>,
-) -> AnimHandlerThread {
-    let mouse_pos = Arc::new(AtomicCell::new(None));
-
-    let settings: Arc<AtomicCell<AnimSettings>> =
-        Arc::new(AtomicCell::new(AnimSettings::default()));
-    let initial_view = view.load();
-    let initial_view = Arc::new(AtomicCell::new(initial_view));
-
-    let screen_dims = Arc::new(AtomicCell::new(screen_dims.into()));
-
-    let inner_settings = settings.clone();
-    let inner_view = view;
-    let inner_mouse_pos = mouse_pos.clone();
-    let inner_dims = screen_dims.clone();
-
-    let (msg_tx, msg_rx) = channel::unbounded::<AnimMsg>();
-
-    let _join_handle = std::thread::spawn(move || {
-        let update_delay = std::time::Duration::from_millis(5);
-        let sleep_delay = std::time::Duration::from_micros(2500);
-
-        let settings = inner_settings;
-        let view = inner_view;
-        let mouse_pos = inner_mouse_pos;
-        let screen_dims = inner_dims;
-
-        let mut anim = anim_handler;
-
-        let mut last_update = std::time::Instant::now();
-
-        loop {
-            while let Ok(msg) = msg_rx.try_recv() {
-                match msg {
-                    AnimMsg::SetMousePan(origin) => match origin {
-                        Some(origin) => anim.start_mouse_pan(origin),
-                        None => anim.end_mouse_pan(),
-                    },
-                    AnimMsg::PanConst { dx, dy } => {
-                        anim.pan_const(dx, dy);
-                    }
-                    AnimMsg::PanDelta { dxy } => {
-                        let settings = settings.load();
-                        anim.pan_delta(&settings, dxy);
-                    }
-                    AnimMsg::ZoomDelta { dz } => {
-                        let view = view.load();
-                        anim.zoom_delta(view.scale, dz)
-                    }
-                }
-            }
-
-            if last_update.elapsed() > update_delay {
-                let dt = last_update.elapsed().as_secs_f32();
-                let settings = settings.load();
-                let pos = mouse_pos.load();
-                let dims = screen_dims.load();
-                anim.update_cell(&settings, &view, dims, pos, dt);
-                last_update = std::time::Instant::now();
-            } else {
-                std::thread::sleep(sleep_delay);
-            }
-        }
-    });
-
-    AnimHandlerThread {
-        _join_handle,
-        mouse_pos,
-        msg_tx,
-        settings,
-        screen_dims,
-        initial_view,
-    }
-}
-
-#[derive(Debug, Default, Clone)]
-pub struct AnimHandler {
-    // screen_dims: ScreenDims,
-    mouse_pan_screen_origin: Option<Point>,
-    view_anim_target: Option<View>,
-    view_pan_const: Point,
-    view_pan_delta: Point,
-    view_scale_delta: f32,
-}
-
-impl AnimHandler {
-    // fn set_screen_dims<D: Into<ScreenDims>>(&mut self, dims: D) {
-    //     self.screen_dims = dims.into();
-    // }
-
-    fn update_cell(
-        &mut self,
-        settings: &AnimSettings,
-        view: &AtomicCell<View>,
-        screen_dims: ScreenDims,
-        mouse_pos: Option<Point>,
-        dt: f32,
-    ) {
-        let before = view.load();
-        let new = self.update(settings, before, screen_dims, mouse_pos, dt);
-        view.store(new);
-    }
-
-    fn update(
-        &mut self,
-        settings: &AnimSettings,
-        mut view: View,
-        screen_dims: ScreenDims,
-        mouse_pos: Option<Point>,
-        dt: f32,
-    ) -> View {
-        let pre_scale = view.scale;
-        let pre_view = view;
-
-        view.scale += view.scale * dt * self.view_scale_delta;
-
-        if let Some(min_scale) = settings.min_view_scale {
-            view.scale = view.scale.max(min_scale);
-        }
-
-        if let Some(max_scale) = settings.max_view_scale {
-            view.scale = view.scale.min(max_scale);
-        }
-
-        let dxy = match (self.mouse_pan_screen_origin, mouse_pos) {
-            (Some(origin), Some(mouse_pos)) => (mouse_pos - origin) * settings.mouse_pan_mult * dt,
-            _ => (self.view_pan_const + self.view_pan_delta) * dt,
-        };
-
-        view.center += dxy * view.scale;
-
-        let zoom_friction = if dt >= 1.0 {
-            0.0
-        } else {
-            1.0 - (10.0_f32.powf(dt - 1.0))
-        };
-        let pan_friction = if dt >= 1.0 {
-            0.0
-        } else {
-            1.0 - (10.0_f32.powf(dt - 1.0))
-        };
-
-        self.view_pan_delta *= pan_friction;
-        self.view_scale_delta *= zoom_friction;
-
-        if self.view_scale_delta.abs() < 0.00001 {
-            self.view_scale_delta = 0.0;
-        }
-
-        view
-    }
-
-    fn start_mouse_pan(&mut self, origin: Point) {
-        self.mouse_pan_screen_origin = Some(origin);
-    }
-
-    fn end_mouse_pan(&mut self) {
-        self.mouse_pan_screen_origin = None;
-    }
-
-    /// If a direction is `None`, don't update the corresponding view delta const
-    fn pan_const(&mut self, dx: Option<f32>, dy: Option<f32>) {
-        // if a direction is set to zero, set the regular pan delta to
-        // the old constant speed, and let the pan_friction in
-        // update() smoothly bring it down
-        if Some(0.0) == dx {
-            self.view_pan_delta.x = self.view_pan_const.x;
-        }
-
-        if Some(0.0) == dy {
-            self.view_pan_delta.y = self.view_pan_const.y;
-        }
-
-        let dxy = Point {
-            x: dx.unwrap_or(self.view_pan_const.x),
-            y: dy.unwrap_or(self.view_pan_const.y),
-        };
-        self.view_pan_const = dxy;
-    }
-
-    fn pan_delta(&mut self, settings: &AnimSettings, dxy: Point) {
-        self.view_pan_delta += dxy;
-
-        if let Some(max_speed) = settings.max_speed {
-            let d = &mut self.view_pan_delta;
-            d.x = d.x.clamp(-max_speed, max_speed);
-            d.y = d.y.clamp(-max_speed, max_speed);
-        }
-    }
-
-    fn zoom_delta(&mut self, current_scale: f32, dz: f32) {
-        let delta_mult = current_scale.log2();
-        let delta_mult = delta_mult.max(1.0);
-        self.view_scale_delta += dz * delta_mult;
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-struct AnimSettings {
-    min_view_scale: Option<f32>,
-    max_view_scale: Option<f32>,
-    max_speed: Option<f32>,
-    key_pan_speed: f32,
-    mouse_pan_mult: f32,
-    wheel_zoom_base_speed: f32,
-}
-
-impl std::default::Default for AnimSettings {
-    fn default() -> Self {
-        Self {
-            min_view_scale: Some(0.5),
-            max_view_scale: None,
-            max_speed: Some(600.0),
-            key_pan_speed: 400.0,
-            mouse_pan_mult: 1.0,
-            wheel_zoom_base_speed: 0.45,
         }
     }
 }

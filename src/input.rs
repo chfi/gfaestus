@@ -116,6 +116,10 @@ impl InputManager {
             let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
             let mouse_over_gui = self.gui_focus_state.mouse_over_gui();
 
+            // NB: on my machine at least, after a file is dropped,
+            // keyboard events appear to not be generated until the
+            // window loses and regains focus; i'm guessing it's a
+            // winit bug, or a winit + sway (+ xwayland) bug
             if let event::WindowEvent::DroppedFile(ref path) = winit_ev {
                 gui_msg_tx
                     .send(GuiMsg::FileDropped { path: path.clone() })

@@ -57,13 +57,13 @@ impl MenuBar {
                     *nodes = !*nodes;
                 }
 
-                if ui.selectable_label(*paths, "Paths").clicked() {
-                    *paths = !*paths;
-                }
+                // if ui.selectable_label(*paths, "Paths").clicked() {
+                //     *paths = !*paths;
+                // }
 
-                if ui.selectable_label(*themes, "Themes").clicked() {
-                    *themes = !*themes;
-                }
+                // if ui.selectable_label(*themes, "Themes").clicked() {
+                //     *themes = !*themes;
+                // }
 
                 if ui.selectable_label(*overlays, "Overlays").clicked() {
                     *overlays = !*overlays;
@@ -196,6 +196,8 @@ impl Widget for FrameRate {
     fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
+        let width = 100.0;
+
         let rect = egui::Rect {
             min: pos.into(),
             max: Point {
@@ -209,7 +211,7 @@ impl Widget for FrameRate {
             .fixed_rect(rect)
             .title_bar(false)
             .show(ctx, |ui| {
-                ui.set_min_width(0.12 * scr.max.x);
+                ui.set_min_width(width);
 
                 ui.label(format!("FPS: {:.2}", self.fps));
                 ui.label(format!("dt:  {:.2} ms", self.frame_time));

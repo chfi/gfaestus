@@ -187,8 +187,6 @@ fn main() {
 
     let mut dirty_swapchain = false;
 
-    let mut gluonvm = gfaestus::gluon::GluonVM::new().unwrap();
-
     let mut selection_edge = SelectionOutlineEdgePipeline::new(
         &gfaestus,
         1,
@@ -209,60 +207,10 @@ fn main() {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
-    let mut snarl_overlay = SnarlOverlay::new(&gfaestus, graph_query.node_count()).unwrap();
-
-    let snarls = [(1, 10), (3, 7), (100, 200), (120, 180)];
-
-    for (a, b) in std::array::IntoIter::new(snarls) {
-        let device = gfaestus.vk_context().device();
-        let snarl = (NodeId::from(a), NodeId::from(b));
-
-        snarl_overlay.add_snarl(device, snarl).unwrap();
-    }
-    dbg!();
-
-    let overlay = snarl_overlay.into_overlay();
-    dbg!();
-    main_view
-        .node_draw_system
-        .overlay_pipeline
-        .update_overlay(0, overlay);
-
     let graph_arc = graph_query.graph_arc().clone();
     let graph_handle = gfaestus::gluon::GraphHandle::new(graph_arc);
 
-    gluonvm.test_graph_handle(&graph_handle);
-
-    let overlay_colors = gluonvm.example_overlay(&graph_handle).unwrap();
-
-    println!("built overlay colors for {} nodes", overlay_colors.len());
-
-    let mut overlay_2 =
-        NodeOverlay::new_empty("gluon_overlay", &gfaestus, graph_query.node_count()).unwrap();
-
-    overlay_2
-        .update_overlay(
-            gfaestus.vk_context().device(),
-            overlay_colors
-                .iter()
-                .enumerate()
-                .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
-        )
-        .unwrap();
-
-    main_view
-        .node_draw_system
-        .overlay_pipeline
-        .update_overlay(1, overlay_2);
-
-    dbg!();
-    main_view
-        .node_draw_system
-        .overlay_pipeline
-        .set_active_overlay(Some(1))
-        .unwrap();
-
-    let mut next_overlay_id = 2;
+    let mut next_overlay_id = 0;
 
     gui.populate_overlay_list(main_view.node_draw_system.overlay_pipeline.overlay_names());
 
@@ -304,8 +252,6 @@ fn main() {
                 let mouse_pos = app.mouse_pos();
 
                 gui.push_event(egui::Event::PointerMoved(mouse_pos.into()));
-                main_view.set_mouse_pos(Some(mouse_pos));
-                main_view.set_screen_dims(screen_dims);
 
                 let hover_node = main_view
                     .read_node_id_at(mouse_pos)
@@ -380,13 +326,6 @@ fn main() {
                                 .node_draw_system
                                 .overlay_pipeline
                                 .update_overlay(next_overlay_id, overlay);
-                            //
-
-                            main_view
-                                .node_draw_system
-                                .overlay_pipeline
-                                .set_active_overlay(Some(1))
-                                .unwrap();
 
                             next_overlay_id += 1;
 

@@ -434,7 +434,7 @@ impl NodeList {
                 ui.set_max_width(200.0);
 
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(filter, "Filter").clicked() {
+                    if ui.selectable_label(filter, "Show selected").clicked() {
                         self.apply_filter.store(!filter);
                         self.update_slots = true;
                     }
@@ -442,7 +442,7 @@ impl NodeList {
                     // TODO not sure if there's an easy way to make a
                     // selectable label right-justified in this
                     // context
-                    ui.add_space(65.0);
+                    ui.add_space(40.0);
 
                     if ui
                         .selectable_label(*open_node_details, "Node Details")
@@ -488,15 +488,12 @@ impl NodeList {
                                 if slot.visible {
                                     let mut row = ui.label(format!("{}", slot.node_id));
 
-                                    // row = row.union(ui.separator());
                                     row = row.union(
                                         ui.label(format!("({}, {})", slot.degree.0, slot.degree.1)),
                                     );
 
-                                    // row = row.union(ui.separator());
                                     row = row.union(ui.label(format!("{}", slot.sequence.len())));
 
-                                    // row = row.union(ui.separator());
                                     row = row.union(ui.label(format!("{}", slot.paths.len())));
 
                                     let row_interact = ui.interact(
@@ -507,6 +504,8 @@ impl NodeList {
 
                                     if row_interact.clicked() {
                                         node_id_cell.store(Some(slot.node_id));
+
+                                        *open_node_details = true;
                                     }
 
                                     ui.end_row();
