@@ -107,6 +107,40 @@ impl Default for View {
 }
 
 impl View {
+    pub fn from_dims_and_target<D: Into<ScreenDims>>(
+        screen_dims: D,
+        p_0: Point,
+        p_1: Point,
+    ) -> Self {
+        let dims = screen_dims.into();
+
+        let top_left = Point {
+            x: p_0.x.min(p_1.x),
+            y: p_0.y.min(p_1.y),
+        };
+
+        let bottom_right = Point {
+            x: p_0.x.max(p_1.x),
+            y: p_0.y.max(p_1.y),
+        };
+
+        let target_dims = Point {
+            x: bottom_right.x - top_left.x,
+            y: bottom_right.y - top_left.y,
+        };
+
+        let scale = {
+            let width = target_dims.x;
+            let scale = width / dims.width;
+
+            scale * 1.05 // add a bit extra so everything fits
+        };
+
+        let center = top_left + (target_dims * 0.5);
+
+        View { center, scale }
+    }
+
     #[rustfmt::skip]
     #[inline]
     pub fn to_scaled_matrix(&self) -> glm::Mat4 {
