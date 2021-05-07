@@ -248,11 +248,9 @@ pub struct NodeList {
     filtered_nodes: Vec<NodeId>,
 
     page: usize,
-    page_count: usize,
     page_size: usize,
+    page_count: usize,
 
-    // top: usize,
-    // bottom: usize,
     slots: Vec<NodeListSlot>,
 
     update_slots: bool,
