@@ -74,6 +74,7 @@ impl PathDetails {
         egui::Window::new("Path details")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
+            .open(open_path_details)
             .show(ctx, |mut ui| {
                 if let Some(path_id) = self.path_id.load() {
                     ui.set_min_height(200.0);
