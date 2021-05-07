@@ -115,7 +115,6 @@ impl NodeDetails {
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
-        // show: &mut bool
     ) -> Option<egui::Response> {
         if self.need_fetch() {
             self.fetch(graph_query);
@@ -181,7 +180,7 @@ impl NodeDetails {
                     });
                     ui.shrink_width_to_current();
                 } else {
-                    ui.label("No node");
+                    ui.label("Examine a node by picking it from the node list");
                 }
             })
     }

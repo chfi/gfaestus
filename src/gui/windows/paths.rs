@@ -37,11 +37,9 @@ pub struct PathList {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathListMsg {
-    // ApplyFilter(Option<bool>),
     NextPage,
     PrevPage,
     SetPage(usize),
-    // SetFiltered(Vec<NodeId>),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -63,6 +61,95 @@ pub struct PathDetails {
 }
 
 impl PathDetails {
+    const ID: &'static str = "path_details_window";
+
+    pub fn ui(
+        &mut self,
+        open_path_details: &mut bool,
+        graph_query: &GraphQuery,
+        ctx: &egui::CtxRef,
+    ) -> Option<egui::Response> {
+        self.fetch(graph_query)?;
+
+        egui::Window::new("Path details")
+            .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(600.0, 200.0))
+            .show(ctx, |mut ui| {
+                if let Some(path_id) = self.path_id.load() {
+                    ui.set_min_height(200.0);
+                    ui.set_max_width(200.0);
+
+                    ui.label(format!("Path: {}", self.path_name.as_bstr()));
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        ui.label(format!("Step count: {}", self.step_count));
+
+                        ui.separator();
+
+                        ui.label(format!("Base count: {}", self.base_count));
+                    });
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        ui.label(format!("First step: {}", self.head.to_vector_value()));
+
+                        ui.separator();
+
+                        ui.label(format!("Last step: {}", self.tail.to_vector_value()));
+                    });
+
+                    /*
+                    let separator = || egui::Separator::default().spacing(1.0);
+
+                    egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                        egui::Grid::new("path_details_step_list")
+                            .spacing(Point { x: 10.0, y: 5.0 })
+                            .striped(true)
+                            .show(&mut ui, |ui| {
+                                ui.label("Node");
+                                ui.add(separator());
+
+                                ui.label("Step");
+                                ui.add(separator());
+
+                                ui.label("Base pos");
+                                ui.end_row();
+
+                                for (path_id, step_ptr, pos) in self.paths.iter() {
+                                    let path_name = graph_query.graph().get_path_name_vec(*path_id);
+
+                                    if let Some(name) = path_name {
+                                        ui.label(format!("{}", name.as_bstr()));
+                                    } else {
+                                        ui.label(format!("Path ID {}", path_id.0));
+                                    }
+
+                                    ui.add(separator());
+
+                                    ui.label(format!("{}", step_ptr.to_vector_value()));
+                                    ui.add(separator());
+
+                                    ui.label(format!("{}", pos));
+                                    ui.end_row();
+                                }
+                            });
+                    });
+                    */
+
+                    ui.shrink_width_to_current();
+                } else {
+                    ui.label("Examine a path by picking it from the path list");
+                }
+            })
+    }
+
+    pub fn path_id_cell(&self) -> &Arc<AtomicCell<Option<PathId>>> {
+        &self.path_id
+    }
+
     fn fetch_path_id(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
         self.path_name.clear();
         let path_name = graph_query.graph().get_path_name(path)?;
@@ -81,12 +168,12 @@ impl PathDetails {
     }
 
     fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
-        let path_id = self.path_id.load()?;
-        if self.fetched_path == Some(path_id) {
+        let path_id = self.path_id.load();
+        if self.fetched_path == path_id || path_id.is_none() {
             return Some(());
         }
 
-        self.fetch_path_id(graph_query, path_id)
+        self.fetch_path_id(graph_query, path_id.unwrap())
     }
 }
 
