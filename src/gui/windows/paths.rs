@@ -62,6 +62,34 @@ pub struct PathDetails {
     base_count: usize,
 }
 
+impl PathDetails {
+    fn fetch_path_id(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+        self.path_name.clear();
+        let path_name = graph_query.graph().get_path_name(path)?;
+        self.path_name.extend(path_name);
+
+        self.head = graph_query.graph().path_first_step(path)?;
+        self.tail = graph_query.graph().path_last_step(path)?;
+
+        self.step_count = graph_query.graph().path_len(path)?;
+        self.base_count = graph_query.graph().path_bases_len(path)?;
+
+        self.path_id.store(Some(path));
+        self.fetched_path = Some(path);
+
+        Some(())
+    }
+
+    fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
+        let path_id = self.path_id.load()?;
+        if self.fetched_path == Some(path_id) {
+            return Some(());
+        }
+
+        self.fetch_path_id(graph_query, path_id)
+    }
+}
+
 impl std::default::Default for PathDetails {
     fn default() -> Self {
         Self {
@@ -169,19 +197,7 @@ impl PathList {
 
         for (slot, path) in self.slots.iter_mut().zip(&paths[page_start..page_end]) {
             let slot = &mut slot.path_details;
-            slot.path_id.store(Some(*path));
-
-            slot.path_name.clear();
-            slot.path_name
-                .extend(graph_query.graph().get_path_name_vec(*path).unwrap());
-
-            slot.head = graph_query.graph().path_first_step(*path).unwrap();
-            slot.tail = graph_query.graph().path_last_step(*path).unwrap();
-
-            slot.step_count = graph_query.graph().path_len(*path).unwrap();
-            slot.base_count = graph_query.graph().path_bases_len(*path).unwrap();
-
-            slot.fetched_path = Some(*path);
+            slot.fetch_path_id(graph_query, *path).unwrap();
         }
 
         self.update_slots = false;
