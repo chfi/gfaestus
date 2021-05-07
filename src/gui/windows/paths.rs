@@ -128,6 +128,8 @@ impl PathDetails {
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
+        node_details_id_cell: &AtomicCell<Option<NodeId>>,
+        open_node_details: &mut bool,
     ) -> Option<egui::Response> {
         self.path_details.fetch(graph_query)?;
 
@@ -175,7 +177,8 @@ impl PathDetails {
                         ));
                     });
 
-                    self.step_list.ui(ui, graph_query);
+                    self.step_list
+                        .ui(ui, graph_query, node_details_id_cell, open_node_details);
 
                     /*
                     let separator = || egui::Separator::default().spacing(1.0);
@@ -236,6 +239,9 @@ impl PathList {
         let paths = &self.all_paths;
 
         self.page_count = paths.len() / self.page_size;
+        if paths.len() == self.page_size {
+            self.page_count -= 1;
+        }
 
         if self.update_slots {
             self.update_slots(graph_query, false);
@@ -269,7 +275,13 @@ impl PathList {
                 }
                 */
 
+                ui.label(format!("Page {}/{}", *page + 1, page_count + 1));
+
                 ui.horizontal(|ui| {
+                    if ui.button("First").clicked() {
+                        *page = 0;
+                    }
+
                     if ui.button("Prev").clicked() {
                         if *page > 0 {
                             *page -= 1;
@@ -284,7 +296,9 @@ impl PathList {
                         }
                     }
 
-                    ui.label(format!("Page {}/{}", *page, page_count));
+                    if ui.button("Last").clicked() {
+                        *page = page_count;
+                    }
                 });
 
                 let path_id_cell = &self.path_details_id;
@@ -469,13 +483,21 @@ impl StepList {
         ui: &mut egui::Ui,
         // app_msg_tx: &Sender<AppMsg>,
         graph_query: &GraphQuery,
+        node_details_id_cell: &AtomicCell<Option<NodeId>>,
+        open_node_details: &mut bool,
     ) -> egui::InnerResponse<()> {
         let steps = &self.steps;
 
         let page = &mut self.page;
         let page_count = self.page_count;
 
+        ui.label(format!("Page {}/{}", *page + 1, page_count + 1));
+
         ui.horizontal(|ui| {
+            if ui.button("First").clicked() {
+                *page = 0;
+            }
+
             if ui.button("Prev").clicked() {
                 if *page > 0 {
                     *page -= 1;
@@ -488,7 +510,9 @@ impl StepList {
                 }
             }
 
-            ui.label(format!("Page {}/{}", *page, page_count));
+            if ui.button("Last").clicked() {
+                *page = page_count;
+            }
         });
 
         let page_start = (*page * self.page_size).min(steps.len() - (steps.len() % self.page_size));
@@ -510,7 +534,9 @@ impl StepList {
                     ui.label("Base pos");
                     ui.end_row();
 
-                    for (handle, step_ptr, pos) in &steps[page_start..page_end] {
+                    for (slot_ix, (handle, step_ptr, pos)) in
+                        steps[page_start..page_end].iter().enumerate()
+                    {
                         let node_id = handle.id();
 
                         let mut row = if handle.is_reverse() {
@@ -525,6 +551,17 @@ impl StepList {
 
                         row = row.union(ui.label(format!("{}", pos)));
                         ui.end_row();
+
+                        let row_interact = ui.interact(
+                            row.rect,
+                            egui::Id::new(ui.id().with(slot_ix)),
+                            egui::Sense::click(),
+                        );
+
+                        if row_interact.clicked() {
+                            node_details_id_cell.store(Some(handle.id()));
+                            *open_node_details = true;
+                        }
                     }
                 })
         })

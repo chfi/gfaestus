@@ -481,7 +481,13 @@ impl NodeList {
                     *update_slots = true;
                 }
 
+                ui.label(format!("Page {}/{}", *page + 1, page_count + 1));
+
                 ui.horizontal(|ui| {
+                    if ui.button("First").clicked() {
+                        *page = 0;
+                    }
+
                     if ui.button("Prev").clicked() {
                         if *page > 0 {
                             *page -= 1;
@@ -496,7 +502,9 @@ impl NodeList {
                         }
                     }
 
-                    ui.label(format!("Page {}/{}", *page, page_count));
+                    if ui.button("Last").clicked() {
+                        *page = page_count;
+                    }
                 });
 
                 let node_id_cell = &self.node_details_id;

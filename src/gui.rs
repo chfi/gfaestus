@@ -689,6 +689,9 @@ impl Gui {
             let path_list = &self.open_windows.paths;
             let path_details = &mut self.open_windows.path_details;
 
+            let node_details = &mut self.open_windows.node_details;
+            let node_details_id_cell = view_state.node_details.state.node_id_cell();
+
             if *path_list {
                 view_state.path_list.state.ui(
                     &self.ctx,
@@ -699,10 +702,13 @@ impl Gui {
             }
 
             if *path_details {
-                view_state
-                    .path_details
-                    .state
-                    .ui(path_details, graph_query, &self.ctx);
+                view_state.path_details.state.ui(
+                    path_details,
+                    graph_query,
+                    &self.ctx,
+                    node_details_id_cell,
+                    node_details,
+                );
             }
         }
 
