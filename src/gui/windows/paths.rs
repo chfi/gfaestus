@@ -43,13 +43,8 @@ pub enum PathListMsg {
     SetPage(usize),
 }
 
-#[derive(Debug, Default, Clone)]
-pub struct PathListSlot {
-    path_details: PathDetails,
-}
-
 #[derive(Debug, Clone)]
-pub struct PathDetails {
+pub struct PathListSlot {
     path_id: Arc<AtomicCell<Option<PathId>>>,
     path_name: Vec<u8>,
     fetched_path: Option<PathId>,
@@ -61,6 +56,70 @@ pub struct PathDetails {
     base_count: usize,
 }
 
+impl std::default::Default for PathListSlot {
+    fn default() -> Self {
+        Self {
+            path_id: Arc::new(AtomicCell::new(None)),
+            path_name: Vec::new(),
+            fetched_path: None,
+
+            head: StepPtr::null(),
+            tail: StepPtr::null(),
+
+            step_count: 0,
+            base_count: 0,
+        }
+    }
+}
+
+impl PathListSlot {
+    pub fn path_id_cell(&self) -> &Arc<AtomicCell<Option<PathId>>> {
+        &self.path_id
+    }
+
+    fn fetch_path_id(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+        self.path_name.clear();
+        let path_name = graph_query.graph().get_path_name(path)?;
+        self.path_name.extend(path_name);
+
+        self.head = graph_query.graph().path_first_step(path)?;
+        self.tail = graph_query.graph().path_last_step(path)?;
+
+        self.step_count = graph_query.graph().path_len(path)?;
+        self.base_count = graph_query.graph().path_bases_len(path)?;
+
+        self.path_id.store(Some(path));
+        self.fetched_path = Some(path);
+
+        Some(())
+    }
+
+    fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
+        let path_id = self.path_id.load();
+        if self.fetched_path == path_id || path_id.is_none() {
+            return Some(());
+        }
+
+        self.fetch_path_id(graph_query, path_id.unwrap())
+    }
+}
+
+pub struct PathDetails {
+    pub(crate) path_details: PathListSlot,
+
+    pub(crate) step_list: StepList,
+}
+
+impl std::default::Default for PathDetails {
+    fn default() -> Self {
+        Self {
+            path_details: Default::default(),
+
+            step_list: StepList::new(15),
+        }
+    }
+}
+
 impl PathDetails {
     const ID: &'static str = "path_details_window";
 
@@ -70,38 +129,53 @@ impl PathDetails {
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
     ) -> Option<egui::Response> {
-        self.fetch(graph_query)?;
+        self.path_details.fetch(graph_query)?;
+
+        if let Some(path) = self.path_details.path_id.load() {
+            self.step_list.update_for_path(graph_query, path)?;
+        }
 
         egui::Window::new("Path details")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .open(open_path_details)
             .show(ctx, |mut ui| {
-                if let Some(path_id) = self.path_id.load() {
+                if let Some(path_id) = self.path_details.path_id.load() {
                     ui.set_min_height(200.0);
                     ui.set_max_width(300.0);
 
-                    ui.label(format!("Path name: {}", self.path_name.as_bstr()));
+                    ui.label(format!(
+                        "Path name: {}",
+                        self.path_details.path_name.as_bstr()
+                    ));
 
                     ui.separator();
 
                     ui.horizontal(|ui| {
-                        ui.label(format!("Step count: {}", self.step_count));
+                        ui.label(format!("Step count: {}", self.path_details.step_count));
 
                         ui.separator();
 
-                        ui.label(format!("Base count: {}", self.base_count));
+                        ui.label(format!("Base count: {}", self.path_details.base_count));
                     });
 
                     ui.separator();
 
                     ui.horizontal(|ui| {
-                        ui.label(format!("First step: {}", self.head.to_vector_value()));
+                        ui.label(format!(
+                            "First step: {}",
+                            self.path_details.head.to_vector_value()
+                        ));
 
                         ui.separator();
 
-                        ui.label(format!("Last step: {}", self.tail.to_vector_value()));
+                        ui.label(format!(
+                            "Last step: {}",
+                            self.path_details.tail.to_vector_value()
+                        ));
                     });
+
+                    self.step_list.ui(ui, graph_query);
 
                     /*
                     let separator = || egui::Separator::default().spacing(1.0);
@@ -146,52 +220,6 @@ impl PathDetails {
                     ui.label("Examine a path by picking it from the path list");
                 }
             })
-    }
-
-    pub fn path_id_cell(&self) -> &Arc<AtomicCell<Option<PathId>>> {
-        &self.path_id
-    }
-
-    fn fetch_path_id(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
-        self.path_name.clear();
-        let path_name = graph_query.graph().get_path_name(path)?;
-        self.path_name.extend(path_name);
-
-        self.head = graph_query.graph().path_first_step(path)?;
-        self.tail = graph_query.graph().path_last_step(path)?;
-
-        self.step_count = graph_query.graph().path_len(path)?;
-        self.base_count = graph_query.graph().path_bases_len(path)?;
-
-        self.path_id.store(Some(path));
-        self.fetched_path = Some(path);
-
-        Some(())
-    }
-
-    fn fetch(&mut self, graph_query: &GraphQuery) -> Option<()> {
-        let path_id = self.path_id.load();
-        if self.fetched_path == path_id || path_id.is_none() {
-            return Some(());
-        }
-
-        self.fetch_path_id(graph_query, path_id.unwrap())
-    }
-}
-
-impl std::default::Default for PathDetails {
-    fn default() -> Self {
-        Self {
-            path_id: Arc::new(AtomicCell::new(None)),
-            path_name: Vec::new(),
-            fetched_path: None,
-
-            head: StepPtr::null(),
-            tail: StepPtr::null(),
-
-            step_count: 0,
-            base_count: 0,
-        }
     }
 }
 
@@ -271,7 +299,7 @@ impl PathList {
                             ui.end_row();
 
                             for (ix, slot) in self.slots.iter().enumerate() {
-                                let slot = &slot.path_details;
+                                // let slot = &slot.path_details;
 
                                 if let Some(path_id) = slot.path_id.load() {
                                     let mut row = ui.label(format!("{}", slot.path_name.as_bstr()));
@@ -377,11 +405,10 @@ impl PathList {
         let page_end = (page_start + self.page_size).min(paths.len());
 
         for slot in self.slots.iter_mut() {
-            slot.path_details.path_id.store(None);
+            slot.path_id.store(None);
         }
 
         for (slot, path) in self.slots.iter_mut().zip(&paths[page_start..page_end]) {
-            let slot = &mut slot.path_details;
             slot.fetch_path_id(graph_query, *path).unwrap();
         }
 
@@ -390,6 +417,8 @@ impl PathList {
 }
 
 pub struct StepList {
+    fetched_path_id: Option<PathId>,
+
     steps: Vec<(Handle, StepPtr, usize)>,
 
     page: usize,
@@ -400,6 +429,8 @@ pub struct StepList {
 impl StepList {
     fn new(page_size: usize) -> Self {
         Self {
+            fetched_path_id: None,
+
             steps: Vec::new(),
 
             page: 0,
@@ -409,6 +440,10 @@ impl StepList {
     }
 
     fn update_for_path(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+        if self.fetched_path_id == Some(path) {
+            return Some(());
+        }
+
         let graph = graph_query.graph();
         let steps = graph.path_steps(path)?;
 
@@ -424,13 +459,15 @@ impl StepList {
 
         self.page_count = self.steps.len() / self.page_size;
 
+        self.fetched_path_id = Some(path);
+
         Some(())
     }
 
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        app_msg_tx: &Sender<AppMsg>,
+        // app_msg_tx: &Sender<AppMsg>,
         graph_query: &GraphQuery,
     ) -> egui::InnerResponse<()> {
         let steps = &self.steps;

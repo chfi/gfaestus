@@ -177,7 +177,7 @@ impl AppViewState {
         let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
         let path_details_state = PathDetails::default();
-        let path_id_cell = path_details_state.path_id_cell().clone();
+        let path_id_cell = path_details_state.path_details.path_id_cell().clone();
         let path_details = ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
         let path_list_state = PathList::new(graph_query, 15, path_id_cell);
@@ -663,7 +663,7 @@ impl Gui {
             let node_details = &mut self.open_windows.node_details;
 
             let path_details = &mut self.open_windows.path_details;
-            let path_details_id_cell = view_state.path_details.state.path_id_cell();
+            let path_details_id_cell = view_state.path_details.state.path_details.path_id_cell();
 
             if *node_list {
                 view_state.node_list.state.ui(
