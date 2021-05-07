@@ -134,6 +134,7 @@ fn main() {
 
     let mut main_view = MainView::new(
         &gfaestus,
+        app.settings.node_width().clone(),
         graph_query.node_count(),
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
@@ -147,7 +148,7 @@ fn main() {
         &gfaestus,
         app.overlay_state.clone(),
         input_manager.gui_focus_state().clone(),
-        main_view.node_width().clone(),
+        app.settings.node_width().clone(),
         &graph_query,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,

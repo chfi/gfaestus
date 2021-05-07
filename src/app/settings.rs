@@ -1,10 +1,65 @@
 use anyhow::Result;
+use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 use super::theme::ThemeDef;
+
+#[derive(Debug, Default)]
+pub struct AppSettings {
+    node_width: Arc<NodeWidth>,
+}
+
+impl AppSettings {
+    pub fn node_width(&self) -> &Arc<NodeWidth> {
+        &self.node_width
+    }
+}
+
+#[derive(Debug)]
+pub struct NodeWidth {
+    base_node_width: AtomicCell<f32>,
+    upscale_limit: AtomicCell<f32>,
+    upscale_factor: AtomicCell<f32>,
+}
+
+impl NodeWidth {
+    pub fn base_node_width(&self) -> f32 {
+        self.base_node_width.load()
+    }
+
+    pub fn upscale_limit(&self) -> f32 {
+        self.upscale_limit.load()
+    }
+
+    pub fn upscale_factor(&self) -> f32 {
+        self.upscale_factor.load()
+    }
+
+    pub fn set_base_node_width(&self, new: f32) {
+        self.base_node_width.store(new);
+    }
+
+    pub fn set_upscale_limit(&self, new: f32) {
+        self.upscale_limit.store(new);
+    }
+
+    pub fn set_upscale_factor(&self, new: f32) {
+        self.upscale_factor.store(new);
+    }
+}
+
+impl std::default::Default for NodeWidth {
+    fn default() -> Self {
+        Self {
+            base_node_width: AtomicCell::new(100.0),
+            upscale_limit: AtomicCell::new(100.0),
+            upscale_factor: AtomicCell::new(100.0),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ActiveRenderLayers {

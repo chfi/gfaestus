@@ -20,8 +20,11 @@ use parking_lot::Mutex;
 
 // use theme_editor::*;
 
-use crate::{app::OverlayState, geometry::*};
 use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
+use crate::{
+    app::{NodeWidth, OverlayState},
+    geometry::*,
+};
 use crate::{gluon::GraphHandle, view::View};
 
 use crate::graph_query::GraphQuery;
@@ -145,7 +148,7 @@ pub struct AppViewState {
 impl AppViewState {
     pub fn new(
         graph_query: &GraphQuery,
-        node_width: Arc<AtomicCell<f32>>,
+        node_width: Arc<NodeWidth>,
         overlay_state: OverlayState,
         dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
     ) -> Self {
@@ -448,7 +451,7 @@ impl Gui {
         app: &GfaestusVk,
         overlay_state: OverlayState,
         gui_focus_state: GuiFocusState,
-        node_width: Arc<AtomicCell<f32>>,
+        node_width: Arc<NodeWidth>,
         graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,

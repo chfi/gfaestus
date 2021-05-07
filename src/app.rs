@@ -38,6 +38,8 @@ pub struct App {
     pub nodes_color: bool,
 
     pub overlay_state: OverlayState,
+
+    pub settings: AppSettings,
 }
 
 #[derive(Debug, Clone)]
@@ -170,6 +172,8 @@ impl App {
             nodes_color: true,
 
             overlay_state: OverlayState::default(),
+
+            settings: AppSettings::default(),
         })
     }
 

@@ -11,7 +11,7 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use super::node_flags::SelectionBuffer;
+use crate::app::{node_flags::SelectionBuffer, NodeWidth};
 use crate::view::{ScreenDims, View};
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
@@ -38,7 +38,7 @@ pub struct MainView {
     pub node_id_buffer: NodeIdBuffer,
     pub selection_buffer: SelectionBuffer,
 
-    base_node_width: Arc<AtomicCell<f32>>,
+    node_width: Arc<NodeWidth>,
 
     view: Arc<AtomicCell<View>>,
     anim_handler: AnimHandler,
@@ -49,6 +49,7 @@ pub struct MainView {
 impl MainView {
     pub fn new(
         app: &GfaestusVk,
+        node_width: Arc<NodeWidth>,
         node_count: usize,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
@@ -63,8 +64,6 @@ impl MainView {
             render_pass,
             selection_buffer.buffer,
         )?;
-
-        let base_node_width = Arc::new(AtomicCell::new(100.0));
 
         let view = View::default();
 
@@ -88,7 +87,7 @@ impl MainView {
             node_id_buffer,
             selection_buffer,
 
-            base_node_width,
+            node_width,
 
             view,
             anim_handler,
@@ -97,10 +96,6 @@ impl MainView {
         };
 
         Ok(main_view)
-    }
-
-    pub fn node_width(&self) -> &Arc<AtomicCell<f32>> {
-        &self.base_node_width
     }
 
     pub fn view(&self) -> View {
@@ -155,9 +150,12 @@ impl MainView {
         let view = self.view.load();
 
         let node_width = {
-            let mut width = self.base_node_width.load();
-            if view.scale > 100.0 {
-                width *= view.scale / 100.0;
+            let mut width = self.node_width.base_node_width();
+            let upscale_limit = self.node_width.upscale_limit();
+            let upscale_factor = self.node_width.upscale_factor();
+
+            if view.scale > upscale_limit {
+                width *= view.scale / upscale_factor;
             }
             width
         };
