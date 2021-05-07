@@ -1,3 +1,4 @@
+use gfa::gfa::Orientation;
 use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
 use handlegraph::{
@@ -385,5 +386,110 @@ impl PathList {
         }
 
         self.update_slots = false;
+    }
+}
+
+pub struct StepList {
+    steps: Vec<(Handle, StepPtr, usize)>,
+
+    page: usize,
+    page_size: usize,
+    page_count: usize,
+}
+
+impl StepList {
+    fn new(page_size: usize) -> Self {
+        Self {
+            steps: Vec::new(),
+
+            page: 0,
+            page_size,
+            page_count: 0,
+        }
+    }
+
+    fn update_for_path(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+        let graph = graph_query.graph();
+        let steps = graph.path_steps(path)?;
+
+        self.steps.clear();
+        self.steps.extend(steps.filter_map(|step| {
+            let handle = step.handle();
+            let (step_ptr, _) = step;
+            let base = graph.path_step_base_offset(path, step_ptr)?;
+            Some((handle, step_ptr, base))
+        }));
+
+        self.page = 0;
+
+        self.page_count = self.steps.len() / self.page_size;
+
+        Some(())
+    }
+
+    pub fn ui(
+        &mut self,
+        ui: &mut egui::Ui,
+        app_msg_tx: &Sender<AppMsg>,
+        graph_query: &GraphQuery,
+    ) -> egui::InnerResponse<()> {
+        let steps = &self.steps;
+
+        let page = &mut self.page;
+        let page_count = self.page_count;
+
+        ui.horizontal(|ui| {
+            if ui.button("Prev").clicked() {
+                if *page > 0 {
+                    *page -= 1;
+                }
+            }
+
+            if ui.button("Next").clicked() {
+                if *page < page_count {
+                    *page += 1;
+                }
+            }
+
+            ui.label(format!("Page {}/{}", *page, page_count));
+        });
+
+        let page_start = (*page * self.page_size).min(steps.len() - (steps.len() % self.page_size));
+        let page_end = (page_start + self.page_size).min(steps.len());
+
+        let separator = || egui::Separator::default().spacing(1.0);
+
+        egui::ScrollArea::auto_sized().show(ui, |mut ui| {
+            egui::Grid::new("path_details_step_list")
+                .spacing(Point { x: 10.0, y: 5.0 })
+                .striped(true)
+                .show(&mut ui, |ui| {
+                    ui.label("Node");
+                    ui.add(separator());
+
+                    ui.label("Step");
+                    ui.add(separator());
+
+                    ui.label("Base pos");
+                    ui.end_row();
+
+                    for (handle, step_ptr, pos) in &steps[page_start..page_end] {
+                        let node_id = handle.id();
+
+                        let mut row = if handle.is_reverse() {
+                            ui.label(format!("{}-", node_id.0))
+                        } else {
+                            ui.label(format!("{}+", node_id.0))
+                        };
+                        row = row.union(ui.add(separator()));
+
+                        row = row.union(ui.label(format!("{}", step_ptr.to_vector_value())));
+                        row = row.union(ui.add(separator()));
+
+                        row = row.union(ui.label(format!("{}", pos)));
+                        ui.end_row();
+                    }
+                })
+        })
     }
 }
