@@ -96,14 +96,14 @@ impl NodeDetails {
         self.degree = (degree_l, degree_r);
 
         let paths_fwd = graph_query.handle_positions(Handle::pack(node_id, false));
-        let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
+        // let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
 
         if let Some(p) = paths_fwd {
             self.paths.extend_from_slice(&p);
         }
-        if let Some(p) = paths_rev {
-            self.paths.extend_from_slice(&p);
-        }
+        // if let Some(p) = paths_rev {
+        //     self.paths.extend_from_slice(&p);
+        // }
 
         self.fetched_node = Some(node_id);
 
@@ -115,6 +115,8 @@ impl NodeDetails {
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
         ctx: &egui::CtxRef,
+        path_details_id_cell: &AtomicCell<Option<PathId>>,
+        open_path_details: &mut bool,
     ) -> Option<egui::Response> {
         if self.need_fetch() {
             self.fetch(graph_query);
@@ -162,18 +164,35 @@ impl NodeDetails {
                                 for (path_id, step_ptr, pos) in self.paths.iter() {
                                     let path_name = graph_query.graph().get_path_name_vec(*path_id);
 
-                                    if let Some(name) = path_name {
-                                        ui.label(format!("{}", name.as_bstr()));
+                                    let mut row = if let Some(name) = path_name {
+                                        ui.label(format!("{}", name.as_bstr()))
                                     } else {
-                                        ui.label(format!("Path ID {}", path_id.0));
+                                        ui.label(format!("Path ID {}", path_id.0))
+                                    };
+
+                                    row = row.union(ui.add(separator()));
+
+                                    row = row
+                                        .union(ui.label(format!("{}", step_ptr.to_vector_value())));
+                                    row = row.union(ui.add(separator()));
+
+                                    row = row.union(ui.label(format!("{}", pos)));
+
+                                    let row_interact = ui.interact(
+                                        row.rect,
+                                        egui::Id::new(ui.id().with(format!(
+                                            "path_{}_{}",
+                                            path_id.0,
+                                            step_ptr.to_vector_value()
+                                        ))),
+                                        egui::Sense::click(),
+                                    );
+
+                                    if row_interact.clicked() {
+                                        path_details_id_cell.store(Some(*path_id));
+                                        *open_path_details = true;
                                     }
 
-                                    ui.add(separator());
-
-                                    ui.label(format!("{}", step_ptr.to_vector_value()));
-                                    ui.add(separator());
-
-                                    ui.label(format!("{}", pos));
                                     ui.end_row();
                                 }
                             });
