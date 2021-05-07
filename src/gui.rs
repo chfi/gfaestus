@@ -653,10 +653,12 @@ impl Gui {
             let node_details = &mut self.open_windows.node_details;
 
             if *node_list {
-                view_state
-                    .node_list
-                    .state
-                    .ui(node_details, graph_query, &self.ctx);
+                view_state.node_list.state.ui(
+                    &self.ctx,
+                    &self.app_msg_tx,
+                    node_details,
+                    graph_query,
+                );
             }
 
             if *node_details {

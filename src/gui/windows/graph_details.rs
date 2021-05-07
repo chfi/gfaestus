@@ -11,14 +11,14 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crossbeam::atomic::AtomicCell;
+use crossbeam::{atomic::AtomicCell, channel::Sender};
 use std::sync::Arc;
 
 use bstr::{BStr, ByteSlice};
 
-use crate::geometry::*;
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
+use crate::{app::AppMsg, geometry::*};
 
 #[derive(Debug, Clone)]
 pub struct NodeDetails {
@@ -369,9 +369,10 @@ impl NodeList {
 
     pub fn ui(
         &mut self,
+        ctx: &egui::CtxRef,
+        app_msg_tx: &Sender<AppMsg>,
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
-        ctx: &egui::CtxRef,
     ) -> Option<egui::Response> {
         let mut filter = self.apply_filter.load();
 
@@ -434,15 +435,14 @@ impl NodeList {
                 ui.set_max_width(200.0);
 
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(filter, "Show selected").clicked() {
-                        self.apply_filter.store(!filter);
-                        self.update_slots = true;
-                    }
+                    let clear_selection_btn = ui
+                        .button("Clear selection")
+                        .on_hover_text("Hotkey: <Escape>");
 
-                    // TODO not sure if there's an easy way to make a
-                    // selectable label right-justified in this
-                    // context
-                    ui.add_space(40.0);
+                    if clear_selection_btn.clicked() {
+                        use crate::app::Select;
+                        app_msg_tx.send(AppMsg::Selection(Select::Clear)).unwrap();
+                    }
 
                     if ui
                         .selectable_label(*open_node_details, "Node Details")
@@ -452,11 +452,16 @@ impl NodeList {
                     }
                 });
 
-                let node_id_cell = &self.node_details_id;
-
                 let page = &mut self.page;
                 let page_count = self.page_count;
                 let update_slots = &mut self.update_slots;
+
+                let apply_filter = &self.apply_filter;
+
+                if ui.selectable_label(filter, "Show only selected").clicked() {
+                    apply_filter.store(!filter);
+                    *update_slots = true;
+                }
 
                 ui.horizontal(|ui| {
                     if ui.button("Prev").clicked() {
@@ -472,7 +477,11 @@ impl NodeList {
                             *update_slots = true;
                         }
                     }
+
+                    ui.label(format!("Page {}/{}", *page, page_count));
                 });
+
+                let node_id_cell = &self.node_details_id;
 
                 egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
                     egui::Grid::new("node_list_grid")
