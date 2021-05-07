@@ -18,7 +18,6 @@ pub mod graph_details;
 pub mod main_view_settings;
 pub mod overlays;
 pub mod paths;
-mod paths;
 pub mod theme;
 
 pub use graph_details::*;

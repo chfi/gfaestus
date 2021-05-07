@@ -137,7 +137,8 @@ pub struct AppViewState {
     node_list: ViewStateChannel<NodeList, NodeListMsg>,
     node_details: ViewStateChannel<NodeDetails, NodeDetailsMsg>,
 
-    path_list: ViewStateChannel<NodeList, NodeListMsg>,
+    path_list: ViewStateChannel<PathList, PathListMsg>,
+    path_details: ViewStateChannel<PathDetails, ()>,
     // path_details: PathList,
 
     // theme_editor: ThemeEditor,
@@ -175,8 +176,12 @@ impl AppViewState {
         let node_list_state = NodeList::new(graph_query, 15, node_id_cell.clone());
         let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
-        let path_list_state = NodeList::new(graph_query, 15, node_id_cell);
-        let path_list = ViewStateChannel::<NodeList, NodeListMsg>::new(path_list_state);
+        let path_details_state = PathDetails::default();
+        let path_id_cell = path_details_state.path_id_cell().clone();
+        let path_details = ViewStateChannel::<PathDetails, ()>::new(path_details_state);
+
+        let path_list_state = PathList::new(graph_query, 15, path_id_cell);
+        let path_list = ViewStateChannel::<PathList, PathListMsg>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);
         let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(overlay_list_state);
@@ -195,6 +200,7 @@ impl AppViewState {
             node_details,
 
             path_list,
+            path_details,
 
             overlay_list,
             overlay_creator,
@@ -356,6 +362,7 @@ pub struct OpenWindows {
     node_details: bool,
 
     paths: bool,
+    path_details: bool,
 
     themes: bool,
     overlays: bool,
@@ -378,6 +385,7 @@ impl std::default::Default for OpenWindows {
             node_details: false,
 
             paths: false,
+            path_details: false,
 
             themes: false,
             overlays: false,
@@ -666,6 +674,27 @@ impl Gui {
                     .node_details
                     .state
                     .ui(node_details, graph_query, &self.ctx);
+            }
+        }
+
+        {
+            let path_list = &self.open_windows.paths;
+            let path_details = &mut self.open_windows.path_details;
+
+            if *path_list {
+                view_state.path_list.state.ui(
+                    &self.ctx,
+                    &self.app_msg_tx,
+                    path_details,
+                    graph_query,
+                );
+            }
+
+            if *path_details {
+                view_state
+                    .path_details
+                    .state
+                    .ui(path_details, graph_query, &self.ctx);
             }
         }
 

@@ -62,9 +62,9 @@ impl MenuBar {
                     *nodes = !*nodes;
                 }
 
-                // if ui.selectable_label(*paths, "Paths").clicked() {
-                //     *paths = !*paths;
-                // }
+                if ui.selectable_label(*paths, "Paths").clicked() {
+                    *paths = !*paths;
+                }
 
                 // if ui.selectable_label(*themes, "Themes").clicked() {
                 //     *themes = !*themes;

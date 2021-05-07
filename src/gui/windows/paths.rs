@@ -77,9 +77,9 @@ impl PathDetails {
             .show(ctx, |mut ui| {
                 if let Some(path_id) = self.path_id.load() {
                     ui.set_min_height(200.0);
-                    ui.set_max_width(200.0);
+                    ui.set_max_width(300.0);
 
-                    ui.label(format!("Path: {}", self.path_name.as_bstr()));
+                    ui.label(format!("Path name: {}", self.path_name.as_bstr()));
 
                     ui.separator();
 
@@ -308,6 +308,8 @@ impl PathList {
         let graph = graph_query.graph();
         let path_count = graph.path_count();
 
+        let page_size = page_size.min(path_count);
+
         let mut all_paths = graph.path_ids().collect::<Vec<_>>();
         all_paths.sort();
 
@@ -320,7 +322,7 @@ impl PathList {
             slots.push(PathListSlot::default());
         }
 
-        let update_slots = false;
+        let update_slots = true;
 
         Self {
             all_paths,

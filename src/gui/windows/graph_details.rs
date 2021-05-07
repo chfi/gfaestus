@@ -318,6 +318,8 @@ impl NodeList {
         let graph = graph_query.graph();
         let node_count = graph.node_count();
 
+        let page_size = page_size.min(node_count);
+
         let mut all_nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
         all_nodes.sort();
 
