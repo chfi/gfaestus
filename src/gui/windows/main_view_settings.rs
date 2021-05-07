@@ -24,17 +24,17 @@ impl MainViewSettings {
 
                 let node_width_slider = ui.add(
                     egui::Slider::new::<f32>(&mut base_node_width, 10.0..=300.0).text("Node width"),
-                );
+                ).on_hover_text("The base node width, in pixels at scale 1.0. Default: 100.0");
 
                 let upscale_limit_slider = ui.add(
                     egui::Slider::new::<f32>(&mut upscale_limit, 10.0..=300.0)
                         .text("Upscale limit"),
-                );
+                ).on_hover_text("The scale at which the upscale factor is applied. Default: 100.0");
 
                 let upscale_factor_slider = ui.add(
                     egui::Slider::new::<f32>(&mut upscale_factor, 10.0..=300.0)
                         .text("Upscale factor"),
-                );
+                ).on_hover_text("When the view scale is above the upscale limit, the scale is divided by the upscale factor before calculating the node width. Default: 100.0");
 
                 if node_width_slider.changed() {
                     self.node_width.set_base_node_width(base_node_width);
