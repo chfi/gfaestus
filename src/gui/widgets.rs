@@ -1,4 +1,4 @@
-use crossbeam::atomic::AtomicCell;
+use crossbeam::{atomic::AtomicCell, channel::Sender};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -10,7 +10,7 @@ use handlegraph::{
 
 use rustc_hash::FxHashMap;
 
-use crate::view::View;
+use crate::{app::AppMsg, view::View};
 use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
@@ -39,7 +39,12 @@ impl MenuBar {
         self.height.load()
     }
 
-    pub fn ui<'a>(&self, ctx: &egui::CtxRef, open_windows: &'a mut super::OpenWindows) {
+    pub fn ui<'a>(
+        &self,
+        ctx: &egui::CtxRef,
+        open_windows: &'a mut super::OpenWindows,
+        app_msg_tx: &Sender<AppMsg>,
+    ) {
         let settings = &mut open_windows.settings;
 
         let fps = &mut open_windows.fps;
@@ -82,6 +87,15 @@ impl MenuBar {
                     .clicked()
                 {
                     self.overlay_state.toggle_overlay()
+                }
+
+                let clear_selection_btn = ui
+                    .button("Clear selection")
+                    .on_hover_text("Hotkey: <Escape>");
+
+                if clear_selection_btn.clicked() {
+                    use crate::app::Select;
+                    app_msg_tx.send(AppMsg::Selection(Select::Clear)).unwrap();
                 }
             });
         });

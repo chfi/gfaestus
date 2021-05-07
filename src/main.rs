@@ -130,6 +130,11 @@ fn main() {
     let mut app =
         App::new(input_manager.clone_mouse_pos(), (100.0, 100.0)).expect("error when creating App");
 
+    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) = crossbeam::channel::unbounded::<AppConfigMsg>();
+
+    let (opts_to_gui, opts_from_app) = crossbeam::channel::unbounded::<AppConfigState>();
+
     let node_vertices = universe.new_vertices();
 
     let mut main_view = MainView::new(
@@ -149,6 +154,7 @@ fn main() {
         app.overlay_state.clone(),
         input_manager.gui_focus_state().clone(),
         app.settings.node_width().clone(),
+        app_msg_tx.clone(),
         &graph_query,
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
@@ -170,11 +176,6 @@ fn main() {
         .vertices
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
-
-    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
-    let (cfg_msg_tx, cfg_msg_rx) = crossbeam::channel::unbounded::<AppConfigMsg>();
-
-    let (opts_to_gui, opts_from_app) = crossbeam::channel::unbounded::<AppConfigState>();
 
     app.themes
         .upload_to_gpu(&gfaestus, &mut main_view.node_draw_system.theme_pipeline)

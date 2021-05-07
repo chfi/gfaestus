@@ -20,7 +20,10 @@ use parking_lot::Mutex;
 
 // use theme_editor::*;
 
-use crate::{app::RenderConfigOpts, vulkan::render_pass::Framebuffers};
+use crate::{
+    app::{AppMsg, RenderConfigOpts},
+    vulkan::render_pass::Framebuffers,
+};
 use crate::{
     app::{NodeWidth, OverlayState},
     geometry::*,
@@ -434,6 +437,8 @@ pub struct Gui {
     gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
     gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
 
+    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
+
     menu_bar: MenuBar,
 
     gui_focus_state: GuiFocusState,
@@ -452,6 +457,7 @@ impl Gui {
         overlay_state: OverlayState,
         gui_focus_state: GuiFocusState,
         node_width: Arc<NodeWidth>,
+        app_msg_tx: crossbeam::channel::Sender<AppMsg>,
         graph_query: &GraphQuery,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
@@ -526,6 +532,8 @@ impl Gui {
             gui_msg_tx,
             gui_msg_rx,
 
+            app_msg_tx,
+
             menu_bar,
 
             gui_focus_state,
@@ -583,7 +591,8 @@ impl Gui {
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 
-        self.menu_bar.ui(&self.ctx, &mut self.open_windows);
+        self.menu_bar
+            .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
 
         if let Some(node_id) = self.hover_node_id {
             egui::containers::popup::show_tooltip_text(
