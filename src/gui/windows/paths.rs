@@ -203,7 +203,101 @@ impl PathList {
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
     ) -> Option<egui::Response> {
-        unimplemented!();
+        let paths = &self.all_paths;
+
+        self.page_count = paths.len() / self.page_size;
+
+        if self.update_slots {
+            self.update_slots(graph_query, false);
+
+            self.update_slots = false;
+        }
+
+        egui::Window::new("Paths")
+            // .enabled(*show)
+            .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(400.0, 200.0))
+            .show(ctx, |mut ui| {
+                ui.set_min_height(300.0);
+                ui.set_max_width(200.0);
+
+                if ui
+                    .selectable_label(*open_path_details, "Path Details")
+                    .clicked()
+                {
+                    *open_path_details = !*open_path_details;
+                }
+
+                let page = &mut self.page;
+                let page_count = self.page_count;
+                let update_slots = &mut self.update_slots;
+
+                /*
+                if ui.selectable_label(filter, "Filter by node selection").clicked() {
+                    apply_filter.store(!filter);
+                    *update_slots = true;
+                }
+                */
+
+                ui.horizontal(|ui| {
+                    if ui.button("Prev").clicked() {
+                        if *page > 0 {
+                            *page -= 1;
+                            *update_slots = true;
+                        }
+                    }
+
+                    if ui.button("Next").clicked() {
+                        if *page < page_count {
+                            *page += 1;
+                            *update_slots = true;
+                        }
+                    }
+
+                    ui.label(format!("Page {}/{}", *page, page_count));
+                });
+
+                let path_id_cell = &self.path_details_id;
+
+                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                    egui::Grid::new("path_list_grid")
+                        .striped(true)
+                        .show(&mut ui, |ui| {
+                            ui.label("Path");
+                            ui.label("Step count");
+                            ui.label("Base count");
+                            ui.end_row();
+
+                            for (ix, slot) in self.slots.iter().enumerate() {
+                                let slot = &slot.path_details;
+
+                                if let Some(path_id) = slot.path_id.load() {
+                                    let mut row = ui.label(format!("{}", slot.path_name.as_bstr()));
+
+                                    row = row.union(ui.label(format!("{}", slot.step_count)));
+
+                                    row = row.union(ui.label(format!("{}", slot.base_count)));
+
+                                    let row_interact = ui.interact(
+                                        row.rect,
+                                        egui::Id::new(ui.id().with(ix)),
+                                        egui::Sense::click(),
+                                    );
+
+                                    if row_interact.clicked() {
+                                        path_id_cell.store(Some(path_id));
+
+                                        *open_path_details = true;
+                                    }
+
+                                    ui.end_row();
+                                }
+                            }
+                        });
+                });
+
+                ui.shrink_width_to_current();
+            })
     }
 
     pub fn new(
