@@ -12,11 +12,73 @@ use handlegraph::{
     path_position::PathPositionMap,
 };
 
-use crossbeam::channel;
+use crossbeam::channel::{self, Receiver};
 
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use anyhow::Result;
+
+
+// pub struct GraphQueryWorker<'a> {
+pub struct GraphQueryWorker {
+    _join_handle: std::thread::JoinHandle<()>,
+    graph_query: Arc<GraphQuery>,
+
+    // work_queue: VecDeque<Box<dyn FnOnce(&'a GraphQuery)>>,
+    // work_queue: VecDeque<Box<dyn FnOnce(Arc<GraphQuery>)>>,
+    // work_tx: channel::Sender<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>,
+    // work_rx: channel::Receiver<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>,
+    work_tx: channel::Sender<Box<dyn FnOnce() + Send + Sync>>,
+    work_rx: channel::Receiver<Box<dyn FnOnce() + Send + Sync>>,
+}
+
+impl GraphQueryWorker {
+    pub fn new(graph_query: Arc<GraphQuery>) -> Self {
+        // let (work_tx, work_rx) = channel::unbounded::<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>();
+        let (work_tx, work_rx) = channel::unbounded::<Box<dyn FnOnce() + Send + Sync>>();
+
+        // let graph_query_ = graph_query.clone();
+        let work_rx_ = work_rx.clone();
+
+        let _join_handle = std::thread::spawn(move || {
+            // let work_queue: VecDeque<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>> = VecDeque::new();
+            // let work_queue: VecDeque<Box<dyn FnOnce() + Send + Sync>> = VecDeque::new();
+
+            // let graph_query = graph_query_;
+            let work_rx = work_rx_;
+
+            while let Ok(work) = work_rx.recv() {
+                work();
+            }
+        });
+
+        Self {
+            _join_handle,
+
+            graph_query,
+            // work_queue: VecDeque::new(),
+            work_tx,
+            work_rx,
+        }
+    }
+
+    pub fn run_query<T, F>(&self, query: F) -> Receiver<T>
+    where
+        T: 'static + Send + Sync,
+        F: Fn(Arc<GraphQuery>) -> T + 'static + Send + Sync,
+    {
+        let (tx, rx) = channel::bounded::<T>(1);
+        let graph_query = self.graph_query.clone();
+        let boxed = Box::new(move || {
+            let result = query(graph_query);
+            tx.send(result).unwrap();
+        });
+
+        self.work_tx.send(boxed).unwrap();
+
+        rx
+    }
+}
 
 pub struct GraphQuery {
     graph: Arc<PackedGraph>,

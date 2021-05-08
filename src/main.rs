@@ -77,7 +77,9 @@ fn main() {
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let graph_query = GraphQuery::load_gfa(gfa_file).unwrap();
+    let graph_query = std::sync::Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+
+    let graph_query_worker = GraphQueryWorker::new(graph_query.clone());
 
     let (universe, stats) = universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
@@ -227,6 +229,13 @@ fn main() {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
+    let node_count_test = graph_query_worker.run_query(|gq| {
+        //
+        println!("running query");
+        std::thread::sleep(std::time::Duration::from_secs(10));
+        gq.graph().node_count()
+    });
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -247,6 +256,10 @@ fn main() {
 
         match event {
             Event::NewEvents(_) => {
+                if let Ok(nc) = node_count_test.try_recv() {
+                    println!("node count query done: {}", nc);
+                }
+
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
                 input_manager.handle_events(&gui_msg_tx);
