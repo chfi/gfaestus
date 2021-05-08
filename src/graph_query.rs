@@ -12,12 +12,47 @@ use handlegraph::{
     path_position::PathPositionMap,
 };
 
-use crossbeam::channel::{self, Receiver};
+use crossbeam::{
+    atomic::AtomicCell,
+    channel::{self, Receiver},
+};
 
 use std::{collections::VecDeque, sync::Arc};
 
 use anyhow::Result;
 
+pub struct AsyncQueryResult<T: 'static + Send + Sync> {
+    result: parking_lot::Mutex<T>,
+    ready: AtomicCell<bool>,
+}
+
+impl<T: 'static + Send + Sync> AsyncQueryResult<T> {
+    pub fn is_ready(&self) -> bool {
+        self.ready.load()
+    }
+
+    pub fn take_result_blocking(self) -> T {
+        self.result.into_inner()
+    }
+
+    /// If the provided `&mut Option<AsyncQueryResult<T>>` contains an
+    /// async result, and that result is ready, replace `result_opt`
+    /// with `None` and return the result.
+    ///
+    /// If the provided value is `None`, or the async result is not
+    /// yet ready, returns `None`.
+    pub fn take_result_option(result_opt: &mut Option<Self>) -> Option<T> {
+        let is_ready = result_opt.as_ref().map(|r| r.is_ready()) == Some(true);
+
+        if is_ready {
+            if let Some(result) = result_opt.take() {
+                return Some(result.take_result_blocking());
+            }
+        }
+
+        None
+    }
+}
 
 // pub struct GraphQueryWorker<'a> {
 pub struct GraphQueryWorker {
