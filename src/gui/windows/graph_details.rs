@@ -366,7 +366,7 @@ impl NodeList {
 
             update_slots: false,
 
-            apply_filter: AtomicCell::new(false),
+            apply_filter: AtomicCell::new(true),
 
             node_details_id,
         }
@@ -375,10 +375,6 @@ impl NodeList {
     pub fn set_filtered(&mut self, nodes: &[NodeId]) {
         self.filtered_nodes.clear();
         self.filtered_nodes.extend(nodes.iter().copied());
-
-        if self.filtered_nodes.is_empty() {
-            self.apply_filter.store(false);
-        }
 
         if self.apply_filter.load() {
             self.update_slots = true;
@@ -392,13 +388,11 @@ impl NodeList {
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
     ) -> Option<egui::Response> {
-        let mut filter = self.apply_filter.load();
+        let filter = self.apply_filter.load();
 
         let nodes = if !filter || self.filtered_nodes.is_empty() {
-            filter = false;
             &self.all_nodes
         } else {
-            filter = true;
             &self.filtered_nodes
         };
 
