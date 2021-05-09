@@ -708,6 +708,7 @@ impl Gui {
                     &self.ctx,
                     node_details_id_cell,
                     node_details,
+                    &self.app_msg_tx,
                 );
             }
         }

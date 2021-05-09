@@ -17,9 +17,14 @@ use std::sync::Arc;
 
 use bstr::{BStr, ByteSlice};
 
+use rustc_hash::{FxHashMap, FxHashSet};
+
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
-use crate::{app::AppMsg, geometry::*};
+use crate::{
+    app::{AppMsg, Select},
+    geometry::*,
+};
 
 pub struct PathList {
     all_paths: Vec<PathId>,
@@ -130,6 +135,7 @@ impl PathDetails {
         ctx: &egui::CtxRef,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
+        app_msg_tx: &Sender<AppMsg>,
     ) -> Option<egui::Response> {
         self.path_details.fetch(graph_query)?;
 
@@ -177,8 +183,13 @@ impl PathDetails {
                         ));
                     });
 
-                    self.step_list
-                        .ui(ui, graph_query, node_details_id_cell, open_node_details);
+                    self.step_list.ui(
+                        ui,
+                        app_msg_tx,
+                        graph_query,
+                        node_details_id_cell,
+                        open_node_details,
+                    );
 
                     /*
                     let separator = || egui::Separator::default().spacing(1.0);
@@ -481,7 +492,7 @@ impl StepList {
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        // app_msg_tx: &Sender<AppMsg>,
+        app_msg_tx: &Sender<AppMsg>,
         graph_query: &GraphQuery,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
@@ -514,6 +525,21 @@ impl StepList {
                 *page = page_count;
             }
         });
+
+        let select_path = ui.button("Select nodes in path");
+
+        if select_path.clicked() {
+            let nodes = self
+                .steps
+                .iter()
+                .map(|(h, _, _)| h.id())
+                .collect::<FxHashSet<_>>();
+            let selection = AppMsg::Selection(Select::Many {
+                nodes,
+                clear: false,
+            });
+            app_msg_tx.send(selection).unwrap();
+        }
 
         let page_start = (*page * self.page_size).min(steps.len() - (steps.len() % self.page_size));
         let page_end = (page_start + self.page_size).min(steps.len());
