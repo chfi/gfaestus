@@ -12,14 +12,17 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crossbeam::{atomic::AtomicCell, channel::Sender};
+use crossbeam::{
+    atomic::AtomicCell,
+    channel::{Receiver, Sender},
+};
 use std::sync::Arc;
 
 use bstr::{BStr, ByteSlice};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
+use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp, GraphQueryWorker};
 use crate::view::View;
 use crate::{
     app::{AppMsg, Select},
@@ -132,6 +135,7 @@ impl PathDetails {
         &mut self,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
+        graph_query_worker: &GraphQueryWorker,
         ctx: &egui::CtxRef,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
@@ -140,7 +144,10 @@ impl PathDetails {
         self.path_details.fetch(graph_query)?;
 
         if let Some(path) = self.path_details.path_id.load() {
-            self.step_list.update_for_path(graph_query, path)?;
+            if self.step_list.fetched_path_id != Some(path) && self.step_list.step_query.is_none() {
+                self.step_list.steps.clear();
+                self.step_list.async_path_update(graph_query_worker, path);
+            }
         }
 
         egui::Window::new("Path details")
@@ -449,6 +456,8 @@ pub struct StepList {
     page: usize,
     page_size: usize,
     page_count: usize,
+
+    step_query: Option<Receiver<(PathId, Vec<(Handle, StepPtr, usize)>)>>,
 }
 
 impl StepList {
@@ -461,7 +470,37 @@ impl StepList {
             page: 0,
             page_size,
             page_count: 0,
+
+            step_query: None,
         }
+    }
+
+    fn async_path_update(&mut self, graph_query_worker: &GraphQueryWorker, path: PathId) {
+        if self.fetched_path_id == Some(path) {
+            return;
+        }
+
+        let result_recv = graph_query_worker.run_query(
+            move |graph_query| -> (PathId, Vec<(Handle, StepPtr, usize)>) {
+                let graph = graph_query.graph();
+                if let Some(steps) = graph.path_steps(path) {
+                    let steps_vec = steps
+                        .filter_map(|step| {
+                            let handle = step.handle();
+                            let (step_ptr, _) = step;
+                            let base = graph.path_step_base_offset(path, step_ptr)?;
+                            Some((handle, step_ptr, base))
+                        })
+                        .collect::<Vec<_>>();
+
+                    (path, steps_vec)
+                } else {
+                    return (path, Vec::new());
+                }
+            },
+        );
+
+        self.step_query = Some(result_recv);
     }
 
     fn update_for_path(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
@@ -497,6 +536,24 @@ impl StepList {
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
     ) -> egui::InnerResponse<()> {
+        {
+            let mut query_complete = false;
+            if let Some(query) = self.step_query.as_ref() {
+                // println!("has query");
+                if let Ok((path, result)) = query.try_recv() {
+                    // println!("receiving query result");
+                    query_complete = true;
+
+                    self.steps = result;
+                    self.fetched_path_id = Some(path);
+                }
+            }
+
+            if query_complete {
+                self.step_query = None;
+            }
+        }
+
         let steps = &self.steps;
 
         let page = &mut self.page;

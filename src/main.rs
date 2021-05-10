@@ -230,9 +230,7 @@ fn main() {
     let initial_resize_timer = std::time::Instant::now();
 
     let node_count_test = graph_query_worker.run_query(|gq| {
-        //
         println!("running query");
-        std::thread::sleep(std::time::Duration::from_secs(10));
         gq.graph().node_count()
     });
 
@@ -388,11 +386,9 @@ fn main() {
 
                         let new_initial_view =
                             View::from_dims_and_target(app.dims(), top_left, bottom_right);
-                        if initial_view.is_none()
-                            && initial_resize_timer.elapsed().as_millis() > 100
+                        if initial_view.is_none() && initial_resize_timer.elapsed().as_millis() > 50
                         {
                             main_view.set_view(new_initial_view);
-
                             initial_view = Some(new_initial_view);
                         }
 
@@ -405,7 +401,12 @@ fn main() {
                     }
                 }
 
-                gui.begin_frame(Some(app.dims().into()), &graph_query, &graph_handle);
+                gui.begin_frame(
+                    Some(app.dims().into()),
+                    &graph_query,
+                    &graph_query_worker,
+                    &graph_handle,
+                );
 
                 let meshes = gui.end_frame();
 

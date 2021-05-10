@@ -59,10 +59,6 @@ pub struct GraphQueryWorker {
     _join_handle: std::thread::JoinHandle<()>,
     graph_query: Arc<GraphQuery>,
 
-    // work_queue: VecDeque<Box<dyn FnOnce(&'a GraphQuery)>>,
-    // work_queue: VecDeque<Box<dyn FnOnce(Arc<GraphQuery>)>>,
-    // work_tx: channel::Sender<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>,
-    // work_rx: channel::Receiver<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>,
     work_tx: channel::Sender<Box<dyn FnOnce() + Send + Sync>>,
     work_rx: channel::Receiver<Box<dyn FnOnce() + Send + Sync>>,
 }
@@ -106,7 +102,10 @@ impl GraphQueryWorker {
         let graph_query = self.graph_query.clone();
         let boxed = Box::new(move || {
             let result = query(graph_query);
-            tx.send(result).unwrap();
+            let send_result = tx.send(result);
+            if let Err(err) = send_result {
+                eprintln!("async graph query error: {:?}", err);
+            }
         });
 
         self.work_tx.send(boxed).unwrap();

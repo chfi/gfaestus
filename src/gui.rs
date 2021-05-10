@@ -22,6 +22,7 @@ use parking_lot::Mutex;
 
 use crate::{
     app::{AppMsg, RenderConfigOpts},
+    graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
 };
 use crate::{
@@ -577,6 +578,7 @@ impl Gui {
         &mut self,
         screen_rect: Option<Point>,
         graph_query: &GraphQuery,
+        graph_query_worker: &GraphQueryWorker,
         graph_handle: &GraphHandle,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
@@ -705,6 +707,7 @@ impl Gui {
                 view_state.path_details.state.ui(
                     path_details,
                     graph_query,
+                    graph_query_worker,
                     &self.ctx,
                     node_details_id_cell,
                     node_details,
