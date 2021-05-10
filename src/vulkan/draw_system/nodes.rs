@@ -1,7 +1,9 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
+use handlegraph::handle::NodeId;
+use rustc_hash::FxHashSet;
 
-use std::ffi::CString;
+use std::{ffi::CString, ops::RangeInclusive};
 
 use nalgebra_glm as glm;
 
@@ -420,6 +422,49 @@ pub struct NodeIdBuffer {
 }
 
 impl NodeIdBuffer {
+    pub fn read_rect(
+        &self,
+        device: &Device,
+        x_range: RangeInclusive<u32>,
+        y_range: RangeInclusive<u32>,
+    ) -> FxHashSet<NodeId> {
+        let min_x = (*x_range.start()).max(0);
+        let max_x = (*x_range.end()).min(self.width - 1);
+
+        let min_y = (*y_range.start()).max(0);
+        let max_y = (*y_range.end()).min(self.height - 1);
+
+        let mut values: FxHashSet<NodeId> = FxHashSet::default();
+
+        let rows = min_y..=max_y;
+        let row_width = (max_x - min_x) as usize;
+
+        unsafe {
+            let data_ptr = device
+                .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
+                .unwrap();
+
+            for y in rows {
+                let row_start = ((y * self.width) + min_x) as usize;
+                let val_ptr = (data_ptr as *const u32).add(row_start);
+
+                let slice = std::slice::from_raw_parts(val_ptr, row_width);
+
+                values.extend(slice.iter().filter_map(|&id| {
+                    if id == 0 {
+                        None
+                    } else {
+                        Some(NodeId::from(id as u64))
+                    }
+                }));
+            }
+
+            device.unmap_memory(self.memory);
+        }
+
+        values
+    }
+
     pub fn read(&self, device: &Device, x: u32, y: u32) -> Option<u32> {
         if x >= self.width || y >= self.height {
             return None;

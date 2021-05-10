@@ -172,6 +172,21 @@ impl MainView {
         self.node_id_buffer.recreate(app, width, height)
     }
 
+    pub fn read_nodes_around(&self, point: Point) -> FxHashSet<NodeId> {
+        let x = point.x as u32;
+        let y = point.y as u32;
+
+        let min_x = if x < 40 { 0 } else { x - 40 };
+
+        let min_y = if y < 40 { 0 } else { y - 40 };
+
+        self.node_id_buffer.read_rect(
+            self.node_draw_system.device(),
+            min_x..=(x + 40),
+            min_y..=(y + 40),
+        )
+    }
+
     pub fn read_node_id_at(&self, point: Point) -> Option<u32> {
         let x = point.x as u32;
         let y = point.y as u32;
