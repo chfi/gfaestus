@@ -804,7 +804,7 @@ impl GfaestusVk {
 
     pub fn recreate_swapchain(&mut self, dimensions: Option<[u32; 2]>) -> Result<()> {
         self.wait_gpu_idle()?;
-        eprintln!("recreating swapchain");
+        // eprintln!("recreating swapchain");
 
         self.cleanup_swapchain();
 

@@ -150,6 +150,7 @@ fn main() {
     .unwrap();
 
     let mut initial_view: Option<View> = None;
+    let mut initialized_view = false;
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
@@ -229,11 +230,6 @@ fn main() {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
-    let node_count_test = graph_query_worker.run_query(|gq| {
-        println!("running query");
-        gq.graph().node_count()
-    });
-
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -254,8 +250,9 @@ fn main() {
 
         match event {
             Event::NewEvents(_) => {
-                if let Ok(nc) = node_count_test.try_recv() {
-                    println!("node count query done: {}", nc);
+                if initial_resize_timer.elapsed().as_millis() > 100 && !initialized_view {
+                    main_view.reset_view();
+                    initialized_view = true;
                 }
 
                 // hacky -- this should take place after mouse pos is updated
@@ -390,7 +387,8 @@ fn main() {
 
                         let new_initial_view =
                             View::from_dims_and_target(app.dims(), top_left, bottom_right);
-                        if initial_view.is_none() && initial_resize_timer.elapsed().as_millis() > 50
+                        if initial_view.is_none()
+                            && initial_resize_timer.elapsed().as_millis() > 100
                         {
                             main_view.set_view(new_initial_view);
                             initial_view = Some(new_initial_view);
