@@ -3,7 +3,7 @@ pub mod node_flags;
 pub mod settings;
 pub mod theme;
 
-use crossbeam::atomic::AtomicCell;
+use crossbeam::{atomic::AtomicCell, channel::Sender};
 use std::sync::Arc;
 
 use crossbeam::channel;
@@ -25,6 +25,8 @@ use crate::{
 use theme::*;
 
 pub use settings::*;
+
+use self::mainview::MainViewMsg;
 
 pub struct App {
     pub themes: AppThemes,
@@ -134,6 +136,7 @@ pub enum Select {
 pub enum AppMsg {
     Selection(Select),
     HoverNode(Option<NodeId>),
+    GotoSelection,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -247,8 +250,20 @@ impl App {
         self.screen_dims = screen_dims.into();
     }
 
-    pub fn apply_app_msg(&mut self, msg: &AppMsg, node_positions: &[Node]) {
+    pub fn apply_app_msg(
+        &mut self,
+        main_view_msg_tx: &Sender<MainViewMsg>,
+        msg: &AppMsg,
+        node_positions: &[Node],
+    ) {
         match msg {
+            AppMsg::GotoSelection => {
+                if let Some(bounds) = self.selected_nodes_bounding_box {
+                    println!("Sending GotoView");
+                    let view = View::from_dims_and_target(self.dims(), bounds.0, bounds.1);
+                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
+                }
+            }
             AppMsg::HoverNode(id) => self.hover_node = *id,
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {

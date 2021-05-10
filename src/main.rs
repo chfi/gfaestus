@@ -306,25 +306,19 @@ fn main() {
                 }
 
                 while let Ok(app_msg) = app_msg_rx.try_recv() {
-                    app.apply_app_msg(&app_msg, universe.layout().nodes());
+                    app.apply_app_msg(
+                        main_view.main_view_msg_tx(),
+                        &app_msg,
+                        universe.layout().nodes(),
+                    );
                 }
 
                 while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
                     app.apply_app_config_msg(&cfg_msg);
                 }
 
-                if let Some(sel_bounds) = app.selected_nodes_bounding_box {
-                    let new_initial_view =
-                        View::from_dims_and_target(app.dims(), sel_bounds.0, sel_bounds.1);
-
-                    main_view.set_initial_view(
-                        Some(new_initial_view.center),
-                        Some(new_initial_view.scale),
-                    );
-                } else {
-                    if let Some(view) = initial_view {
-                        main_view.set_initial_view(Some(view.center), Some(view.scale));
-                    }
+                while let Ok(main_view_msg) = main_view.main_view_msg_rx().try_recv() {
+                    main_view.apply_msg(main_view_msg);
                 }
 
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {

@@ -1,5 +1,8 @@
-use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
+use crossbeam::{
+    atomic::AtomicCell,
+    channel::{Receiver, Sender},
+};
 
 use std::sync::Arc;
 
@@ -44,6 +47,14 @@ pub struct MainView {
     anim_handler: AnimHandler,
 
     view_input_state: ViewInputState,
+
+    msg_tx: Sender<MainViewMsg>,
+    msg_rx: Receiver<MainViewMsg>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum MainViewMsg {
+    GotoView(View),
 }
 
 impl MainView {
@@ -82,6 +93,8 @@ impl MainView {
 
         let anim_handler = AnimHandler::new(view.clone(), Point::ZERO, screen_dims);
 
+        let (msg_tx, msg_rx) = channel::unbounded::<MainViewMsg>();
+
         let main_view = Self {
             node_draw_system,
             node_id_buffer,
@@ -93,9 +106,29 @@ impl MainView {
             anim_handler,
 
             view_input_state: Default::default(),
+
+            msg_tx,
+            msg_rx,
         };
 
         Ok(main_view)
+    }
+
+    pub fn main_view_msg_tx(&self) -> &Sender<MainViewMsg> {
+        &self.msg_tx
+    }
+
+    pub fn main_view_msg_rx(&self) -> &Receiver<MainViewMsg> {
+        &self.msg_rx
+    }
+
+    pub fn apply_msg(&self, msg: MainViewMsg) {
+        match msg {
+            MainViewMsg::GotoView(view) => {
+                println!("Setting view");
+                self.view.store(view);
+            }
+        }
     }
 
     pub fn view(&self) -> View {

@@ -43,7 +43,7 @@ impl MenuBar {
         &self,
         ctx: &egui::CtxRef,
         open_windows: &'a mut super::OpenWindows,
-        _app_msg_tx: &Sender<AppMsg>,
+        app_msg_tx: &Sender<AppMsg>,
     ) {
         let settings = &mut open_windows.settings;
 
@@ -87,6 +87,10 @@ impl MenuBar {
                     .clicked()
                 {
                     self.overlay_state.toggle_overlay()
+                }
+
+                if ui.button("Goto selection").clicked() {
+                    app_msg_tx.send(AppMsg::GotoSelection).unwrap();
                 }
             });
         });
