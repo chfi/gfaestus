@@ -14,9 +14,9 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
-use crate::input::MousePos;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
+use crate::{gui::GuiMsg, input::MousePos};
 use crate::{
     input::binds::{BindableInput, InputPayload, KeyBind, SystemInput},
     universe::Node,
@@ -355,7 +355,7 @@ impl App {
         }
     }
 
-    pub fn apply_input(&mut self, input: SystemInput<AppInput>) {
+    pub fn apply_input(&mut self, input: SystemInput<AppInput>, gui_msg: &Sender<GuiMsg>) {
         if let SystemInput::Keyboard { state, payload } = input {
             match payload {
                 AppInput::KeyClearSelection => {
@@ -368,6 +368,14 @@ impl App {
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
                         self.themes.toggle_previous_theme();
+
+                        let msg = if self.themes.is_active_theme_dark() {
+                            GuiMsg::SetDarkMode
+                        } else {
+                            GuiMsg::SetLightMode
+                        };
+
+                        gui_msg.send(msg).unwrap();
                     }
                 }
                 AppInput::KeyToggleOverlay => {

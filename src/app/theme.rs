@@ -52,8 +52,7 @@ impl AppThemes {
         let next_theme_id = 2;
 
         let theme_definitions: FxHashMap<usize, ThemeDef> =
-            std::array::IntoIter::new([(light_ix, light), (dark_ix, dark)])
-                .collect();
+            std::array::IntoIter::new([(light_ix, light), (dark_ix, dark)]).collect();
 
         let active_theme = light_ix;
         let previous_theme = dark_ix;
@@ -86,6 +85,20 @@ impl AppThemes {
         self.uploaded_to_gpu = true;
 
         Ok(())
+    }
+
+    pub fn active_theme_luma(&self) -> f32 {
+        let theme = self
+            .theme_definitions
+            .get(&self.active_theme)
+            .expect("Active theme lacks theme definition");
+        let bg = theme.background;
+
+        (0.2126 * bg.r) + (0.7152 * bg.g) + (0.0722 * bg.b)
+    }
+
+    pub fn is_active_theme_dark(&self) -> bool {
+        self.active_theme_luma() < 0.5
     }
 
     pub fn active_theme(&self) -> usize {
@@ -190,8 +203,7 @@ pub fn light_default() -> ThemeDef {
     let background = RGB::new(1.0, 1.0, 1.0);
 
     // use rainbow theme for node colors in both light and dark themes for now
-    let node_colors =
-        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
+    let node_colors = RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,
@@ -202,8 +214,7 @@ pub fn light_default() -> ThemeDef {
 pub fn dark_default() -> ThemeDef {
     let background = RGB::new(0.0, 0.0, 0.05);
 
-    let node_colors =
-        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
+    let node_colors = RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,

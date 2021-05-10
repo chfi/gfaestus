@@ -230,6 +230,12 @@ fn main() {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
+    if app.themes.is_active_theme_dark() {
+        gui_msg_tx.send(GuiMsg::SetDarkMode).unwrap();
+    } else {
+        gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
+    }
+
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
@@ -243,8 +249,6 @@ fn main() {
             let ev = event.clone();
             winit_tx.send(ev).unwrap();
         }
-
-        gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
         let screen_dims = app.dims();
 
@@ -291,14 +295,12 @@ fn main() {
                 }
 
                 while let Ok(app_in) = app_rx.try_recv() {
-                    app.apply_input(app_in);
+                    app.apply_input(app_in, &gui_msg_tx);
                 }
 
                 while let Ok(gui_in) = gui_rx.try_recv() {
                     gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
                 }
-
-                gui.apply_received_gui_msgs();
 
                 while let Ok(main_view_in) = main_view_rx.try_recv() {
                     main_view.apply_input(screen_dims, app.mouse_pos(), &app_msg_tx, main_view_in);
@@ -311,6 +313,8 @@ fn main() {
                         universe.layout().nodes(),
                     );
                 }
+
+                gui.apply_received_gui_msgs();
 
                 while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
                     app.apply_app_config_msg(&cfg_msg);
