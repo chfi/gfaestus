@@ -29,7 +29,7 @@ nalgebra = "0.24"
 nalgebra-glm = "0.10"
 
 gfa = { version = "0.10" }
-handlegraph = "0.7.0-alpha.4"
+handlegraph = "0.7.0-alpha.5"
 
 anyhow = "1.0"
 

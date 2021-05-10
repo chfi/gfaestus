@@ -155,6 +155,14 @@ impl GraphQuery {
         &self.graph
     }
 
+    pub fn path_positions_arc(&self) -> &Arc<PathPositionMap> {
+        &self.path_positions
+    }
+
+    pub fn path_positions(&self) -> &PathPositionMap {
+        &self.path_positions
+    }
+
     pub fn build_overlay_colors<F>(&self, mut f: F) -> Vec<rgb::RGB<f32>>
     where
         F: FnMut(&PackedGraph, Handle) -> rgb::RGB<f32>,

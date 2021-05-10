@@ -483,12 +483,14 @@ impl StepList {
         let result_recv = graph_query_worker.run_query(
             move |graph_query| -> (PathId, Vec<(Handle, StepPtr, usize)>) {
                 let graph = graph_query.graph();
+                let path_pos = graph_query.path_positions();
+
                 if let Some(steps) = graph.path_steps(path) {
                     let steps_vec = steps
                         .filter_map(|step| {
                             let handle = step.handle();
                             let (step_ptr, _) = step;
-                            let base = graph.path_step_base_offset(path, step_ptr)?;
+                            let base = path_pos.path_step_position(path, step_ptr)?;
                             Some((handle, step_ptr, base))
                         })
                         .collect::<Vec<_>>();
