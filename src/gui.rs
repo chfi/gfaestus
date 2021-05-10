@@ -590,10 +590,18 @@ impl Gui {
         raw_input.screen_rect = screen_rect;
 
         self.ctx.begin_frame(raw_input);
+        {
+            let pointer_over_menu_bar = if let Some(pos) = self.ctx.input().pointer.hover_pos() {
+                pos.y <= self.menu_bar.height()
+            } else {
+                false
+            };
 
-        self.gui_focus_state
-            .mouse_over_gui
-            .store(self.ctx.is_pointer_over_area());
+            self.gui_focus_state
+                .mouse_over_gui
+                .store(self.ctx.is_pointer_over_area() || pointer_over_menu_bar);
+        }
+
         self.gui_focus_state
             .wants_keyboard_input
             .store(self.ctx.wants_keyboard_input());
