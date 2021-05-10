@@ -313,6 +313,20 @@ fn main() {
                     app.apply_app_config_msg(&cfg_msg);
                 }
 
+                if let Some(sel_bounds) = app.selected_nodes_bounding_box {
+                    let new_initial_view =
+                        View::from_dims_and_target(app.dims(), sel_bounds.0, sel_bounds.1);
+
+                    main_view.set_initial_view(
+                        Some(new_initial_view.center),
+                        Some(new_initial_view.scale),
+                    );
+                } else {
+                    if let Some(view) = initial_view {
+                        main_view.set_initial_view(Some(view.center), Some(view.scale));
+                    }
+                }
+
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {
                     match new_overlay {
                         OverlayCreatorMsg::NewOverlay { name, colors } => {
