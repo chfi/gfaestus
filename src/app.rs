@@ -36,6 +36,7 @@ pub struct App {
 
     hover_node: Option<NodeId>,
     selected_nodes: FxHashSet<NodeId>,
+    selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
@@ -157,12 +158,6 @@ pub enum RenderConfigOpts {
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(mouse_pos: MousePos, screen_dims: Dims) -> Result<Self> {
-        // let themes = Themes::new_from_primary_and_secondary(
-        //     queue.clone(),
-        //     &dark_default(),
-        //     &light_default(),
-        // )?;
-
         let themes = AppThemes::default_themes();
 
         Ok(Self {
@@ -173,6 +168,7 @@ impl App {
 
             hover_node: None,
             selected_nodes: FxHashSet::default(),
+            selection_changed: false,
 
             selected_nodes_bounding_box: None,
 
@@ -187,53 +183,20 @@ impl App {
         })
     }
 
-    // pub fn themes(&self) -> &Themes {
-    //     &self.themes
-    // }
-
-    // pub fn active_theme(&self) -> Option<(ThemeId, &Theme)> {
-    //     self.themes.active_theme()
-    // }
-
-    // pub fn active_theme_ignore_cache(&self) -> (ThemeId, &Theme) {
-    //     self.themes.active_theme_ignore_cache()
-    // }
-
-    // pub fn active_theme_def(&self) -> (ThemeId, &ThemeDef) {
-    //     let (id, _) = self.themes.active_theme_ignore_cache();
-    //     let def = self.themes.get_theme_def(id);
-    //     (id, def)
-    // }
-
-    // pub fn all_theme_defs(&self) -> Vec<(ThemeId, &ThemeDef)> {
-    //     let mut res = Vec::new();
-    //     res.push((ThemeId::Primary, &self.themes.primary_def));
-    //     res.push((ThemeId::Secondary, &self.themes.secondary_def));
-    //     res
-    // }
-
-    // pub fn active_theme_luma(&self) -> f32 {
-    //     let (_, theme) = self.active_theme_ignore_cache();
-    //     theme.bg_luma()
-    // }
-
-    // pub fn dark_active_theme(&self) -> bool {
-    //     let (_, theme) = self.active_theme_ignore_cache();
-    //     theme.is_dark()
-    // }
-
-    // pub fn theme_upload_future(&mut self) -> Option<Box<dyn GpuFuture>> {
-    //     self.themes.take_future()
-    // }
-
     pub fn hover_node(&self) -> Option<NodeId> {
         self.hover_node
     }
 
-    pub fn selected_nodes(&self) -> Option<&FxHashSet<NodeId>> {
+    pub fn selection_changed(&self) -> bool {
+        self.selection_changed
+    }
+
+    pub fn selected_nodes(&mut self) -> Option<&FxHashSet<NodeId>> {
         if self.selected_nodes.is_empty() {
+            self.selection_changed = false;
             None
         } else {
+            self.selection_changed = false;
             Some(&self.selected_nodes)
         }
     }
@@ -267,11 +230,13 @@ impl App {
             AppMsg::HoverNode(id) => self.hover_node = *id,
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
+                    self.selection_changed = true;
                     self.selected_nodes.clear();
 
                     self.selected_nodes_bounding_box = None;
                 }
                 Select::One { node, clear } => {
+                    self.selection_changed = true;
                     if *clear {
                         self.selected_nodes.clear();
                     }
@@ -292,6 +257,7 @@ impl App {
                     self.selected_nodes_bounding_box = Some((top_left, bottom_right));
                 }
                 Select::Many { nodes, clear } => {
+                    self.selection_changed = true;
                     if *clear {
                         self.selected_nodes.clear();
                     }

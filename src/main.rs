@@ -271,21 +271,23 @@ fn main() {
 
                 gui.set_hover_node(hover_node);
 
-                if let Some(selected) = app.selected_nodes() {
-                    let mut nodes = selected.iter().copied().collect::<Vec<_>>();
-                    nodes.sort();
+                if app.selection_changed() {
+                    if let Some(selected) = app.selected_nodes() {
+                        let mut nodes = selected.iter().copied().collect::<Vec<_>>();
+                        nodes.sort();
 
-                    gui.app_view_state()
-                        .node_list()
-                        .send(NodeListMsg::SetFiltered(nodes));
+                        gui.app_view_state()
+                            .node_list()
+                            .send(NodeListMsg::SetFiltered(nodes));
 
-                    main_view.update_node_selection(selected).unwrap();
-                } else {
-                    gui.app_view_state()
-                        .node_list()
-                        .send(NodeListMsg::SetFiltered(Vec::new()));
+                        main_view.update_node_selection(selected).unwrap();
+                    } else {
+                        gui.app_view_state()
+                            .node_list()
+                            .send(NodeListMsg::SetFiltered(Vec::new()));
 
-                    main_view.clear_node_selection().unwrap();
+                        main_view.clear_node_selection().unwrap();
+                    }
                 }
 
                 while let Ok(app_in) = app_rx.try_recv() {
