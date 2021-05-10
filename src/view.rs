@@ -129,12 +129,15 @@ impl View {
             y: bottom_right.y - top_left.y,
         };
 
-        let scale = {
+        let scale = if target_dims.x > target_dims.y {
             let width = target_dims.x;
-            let scale = width / dims.width;
-
-            scale * 1.05 // add a bit extra so everything fits
+            width / dims.width
+        } else {
+            let height = target_dims.y;
+            height / dims.height
         };
+
+        let scale = scale * 1.05; // add a bit extra so everything fits
 
         let center = top_left + (target_dims * 0.5);
 
