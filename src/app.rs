@@ -232,49 +232,91 @@ impl App {
                 Select::Clear => {
                     self.selection_changed = true;
                     self.selected_nodes.clear();
-
                     self.selected_nodes_bounding_box = None;
                 }
                 Select::One { node, clear } => {
                     self.selection_changed = true;
                     if *clear {
                         self.selected_nodes.clear();
+                        self.selected_nodes_bounding_box = None;
                     }
                     self.selected_nodes.insert(*node);
 
                     let node_pos = node_positions[(node.0 - 1) as usize];
 
-                    let top_left = Point {
-                        x: node_pos.p0.x.min(node_pos.p1.x),
-                        y: node_pos.p0.y.min(node_pos.p1.y),
-                    };
+                    if let Some(bounds) = self.selected_nodes_bounding_box {
+                        let old_min = Point {
+                            x: bounds.0.x.min(bounds.1.x),
+                            y: bounds.0.y.min(bounds.1.y),
+                        };
 
-                    let bottom_right = Point {
-                        x: node_pos.p0.x.max(node_pos.p1.x),
-                        y: node_pos.p0.y.max(node_pos.p1.y),
-                    };
+                        let old_max = Point {
+                            x: bounds.0.x.max(bounds.1.x),
+                            y: bounds.0.y.max(bounds.1.y),
+                        };
 
-                    self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                        let top_left = Point {
+                            x: old_min.x.min(node_pos.p0.x.min(node_pos.p1.x)),
+                            y: old_min.y.min(node_pos.p0.y.min(node_pos.p1.y)),
+                        };
+
+                        let bottom_right = Point {
+                            x: old_max.x.max(node_pos.p0.x.max(node_pos.p1.x)),
+                            y: old_max.y.max(node_pos.p0.y.max(node_pos.p1.y)),
+                        };
+
+                        self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                    } else {
+                        let top_left = Point {
+                            x: node_pos.p0.x.min(node_pos.p1.x),
+                            y: node_pos.p0.y.min(node_pos.p1.y),
+                        };
+
+                        let bottom_right = Point {
+                            x: node_pos.p0.x.max(node_pos.p1.x),
+                            y: node_pos.p0.y.max(node_pos.p1.y),
+                        };
+
+                        self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                    }
                 }
                 Select::Many { nodes, clear } => {
                     self.selection_changed = true;
                     if *clear {
                         self.selected_nodes.clear();
+                        self.selected_nodes_bounding_box = None;
                     }
                     if self.selected_nodes.capacity() < nodes.len() {
                         let additional = nodes.len() - self.selected_nodes.capacity();
                         self.selected_nodes.reserve(additional);
                     }
 
-                    let mut top_left = Point {
-                        x: std::f32::MAX,
-                        y: std::f32::MAX,
-                    };
+                    let (mut top_left, mut bottom_right) =
+                        if let Some(bounds) = self.selected_nodes_bounding_box {
+                            let old_min = Point {
+                                x: bounds.0.x.min(bounds.1.x),
+                                y: bounds.0.y.min(bounds.1.y),
+                            };
 
-                    let mut bottom_right = Point {
-                        x: std::f32::MIN,
-                        y: std::f32::MIN,
-                    };
+                            let old_max = Point {
+                                x: bounds.0.x.max(bounds.1.x),
+                                y: bounds.0.y.max(bounds.1.y),
+                            };
+
+                            (old_min, old_max)
+                        } else {
+                            let top_left = Point {
+                                x: std::f32::MAX,
+                                y: std::f32::MAX,
+                            };
+
+                            let bottom_right = Point {
+                                x: std::f32::MIN,
+                                y: std::f32::MIN,
+                            };
+
+                            (top_left, bottom_right)
+                        };
 
                     for &node in nodes.iter() {
                         let pos = node_positions[(node.0 - 1) as usize];
@@ -318,7 +360,9 @@ impl App {
             match payload {
                 AppInput::KeyClearSelection => {
                     if state.pressed() {
+                        self.selection_changed = true;
                         self.selected_nodes.clear();
+                        self.selected_nodes_bounding_box = None;
                     }
                 }
                 AppInput::KeyToggleTheme => {

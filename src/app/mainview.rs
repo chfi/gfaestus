@@ -125,8 +125,17 @@ impl MainView {
     pub fn apply_msg(&self, msg: MainViewMsg) {
         match msg {
             MainViewMsg::GotoView(view) => {
-                println!("Setting view");
-                self.view.store(view);
+                use std::time::Duration;
+
+                let anim_def = AnimationDef {
+                    kind: AnimationKind::Absolute,
+                    order: AnimationOrder::Transform {
+                        center: view.center,
+                        scale: view.scale,
+                    },
+                    duration: Duration::from_millis(500),
+                };
+                self.anim_handler.send_anim_def(anim_def);
             }
         }
     }

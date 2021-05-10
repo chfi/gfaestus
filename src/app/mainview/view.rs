@@ -46,9 +46,9 @@ impl AnimationOrder {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AnimationDef {
-    kind: AnimationKind,
-    order: AnimationOrder,
-    // instant: bool,
+    pub(super) kind: AnimationKind,
+    pub(super) order: AnimationOrder,
+    pub(super) duration: Duration,
 }
 
 impl AnimationDef {
@@ -79,7 +79,11 @@ impl AnimationDef {
 
         let order = AnimationOrder::Translate { center };
 
-        Self { kind, order }
+        Self {
+            kind,
+            order,
+            duration: Duration::from_millis(100),
+        }
     }
 }
 
@@ -235,7 +239,7 @@ where
 }
 
 impl<E: EasingFunction> ViewAnimation<E> {
-    pub fn from_anim_def(start: View, anim: AnimationDef, duration: Duration) -> Self {
+    pub fn from_anim_def(start: View, anim: AnimationDef) -> Self {
         let end = match anim.kind {
             AnimationKind::Absolute => View {
                 center: anim.order.center().unwrap_or(start.center),
@@ -253,7 +257,7 @@ impl<E: EasingFunction> ViewAnimation<E> {
 
         Self {
             view_lerp,
-            duration,
+            duration: anim.duration,
 
             now,
 
@@ -363,7 +367,7 @@ impl AnimHandler {
 
                 while let Ok(def) = anim_rx.try_recv() {
                     let view_anim: ViewAnimation<EasingExpoOut> =
-                        ViewAnimation::from_anim_def(cur_view, def, Duration::from_millis(100));
+                        ViewAnimation::from_anim_def(cur_view, def);
 
                     animation = Some(view_anim.boxed());
                     last_update = Instant::now();
@@ -475,7 +479,11 @@ impl KeyPanState {
 
             let order = AnimationOrder::Translate { center };
 
-            return Some(AnimationDef { kind, order });
+            return Some(AnimationDef {
+                kind,
+                order,
+                duration: Duration::from_millis(100),
+            });
         }
 
         let d_x = match (self.left(), self.right()) {
@@ -496,7 +504,11 @@ impl KeyPanState {
 
         let order = AnimationOrder::Translate { center };
 
-        Some(AnimationDef { kind, order })
+        Some(AnimationDef {
+            kind,
+            order,
+            duration: Duration::from_millis(100),
+        })
     }
 
     pub fn reset(&mut self) {
@@ -587,7 +599,11 @@ impl MousePanState {
                 let kind = AnimationKind::Relative;
                 let order = AnimationOrder::Translate { center };
 
-                Some(AnimationDef { order, kind })
+                Some(AnimationDef {
+                    order,
+                    kind,
+                    duration: Duration::from_millis(50),
+                })
             }
             MousePanState::ClickAndDrag { mouse_world_origin } => {
                 let mouse_delta = *mouse_world_origin - cur_mouse_world;
@@ -597,7 +613,11 @@ impl MousePanState {
                 let kind = AnimationKind::Relative;
                 let order = AnimationOrder::Translate { center };
 
-                Some(AnimationDef { order, kind })
+                Some(AnimationDef {
+                    order,
+                    kind,
+                    duration: Duration::from_millis(50),
+                })
             }
         }
     }
@@ -655,7 +675,11 @@ impl ScrollZoomState {
 
         let order = AnimationOrder::Transform { center, scale };
 
-        AnimationDef { kind, order }
+        AnimationDef {
+            kind,
+            order,
+            duration: Duration::from_millis(100),
+        }
     }
 }
 
