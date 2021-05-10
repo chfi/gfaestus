@@ -222,7 +222,6 @@ impl App {
         match msg {
             AppMsg::GotoSelection => {
                 if let Some(bounds) = self.selected_nodes_bounding_box {
-                    println!("Sending GotoView");
                     let view = View::from_dims_and_target(self.dims(), bounds.0, bounds.1);
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }

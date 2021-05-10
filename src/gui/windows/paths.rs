@@ -259,7 +259,10 @@ impl PathList {
 
                 ui.horizontal(|ui| {
                     if ui.button("First").clicked() {
-                        *page = 0;
+                        if *page != 0 {
+                            *page = 0;
+                            *update_slots = true;
+                        }
                     }
 
                     if ui.button("Prev").clicked() {
@@ -277,7 +280,10 @@ impl PathList {
                     }
 
                     if ui.button("Last").clicked() {
-                        *page = page_count;
+                        if *page != page_count {
+                            *page = page_count;
+                            *update_slots = true;
+                        }
                     }
                 });
 
