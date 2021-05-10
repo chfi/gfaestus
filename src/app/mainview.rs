@@ -50,6 +50,8 @@ pub struct MainView {
 
     msg_tx: Sender<MainViewMsg>,
     msg_rx: Receiver<MainViewMsg>,
+
+    rectangle_select_start: AtomicCell<Option<Point>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -109,6 +111,8 @@ impl MainView {
 
             msg_tx,
             msg_rx,
+
+            rectangle_select_start: AtomicCell::new(None),
         };
 
         Ok(main_view)
@@ -324,11 +328,15 @@ impl MainView {
                 match payload {
                     In::ButtonMousePan => {
                         if pressed {
-                            let view = self.view.load();
-                            let mouse_world = view.screen_point_to_world(screen_dims, mouse_pos);
+                            let rect = self.rectangle_select_start.load();
+                            if rect.is_none() {
+                                let view = self.view.load();
+                                let mouse_world =
+                                    view.screen_point_to_world(screen_dims, mouse_pos);
 
-                            self.view_input_state
-                                .start_click_and_drag_pan(view, mouse_world);
+                                self.view_input_state
+                                    .start_click_and_drag_pan(view, mouse_world);
+                            }
                         } else {
                             self.view_input_state.mouse_released();
                         }
@@ -345,6 +353,49 @@ impl MainView {
                             app_msg_tx
                                 .send(AppMsg::Selection(Select::One { node, clear: false }))
                                 .unwrap();
+                        }
+                    }
+
+                    In::ButtonRectangleSelect => {
+                        use crate::app::AppMsg;
+                        use crate::app::Select;
+
+                        if pressed {
+                            let view = self.view.load();
+
+                            self.rectangle_select_start.store(Some(mouse_pos));
+                        } else {
+                            if let Some(start) = self.rectangle_select_start.load() {
+                                let end = mouse_pos;
+
+                                let min = Point {
+                                    x: start.x.min(end.x),
+                                    y: start.y.min(end.y),
+                                };
+
+                                let max = Point {
+                                    x: start.x.max(end.x),
+                                    y: start.y.max(end.y),
+                                };
+
+                                let x_range = (min.x as u32)..=(max.x as u32);
+                                let y_range = (min.y as u32)..=(max.y as u32);
+
+                                let selection = self.node_id_buffer.read_rect(
+                                    self.node_draw_system.device(),
+                                    x_range,
+                                    y_range,
+                                );
+
+                                app_msg_tx
+                                    .send(AppMsg::Selection(Select::Many {
+                                        nodes: selection,
+                                        clear: false,
+                                    }))
+                                    .unwrap();
+                            }
+
+                            self.rectangle_select_start.store(None);
                         }
                     }
                     _ => (),
@@ -364,6 +415,7 @@ impl MainView {
 pub enum MainViewInput {
     ButtonMousePan,
     ButtonSelect,
+    ButtonRectangleSelect,
     KeyPanUp,
     KeyPanRight,
     KeyPanDown,
@@ -390,13 +442,19 @@ impl BindableInput for MainViewInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
-        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [(
-            event::MouseButton::Left,
-            vec![
-                MouseButtonBind::new(Input::ButtonMousePan),
-                MouseButtonBind::new(Input::ButtonSelect),
-            ],
-        )]
+        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [
+            (
+                event::MouseButton::Left,
+                vec![
+                    MouseButtonBind::new(Input::ButtonMousePan),
+                    MouseButtonBind::new(Input::ButtonSelect),
+                ],
+            ),
+            (
+                event::MouseButton::Right,
+                vec![MouseButtonBind::new(Input::ButtonRectangleSelect)],
+            ),
+        ]
         .iter()
         .cloned()
         .collect();
