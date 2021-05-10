@@ -198,44 +198,6 @@ impl PathDetails {
                         open_node_details,
                     );
 
-                    /*
-                    let separator = || egui::Separator::default().spacing(1.0);
-
-                    egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
-                        egui::Grid::new("path_details_step_list")
-                            .spacing(Point { x: 10.0, y: 5.0 })
-                            .striped(true)
-                            .show(&mut ui, |ui| {
-                                ui.label("Node");
-                                ui.add(separator());
-
-                                ui.label("Step");
-                                ui.add(separator());
-
-                                ui.label("Base pos");
-                                ui.end_row();
-
-                                for (path_id, step_ptr, pos) in self.paths.iter() {
-                                    let path_name = graph_query.graph().get_path_name_vec(*path_id);
-
-                                    if let Some(name) = path_name {
-                                        ui.label(format!("{}", name.as_bstr()));
-                                    } else {
-                                        ui.label(format!("Path ID {}", path_id.0));
-                                    }
-
-                                    ui.add(separator());
-
-                                    ui.label(format!("{}", step_ptr.to_vector_value()));
-                                    ui.add(separator());
-
-                                    ui.label(format!("{}", pos));
-                                    ui.end_row();
-                                }
-                            });
-                    });
-                    */
-
                     ui.shrink_width_to_current();
                 } else {
                     ui.label("Examine a path by picking it from the path list");

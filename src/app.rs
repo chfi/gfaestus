@@ -14,10 +14,13 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
-use crate::input::binds::{BindableInput, InputPayload, KeyBind, SystemInput};
 use crate::input::MousePos;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
+use crate::{
+    input::binds::{BindableInput, InputPayload, KeyBind, SystemInput},
+    universe::Node,
+};
 
 use theme::*;
 
@@ -31,6 +34,8 @@ pub struct App {
 
     hover_node: Option<NodeId>,
     selected_nodes: FxHashSet<NodeId>,
+
+    pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
     pub selection_edge_detect: bool,
     pub selection_edge_blur: bool,
@@ -166,6 +171,8 @@ impl App {
             hover_node: None,
             selected_nodes: FxHashSet::default(),
 
+            selected_nodes_bounding_box: None,
+
             selection_edge_detect: true,
             selection_edge_blur: true,
             selection_edge: true,
@@ -240,24 +247,73 @@ impl App {
         self.screen_dims = screen_dims.into();
     }
 
-    pub fn apply_app_msg(&mut self, msg: &AppMsg) {
+    pub fn apply_app_msg(&mut self, msg: &AppMsg, node_positions: &[Node]) {
         match msg {
             AppMsg::HoverNode(id) => self.hover_node = *id,
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selected_nodes.clear();
+
+                    self.selected_nodes_bounding_box = None;
                 }
                 Select::One { node, clear } => {
                     if *clear {
                         self.selected_nodes.clear();
                     }
                     self.selected_nodes.insert(*node);
+
+                    let node_pos = node_positions[(node.0 - 1) as usize];
+
+                    let top_left = Point {
+                        x: node_pos.p0.x.min(node_pos.p1.x),
+                        y: node_pos.p0.y.min(node_pos.p1.y),
+                    };
+
+                    let bottom_right = Point {
+                        x: node_pos.p0.x.max(node_pos.p1.x),
+                        y: node_pos.p0.y.max(node_pos.p1.y),
+                    };
+
+                    self.selected_nodes_bounding_box = Some((top_left, bottom_right));
                 }
                 Select::Many { nodes, clear } => {
                     if *clear {
                         self.selected_nodes.clear();
                     }
-                    self.selected_nodes.extend(nodes.iter().copied());
+                    if self.selected_nodes.capacity() < nodes.len() {
+                        let additional = nodes.len() - self.selected_nodes.capacity();
+                        self.selected_nodes.reserve(additional);
+                    }
+
+                    let mut top_left = Point {
+                        x: std::f32::MAX,
+                        y: std::f32::MAX,
+                    };
+
+                    let mut bottom_right = Point {
+                        x: std::f32::MIN,
+                        y: std::f32::MIN,
+                    };
+
+                    for &node in nodes.iter() {
+                        let pos = node_positions[(node.0 - 1) as usize];
+
+                        let min_x = pos.p0.x.min(pos.p1.x);
+                        let min_y = pos.p0.y.min(pos.p1.y);
+
+                        let max_x = pos.p0.x.max(pos.p1.x);
+                        let max_y = pos.p0.y.max(pos.p1.y);
+
+                        top_left.x = top_left.x.min(min_x);
+                        top_left.y = top_left.y.min(min_y);
+
+                        bottom_right.x = bottom_right.x.max(max_x);
+                        bottom_right.y = bottom_right.y.max(max_y);
+
+                        self.selected_nodes.insert(node);
+                    }
+
+                    self.selected_nodes_bounding_box = Some((top_left, bottom_right));
                 }
             },
         }
@@ -284,7 +340,6 @@ impl App {
                         self.selected_nodes.clear();
                     }
                 }
-
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
                         self.themes.toggle_previous_theme();

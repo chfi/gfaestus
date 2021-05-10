@@ -301,16 +301,12 @@ fn main() {
 
                 gui.apply_received_gui_msgs();
 
-                // while let Ok(opt_in) = opts_from_gui.try_recv() {
-                //     app.apply_app_config_state(opt_in);
-                // }
-
                 while let Ok(main_view_in) = main_view_rx.try_recv() {
                     main_view.apply_input(screen_dims, app.mouse_pos(), &app_msg_tx, main_view_in);
                 }
 
                 while let Ok(app_msg) = app_msg_rx.try_recv() {
-                    app.apply_app_msg(&app_msg);
+                    app.apply_app_msg(&app_msg, universe.layout().nodes());
                 }
 
                 while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
