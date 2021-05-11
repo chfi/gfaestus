@@ -27,6 +27,8 @@ use handlegraph::{
 
 use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
+pub mod bed;
+
 pub struct GluonVM {
     vm: RootedThread,
 }
@@ -55,7 +57,10 @@ impl GluonVM {
         }
     }
 
-    pub fn load_overlay_expr(&self, script_path: &Path) -> Result<Vec<RGBTuple>> {
+    pub fn load_overlay_expr(
+        &self,
+        script_path: &Path,
+    ) -> Result<Vec<RGBTuple>> {
         use std::{fs::File, io::Read};
 
         let mut file = File::open(script_path)?;
@@ -86,8 +91,10 @@ impl GluonVM {
 
         let node_count = graph.graph.node_count();
 
-        let (mut node_color, _): (FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>, _) =
-            self.vm.run_expr("node_color_fun", &source)?;
+        let (mut node_color, _): (
+            FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>,
+            _,
+        ) = self.vm.run_expr("node_color_fun", &source)?;
 
         let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
 
@@ -109,7 +116,10 @@ gfaestus.node_count
 
         let (mut node_count_fn, _) = self
             .vm
-            .run_expr::<FunctionRef<fn(GraphHandle) -> usize>>("node_count_test", script)
+            .run_expr::<FunctionRef<fn(GraphHandle) -> usize>>(
+                "node_count_test",
+                script,
+            )
             .unwrap();
 
         let node_count = node_count_fn.call(graph.clone()).unwrap();
@@ -117,7 +127,10 @@ gfaestus.node_count
         println!("gluon node count: {}", node_count);
     }
 
-    pub fn example_overlay(&self, graph: &GraphHandle) -> gluon::Result<Vec<rgb::RGB<f32>>> {
+    pub fn example_overlay(
+        &self,
+        graph: &GraphHandle,
+    ) -> gluon::Result<Vec<rgb::RGB<f32>>> {
         let script = r#"
 let gfaestus = import! gfaestus
 let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_paths g x)
@@ -126,8 +139,10 @@ node_color
 
         let node_count = graph.graph.node_count();
 
-        let (mut node_color, _): (FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>, _) =
-            self.vm.run_expr("node_color_fun", script)?;
+        let (mut node_color, _): (
+            FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>,
+            _,
+        ) = self.vm.run_expr("node_color_fun", script)?;
 
         let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
 
@@ -202,7 +217,9 @@ fn has_node(graph: &GraphHandle, node_id: u64) -> bool {
 }
 
 fn is_path_on_node(graph: &GraphHandle, path_id: u64, node_id: u64) -> bool {
-    if let Some(mut steps) = graph.graph.steps_on_handle(Handle::pack(node_id, false)) {
+    if let Some(mut steps) =
+        graph.graph.steps_on_handle(Handle::pack(node_id, false))
+    {
         steps.any(|(path, _)| path.0 == path_id)
     } else {
         false
@@ -225,7 +242,9 @@ fn hash_node_seq(graph: &GraphHandle, node_id: u64) -> u64 {
 fn hash_node_paths(graph: &GraphHandle, node_id: u64) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-    if let Some(steps) = graph.graph.steps_on_handle(Handle::pack(node_id, false)) {
+    if let Some(steps) =
+        graph.graph.steps_on_handle(Handle::pack(node_id, false))
+    {
         let mut hasher = DefaultHasher::default();
 
         for (path, _) in steps {
