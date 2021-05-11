@@ -39,6 +39,7 @@ impl GluonVM {
     pub fn new() -> Result<Self> {
         let vm = new_vm();
         gluon::import::add_extern_module(&vm, "gfaestus", packedgraph_module);
+        gluon::import::add_extern_module(&vm, "bed", bed::bed_module);
 
         vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
 

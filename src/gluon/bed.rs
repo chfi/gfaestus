@@ -1,10 +1,57 @@
+use gluon_codegen::*;
+
+use gluon::vm::{
+    api::{FunctionRef, Hole, OpaqueValue},
+    ExternModule,
+};
+use gluon::*;
+use gluon::{base::types::ArcType, import::add_extern_module};
+
 use std::path::Path;
 
 use bstr::{ByteSlice, ByteVec};
 
 use anyhow::Result;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Need a newtype wrapper for RGB to be able to derive the gluon traits
+#[derive(Debug, Clone, Copy, PartialEq, Trace, VmType, Userdata)]
+#[gluon_trace(skip)]
+#[gluon(vm_type = "RGB")]
+pub struct RGB(pub rgb::RGB<f32>);
+
+impl RGB {
+    pub fn r(&self) -> f32 {
+        self.0.r
+    }
+
+    pub fn g(&self) -> f32 {
+        self.0.g
+    }
+
+    pub fn b(&self) -> f32 {
+        self.0.b
+    }
+
+    pub fn rgb(&self) -> (f32, f32, f32) {
+        (self.0.r, self.0.g, self.0.b)
+    }
+}
+
+impl From<rgb::RGB<f32>> for RGB {
+    fn from(rgb: rgb::RGB<f32>) -> Self {
+        RGB(rgb)
+    }
+}
+
+impl Into<rgb::RGB<f32>> for RGB {
+    fn into(self) -> rgb::RGB<f32> {
+        self.0
+    }
+}
+
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Trace, VmType, Getable, Pushable,
+)]
 pub enum Strand {
     Pos,
     Neg,
@@ -27,7 +74,7 @@ impl std::str::FromStr for Strand {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace, VmType, Userdata)]
 pub struct BedRecord {
     chrom: Vec<u8>,
     chrom_start: usize,
@@ -40,12 +87,38 @@ pub struct BedRecord {
     thick_start: Option<usize>,
     thick_end: Option<usize>,
 
-    item_rgb: Option<rgb::RGB<f32>>,
+    item_rgb: Option<RGB>,
     /*
     block_count: Option<usize>,
     block_sizes: Option<Vec<usize>>,
     block_starts: Option<Vec<usize>>,
     */
+}
+
+impl BedRecord {
+    pub fn chrom(&self) -> &[u8] {
+        &self.chrom
+    }
+
+    pub fn chrom_start(&self) -> usize {
+        self.chrom_start
+    }
+
+    pub fn chrom_end(&self) -> usize {
+        self.chrom_end
+    }
+
+    pub fn name(&self) -> Option<&[u8]> {
+        self.name.as_ref().map(|n| n.as_slice())
+    }
+
+    pub fn score(&self) -> Option<f32> {
+        self.score
+    }
+
+    pub fn item_rgb(&self) -> Option<(f32, f32, f32)> {
+        self.item_rgb.map(|rgb| rgb.rgb())
+    }
 }
 
 fn parse_next<'a, T, I>(fields: &mut I) -> Option<T>
@@ -58,7 +131,7 @@ where
     field.parse().ok()
 }
 
-fn parse_rgb(field: &[u8]) -> Option<rgb::RGB<f32>> {
+fn parse_rgb(field: &[u8]) -> Option<RGB> {
     let mut fields = field.split_str(",");
 
     let ru = parse_next::<u8, _>(&mut fields)?;
@@ -67,7 +140,7 @@ fn parse_rgb(field: &[u8]) -> Option<rgb::RGB<f32>> {
 
     let rgb_u8 = rgb::RGB::new(ru, gu, bu);
 
-    Some(rgb_u8.into())
+    Some(RGB(rgb_u8.into()))
 }
 
 impl BedRecord {
@@ -142,4 +215,36 @@ impl BedRecord {
 
         Ok(result)
     }
+}
+
+fn parse_bed_file(path: &str) -> Option<Vec<BedRecord>> {
+    BedRecord::parse_bed_file(path).ok()
+}
+
+fn parse_bed_file_unwrap(path: &str) -> Vec<BedRecord> {
+    BedRecord::parse_bed_file(path).unwrap()
+}
+
+pub(super) fn bed_module(thread: &Thread) -> vm::Result<ExternModule> {
+    thread.register_type::<BedRecord>("BedRecord", &[])?;
+    thread.register_type::<RGB>("RGB", &[])?;
+
+    let module = record! {
+        type BedRecord => BedRecord,
+
+        parse_bed_file => primitive!(1, parse_bed_file),
+        parse_bed_file_unwrap => primitive!(1, parse_bed_file_unwrap),
+
+        rgb => primitive!(1, RGB::rgb),
+
+        chrom => primitive!(1, BedRecord::chrom),
+        chrom_start => primitive!(1, BedRecord::chrom_start),
+        chrom_end => primitive!(1, BedRecord::chrom_end),
+
+        name => primitive!(1, BedRecord::name),
+        score => primitive!(1, BedRecord::score),
+        item_rgb => primitive!(1, BedRecord::item_rgb),
+    };
+
+    ExternModule::new(thread, module)
 }
