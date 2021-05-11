@@ -22,7 +22,9 @@ use bstr::{BStr, ByteSlice};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp, GraphQueryWorker};
+use crate::graph_query::{
+    GraphQuery, GraphQueryRequest, GraphQueryResp, GraphQueryWorker,
+};
 use crate::view::View;
 use crate::{
     app::{AppMsg, Select},
@@ -85,7 +87,11 @@ impl PathListSlot {
         &self.path_id
     }
 
-    fn fetch_path_id(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+    fn fetch_path_id(
+        &mut self,
+        graph_query: &GraphQuery,
+        path: PathId,
+    ) -> Option<()> {
         self.path_name.clear();
         let path_name = graph_query.graph().get_path_name(path)?;
         self.path_name.extend(path_name);
@@ -144,7 +150,9 @@ impl PathDetails {
         self.path_details.fetch(graph_query)?;
 
         if let Some(path) = self.path_details.path_id.load() {
-            if self.step_list.fetched_path_id != Some(path) && self.step_list.step_query.is_none() {
+            if self.step_list.fetched_path_id != Some(path)
+                && self.step_list.step_query.is_none()
+            {
                 self.step_list.steps.clear();
                 self.step_list.async_path_update(graph_query_worker, path);
             }
@@ -167,11 +175,17 @@ impl PathDetails {
                     ui.separator();
 
                     ui.horizontal(|ui| {
-                        ui.label(format!("Step count: {}", self.path_details.step_count));
+                        ui.label(format!(
+                            "Step count: {}",
+                            self.path_details.step_count
+                        ));
 
                         ui.separator();
 
-                        ui.label(format!("Base count: {}", self.path_details.base_count));
+                        ui.label(format!(
+                            "Base count: {}",
+                            self.path_details.base_count
+                        ));
                     });
 
                     ui.separator();
@@ -290,9 +304,9 @@ impl PathList {
                 let path_id_cell = &self.path_details_id;
 
                 egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
-                    egui::Grid::new("path_list_grid")
-                        .striped(true)
-                        .show(&mut ui, |ui| {
+                    egui::Grid::new("path_list_grid").striped(true).show(
+                        &mut ui,
+                        |ui| {
                             ui.label("Path");
                             ui.label("Step count");
                             ui.label("Base count");
@@ -302,11 +316,22 @@ impl PathList {
                                 // let slot = &slot.path_details;
 
                                 if let Some(path_id) = slot.path_id.load() {
-                                    let mut row = ui.label(format!("{}", slot.path_name.as_bstr()));
+                                    let mut row = ui.label(format!(
+                                        "{}",
+                                        slot.path_name.as_bstr()
+                                    ));
 
-                                    row = row.union(ui.label(format!("{}", slot.step_count)));
+                                    row =
+                                        row.union(ui.label(format!(
+                                            "{}",
+                                            slot.step_count
+                                        )));
 
-                                    row = row.union(ui.label(format!("{}", slot.base_count)));
+                                    row =
+                                        row.union(ui.label(format!(
+                                            "{}",
+                                            slot.base_count
+                                        )));
 
                                     let row_interact = ui.interact(
                                         row.rect,
@@ -323,7 +348,8 @@ impl PathList {
                                     ui.end_row();
                                 }
                             }
-                        });
+                        },
+                    );
                 });
 
                 ui.shrink_width_to_current();
@@ -338,7 +364,7 @@ impl PathList {
         let graph = graph_query.graph();
         let path_count = graph.path_count();
 
-        let page_size = page_size.min(path_count);
+        let page_size = page_size.min(path_count).max(1);
 
         let mut all_paths = graph.path_ids().collect::<Vec<_>>();
         all_paths.sort();
@@ -400,15 +426,17 @@ impl PathList {
 
         let paths = &self.all_paths;
 
-        let page_start =
-            (self.page * self.page_size).min(paths.len() - (paths.len() % self.page_size));
+        let page_start = (self.page * self.page_size)
+            .min(paths.len() - (paths.len() % self.page_size));
         let page_end = (page_start + self.page_size).min(paths.len());
 
         for slot in self.slots.iter_mut() {
             slot.path_id.store(None);
         }
 
-        for (slot, path) in self.slots.iter_mut().zip(&paths[page_start..page_end]) {
+        for (slot, path) in
+            self.slots.iter_mut().zip(&paths[page_start..page_end])
+        {
             slot.fetch_path_id(graph_query, *path).unwrap();
         }
 
@@ -443,7 +471,11 @@ impl StepList {
         }
     }
 
-    fn async_path_update(&mut self, graph_query_worker: &GraphQueryWorker, path: PathId) {
+    fn async_path_update(
+        &mut self,
+        graph_query_worker: &GraphQueryWorker,
+        path: PathId,
+    ) {
         if self.fetched_path_id == Some(path) {
             return;
         }
@@ -458,7 +490,8 @@ impl StepList {
                         .filter_map(|step| {
                             let handle = step.handle();
                             let (step_ptr, _) = step;
-                            let base = path_pos.path_step_position(path, step_ptr)?;
+                            let base =
+                                path_pos.path_step_position(path, step_ptr)?;
                             Some((handle, step_ptr, base))
                         })
                         .collect::<Vec<_>>();
@@ -473,7 +506,11 @@ impl StepList {
         self.step_query = Some(result_recv);
     }
 
-    fn update_for_path(&mut self, graph_query: &GraphQuery, path: PathId) -> Option<()> {
+    fn update_for_path(
+        &mut self,
+        graph_query: &GraphQuery,
+        path: PathId,
+    ) -> Option<()> {
         if self.fetched_path_id == Some(path) {
             return Some(());
         }
@@ -568,7 +605,8 @@ impl StepList {
             app_msg_tx.send(selection).unwrap();
         }
 
-        let page_start = (*page * self.page_size).min(steps.len() - (steps.len() % self.page_size));
+        let page_start = (*page * self.page_size)
+            .min(steps.len() - (steps.len() % self.page_size));
         let page_end = (page_start + self.page_size).min(steps.len());
 
         let separator = || egui::Separator::default().spacing(1.0);
@@ -599,7 +637,9 @@ impl StepList {
                         };
                         row = row.union(ui.add(separator()));
 
-                        row = row.union(ui.label(format!("{}", step_ptr.to_vector_value())));
+                        row = row.union(
+                            ui.label(format!("{}", step_ptr.to_vector_value())),
+                        );
                         row = row.union(ui.add(separator()));
 
                         row = row.union(ui.label(format!("{}", pos)));
