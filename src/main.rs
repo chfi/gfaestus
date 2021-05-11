@@ -41,6 +41,7 @@ fn universe_from_gfa_layout(
     graph_query: &GraphQuery,
     layout_path: &str,
 ) -> Result<(Universe<FlatLayout>, GraphStats)> {
+    eprintln!("creating universe");
     let graph = graph_query.graph();
 
     let universe = Universe::from_laid_out_graph(&graph, layout_path)?;
@@ -77,11 +78,13 @@ fn main() {
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let graph_query = std::sync::Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+    let graph_query =
+        std::sync::Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
     let graph_query_worker = GraphQueryWorker::new(graph_query.clone());
 
-    let (universe, stats) = universe_from_gfa_layout(&graph_query, layout_file).unwrap();
+    let (universe, stats) =
+        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
@@ -105,8 +108,8 @@ fn main() {
         universe.layout().nodes().len() * 2
     );
 
-    let event_loop = EventLoop::new();
-    // let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
+    // let event_loop = EventLoop::new();
+    let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
         .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
@@ -121,7 +124,8 @@ fn main() {
 
     let mut gfaestus = gfaestus.unwrap();
 
-    let (winit_tx, winit_rx) = crossbeam::channel::unbounded::<WindowEvent<'static>>();
+    let (winit_tx, winit_rx) =
+        crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let input_manager = InputManager::new(winit_rx);
 
@@ -129,13 +133,15 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    let mut app =
-        App::new(input_manager.clone_mouse_pos(), (100.0, 100.0)).expect("error when creating App");
+    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
+        .expect("error when creating App");
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
-    let (cfg_msg_tx, cfg_msg_rx) = crossbeam::channel::unbounded::<AppConfigMsg>();
+    let (cfg_msg_tx, cfg_msg_rx) =
+        crossbeam::channel::unbounded::<AppConfigMsg>();
 
-    let (opts_to_gui, opts_from_app) = crossbeam::channel::unbounded::<AppConfigState>();
+    let (opts_to_gui, opts_from_app) =
+        crossbeam::channel::unbounded::<AppConfigState>();
 
     let node_vertices = universe.new_vertices();
 
@@ -181,7 +187,10 @@ fn main() {
         .unwrap();
 
     app.themes
-        .upload_to_gpu(&gfaestus, &mut main_view.node_draw_system.theme_pipeline)
+        .upload_to_gpu(
+            &gfaestus,
+            &mut main_view.node_draw_system.theme_pipeline,
+        )
         .unwrap();
 
     main_view
@@ -213,11 +222,16 @@ fn main() {
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
     let graph_arc = graph_query.graph_arc().clone();
-    let graph_handle = gfaestus::gluon::GraphHandle::new(graph_arc);
+    let graph_handle = gfaestus::gluon::GraphHandle::new(
+        graph_arc,
+        graph_query.path_positions_arc().clone(),
+    );
 
     let mut next_overlay_id = 0;
 
-    gui.populate_overlay_list(main_view.node_draw_system.overlay_pipeline.overlay_names());
+    gui.populate_overlay_list(
+        main_view.node_draw_system.overlay_pipeline.overlay_names(),
+    );
 
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;

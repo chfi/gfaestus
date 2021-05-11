@@ -160,6 +160,7 @@ impl FlatLayout {
 
         use rustc_hash::FxHashMap;
 
+        eprintln!("loading layout");
         let layout_file = File::open(layout_path)?;
         let reader = BufReader::new(layout_file);
 

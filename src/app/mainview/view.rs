@@ -202,7 +202,9 @@ impl ViewAnimationBoxed {
     pub fn view_at_time(&self, time: Duration) -> View {
         let duration = self.duration.as_secs_f64();
 
-        let norm_time = if time > self.duration {
+        let norm_time = if duration <= 0.01 {
+            1.0
+        } else if time >= self.duration {
             1.0
         } else {
             time.as_secs_f64() / duration
@@ -246,7 +248,8 @@ impl<E: EasingFunction> ViewAnimation<E> {
                 scale: anim.order.scale().unwrap_or(start.scale),
             },
             AnimationKind::Relative => View {
-                center: start.center + anim.order.center().unwrap_or(Point::ZERO),
+                center: start.center
+                    + anim.order.center().unwrap_or(Point::ZERO),
                 scale: start.scale + anim.order.scale().unwrap_or(0.0),
             },
         };
@@ -414,7 +417,14 @@ impl AnimHandler {
         self.anim_tx.send(anim_def).unwrap();
     }
 
-    pub fn pan_key(&self, scale: f32, up: bool, right: bool, down: bool, left: bool) {
+    pub fn pan_key(
+        &self,
+        scale: f32,
+        up: bool,
+        right: bool,
+        down: bool,
+        left: bool,
+    ) {
         let h = if right {
             1
         } else if left {
@@ -616,7 +626,7 @@ impl MousePanState {
                 Some(AnimationDef {
                     order,
                     kind,
-                    duration: Duration::from_millis(50),
+                    duration: Duration::from_millis(1),
                 })
             }
         }
@@ -631,7 +641,11 @@ pub struct ScrollZoomState {
 }
 
 impl ScrollZoomState {
-    pub fn zoom_to_cursor(view: View, mouse_screen_pos: Point, scroll_delta: f32) -> Self {
+    pub fn zoom_to_cursor(
+        view: View,
+        mouse_screen_pos: Point,
+        scroll_delta: f32,
+    ) -> Self {
         Self {
             view_start: view,
             mouse_screen_pos,
@@ -646,7 +660,10 @@ impl ScrollZoomState {
         }
     }
 
-    pub fn animation_def<D: Into<ScreenDims>>(&self, screen_dims: D) -> AnimationDef {
+    pub fn animation_def<D: Into<ScreenDims>>(
+        &self,
+        screen_dims: D,
+    ) -> AnimationDef {
         let dims = screen_dims.into();
 
         let start = self.view_start;
@@ -663,8 +680,10 @@ impl ScrollZoomState {
 
         end.scale *= scroll_delta;
 
-        let start_mouse_world = start.screen_point_to_world(dims, self.mouse_screen_pos);
-        let end_mouse_world = end.screen_point_to_world(dims, self.mouse_screen_pos);
+        let start_mouse_world =
+            start.screen_point_to_world(dims, self.mouse_screen_pos);
+        let end_mouse_world =
+            end.screen_point_to_world(dims, self.mouse_screen_pos);
 
         let mouse_diff = end_mouse_world - start_mouse_world;
 
@@ -717,7 +736,12 @@ impl ViewInputState {
             self.scroll_zoom.store(None);
             anim_def
         } else if mouse_pan.active() {
-            mouse_pan.animation_def(view.scale, screen_dims, cur_mouse_screen, cur_mouse_world)
+            mouse_pan.animation_def(
+                view.scale,
+                screen_dims,
+                cur_mouse_screen,
+                cur_mouse_world,
+            )
         } else {
             self.key_pan.animation_def(view.scale)
         }
@@ -743,8 +767,17 @@ impl ViewInputState {
         self.mouse_pan.store(MousePanState::Inactive);
     }
 
-    pub fn scroll_zoom(&self, view: View, cur_mouse_screen: Point, scroll_delta: f32) {
-        let scroll_zoom = ScrollZoomState::zoom_to_cursor(view, cur_mouse_screen, scroll_delta);
+    pub fn scroll_zoom(
+        &self,
+        view: View,
+        cur_mouse_screen: Point,
+        scroll_delta: f32,
+    ) {
+        let scroll_zoom = ScrollZoomState::zoom_to_cursor(
+            view,
+            cur_mouse_screen,
+            scroll_delta,
+        );
         self.scroll_zoom.store(Some(scroll_zoom));
     }
 }

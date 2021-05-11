@@ -52,7 +52,8 @@ impl AppThemes {
         let next_theme_id = 2;
 
         let theme_definitions: FxHashMap<usize, ThemeDef> =
-            std::array::IntoIter::new([(light_ix, light), (dark_ix, dark)]).collect();
+            std::array::IntoIter::new([(light_ix, light), (dark_ix, dark)])
+                .collect();
 
         let active_theme = light_ix;
         let previous_theme = dark_ix;
@@ -203,7 +204,8 @@ pub fn light_default() -> ThemeDef {
     let background = RGB::new(1.0, 1.0, 1.0);
 
     // use rainbow theme for node colors in both light and dark themes for now
-    let node_colors = RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
+    let node_colors =
+        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,
@@ -212,9 +214,11 @@ pub fn light_default() -> ThemeDef {
 }
 
 pub fn dark_default() -> ThemeDef {
-    let background = RGB::new(0.0, 0.0, 0.05);
+    // let background = RGB::new(0.0, 0.0, 0.05);
+    let background = RGB::new(0.1, 0.1, 0.2);
 
-    let node_colors = RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
+    let node_colors =
+        RAINBOW.iter().copied().map(RGB::from).collect::<Vec<_>>();
 
     ThemeDef {
         background,
