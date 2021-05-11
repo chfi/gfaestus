@@ -25,6 +25,7 @@ use handlegraph::{
     packedgraph::{paths::StepPtr, PackedGraph},
     path_position::PathPositionMap,
 };
+use vm::api::Function;
 
 use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
@@ -110,8 +111,8 @@ impl GluonVM {
         Ok(colors)
     }
 
-    pub fn load_overlay_per_node_expr_io(
-        &self,
+    pub fn load_overlay_per_node_expr_io<'a>(
+        &'a self,
         graph: &GraphHandle,
         script_path: &Path,
     ) -> Result<Vec<rgb::RGB<f32>>> {
@@ -126,14 +127,23 @@ impl GluonVM {
         dbg!();
 
         self.vm.run_io(true);
-        let (node_color, _): (
-            vm::api::IO<FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>>,
+        let (mut node_color, _): (
+            Function<
+                RootedThread,
+                fn(
+                    GraphHandle,
+                ) -> vm::api::IO<
+                    Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+                >,
+            >,
             _,
         ) = self.vm.run_expr("node_color_fun", &source)?;
 
         dbg!();
         let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
         dbg!();
+
+        let node_color = node_color.call(graph.clone())?;
 
         let mut node_color = match node_color {
             vm::api::IO::Value(v) => v,
@@ -142,7 +152,7 @@ impl GluonVM {
 
         for node_id in 0..node_count {
             let node_id = (node_id + 1) as u64;
-            let (r, g, b) = node_color.call(graph.clone(), node_id)?;
+            let (r, g, b) = node_color.call(node_id)?;
 
             colors.push(rgb::RGB::new(r, g, b));
         }
@@ -315,6 +325,45 @@ fn path_range(
     Some(result)
 }
 
+fn path_base_range(
+    graph: &GraphHandle,
+    path_id: u64,
+    start: usize,
+    end: usize,
+) -> Option<Vec<(u64, u64, usize)>> {
+    let mut start_ptr: Option<StepPtr> = None;
+    let mut end_ptr: Option<StepPtr> = None;
+
+    let mut base_offset = 0usize;
+
+    let path_steps = graph.graph.path_steps(PathId(path_id))?;
+
+    for step in path_steps {
+        let handle = step.handle();
+        let len = graph.graph.node_len(handle);
+
+        base_offset += len;
+
+        if start_ptr.is_none() && base_offset > start {
+            start_ptr = Some(step.0);
+        }
+
+        if end_ptr.is_none() && base_offset > end {
+            end_ptr = Some(step.0);
+        }
+    }
+
+    let start = start_ptr?;
+    let end = end_ptr?;
+
+    path_range(
+        graph,
+        path_id,
+        start.to_vector_value(),
+        end.to_vector_value(),
+    )
+}
+
 fn hash_node_seq(graph: &GraphHandle, node_id: u64) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -362,7 +411,9 @@ fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
 
         get_path_id => primitive!(2, get_path_id),
         get_path_id_str => primitive!(2, get_path_id_str),
+
         path_range => primitive!(4, path_range),
+        path_base_range => primitive!(4, path_base_range),
 
         node_count => primitive!(1, node_count),
         edge_count => primitive!(1, edge_count),
