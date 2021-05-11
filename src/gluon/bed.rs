@@ -112,6 +112,10 @@ impl BedRecord {
         self.name.as_ref().map(|n| n.as_slice())
     }
 
+    pub fn name_str(&self) -> Option<&str> {
+        self.name.as_ref().and_then(|n| n.to_str().ok())
+    }
+
     pub fn score(&self) -> Option<f32> {
         self.score
     }
@@ -138,9 +142,11 @@ fn parse_rgb(field: &[u8]) -> Option<RGB> {
     let gu = parse_next::<u8, _>(&mut fields)?;
     let bu = parse_next::<u8, _>(&mut fields)?;
 
-    let rgb_u8 = rgb::RGB::new(ru, gu, bu);
+    let r = (ru as f32) / 255.0;
+    let g = (gu as f32) / 255.0;
+    let b = (bu as f32) / 255.0;
 
-    Some(RGB(rgb_u8.into()))
+    Some(RGB(rgb::RGB::new(r, g, b)))
 }
 
 impl BedRecord {
@@ -242,6 +248,7 @@ pub(super) fn bed_module(thread: &Thread) -> vm::Result<ExternModule> {
         chrom_end => primitive!(1, BedRecord::chrom_end),
 
         name => primitive!(1, BedRecord::name),
+        name_str => primitive!(1, BedRecord::name_str),
         score => primitive!(1, BedRecord::score),
         item_rgb => primitive!(1, BedRecord::item_rgb),
     };

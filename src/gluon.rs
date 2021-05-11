@@ -17,6 +17,7 @@ use handlegraph::{
     handlegraph::*,
     mutablehandlegraph::*,
     packed::*,
+    packedgraph::index::OneBasedIndex,
     pathhandlegraph::*,
 };
 
@@ -109,6 +110,48 @@ impl GluonVM {
         Ok(colors)
     }
 
+    pub fn load_overlay_per_node_expr_io(
+        &self,
+        graph: &GraphHandle,
+        script_path: &Path,
+    ) -> Result<Vec<rgb::RGB<f32>>> {
+        use std::{fs::File, io::Read};
+
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        let node_count = graph.graph.node_count();
+
+        dbg!();
+
+        self.vm.run_io(true);
+        let (node_color, _): (
+            vm::api::IO<FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>>,
+            _,
+        ) = self.vm.run_expr("node_color_fun", &source)?;
+
+        dbg!();
+        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+        dbg!();
+
+        let mut node_color = match node_color {
+            vm::api::IO::Value(v) => v,
+            vm::api::IO::Exception(err) => anyhow::bail!(err),
+        };
+
+        for node_id in 0..node_count {
+            let node_id = (node_id + 1) as u64;
+            let (r, g, b) = node_color.call(graph.clone(), node_id)?;
+
+            colors.push(rgb::RGB::new(r, g, b));
+        }
+
+        self.vm.run_io(false);
+
+        Ok(colors)
+    }
+
     pub fn test_graph_handle(&self, graph: &GraphHandle) {
         let script = r#"
 let gfaestus = import! gfaestus
@@ -164,11 +207,15 @@ node_color
 #[gluon(vm_type = "GraphHandle")]
 pub struct GraphHandle {
     graph: Arc<PackedGraph>,
+    path_pos: Arc<PathPositionMap>,
 }
 
 impl GraphHandle {
-    pub fn new(graph: Arc<PackedGraph>) -> Self {
-        Self { graph }
+    pub fn new(
+        graph: Arc<PackedGraph>,
+        path_pos: Arc<PathPositionMap>,
+    ) -> Self {
+        Self { graph, path_pos }
     }
 }
 
@@ -231,6 +278,43 @@ fn path_len(graph: &GraphHandle, path_id: u64) -> Option<usize> {
     graph.graph.path_len(PathId(path_id))
 }
 
+fn get_path_id(graph: &GraphHandle, path_name: &[u8]) -> Option<u64> {
+    graph.graph.get_path_id(path_name).map(|p| p.0)
+}
+
+fn get_path_id_str(graph: &GraphHandle, path_name: &str) -> Option<u64> {
+    graph.graph.get_path_id(path_name.as_bytes()).map(|p| p.0)
+}
+
+fn path_range(
+    graph: &GraphHandle,
+    path_id: u64,
+    start: u64,
+    end: u64,
+) -> Option<Vec<(u64, u64, usize)>> {
+    let path_steps = graph.graph.path_steps_range(
+        PathId(path_id),
+        StepPtr::from_zero_based(start as usize),
+        StepPtr::from_zero_based(end as usize),
+    )?;
+
+    let mut result = Vec::new();
+
+    for step in path_steps {
+        let step_ptr = step.0;
+        let handle = step.handle();
+
+        let base_pos = graph
+            .path_pos
+            .path_step_position(PathId(path_id), step_ptr)
+            .unwrap();
+
+        result.push((handle.id().0, step_ptr.to_vector_value(), base_pos));
+    }
+
+    Some(result)
+}
+
 fn hash_node_seq(graph: &GraphHandle, node_id: u64) -> u64 {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
@@ -275,6 +359,11 @@ fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
 
     let module = record! {
         type GraphHandle => GraphHandle,
+
+        get_path_id => primitive!(2, get_path_id),
+        get_path_id_str => primitive!(2, get_path_id_str),
+        path_range => primitive!(4, path_range),
+
         node_count => primitive!(1, node_count),
         edge_count => primitive!(1, edge_count),
         path_count => primitive!(1, path_count),
