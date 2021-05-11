@@ -1,0 +1,5 @@
+Consensus_0	100	500	record0	0	.	0	0	200,50,50
+Consensus_0	600	1000	record1	0	.	0	0	200,50,50
+Consensus_1	300	400	record2	0	.	0	0	50,50,250
+Consensus_1	500	700	record3	0	.	0	0	10,250,50
+Consensus_2	100	2000	record4	0	.	0	0	0,1,0

@@ -1,4 +1,8 @@
 let io @ { ? }  = import! std.io
 let gfaestus = import! gfaestus
-let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_seq g x)
-io.wrap node_color
+
+let node_color_io graph : gfaestus.GraphHandle -> IO (Int -> (Float, Float, Float)) =
+    let node_color id = gfaestus.hash_node_color (gfaestus.hash_node_seq graph id)
+    io.wrap node_color
+
+node_color_io
