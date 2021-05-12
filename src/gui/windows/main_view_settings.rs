@@ -18,34 +18,50 @@ impl MainViewSettings {
         egui::Window::new("View Settings")
             .id(egui::Id::new(Self::ID))
             .show(ctx, |ui| {
-                let mut base_node_width = self.node_width.base_node_width();
-                let mut upscale_limit = self.node_width.upscale_limit();
-                let mut upscale_factor = self.node_width.upscale_factor();
 
-                let node_width_slider = ui.add(
-                    egui::Slider::new::<f32>(&mut base_node_width, 10.0..=300.0).text("Node width"),
-                ).on_hover_text("The base node width, in pixels at scale 1.0. Default: 100.0");
 
-                let upscale_limit_slider = ui.add(
-                    egui::Slider::new::<f32>(&mut upscale_limit, 10.0..=300.0)
-                        .text("Upscale limit"),
-                ).on_hover_text("The scale at which the upscale factor is applied. Default: 100.0");
+                let mut min_width = self.node_width.min_node_width();
+                let mut max_width = self.node_width.max_node_width();
 
-                let upscale_factor_slider = ui.add(
-                    egui::Slider::new::<f32>(&mut upscale_factor, 10.0..=300.0)
-                        .text("Upscale factor"),
-                ).on_hover_text("When the view scale is above the upscale limit, the scale is divided by the upscale factor before calculating the node width. Default: 100.0");
+                let mut min_scale = self.node_width.min_scale();
+                let mut max_scale = self.node_width.max_scale();
 
-                if node_width_slider.changed() {
-                    self.node_width.set_base_node_width(base_node_width);
+                // let mut base_node_width = self.node_width.base_node_width();
+                // let mut upscale_limit = self.node_width.upscale_limit();
+                // let mut upscale_factor = self.node_width.upscale_factor();
+
+                let min_node_width_slider = ui.add(
+                    egui::Slider::new::<f32>(&mut min_width, 0.1..=max_width).text("Min node width"),
+                ).on_hover_text("The minimum node width, in pixels at scale 1.0. Default: 0.1");
+
+                let max_node_width_slider = ui.add(
+                    egui::Slider::new::<f32>(&mut max_width, min_width..=300.0).text("Max node width"),
+                ).on_hover_text("The maximum node width, in pixels at scale 1.0. Default: 100.0");
+
+
+                let min_scale_slider = ui.add(
+                    egui::Slider::new::<f32>(&mut min_scale, 1.0..=max_scale).text("Min node width scale"),
+                ).on_hover_text("The scale below which the minimum node width will be used. Default: 0.1");
+
+                let max_scale_slider = ui.add(
+                    egui::Slider::new::<f32>(&mut max_scale, min_scale..=1000.0).text("Max node width scale"),
+                ).on_hover_text("The scale above which the maximum node width will be used. Default: 200.0");
+
+
+                if min_node_width_slider.changed() {
+                    self.node_width.set_min_node_width(min_width);
                 }
 
-                if upscale_limit_slider.changed() {
-                    self.node_width.set_upscale_limit(upscale_limit);
+                if max_node_width_slider.changed() {
+                    self.node_width.set_max_node_width(max_width);
                 }
 
-                if upscale_factor_slider.changed() {
-                    self.node_width.set_upscale_factor(upscale_factor);
+                if min_scale_slider.changed() {
+                    self.node_width.set_min_scale(min_scale);
+                }
+
+                if max_scale_slider.changed() {
+                    self.node_width.set_max_scale(max_scale);
                 }
             })
     }

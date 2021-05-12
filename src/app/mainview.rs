@@ -19,14 +19,16 @@ use crate::view::{ScreenDims, View};
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
-    WheelBind,
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
+    SystemInputBindings, WheelBind,
 };
 use crate::input::MousePos;
 
 use crate::vulkan::{
     context::VkContext,
-    draw_system::nodes::{NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices},
+    draw_system::nodes::{
+        NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices,
+    },
     GfaestusVk, SwapchainProperties,
 };
 
@@ -90,10 +92,14 @@ impl MainView {
             }
         };
 
-        let node_id_buffer =
-            NodeIdBuffer::new(&app, screen_dims.width as u32, screen_dims.height as u32)?;
+        let node_id_buffer = NodeIdBuffer::new(
+            &app,
+            screen_dims.width as u32,
+            screen_dims.height as u32,
+        )?;
 
-        let anim_handler = AnimHandler::new(view.clone(), Point::ZERO, screen_dims);
+        let anim_handler =
+            AnimHandler::new(view.clone(), Point::ZERO, screen_dims);
 
         let (msg_tx, msg_rx) = channel::unbounded::<MainViewMsg>();
 
@@ -211,12 +217,31 @@ impl MainView {
         let view = self.view.load();
 
         let node_width = {
-            let mut width = self.node_width.base_node_width();
-            let upscale_limit = self.node_width.upscale_limit();
-            let upscale_factor = self.node_width.upscale_factor();
+            let min = self.node_width.min_node_width();
+            let max = self.node_width.max_node_width();
 
-            if view.scale > upscale_limit {
-                width *= view.scale / upscale_factor;
+            let min_scale = self.node_width.min_scale();
+            let max_scale = self.node_width.max_scale();
+
+            // let norm_scale =
+            //     1.0 - ((view.scale - min_scale) / (max_scale - min_scale));
+
+            // let easing_val =
+            //     EasingExpoIn::value_at_normalized_time(norm_scale as f64)
+            //         as f32;
+
+            let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
+
+            let easing_val =
+                EasingExpoOut::value_at_normalized_time(norm_scale as f64)
+                    as f32;
+
+            let mut width = min + easing_val * (max - min);
+
+            if view.scale > max_scale {
+                width *= view.scale / (min_scale - max_scale);
+            } else if view.scale < min_scale {
+                width = min
             }
             width
         };
@@ -246,7 +271,10 @@ impl MainView {
         }
     }
 
-    pub fn update_node_selection(&mut self, new_selection: &FxHashSet<NodeId>) -> Result<()> {
+    pub fn update_node_selection(
+        &mut self,
+        new_selection: &FxHashSet<NodeId>,
+    ) -> Result<()> {
         let device = self.node_draw_system.device();
         let selection = &mut self.selection_buffer;
 
@@ -273,17 +301,23 @@ impl MainView {
         self.view.store(view);
     }
 
-    pub fn update_view_animation<D: Into<ScreenDims>>(&self, screen_dims: D, mouse_pos: Point) {
+    pub fn update_view_animation<D: Into<ScreenDims>>(
+        &self,
+        screen_dims: D,
+        mouse_pos: Point,
+    ) {
         let screen_dims = screen_dims.into();
         let view = self.view.load();
 
         let mouse_screen = mouse_pos;
         let mouse_world = view.screen_point_to_world(screen_dims, mouse_screen);
 
-        if let Some(anim_def) =
-            self.view_input_state
-                .animation_def(view, screen_dims, mouse_screen, mouse_world)
-        {
+        if let Some(anim_def) = self.view_input_state.animation_def(
+            view,
+            screen_dims,
+            mouse_screen,
+            mouse_world,
+        ) {
             self.anim_handler.send_anim_def(anim_def);
         }
     }
@@ -331,11 +365,15 @@ impl MainView {
                             let rect = self.rectangle_select_start.load();
                             if rect.is_none() {
                                 let view = self.view.load();
-                                let mouse_world =
-                                    view.screen_point_to_world(screen_dims, mouse_pos);
+                                let mouse_world = view.screen_point_to_world(
+                                    screen_dims,
+                                    mouse_pos,
+                                );
 
-                                self.view_input_state
-                                    .start_click_and_drag_pan(view, mouse_world);
+                                self.view_input_state.start_click_and_drag_pan(
+                                    view,
+                                    mouse_world,
+                                );
                             }
                         } else {
                             self.view_input_state.mouse_released();
@@ -351,7 +389,10 @@ impl MainView {
 
                         if let Some(node) = selected_node {
                             app_msg_tx
-                                .send(AppMsg::Selection(Select::One { node, clear: false }))
+                                .send(AppMsg::Selection(Select::One {
+                                    node,
+                                    clear: false,
+                                }))
                                 .unwrap();
                         }
                     }
@@ -365,7 +406,9 @@ impl MainView {
 
                             self.rectangle_select_start.store(Some(mouse_pos));
                         } else {
-                            if let Some(start) = self.rectangle_select_start.load() {
+                            if let Some(start) =
+                                self.rectangle_select_start.load()
+                            {
                                 let end = mouse_pos;
 
                                 let min = Point {
@@ -403,8 +446,11 @@ impl MainView {
             }
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelZoom = payload {
-                    self.view_input_state
-                        .scroll_zoom(self.view.load(), mouse_pos, delta);
+                    self.view_input_state.scroll_zoom(
+                        self.view.load(),
+                        mouse_pos,
+                        delta,
+                    );
                 }
             }
         }
@@ -442,7 +488,10 @@ impl BindableInput for MainViewInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
-        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [
             (
                 event::MouseButton::Left,
                 vec![

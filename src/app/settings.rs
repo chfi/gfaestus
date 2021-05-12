@@ -20,43 +20,54 @@ impl AppSettings {
 
 #[derive(Debug)]
 pub struct NodeWidth {
-    base_node_width: AtomicCell<f32>,
-    upscale_limit: AtomicCell<f32>,
-    upscale_factor: AtomicCell<f32>,
+    min_node_width: AtomicCell<f32>,
+    max_node_width: AtomicCell<f32>,
+
+    min_scale: AtomicCell<f32>,
+    max_scale: AtomicCell<f32>,
 }
 
 impl NodeWidth {
-    pub fn base_node_width(&self) -> f32 {
-        self.base_node_width.load()
+    pub fn min_node_width(&self) -> f32 {
+        self.min_node_width.load()
     }
 
-    pub fn upscale_limit(&self) -> f32 {
-        self.upscale_limit.load()
+    pub fn max_node_width(&self) -> f32 {
+        self.max_node_width.load()
+    }
+    pub fn min_scale(&self) -> f32 {
+        self.min_scale.load()
     }
 
-    pub fn upscale_factor(&self) -> f32 {
-        self.upscale_factor.load()
+    pub fn max_scale(&self) -> f32 {
+        self.max_scale.load()
     }
 
-    pub fn set_base_node_width(&self, new: f32) {
-        self.base_node_width.store(new);
+    pub fn set_min_node_width(&self, width: f32) {
+        self.min_node_width.store(width);
     }
 
-    pub fn set_upscale_limit(&self, new: f32) {
-        self.upscale_limit.store(new);
+    pub fn set_max_node_width(&self, width: f32) {
+        self.max_node_width.store(width);
     }
 
-    pub fn set_upscale_factor(&self, new: f32) {
-        self.upscale_factor.store(new);
+    pub fn set_min_scale(&self, width: f32) {
+        self.min_scale.store(width);
+    }
+
+    pub fn set_max_scale(&self, width: f32) {
+        self.max_scale.store(width);
     }
 }
 
 impl std::default::Default for NodeWidth {
     fn default() -> Self {
         Self {
-            base_node_width: AtomicCell::new(100.0),
-            upscale_limit: AtomicCell::new(100.0),
-            upscale_factor: AtomicCell::new(100.0),
+            min_node_width: AtomicCell::new(0.1),
+            max_node_width: AtomicCell::new(100.0),
+
+            min_scale: AtomicCell::new(0.1),
+            max_scale: AtomicCell::new(200.0),
         }
     }
 }
