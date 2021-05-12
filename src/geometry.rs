@@ -10,6 +10,12 @@ pub struct Point {
     pub y: f32,
 }
 
+#[derive(Default, Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub struct Rect {
+    min: Point,
+    max: Point,
+}
+
 impl Point {
     pub const ZERO: Self = Point { x: 0.0, y: 0.0 };
 
@@ -94,6 +100,73 @@ impl Into<egui::Vec2> for Point {
             x: self.x,
             y: self.y,
         }
+    }
+}
+
+impl Rect {
+    #[inline]
+    pub fn new<T: Into<Point>>(p0: T, p1: T) -> Self {
+        let p0 = p0.into();
+        let p1 = p1.into();
+
+        let min = Point {
+            x: p0.x.min(p1.x),
+            y: p0.y.min(p1.y),
+        };
+
+        let max = Point {
+            x: p0.x.max(p1.x),
+            y: p0.y.max(p1.y),
+        };
+
+        Self { min, max }
+    }
+
+    #[inline]
+    pub fn min(&self) -> Point {
+        self.min
+    }
+
+    #[inline]
+    pub fn max(&self) -> Point {
+        self.max
+    }
+
+    #[inline]
+    pub fn contains(&self, p: Point) -> bool {
+        self.min.x <= p.x
+            && self.max.x >= p.x
+            && self.min.y <= p.y
+            && self.max.y >= p.y
+    }
+
+    #[inline]
+    pub fn union(&self, other: &Self) -> Self {
+        let min = Point {
+            x: self.min.x.min(other.min.x),
+            y: self.min.y.min(other.min.y),
+        };
+
+        let max = Point {
+            x: self.max.x.max(other.max.x),
+            y: self.max.y.max(other.max.y),
+        };
+
+        Self { min, max }
+    }
+}
+
+impl From<(Point, Point)> for Rect {
+    #[inline]
+    fn from((p0, p1): (Point, Point)) -> Self {
+        Self::new(p0, p1)
+    }
+}
+
+impl Into<egui::Rect> for Rect {
+    #[inline]
+    fn into(self) -> egui::Rect {
+        egui::Rect::from_min_max(self.min.into(), self.max.into())
     }
 }
 
