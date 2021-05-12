@@ -19,4 +19,17 @@ more.
 
 
 `gfaestus` uses Vulkan for hardware-acceleration, via the
-[`vulkano`](https://crates.io/crates/vulkano) crate.
+[`ash`](https://crates.io/crates/ash) crate.
+
+
+
+## Requirements
+
+Compiling `gfaestus` requires the Vulkan SDK, available here: https://vulkan.lunarg.com/sdk/home
+
+To run `gfaestus`, you must have a GPU with drivers that support
+
+Vulkan. If you're on Windows or Linux, and have an AMD, Nvidia, or
+integrated Intel GPU, you should be good to go.
+
+If you're on Mac, you'll need to install [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
