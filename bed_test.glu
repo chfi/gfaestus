@@ -9,12 +9,6 @@ let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_seq g x)
 
 let bed_file = bed.parse_bed_file_unwrap("a3105.test.bed")
 
-// let add_value : gfaestus.GraphHandle -> (bed.BedRecord -> Map Int (Float, Float, FLoat))
-
-
-
-// let bed_node_colors graph record: gfaestus.GraphHandle -> bed.BedRecord -> Map Int (Float, Float, Float) =
-// let bed_node_colors graph record: gfaestus.GraphHandle -> bed.BedRecord -> (Float, Float, Float) =
 let bed_node_colors graph record: gfaestus.GraphHandle -> bed.BedRecord -> (Array Int, (Float, Float, Float)) =
     let path_id = opt.unwrap (gfaestus.get_path_id graph (bed.chrom record))
     let steps = opt.unwrap (gfaestus.path_base_range graph path_id (bed.chrom_start record) (bed.chrom_end record))
@@ -49,18 +43,6 @@ let build_node_map graph records : gfaestus.GraphHandle
     let empty_map : map.Map Int (Float, Float, Float) = map.empty
 
     array.foldable.foldl fold_fn empty_map id_colors
-
-// let build_node_map : Map Int (Float, Float, Float) =
-//     array.Foldable.foldl (
-
-// let build_color_map graph records : gfaestus.GraphHandle -> Array bed.BedRecord -> Map Int (Float, Float, Float) =
-//     array.Foldable.
-
-// let node_color graph id : gfaestus.GraphHandle -> Int -> (Float
-
-// let node_color graph id : gfaestus.GraphHandle -> Int -> (Float, Float, Float) =
-//     let color_map = build_node_map graph bed_file
-//     opt.unwrap_or (0.2, 0.2, 0.2) (map.find id color_map)
 
 let node_color_io graph : gfaestus.GraphHandle -> IO (Int -> (Float, Float, Float)) =
     io.println (opt.unwrap (bed.name_str (array.index bed_file 1)))
