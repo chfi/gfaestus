@@ -9,6 +9,7 @@ use gluon::vm::{
 };
 use gluon::*;
 use gluon::{base::types::ArcType, import::add_extern_module};
+use vm::api::Function;
 
 use anyhow::Result;
 
@@ -25,7 +26,6 @@ use handlegraph::{
     packedgraph::{paths::StepPtr, PackedGraph},
     path_position::PathPositionMap,
 };
-use vm::api::Function;
 
 use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
@@ -124,8 +124,6 @@ impl GluonVM {
 
         let node_count = graph.graph.node_count();
 
-        dbg!();
-
         self.vm.run_io(true);
         let (mut node_color, _): (
             Function<
@@ -139,9 +137,54 @@ impl GluonVM {
             _,
         ) = self.vm.run_expr("node_color_fun", &source)?;
 
-        dbg!();
         let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
-        dbg!();
+
+        let node_color = node_color.call(graph.clone())?;
+
+        let mut node_color = match node_color {
+            vm::api::IO::Value(v) => v,
+            vm::api::IO::Exception(err) => anyhow::bail!(err),
+        };
+
+        for node_id in 0..node_count {
+            let node_id = (node_id + 1) as u64;
+            let (r, g, b) = node_color.call(node_id)?;
+
+            colors.push(rgb::RGB::new(r, g, b));
+        }
+
+        self.vm.run_io(false);
+
+        Ok(colors)
+    }
+
+    pub async fn load_overlay_per_node_expr_async<'a>(
+        &'a self,
+        graph: &GraphHandle,
+        script_path: &Path,
+    ) -> Result<Vec<rgb::RGB<f32>>> {
+        use std::{fs::File, io::Read};
+
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        let node_count = graph.graph.node_count();
+
+        self.vm.run_io(true);
+        let (mut node_color, _): (
+            Function<
+                RootedThread,
+                fn(
+                    GraphHandle,
+                ) -> vm::api::IO<
+                    Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+                >,
+            >,
+            _,
+        ) = self.vm.run_expr_async("node_color_fun", &source).await?;
+
+        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
 
         let node_color = node_color.call(graph.clone())?;
 
