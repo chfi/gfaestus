@@ -176,6 +176,7 @@ fn main() {
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
+        thread_pool.clone(),
     )
     .unwrap();
 

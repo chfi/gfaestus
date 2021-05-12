@@ -8,6 +8,10 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
+use futures::executor::ThreadPool;
+
+use crate::asynchronous::AsyncResult;
+
 use crate::{app::OverlayState, gluon::GraphHandle, graph_query::GraphQuery};
 
 use crate::gluon::GluonVM;
@@ -110,12 +114,14 @@ pub struct OverlayCreator {
 
     script_error: String,
 
-    gluon: GluonVM,
+    gluon: Arc<GluonVM>,
 
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     new_overlay_rx: Receiver<OverlayCreatorMsg>,
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+
+    script_query: Option<AsyncResult<anyhow::Result<Vec<rgb::RGB<f32>>>>>,
 }
 
 impl OverlayCreator {
@@ -136,12 +142,14 @@ impl OverlayCreator {
             script_path: PathBuf::new(),
             script_error: String::new(),
 
-            gluon: gluonvm,
+            gluon: Arc::new(gluonvm),
 
             new_overlay_tx,
             new_overlay_rx,
 
             dropped_file,
+
+            script_query: None,
         })
     }
 
@@ -154,6 +162,7 @@ impl OverlayCreator {
         open: &mut bool,
         graph: &GraphHandle,
         ctx: &egui::CtxRef,
+        thread_pool: &ThreadPool,
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
@@ -204,19 +213,39 @@ impl OverlayCreator {
 
                 let _script_error_msg = ui.label(&self.script_error);
 
-                if run_script.clicked() {
+                if run_script.clicked() && self.script_query.is_none() {
                     let path = PathBuf::from(path_str.as_str());
                     println!(
                         "loading gluon script from path {:?}",
                         path.to_str()
                     );
 
-                    // let result =
-                    // self.gluon.load_overlay_per_node_expr(graph, &path);
-                    let result =
-                        self.gluon.load_overlay_per_node_expr_io(graph, &path);
+                    let gluon_ = self.gluon.clone();
+                    let graph_ = graph.clone();
 
-                    match result {
+                    let query = AsyncResult::new(thread_pool, async move {
+                        let path = path;
+                        let gluon_vm = gluon_;
+                        let graph = graph_;
+
+                        gluon_vm
+                            .load_overlay_per_node_expr_async(&graph, &path)
+                            .await
+                    });
+
+                    self.script_query = Some(query);
+                }
+
+                if let Some(query) = self.script_query.as_mut() {
+                    query.move_result_if_ready();
+                }
+
+                if let Some(script_result) = self
+                    .script_query
+                    .as_mut()
+                    .and_then(|mut r| r.take_result_if_ready())
+                {
+                    match script_result {
                         Ok(colors) => {
                             let msg = OverlayCreatorMsg::NewOverlay {
                                 name: name.to_owned(),

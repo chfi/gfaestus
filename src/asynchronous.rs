@@ -74,4 +74,14 @@ impl<T: Send + 'static> AsyncResult<T> {
     pub fn get_result(&self) -> Option<&T> {
         self.result.as_ref()
     }
+
+    pub fn take_result_if_ready(&mut self) -> Option<T> {
+        if !self.is_ready() {
+            return None;
+        }
+
+        self.move_result_if_ready();
+
+        self.result.take()
+    }
 }

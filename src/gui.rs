@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use futures::executor::ThreadPool;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -34,8 +35,8 @@ use crate::{gluon::GraphHandle, view::View};
 use crate::graph_query::GraphQuery;
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
-    WheelBind,
+    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
+    SystemInputBindings, WheelBind,
 };
 use crate::input::MousePos;
 
@@ -172,24 +173,35 @@ impl AppViewState {
 
         let node_details_state = NodeDetails::default();
         let node_id_cell = node_details_state.node_id_cell().clone();
-        let node_details = ViewStateChannel::<NodeDetails, NodeDetailsMsg>::new(node_details_state);
+        let node_details = ViewStateChannel::<NodeDetails, NodeDetailsMsg>::new(
+            node_details_state,
+        );
 
-        let node_list_state = NodeList::new(graph_query, 15, node_id_cell.clone());
-        let node_list = ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
+        let node_list_state =
+            NodeList::new(graph_query, 15, node_id_cell.clone());
+        let node_list =
+            ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
         let path_details_state = PathDetails::default();
-        let path_id_cell = path_details_state.path_details.path_id_cell().clone();
-        let path_details = ViewStateChannel::<PathDetails, ()>::new(path_details_state);
+        let path_id_cell =
+            path_details_state.path_details.path_id_cell().clone();
+        let path_details =
+            ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
         let path_list_state = PathList::new(graph_query, 15, path_id_cell);
-        let path_list = ViewStateChannel::<PathList, PathListMsg>::new(path_list_state);
+        let path_list =
+            ViewStateChannel::<PathList, PathListMsg>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);
-        let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(overlay_list_state);
+        let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(
+            overlay_list_state,
+        );
 
         let overlay_creator_state = OverlayCreator::new(dropped_file).unwrap();
-        let overlay_creator =
-            ViewStateChannel::<OverlayCreator, OverlayCreatorMsg>::new(overlay_creator_state);
+        let overlay_creator = ViewStateChannel::<
+            OverlayCreator,
+            OverlayCreatorMsg,
+        >::new(overlay_creator_state);
 
         Self {
             settings,
@@ -220,7 +232,9 @@ impl AppViewState {
         &self.node_list
     }
 
-    pub fn node_details(&self) -> &ViewStateChannel<NodeDetails, NodeDetailsMsg> {
+    pub fn node_details(
+        &self,
+    ) -> &ViewStateChannel<NodeDetails, NodeDetailsMsg> {
         &self.node_details
     }
 
@@ -453,6 +467,8 @@ pub struct Gui {
     gui_focus_state: GuiFocusState,
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+
+    thread_pool: Arc<ThreadPool>,
     // widgets: FxHashMap<String,
 
     // windows:
@@ -471,6 +487,7 @@ impl Gui {
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        thread_pool: Arc<ThreadPool>,
     ) -> Result<(Self, channel::Receiver<AppConfigState>)> {
         let draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
 
@@ -548,6 +565,8 @@ impl Gui {
             gui_focus_state,
 
             dropped_file,
+
+            thread_pool,
         };
 
         Ok((gui, receiver))
@@ -566,11 +585,16 @@ impl Gui {
     }
 
     // TODO this should be handled better
-    pub fn populate_overlay_list<'a>(&mut self, names: impl Iterator<Item = (usize, &'a str)>) {
+    pub fn populate_overlay_list<'a>(
+        &mut self,
+        names: impl Iterator<Item = (usize, &'a str)>,
+    ) {
         self.view_state.overlay_list.state.populate_names(names);
     }
 
-    pub fn new_overlay_rx(&self) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
+    pub fn new_overlay_rx(
+        &self,
+    ) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
         &self.view_state.overlay_creator.state.new_overlay_rx()
     }
 
@@ -591,15 +615,16 @@ impl Gui {
 
         self.ctx.begin_frame(raw_input);
         {
-            let pointer_over_menu_bar = if let Some(pos) = self.ctx.input().pointer.hover_pos() {
-                pos.y <= self.menu_bar.height()
-            } else {
-                false
-            };
+            let pointer_over_menu_bar =
+                if let Some(pos) = self.ctx.input().pointer.hover_pos() {
+                    pos.y <= self.menu_bar.height()
+                } else {
+                    false
+                };
 
-            self.gui_focus_state
-                .mouse_over_gui
-                .store(self.ctx.is_pointer_over_area() || pointer_over_menu_bar);
+            self.gui_focus_state.mouse_over_gui.store(
+                self.ctx.is_pointer_over_area() || pointer_over_menu_bar,
+            );
         }
 
         self.gui_focus_state
@@ -636,10 +661,12 @@ impl Gui {
                 view_state.overlay_list.state.ui(overlay_creator, &self.ctx);
             }
 
-            view_state
-                .overlay_creator
-                .state
-                .ui(overlay_creator, graph_handle, &self.ctx);
+            view_state.overlay_creator.state.ui(
+                overlay_creator,
+                graph_handle,
+                &self.ctx,
+                &self.thread_pool,
+            );
         }
 
         if self.open_windows.settings {
@@ -662,10 +689,11 @@ impl Gui {
         if self.open_windows.graph_stats {
             let top = self.menu_bar.height();
 
-            view_state
-                .graph_stats
-                .state
-                .ui(&self.ctx, Point { x: 0.0, y: top }, None);
+            view_state.graph_stats.state.ui(
+                &self.ctx,
+                Point { x: 0.0, y: top },
+                None,
+            );
         }
 
         {
@@ -673,7 +701,8 @@ impl Gui {
             let node_details = &mut self.open_windows.node_details;
 
             let path_details = &mut self.open_windows.path_details;
-            let path_details_id_cell = view_state.path_details.state.path_details.path_id_cell();
+            let path_details_id_cell =
+                view_state.path_details.state.path_details.path_id_cell();
 
             if *node_list {
                 view_state.node_list.state.ui(
@@ -700,7 +729,8 @@ impl Gui {
             let path_details = &mut self.open_windows.path_details;
 
             let node_details = &mut self.open_windows.node_details;
-            let node_details_id_cell = view_state.node_details.state.node_id_cell();
+            let node_details_id_cell =
+                view_state.node_details.state.node_id_cell();
 
             if *path_list {
                 view_state.path_list.state.ui(
@@ -735,7 +765,8 @@ impl Gui {
         }
 
         if self.open_windows.egui_memory {
-            egui::Window::new("egui_memory_ui_window").show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+            egui::Window::new("egui_memory_ui_window")
+                .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
         }
     }
 
@@ -745,7 +776,8 @@ impl Gui {
     }
 
     pub fn active_views(&self) -> Vec<Views> {
-        let mut views: Vec<_> = self.windows_active_view.values().copied().collect();
+        let mut views: Vec<_> =
+            self.windows_active_view.values().copied().collect();
         views.sort();
         views
     }
@@ -809,8 +841,12 @@ impl Gui {
                         Windows::Paths => &mut open_windows.paths,
                         Windows::Themes => &mut open_windows.themes,
                         Windows::Overlays => &mut open_windows.overlays,
-                        Windows::EguiInspection => &mut open_windows.egui_inspection,
-                        Windows::EguiSettings => &mut open_windows.egui_settings,
+                        Windows::EguiInspection => {
+                            &mut open_windows.egui_inspection
+                        }
+                        Windows::EguiSettings => {
+                            &mut open_windows.egui_settings
+                        }
                         Windows::EguiMemory => &mut open_windows.egui_memory,
                     };
 
@@ -831,7 +867,10 @@ impl Gui {
                 }
                 GuiMsg::FileDropped { path } => {
                     if let Ok(mut guard) = self.dropped_file.lock() {
-                        println!("Updated dropped file with {:?}", path.to_str());
+                        println!(
+                            "Updated dropped file with {:?}",
+                            path.to_str()
+                        );
                         *guard = Some(path);
                     }
                 }
@@ -881,8 +920,12 @@ impl Gui {
                             use crate::app::RenderConfigOpts as Opts;
 
                             let cfg_msg = match opt {
-                                Opts::SelOutlineEdge => Msg::ToggleSelectionEdgeDetect,
-                                Opts::SelOutlineBlur => Msg::ToggleSelectionEdgeBlur,
+                                Opts::SelOutlineEdge => {
+                                    Msg::ToggleSelectionEdgeDetect
+                                }
+                                Opts::SelOutlineBlur => {
+                                    Msg::ToggleSelectionEdgeBlur
+                                }
                                 Opts::SelOutline => Msg::ToggleSelectionOutline,
                                 Opts::NodesColor => Msg::ToggleNodesColor,
                             };
@@ -898,7 +941,9 @@ impl Gui {
 
                 let button = match payload {
                     GuiInput::ButtonLeft => Some(egui::PointerButton::Primary),
-                    GuiInput::ButtonRight => Some(egui::PointerButton::Secondary),
+                    GuiInput::ButtonRight => {
+                        Some(egui::PointerButton::Secondary)
+                    }
 
                     _ => None,
                 };
@@ -1004,7 +1049,10 @@ impl BindableInput for GuiInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
-        let mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Input>>> = [
+        let mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Input>>,
+        > = [
             (
                 event::MouseButton::Left,
                 vec![MouseButtonBind::new(Input::ButtonLeft)],
