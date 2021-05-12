@@ -59,4 +59,19 @@ impl<T: Send + 'static> AsyncResult<T> {
 
         self.result.as_ref()
     }
+
+    pub fn move_result_if_ready(&mut self) {
+        if !self.is_ready() || self.result.is_some() {
+            return;
+        }
+
+        if let Some(future) = self.future.take() {
+            let value = futures::executor::block_on(future);
+            self.result = Some(value);
+        }
+    }
+
+    pub fn get_result(&self) -> Option<&T> {
+        self.result.as_ref()
+    }
 }

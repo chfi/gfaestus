@@ -27,6 +27,8 @@ use ash::{vk, Device};
 
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
+use std::sync::Arc;
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -77,13 +79,17 @@ fn main() {
         std::process::exit(1);
     };
 
+    // TODO make sure to set thread pool size to less than number of CPUs
+    let thread_pool =
+        Arc::new(ThreadPoolBuilder::new().pool_size(3).create().unwrap());
+
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
-    let graph_query =
-        std::sync::Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+    let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
-    let graph_query_worker = GraphQueryWorker::new(graph_query.clone());
+    let graph_query_worker =
+        GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
 
     let (universe, stats) =
         universe_from_gfa_layout(&graph_query, layout_file).unwrap();
@@ -252,8 +258,6 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
-    // TODO make sure to set thread pool size to less than number of CPUs
-    let thread_pool = ThreadPoolBuilder::new().pool_size(3).create().unwrap();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 

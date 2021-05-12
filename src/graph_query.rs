@@ -1,3 +1,4 @@
+use futures::{executor::ThreadPool, Future};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -17,100 +18,39 @@ use crossbeam::{
     channel::{self, Receiver},
 };
 
-use std::{collections::VecDeque, sync::Arc};
+use std::sync::Arc;
 
 use anyhow::Result;
 
-pub struct AsyncQueryResult<T: 'static + Send + Sync> {
-    result: parking_lot::Mutex<T>,
-    ready: AtomicCell<bool>,
-}
+use crate::asynchronous::AsyncResult;
 
-impl<T: 'static + Send + Sync> AsyncQueryResult<T> {
-    pub fn is_ready(&self) -> bool {
-        self.ready.load()
-    }
-
-    pub fn take_result_blocking(self) -> T {
-        self.result.into_inner()
-    }
-
-    /// If the provided `&mut Option<AsyncQueryResult<T>>` contains an
-    /// async result, and that result is ready, replace `result_opt`
-    /// with `None` and return the result.
-    ///
-    /// If the provided value is `None`, or the async result is not
-    /// yet ready, returns `None`.
-    pub fn take_result_option(result_opt: &mut Option<Self>) -> Option<T> {
-        let is_ready = result_opt.as_ref().map(|r| r.is_ready()) == Some(true);
-
-        if is_ready {
-            if let Some(result) = result_opt.take() {
-                return Some(result.take_result_blocking());
-            }
-        }
-
-        None
-    }
-}
-
-// pub struct GraphQueryWorker<'a> {
 pub struct GraphQueryWorker {
-    _join_handle: std::thread::JoinHandle<()>,
     graph_query: Arc<GraphQuery>,
-
-    work_tx: channel::Sender<Box<dyn FnOnce() + Send + Sync>>,
-    work_rx: channel::Receiver<Box<dyn FnOnce() + Send + Sync>>,
+    thread_pool: Arc<ThreadPool>,
 }
 
 impl GraphQueryWorker {
-    pub fn new(graph_query: Arc<GraphQuery>) -> Self {
-        // let (work_tx, work_rx) = channel::unbounded::<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>>();
-        let (work_tx, work_rx) = channel::unbounded::<Box<dyn FnOnce() + Send + Sync>>();
-
-        // let graph_query_ = graph_query.clone();
-        let work_rx_ = work_rx.clone();
-
-        let _join_handle = std::thread::spawn(move || {
-            // let work_queue: VecDeque<Box<dyn Fn(Arc<GraphQuery>) + Send + Sync>> = VecDeque::new();
-            // let work_queue: VecDeque<Box<dyn FnOnce() + Send + Sync>> = VecDeque::new();
-
-            // let graph_query = graph_query_;
-            let work_rx = work_rx_;
-
-            while let Ok(work) = work_rx.recv() {
-                work();
-            }
-        });
-
+    pub fn new(
+        graph_query: Arc<GraphQuery>,
+        thread_pool: Arc<ThreadPool>,
+    ) -> Self {
         Self {
-            _join_handle,
-
             graph_query,
-            // work_queue: VecDeque::new(),
-            work_tx,
-            work_rx,
+            thread_pool,
         }
     }
 
-    pub fn run_query<T, F>(&self, query: F) -> Receiver<T>
+    pub fn run_query<T, F, Fut>(&self, query: F) -> AsyncResult<T>
     where
-        T: 'static + Send + Sync,
-        F: Fn(Arc<GraphQuery>) -> T + 'static + Send + Sync,
+        T: Send,
+        F: FnOnce(Arc<GraphQuery>) -> Fut + Send + 'static,
+        Fut: Future<Output = T> + Send + 'static,
     {
-        let (tx, rx) = channel::bounded::<T>(1);
-        let graph_query = self.graph_query.clone();
-        let boxed = Box::new(move || {
-            let result = query(graph_query);
-            let send_result = tx.send(result);
-            if let Err(err) = send_result {
-                eprintln!("async graph query error: {:?}", err);
-            }
-        });
+        let future = query(self.graph_query.clone());
 
-        self.work_tx.send(boxed).unwrap();
+        let result = AsyncResult::new(&self.thread_pool, future);
 
-        rx
+        result
     }
 }
 
@@ -143,7 +83,10 @@ impl GraphQuery {
         }
     }
 
-    pub fn query_request_blocking(&self, request: GraphQueryRequest) -> GraphQueryResp {
+    pub fn query_request_blocking(
+        &self,
+        request: GraphQueryRequest,
+    ) -> GraphQueryResp {
         self.query_thread.request_blocking(request)
     }
 
@@ -180,7 +123,10 @@ impl GraphQuery {
         result
     }
 
-    pub fn handle_positions(&self, handle: Handle) -> Option<Vec<(PathId, StepPtr, usize)>> {
+    pub fn handle_positions(
+        &self,
+        handle: Handle,
+    ) -> Option<Vec<(PathId, StepPtr, usize)>> {
         self.path_positions.handle_positions(&self.graph, handle)
     }
 }
@@ -241,7 +187,8 @@ impl QueryThread {
                         }
                     }
                     Req::NodeSeq(node_id) => {
-                        let seq = graph.sequence_vec(Handle::pack(node_id, false));
+                        let seq =
+                            graph.sequence_vec(Handle::pack(node_id, false));
                         let len = seq.len();
 
                         Resp::NodeSeq { node_id, seq, len }
