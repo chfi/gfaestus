@@ -25,6 +25,8 @@ use anyhow::Result;
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
+use futures::executor::{ThreadPool, ThreadPoolBuilder};
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -250,6 +252,8 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
+    // TODO make sure to set thread pool size to less than number of CPUs
+    let thread_pool = ThreadPoolBuilder::new().pool_size(3).create().unwrap();
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
