@@ -18,8 +18,10 @@ use crate::vulkan::draw_system::Vertex;
 pub mod config;
 pub mod grid;
 pub mod physics;
+pub mod selection;
 
 pub use config::*;
+pub use selection::*;
 
 // Trait abstracting over Grid and FlatLayout -- this definition only
 // supports FlatLayout, though, and should be changed to use iterators

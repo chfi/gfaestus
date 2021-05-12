@@ -121,6 +121,35 @@ impl Rect {
 
         Self { min, max }
     }
+    #[inline]
+    pub fn everywhere() -> Self {
+        let min = Point {
+            x: std::f32::MIN,
+            y: std::f32::MIN,
+        };
+
+        let max = Point {
+            x: std::f32::MAX,
+            y: std::f32::MAX,
+        };
+
+        Self { min, max }
+    }
+
+    #[inline]
+    pub fn nowhere() -> Self {
+        let min = Point {
+            x: std::f32::MAX,
+            y: std::f32::MAX,
+        };
+
+        let max = Point {
+            x: std::f32::MIN,
+            y: std::f32::MIN,
+        };
+
+        Self { min, max }
+    }
 
     #[inline]
     pub fn min(&self) -> Point {
@@ -141,7 +170,7 @@ impl Rect {
     }
 
     #[inline]
-    pub fn union(&self, other: &Self) -> Self {
+    pub fn union(&self, other: Self) -> Self {
         let min = Point {
             x: self.min.x.min(other.min.x),
             y: self.min.y.min(other.min.y),
