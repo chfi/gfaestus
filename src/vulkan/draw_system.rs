@@ -42,7 +42,7 @@ macro_rules! load_shader {
     }};
 }
 
-fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
+pub(crate) fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
 where
     P: AsRef<std::path::Path>,
 {
@@ -58,7 +58,10 @@ where
     Ok(spv)
 }
 
-fn create_shader_module(device: &Device, code: &[u32]) -> vk::ShaderModule {
+pub(crate) fn create_shader_module(
+    device: &Device,
+    code: &[u32],
+) -> vk::ShaderModule {
     let create_info = vk::ShaderModuleCreateInfo::builder().code(code).build();
     unsafe { device.create_shader_module(&create_info, None).unwrap() }
 }

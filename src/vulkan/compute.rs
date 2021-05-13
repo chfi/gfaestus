@@ -8,9 +8,11 @@ use ash::{
 };
 use ash::{vk, Device, Entry};
 
-use std::{ffi::CString, ops::RangeInclusive};
+use std::{collections::HashMap, ffi::CString, ops::RangeInclusive};
 
 use anyhow::Result;
+
+use super::draw_system::nodes::NodeVertices;
 
 pub struct NodeTranslatePipeline {
     pub(super) descriptor_pool: vk::DescriptorPool,
@@ -22,6 +24,11 @@ pub struct NodeTranslatePipeline {
     pub(super) pipeline: vk::Pipeline,
 
     pub(super) device: Device,
+
+    pub fences: HashMap<usize, vk::Fence>,
+    command_buffers: HashMap<usize, vk::CommandBuffer>,
+
+    next_fence: usize,
 }
 
 impl NodeTranslatePipeline {
@@ -68,7 +75,163 @@ impl NodeTranslatePipeline {
             pipeline,
 
             device: device.clone(),
+
+            command_buffers: HashMap::default(),
+            fences: HashMap::default(),
+            next_fence: 0,
         })
+    }
+
+    pub fn is_fence_ready(&self, fence_id: usize) -> Result<bool> {
+        let fence = *self.fences.get(&fence_id).unwrap();
+        let status = unsafe { self.device.get_fence_status(fence) }?;
+
+        Ok(status)
+    }
+
+    pub fn block_on_fence(&self, fence_id: usize) -> Result<()> {
+        let fence = *self.fences.get(&fence_id).unwrap();
+        let fences = [fence];
+        let status =
+            unsafe { self.device.wait_for_fences(&fences, true, 100_000_000) }?;
+
+        Ok(())
+    }
+
+    pub fn free_fence(
+        &mut self,
+        command_pool: vk::CommandPool,
+        fence_id: usize,
+        block: bool,
+    ) -> Result<()> {
+        let fence = *self.fences.get(&fence_id).unwrap();
+
+        if block {
+            let fences = [fence];
+            let status =
+                unsafe { self.device.wait_for_fences(&fences, true, 0) }?;
+        }
+
+        let cmd_buf = *self.command_buffers.get(&fence_id).unwrap();
+
+        unsafe {
+            let cmd_bufs = [cmd_buf];
+            self.device.free_command_buffers(command_pool, &cmd_bufs);
+            self.device.destroy_fence(fence, None);
+        }
+
+        Ok(())
+    }
+
+    pub fn dispatch(
+        &mut self,
+        queue: vk::Queue,
+        cmd_pool: vk::CommandPool,
+        vertices: &NodeVertices,
+    ) -> Result<usize> {
+        dbg!();
+        let fence = {
+            let fence_info = vk::FenceCreateInfo::builder()
+                .flags(vk::FenceCreateFlags::SIGNALED)
+                .build();
+            unsafe { self.device.create_fence(&fence_info, None).unwrap() }
+        };
+
+        dbg!();
+        // let buffer_info = vk::DescriptorBufferInfo::
+        let buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(vertices.buffer())
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let buf_infos = [buf_info];
+
+        dbg!();
+        let desc_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.vertices_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&buf_infos)
+            .build();
+
+        dbg!();
+        let desc_writes = [desc_write];
+
+        unsafe { self.device.update_descriptor_sets(&desc_writes, &[]) };
+
+        dbg!();
+        let device = &self.device;
+
+        let cmd_buf = {
+            let alloc_info = vk::CommandBufferAllocateInfo::builder()
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_pool(cmd_pool)
+                .command_buffer_count(1)
+                .build();
+
+            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
+            bufs[0]
+        };
+
+        dbg!();
+        {
+            let begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                .build();
+
+            unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
+        }
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.pipeline,
+            );
+
+            let desc_sets = [self.vertices_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        dbg!();
+        unsafe { device.cmd_dispatch(cmd_buf, 1024, 1, 1) };
+
+        dbg!();
+        unsafe { device.end_command_buffer(cmd_buf) }?;
+
+        dbg!();
+        {
+            let submit_info = vk::SubmitInfo::builder()
+                .command_buffers(&[cmd_buf])
+                .build();
+
+            unsafe {
+                device.queue_submit(queue, &[submit_info], fence)?;
+            }
+        }
+
+        dbg!();
+        self.fences.insert(self.next_fence, fence);
+        self.command_buffers.insert(self.next_fence, cmd_buf);
+
+        dbg!();
+        let fence_id = self.next_fence;
+
+        self.next_fence += 1;
+
+        dbg!();
+        Ok(fence_id)
     }
 
     fn create_descriptor_set_layout(

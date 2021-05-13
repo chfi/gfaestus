@@ -47,11 +47,19 @@ impl NodePipelines {
 
         let vertices = NodeVertices::new(device);
 
-        let selection_descriptors =
-            SelectionDescriptors::new(app, swapchain_props, selection_buffer, 1)?;
+        let selection_descriptors = SelectionDescriptors::new(
+            app,
+            swapchain_props,
+            selection_buffer,
+            1,
+        )?;
 
-        let theme_pipeline =
-            NodeThemePipeline::new(app, msaa_samples, render_pass, selection_descriptors.layout)?;
+        let theme_pipeline = NodeThemePipeline::new(
+            app,
+            msaa_samples,
+            render_pass,
+            selection_descriptors.layout,
+        )?;
         let overlay_pipeline = NodeOverlayPipeline::new(
             device,
             msaa_samples,
@@ -160,8 +168,13 @@ impl NodePipelines {
             );
         };
 
-        let push_constants =
-            NodePushConstants::new([offset.x, offset.y], viewport_dims, view, node_width, 7);
+        let push_constants = NodePushConstants::new(
+            [offset.x, offset.y],
+            viewport_dims,
+            view,
+            node_width,
+            7,
+        );
 
         let pc_bytes = push_constants.bytes();
 
@@ -176,7 +189,9 @@ impl NodePipelines {
             )
         };
 
-        unsafe { device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0) };
+        unsafe {
+            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
+        };
 
         // End render pass
         unsafe { device.cmd_end_render_pass(cmd_buf) };
@@ -269,8 +284,13 @@ impl NodePipelines {
             );
         };
 
-        let push_constants =
-            NodePushConstants::new([offset.x, offset.y], viewport_dims, view, node_width, 7);
+        let push_constants = NodePushConstants::new(
+            [offset.x, offset.y],
+            viewport_dims,
+            view,
+            node_width,
+            7,
+        );
 
         let pc_bytes = push_constants.bytes();
 
@@ -285,7 +305,9 @@ impl NodePipelines {
             )
         };
 
-        unsafe { device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0) };
+        unsafe {
+            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
+        };
 
         // End render pass
         unsafe { device.cmd_end_render_pass(cmd_buf) };
@@ -297,8 +319,12 @@ impl NodePipelines {
         let device = &self.theme_pipeline.device;
 
         unsafe {
-            device.destroy_descriptor_set_layout(self.selection_descriptors.layout, None);
-            device.destroy_descriptor_pool(self.selection_descriptors.pool, None);
+            device.destroy_descriptor_set_layout(
+                self.selection_descriptors.layout,
+                None,
+            );
+            device
+                .destroy_descriptor_pool(self.selection_descriptors.pool, None);
         }
 
         self.vertices.destroy();
@@ -399,7 +425,9 @@ impl SelectionDescriptors {
             .build()
     }
 
-    fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayout> {
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
         let binding = Self::layout_binding();
         let bindings = [binding];
 
@@ -407,7 +435,8 @@ impl SelectionDescriptors {
             .bindings(&bindings)
             .build();
 
-        let layout = unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
 
         Ok(layout)
     }
@@ -441,7 +470,12 @@ impl NodeIdBuffer {
 
         unsafe {
             let data_ptr = device
-                .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
+                .map_memory(
+                    self.memory,
+                    0,
+                    self.size,
+                    vk::MemoryMapFlags::empty(),
+                )
                 .unwrap();
 
             for y in rows {
@@ -472,7 +506,12 @@ impl NodeIdBuffer {
 
         let value = unsafe {
             let data_ptr = device
-                .map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())
+                .map_memory(
+                    self.memory,
+                    0,
+                    self.size,
+                    vk::MemoryMapFlags::empty(),
+                )
                 .unwrap();
 
             let x_offset = |x: u32, o: i32| -> u32 {
@@ -485,7 +524,8 @@ impl NodeIdBuffer {
                 (y + o).clamp(0, (self.height - 1) as i32) as u32
             };
 
-            let to_ix = |x: u32, y: u32| -> usize { (y * self.width + x) as usize };
+            let to_ix =
+                |x: u32, y: u32| -> usize { (y * self.width + x) as usize };
 
             let index = (y * self.width + x) as usize;
 
@@ -521,15 +561,18 @@ impl NodeIdBuffer {
     }
 
     pub fn new(app: &GfaestusVk, width: u32, height: u32) -> Result<Self> {
-        let img_size = (width * height * (std::mem::size_of::<u32>() as u32)) as vk::DeviceSize;
+        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
+            as vk::DeviceSize;
 
-        let usage = vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::STORAGE_BUFFER;
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::STORAGE_BUFFER;
 
         let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
             | vk::MemoryPropertyFlags::HOST_COHERENT
             | vk::MemoryPropertyFlags::HOST_CACHED;
 
-        let (buffer, memory, size) = app.create_buffer(img_size, usage, mem_props)?;
+        let (buffer, memory, size) =
+            app.create_buffer(img_size, usage, mem_props)?;
 
         Ok(Self {
             buffer,
@@ -553,21 +596,29 @@ impl NodeIdBuffer {
         self.height = 0;
     }
 
-    pub fn recreate(&mut self, app: &GfaestusVk, width: u32, height: u32) -> Result<()> {
+    pub fn recreate(
+        &mut self,
+        app: &GfaestusVk,
+        width: u32,
+        height: u32,
+    ) -> Result<()> {
         if self.width * self.height == width * height {
             return Ok(());
         }
 
         self.destroy(app.vk_context().device());
 
-        let img_size = (width * height * (std::mem::size_of::<u32>() as u32)) as vk::DeviceSize;
+        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
+            as vk::DeviceSize;
 
-        let usage = vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::STORAGE_BUFFER;
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::STORAGE_BUFFER;
 
-        let mem_props =
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
 
-        let (buffer, memory, size) = app.create_buffer(img_size, usage, mem_props)?;
+        let (buffer, memory, size) =
+            app.create_buffer(img_size, usage, mem_props)?;
 
         self.buffer = buffer;
         self.memory = memory;
@@ -601,6 +652,10 @@ impl NodeVertices {
             vertex_memory,
             device,
         }
+    }
+
+    pub fn buffer(&self) -> vk::Buffer {
+        self.vertex_buffer
     }
 
     pub fn has_vertices(&self) -> bool {
@@ -661,8 +716,8 @@ impl NodePushConstants {
         use crate::view;
 
         let model_mat = glm::mat4(
-            1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-            1.0,
+            1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0,
+            0.0, 0.0, 0.0, 0.0, 1.0,
         );
 
         let view_mat = view.to_scaled_matrix();
@@ -735,8 +790,10 @@ fn create_pipeline(
     layouts: &[vk::DescriptorSetLayout],
     frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_src = crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
-    let geom_src = crate::load_shader!("../../../shaders/nodes_simple.geom.spv");
+    let vert_src =
+        crate::load_shader!("../../../shaders/nodes_simple.vert.spv");
+    let geom_src =
+        crate::load_shader!("../../../shaders/nodes_simple.geom.spv");
     let frag_src = {
         let mut cursor = std::io::Cursor::new(frag_shader);
         ash::util::read_spv(&mut cursor).unwrap()
@@ -766,7 +823,8 @@ fn create_pipeline(
         .name(&entry_point)
         .build();
 
-    let shader_state_infos = [vert_state_info, geom_state_info, frag_state_info];
+    let shader_state_infos =
+        [vert_state_info, geom_state_info, frag_state_info];
 
     let vert_binding_descs = [Vertex::get_binding_desc()];
     let vert_attr_descs = Vertex::get_attribute_descs();
@@ -775,10 +833,11 @@ fn create_pipeline(
         .vertex_attribute_descriptions(&vert_attr_descs)
         .build();
 
-    let input_assembly_info = vk::PipelineInputAssemblyStateCreateInfo::builder()
-        .topology(vk::PrimitiveTopology::LINE_LIST)
-        .primitive_restart_enable(false)
-        .build();
+    let input_assembly_info =
+        vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::LINE_LIST)
+            .primitive_restart_enable(false)
+            .build();
 
     let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
         .viewport_count(1)
@@ -817,26 +876,29 @@ fn create_pipeline(
         .alpha_to_one_enable(false)
         .build();
 
-    let color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-        .color_write_mask(vk::ColorComponentFlags::all())
-        .blend_enable(true)
-        .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
-        .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-        .color_blend_op(vk::BlendOp::ADD)
-        .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
-        .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
-        .alpha_blend_op(vk::BlendOp::ADD)
-        .build();
+    let color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .alpha_blend_op(vk::BlendOp::ADD)
+            .build();
 
-    let id_color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-        .color_write_mask(vk::ColorComponentFlags::R)
-        .blend_enable(false)
-        .build();
+    let id_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::R)
+            .blend_enable(false)
+            .build();
 
-    let mask_color_blend_attachment = vk::PipelineColorBlendAttachmentState::builder()
-        .color_write_mask(vk::ColorComponentFlags::all())
-        .blend_enable(false)
-        .build();
+    let mask_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(false)
+            .build();
 
     let color_blend_attachments = [
         color_blend_attachment,
@@ -888,7 +950,11 @@ fn create_pipeline(
 
     let pipeline = unsafe {
         device
-            .create_graphics_pipelines(vk::PipelineCache::null(), &pipeline_infos, None)
+            .create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &pipeline_infos,
+                None,
+            )
             .unwrap()[0]
     };
 

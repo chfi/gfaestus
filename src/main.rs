@@ -20,6 +20,8 @@ use gfaestus::vulkan::draw_system::selection::{
     SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
 };
 
+use gfaestus::vulkan::compute::NodeTranslatePipeline;
+
 use anyhow::Result;
 
 use ash::version::DeviceV1_0;
@@ -242,6 +244,9 @@ fn main() {
         main_view.node_draw_system.overlay_pipeline.overlay_names(),
     );
 
+    let mut translate_pipeline =
+        NodeTranslatePipeline::new(gfaestus.vk_context().device()).unwrap();
+
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
@@ -258,6 +263,11 @@ fn main() {
     } else {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
+
+    /*
+    let mut fence_id: Option<usize> = None;
+    let mut translate_timer = std::time::Instant::now();
+    */
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -383,8 +393,39 @@ fn main() {
                 let screen_dims = app.dims();
                 let mouse_pos = app.mouse_pos();
                 main_view.update_view_animation(screen_dims, mouse_pos);
+
+                /*
+                if translate_timer.elapsed().as_secs_f64() > 2.0 {
+                    if fence_id.is_none() {
+                        println!("dispatching translation");
+                        let new_fence_id = translate_pipeline
+                        .dispatch(
+                            gfaestus.graphics_queue,
+                            gfaestus.command_pool,
+                            &main_view.node_draw_system.vertices,
+                        )
+                            .unwrap();
+
+                        fence_id = Some(new_fence_id);
+                        translate_timer = std::time::Instant::now();
+                    }
+                }
+                */
+
             }
             Event::RedrawEventsCleared => {
+
+
+                /*
+                if let Some(fid) = fence_id {
+                    println!("waiting on compute fence");
+                    translate_pipeline.block_on_fence(fid).unwrap();
+                    translate_pipeline.free_fence(gfaestus.command_pool, fid, false).unwrap();
+                    println!("compute fence signaled");
+                    fence_id = None;
+                }
+                */
+
                 let frame_t = std::time::Instant::now();
 
                 main_view
