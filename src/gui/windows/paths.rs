@@ -148,6 +148,7 @@ impl PathDetails {
             if self.step_list.fetched_path_id != Some(path) {
                 self.step_list.async_path_update(graph_query_worker, path);
                 self.step_list.fetched_path_id = Some(path);
+                self.step_list.update_filter = true;
             }
         }
 
@@ -436,16 +437,53 @@ impl PathList {
     }
 }
 
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+pub struct StepRange {
+    from_ix: usize,
+    to_ix: usize,
+
+    from_pos: usize,
+    to_pos: usize,
+
+    path_base_len: usize,
+}
+
+impl StepRange {
+    fn from_steps(
+        path_base_len: usize,
+        steps: &[(Handle, StepPtr, usize)],
+    ) -> Self {
+        let from_ix = 0;
+        let to_ix = steps.len();
+
+        let from_pos = 0;
+        let to_pos = path_base_len;
+
+        Self {
+            from_ix,
+            to_ix,
+
+            from_pos,
+            to_pos,
+
+            path_base_len,
+        }
+    }
+}
+
 pub struct StepList {
     fetched_path_id: Option<PathId>,
 
-    // steps: Vec<(Handle, StepPtr, usize)>,
     page: usize,
     page_size: usize,
     page_count: usize,
 
-    // step_query: Option<Receiver<(PathId, Vec<(Handle, StepPtr, usize)>)>>,
-    step_query: Option<AsyncResult<(PathId, Vec<(Handle, StepPtr, usize)>)>>,
+    step_query:
+        Option<AsyncResult<(PathId, usize, Vec<(Handle, StepPtr, usize)>)>>,
+
+    range_filter: StepRange,
+
+    update_filter: bool,
 }
 
 impl StepList {
@@ -459,6 +497,10 @@ impl StepList {
             page_count: 0,
 
             step_query: None,
+
+            range_filter: StepRange::default(),
+
+            update_filter: false,
         }
     }
 
@@ -471,7 +513,10 @@ impl StepList {
             graph_query_worker.run_query(move |graph_query| async move {
                 let graph = graph_query.graph();
                 let path_pos = graph_query.path_positions();
+
                 if let Some(steps) = graph.path_steps(path) {
+                    let base_len = path_pos.path_base_len(path).unwrap();
+
                     let steps_vec = steps
                         .filter_map(|step| {
                             let handle = step.handle();
@@ -482,9 +527,9 @@ impl StepList {
                         })
                         .collect::<Vec<_>>();
 
-                    (path, steps_vec)
+                    (path, base_len, steps_vec)
                 } else {
-                    return (path, Vec::new());
+                    return (path, 0, Vec::new());
                 }
             });
 
@@ -503,11 +548,24 @@ impl StepList {
             query.move_result_if_ready();
         }
 
-        let steps = if let Some((_path, result)) =
+        // let mut step_count = 0usize;
+
+        // let mut base_len = 0usize;
+
+        let steps = if let Some((_path, path_base_len, result)) =
             self.step_query.as_ref().and_then(|q| q.get_result())
         {
+            if self.update_filter {
+                self.range_filter =
+                    StepRange::from_steps(*path_base_len, &result);
+
+                self.update_filter = false;
+            }
+
             result.as_slice()
         } else {
+            self.range_filter = StepRange::default();
+
             &[]
         };
 
@@ -537,6 +595,68 @@ impl StepList {
                 *page = page_count;
             }
         });
+
+        let range_filter = &mut self.range_filter;
+
+        ui.vertical(|ui| {
+            let path_base_len = range_filter.path_base_len;
+
+            let from_pos = &mut range_filter.from_pos;
+            let to_pos = &mut range_filter.to_pos;
+
+            let from_range = 0..=*to_pos;
+            let to_range = *from_pos..=path_base_len;
+
+            let from_drag =
+                egui::DragValue::new::<usize>(from_pos).clamp_range(from_range);
+            let to_drag =
+                egui::DragValue::new::<usize>(to_pos).clamp_range(to_range);
+
+            ui.horizontal(|ui| {
+                ui.label("Filter by base pos");
+                let _from_ui = ui.add(from_drag);
+                let _to_ui = ui.add(to_drag);
+            });
+
+            let buttons = ui.horizontal(|ui| {
+                let apply_btn = ui.button("Apply filter");
+                let reset_btn = ui.button("Reset filter");
+
+                (apply_btn, reset_btn)
+            });
+
+            let (apply_btn, reset_btn) = buttons.inner;
+
+            if apply_btn.clicked() {
+                range_filter.from_ix = match steps
+                    .binary_search_by_key(from_pos, |(_, _, p)| *p)
+                {
+                    Ok(x) => x,
+                    Err(x) => x,
+                };
+
+                range_filter.to_ix =
+                    match steps.binary_search_by_key(to_pos, |(_, _, p)| *p) {
+                        Ok(x) => x,
+                        Err(x) => x,
+                    };
+            }
+
+            if reset_btn.clicked() {
+                *from_pos = 0;
+                *to_pos = path_base_len;
+
+                range_filter.from_ix = 0;
+                range_filter.to_ix = steps.len();
+            }
+        });
+
+        let steps = {
+            let from = self.range_filter.from_ix;
+            let to = self.range_filter.to_ix;
+
+            &steps[from..to]
+        };
 
         let select_path = ui.button("Select nodes in path");
 
