@@ -1,3 +1,4 @@
+pub mod compute;
 pub mod context;
 pub mod debug;
 pub mod draw_system;
