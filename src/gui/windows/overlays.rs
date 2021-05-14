@@ -243,7 +243,7 @@ impl OverlayCreator {
                 if let Some(script_result) = self
                     .script_query
                     .as_mut()
-                    .and_then(|mut r| r.take_result_if_ready())
+                    .and_then(|r| r.take_result_if_ready())
                 {
                     match script_result {
                         Ok(colors) => {
@@ -280,6 +280,8 @@ impl OverlayCreator {
                             eprintln!("Script error:\n{:?}", err);
                         }
                     }
+
+                    self.script_query = None;
                 }
             })
     }
