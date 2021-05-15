@@ -12,6 +12,8 @@ use std::{collections::HashMap, ffi::CString, ops::RangeInclusive};
 
 use anyhow::Result;
 
+use crate::app::node_flags::SelectionBuffer;
+
 use super::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 pub struct ComputeManager {
@@ -172,6 +174,191 @@ pub struct NodeTranslatePipeline {
     command_buffers: HashMap<usize, vk::CommandBuffer>,
 
     next_fence: usize,
+}
+
+pub struct GpuSelection {
+    compute_pipeline: ComputePipeline,
+
+    descriptor_set: vk::DescriptorSet,
+
+    selection_buffer: SelectionBuffer,
+}
+
+impl GpuSelection {
+    /*
+    pub fn new(device: &Device, node_count: usize) -> Result<Self> {
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(device, desc_set_layout);
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(1)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+    }
+    */
+
+    fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
+        use vk::ShaderStageFlags as Stages;
+
+        let selection = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::COMPUTE)
+            .build();
+
+        let node_vertices = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::COMPUTE)
+            .build();
+
+        [selection, node_vertices]
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let bindings = Self::layout_binding();
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+}
+
+// struct
+
+// descriptor set:
+// vertex buffer
+// selection buffer
+pub struct TranslationPipeline {
+    compute_pipeline: ComputePipeline,
+
+    descriptor_set: vk::DescriptorSet,
+}
+
+pub struct ComputePipeline {
+    pub(super) descriptor_pool: vk::DescriptorPool,
+    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+
+    pub(super) pipeline_layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+
+    pub(super) device: Device,
+}
+
+impl ComputePipeline {
+    /*
+    pub fn new(device: &Device,
+               descriptor_set_layout: vk::DescriptorSetLayout,
+               pipeline_layout: vk::PipelineLayout,
+    ) -> Result<Self> {
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: 1,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(1)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+    }
+    */
+
+    pub(crate) fn create_pipeline(
+        device: &Device,
+        pipeline_layout: vk::PipelineLayout,
+        shader: &[u8],
+    ) -> Result<vk::Pipeline> {
+        let comp_src = {
+            let mut cursor = std::io::Cursor::new(shader);
+            ash::util::read_spv(&mut cursor)
+        }?;
+
+        let comp_module =
+            super::draw_system::create_shader_module(device, &comp_src);
+
+        let entry_point = CString::new("main").unwrap();
+
+        let comp_state_info = vk::PipelineShaderStageCreateInfo::builder()
+            .stage(vk::ShaderStageFlags::COMPUTE)
+            .module(comp_module)
+            .name(&entry_point)
+            .build();
+
+        let pipeline_info = vk::ComputePipelineCreateInfo::builder()
+            .layout(pipeline_layout)
+            .stage(comp_state_info)
+            .build();
+
+        let pipeline_infos = [pipeline_info];
+
+        let pipeline = unsafe {
+            device
+                .create_compute_pipelines(
+                    vk::PipelineCache::null(),
+                    &pipeline_infos,
+                    None,
+                )
+                .unwrap()[0]
+        };
+
+        unsafe {
+            device.destroy_shader_module(comp_module, None);
+        }
+
+        Ok(pipeline)
+    }
 }
 
 impl NodeTranslatePipeline {
@@ -427,15 +614,6 @@ impl NodeTranslatePipeline {
         let layout = {
             use vk::ShaderStageFlags as Flags;
 
-            /*
-            let pc_range = vk::PushConstantRange::builder()
-                .stage_flags(Flags::COMPUTE)
-                .offset(0)
-                .size(8)
-                .build();
-            */
-
-            // let pc_ranges = [pc_range];
             let pc_ranges = [];
 
             let layouts = [descriptor_set_layout];
