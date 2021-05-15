@@ -205,52 +205,64 @@ impl GluonVM {
         Ok(colors)
     }
 
-    pub fn test_graph_handle(&self, graph: &GraphHandle) {
-        let script = r#"
-let gfaestus = import! gfaestus
-gfaestus.node_count
-"#;
-
-        let (mut node_count_fn, _) = self
-            .vm
-            .run_expr::<FunctionRef<fn(GraphHandle) -> usize>>(
-                "node_count_test",
-                script,
-            )
-            .unwrap();
-
-        let node_count = node_count_fn.call(graph.clone()).unwrap();
-
-        println!("gluon node count: {}", node_count);
-    }
-
-    pub fn example_overlay(
-        &self,
+    pub fn overlay_par<'a>(
+        &'a self,
+        rayon_pool: &rayon::ThreadPool,
         graph: &GraphHandle,
-    ) -> gluon::Result<Vec<rgb::RGB<f32>>> {
-        let script = r#"
-let gfaestus = import! gfaestus
-let node_color g x = gfaestus.hash_node_color (gfaestus.hash_node_paths g x)
-node_color
-"#;
-
+        color_fn: Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+    ) -> Result<Vec<rgb::RGB<f32>>> {
         let node_count = graph.graph.node_count();
 
+        let result = rayon_pool.install(|| {
+            let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+
+            (0..node_count)
+                .into_par_iter()
+                .map_with(color_fn, |cfn, node_id| {
+                    let node_id = (node_id + 1) as u64;
+                    let (r, g, b) = cfn.call(node_id).unwrap();
+                    rgb::RGB::new(r, g, b)
+                })
+                .collect_into_vec(&mut colors);
+
+            colors
+        });
+
+        Ok(result)
+    }
+
+    async fn load_overlay_color_fn(
+        &self,
+        graph: &GraphHandle,
+        script_path: &Path,
+    ) -> Result<Function<RootedThread, fn(u64) -> (f32, f32, f32)>> {
+        use std::{fs::File, io::Read};
+
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        self.vm.run_io(true);
         let (mut node_color, _): (
-            FunctionRef<fn(GraphHandle, u64) -> (f32, f32, f32)>,
+            Function<
+                RootedThread,
+                fn(
+                    GraphHandle,
+                ) -> vm::api::IO<
+                    Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+                >,
+            >,
             _,
-        ) = self.vm.run_expr("node_color_fun", script)?;
+        ) = self.vm.run_expr_async("node_color_fun", &source).await?;
 
-        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+        let node_color = node_color.call(graph.clone())?;
 
-        for node_id in 0..node_count {
-            let node_id = (node_id + 1) as u64;
-            let (r, g, b) = node_color.call(graph.clone(), node_id)?;
+        let node_color = match node_color {
+            vm::api::IO::Value(v) => v,
+            vm::api::IO::Exception(err) => anyhow::bail!(err),
+        };
 
-            colors.push(rgb::RGB::new(r, g, b));
-        }
-
-        Ok(colors)
+        Ok(node_color)
     }
 }
 
