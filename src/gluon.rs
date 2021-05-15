@@ -13,6 +13,8 @@ use vm::api::Function;
 
 use anyhow::Result;
 
+use rayon::prelude::*;
+
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
     handlegraph::*,
@@ -203,6 +205,29 @@ impl GluonVM {
         self.vm.run_io(false);
 
         Ok(colors)
+    }
+
+    pub async fn load_overlay_par<'a>(
+        &'a self,
+        rayon_pool: &rayon::ThreadPool,
+        // thread_pool: &futures::executor::ThreadPool,
+        graph: &GraphHandle,
+        color_fn: Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+    ) -> Result<Vec<rgb::RGB<f32>>> {
+        use futures::channel::oneshot;
+
+        let (sender, receiver) =
+            oneshot::channel::<Result<Vec<rgb::RGB<f32>>>>();
+
+        async {
+            let result = self.overlay_par(rayon_pool, graph, color_fn);
+            sender.send(result).unwrap();
+        }
+        .await;
+
+        let val = receiver.await?;
+
+        val
     }
 
     pub fn overlay_par<'a>(
