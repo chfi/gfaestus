@@ -30,6 +30,7 @@ impl SelectionBuffer {
             as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::TRANSFER_SRC
             | vk::BufferUsageFlags::STORAGE_BUFFER;
 
         let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE

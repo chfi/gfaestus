@@ -108,6 +108,10 @@ impl ComputeManager {
             unsafe { device.create_fence(&fence_info, None).unwrap() }
         };
 
+        let fences = [fence];
+
+        unsafe { device.reset_fences(&fences).unwrap() };
+
         let cmd_buf = {
             let alloc_info = vk::CommandBufferAllocateInfo::builder()
                 .level(vk::CommandBufferLevel::PRIMARY)
@@ -179,6 +183,8 @@ pub struct GpuSelection {
     descriptor_set: vk::DescriptorSet,
 
     pub selection_buffer: SelectionBuffer,
+
+    node_count: usize,
 }
 
 impl GpuSelection {
@@ -187,17 +193,15 @@ impl GpuSelection {
 
         let device = app.vk_context().device();
 
-        dbg!();
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        dbg!();
         let pipeline_layout = {
             use vk::ShaderStageFlags as Flags;
 
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(16)
+                .size(20)
                 .build();
 
             let pc_ranges = [pc_range];
@@ -212,7 +216,6 @@ impl GpuSelection {
             unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
 
-        dbg!();
         let compute_pipeline = ComputePipeline::new(
             device,
             desc_set_layout,
@@ -220,11 +223,9 @@ impl GpuSelection {
             include_bytes!("../../shaders/rect_select.comp.spv"),
         )?;
 
-        dbg!();
         let descriptor_sets = {
             let layouts = vec![desc_set_layout];
 
-            dbg!();
             let alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(compute_pipeline.descriptor_pool)
                 .set_layouts(&layouts)
@@ -233,16 +234,16 @@ impl GpuSelection {
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
 
-        dbg!();
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
-        dbg!();
         Ok(Self {
             compute_pipeline,
 
             descriptor_set: descriptor_sets[0],
 
             selection_buffer,
+
+            node_count,
         })
     }
 
@@ -293,7 +294,11 @@ impl GpuSelection {
             );
         };
 
-        let push_constants = RectPushConstants::new(rect.min(), rect.max());
+        let push_constants = RectPushConstants::new(
+            self.node_count as u32,
+            rect.min(),
+            rect.max(),
+        );
         let pc_bytes = push_constants.bytes();
 
         unsafe {
@@ -307,7 +312,21 @@ impl GpuSelection {
             )
         };
 
-        unsafe { device.cmd_dispatch(cmd_buf, 64, 1, 1) };
+        let x_group_count = {
+            let div = self.node_count / 64;
+            let rem = self.node_count % 64;
+
+            let mut count = div;
+            if rem > 0 {
+                count += 1;
+            }
+            count as u32
+        };
+
+        println!("dispatch with x_group_count {}", x_group_count);
+
+        unsafe { device.cmd_dispatch(cmd_buf, x_group_count, 1, 1) };
+        // unsafe { device.cmd_dispatch(cmd_buf, 64, 1, 1) };
 
         Ok(())
     }
@@ -345,7 +364,6 @@ impl GpuSelection {
             .buffer_info(&node_buf_infos)
             .build();
 
-        dbg!();
         let desc_writes = [sel_write, node_write];
 
         unsafe {
@@ -592,7 +610,6 @@ impl NodeTranslatePipeline {
         cmd_pool: vk::CommandPool,
         vertices: &NodeVertices,
     ) -> Result<usize> {
-        dbg!();
         let fence = {
             let fence_info = vk::FenceCreateInfo::builder()
                 .flags(vk::FenceCreateFlags::SIGNALED)
@@ -600,7 +617,6 @@ impl NodeTranslatePipeline {
             unsafe { self.device.create_fence(&fence_info, None).unwrap() }
         };
 
-        dbg!();
         // let buffer_info = vk::DescriptorBufferInfo::
         let buf_info = vk::DescriptorBufferInfo::builder()
             .buffer(vertices.buffer())
@@ -610,7 +626,6 @@ impl NodeTranslatePipeline {
 
         let buf_infos = [buf_info];
 
-        dbg!();
         let desc_write = vk::WriteDescriptorSet::builder()
             .dst_set(self.vertices_set)
             .dst_binding(0)
@@ -619,12 +634,10 @@ impl NodeTranslatePipeline {
             .buffer_info(&buf_infos)
             .build();
 
-        dbg!();
         let desc_writes = [desc_write];
 
         unsafe { self.device.update_descriptor_sets(&desc_writes, &[]) };
 
-        dbg!();
         let device = &self.device;
 
         let cmd_buf = {
@@ -638,7 +651,6 @@ impl NodeTranslatePipeline {
             bufs[0]
         };
 
-        dbg!();
         {
             let begin_info = vk::CommandBufferBeginInfo::builder()
                 .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
@@ -667,13 +679,10 @@ impl NodeTranslatePipeline {
             );
         };
 
-        dbg!();
         unsafe { device.cmd_dispatch(cmd_buf, 1024, 1, 1) };
 
-        dbg!();
         unsafe { device.end_command_buffer(cmd_buf) }?;
 
-        dbg!();
         {
             let submit_info = vk::SubmitInfo::builder()
                 .command_buffers(&[cmd_buf])
@@ -684,16 +693,13 @@ impl NodeTranslatePipeline {
             }
         }
 
-        dbg!();
         self.fences.insert(self.next_fence, fence);
         self.command_buffers.insert(self.next_fence, cmd_buf);
 
-        dbg!();
         let fence_id = self.next_fence;
 
         self.next_fence += 1;
 
-        dbg!();
         Ok(fence_id)
     }
 
@@ -787,37 +793,47 @@ impl NodeTranslatePipeline {
 }
 
 pub struct RectPushConstants {
+    node_count: u32,
     rect: Rect,
 }
 
 impl RectPushConstants {
     #[inline]
-    pub fn new(p0: Point, p1: Point) -> Self {
+    pub fn new(node_count: u32, p0: Point, p1: Point) -> Self {
         let rect = Rect::new(p0, p1);
 
-        Self { rect }
+        Self { node_count, rect }
     }
 
     #[inline]
-    pub fn bytes(&self) -> [u8; 16] {
-        let mut bytes = [0u8; 16];
+    pub fn bytes(&self) -> [u8; 20] {
+        let mut bytes = [0u8; 20];
 
         {
             let mut offset = 0;
 
-            let mut add_float = |f: f32| {
-                let f_bytes = f.to_ne_bytes();
+            {
+                let mut add_float = |f: f32| {
+                    let f_bytes = f.to_ne_bytes();
+                    for i in 0..4 {
+                        bytes[offset] = f_bytes[i];
+                        offset += 1;
+                    }
+                };
+                add_float(self.rect.min().x);
+                add_float(self.rect.min().y);
+
+                add_float(self.rect.max().x);
+                add_float(self.rect.max().y);
+            }
+
+            {
+                let nc_bytes = self.node_count.to_ne_bytes();
                 for i in 0..4 {
-                    bytes[offset] = f_bytes[i];
+                    bytes[offset] = nc_bytes[i];
                     offset += 1;
                 }
-            };
-
-            add_float(self.rect.min().x);
-            add_float(self.rect.min().y);
-
-            add_float(self.rect.max().x);
-            add_float(self.rect.max().y);
+            }
         }
 
         bytes
