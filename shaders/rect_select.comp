@@ -1,0 +1,40 @@
+#version 450
+
+layout (set = 0, binding = 0) buffer Selection {
+  int data[];
+} selection;
+
+// struct Node {
+//   vec2 p0;
+//   vec2 p1;
+// };
+
+layout (set = 0, binding = 1) readonly buffer Nodes {
+  vec4 pos[];
+} nodes;
+
+layout (push_constant) uniform Rect {
+  vec2 top_left;
+  vec2 bottom_right;
+} rect;
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+bool point_in_rect(vec2 point, vec2 tl, vec2 br) {
+  return point.x >= tl.x && point.x <= br.x
+    && point.y >= tl.y && point.y <= br.y;
+}
+
+void main() {
+  uint index = gl_GlobalInvocationID.x;
+
+  vec2 p0 = nodes.pos[index].xy;
+  vec2 p1 = nodes.pos[index].zw;
+
+  if (point_in_rect(p0, rect.top_left, rect.bottom_right) ||
+       point_in_rect(p1, rect.top_left, rect.bottom_right)) {
+      selection.data[index] = 1;
+  } else {
+      selection.data[index] = 0;
+  }
+}

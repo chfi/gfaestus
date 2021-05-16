@@ -1,6 +1,7 @@
 pub mod compute;
 pub mod context;
 pub mod debug;
+pub mod descriptor;
 pub mod draw_system;
 pub mod render_pass;
 pub mod texture;
