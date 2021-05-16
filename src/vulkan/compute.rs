@@ -1,3 +1,4 @@
+use crate::geometry::{Point, Rect};
 use ash::{
     extensions::{
         ext::DebugReport,
@@ -196,10 +197,10 @@ impl GpuSelection {
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(8)
+                .size(16)
                 .build();
 
-            let pc_ranges = [];
+            let pc_ranges = [pc_range];
 
             let layouts = [desc_set_layout];
 
@@ -238,6 +239,72 @@ impl GpuSelection {
 
             selection_buffer,
         })
+    }
+
+    pub fn rectangle_select(
+        &self,
+        comp_manager: &mut ComputeManager,
+        vertices: &NodeVertices,
+        rect: Rect,
+        // returns fence ID
+    ) -> Result<usize> {
+        self.write_descriptor_set(vertices);
+
+        let fence_id = comp_manager.dispatch_with(|_device, cmd_buf| {
+            self.rectangle_select_cmd(cmd_buf, rect).unwrap();
+        })?;
+
+        Ok(fence_id)
+    }
+
+    fn rectangle_select_cmd(
+        &self,
+        // comp_manager: &mut ComputeManager,
+        // vertices: &NodeVertices,
+        cmd_buf: vk::CommandBuffer,
+        rect: Rect,
+    ) -> Result<()> {
+        let device = &self.compute_pipeline.device;
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_pipeline.pipeline,
+            )
+        };
+
+        unsafe {
+            let desc_sets = [self.descriptor_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        let push_constants = RectPushConstants::new(rect.min(), rect.max());
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.compute_pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe { device.cmd_dispatch(cmd_buf, 64, 1, 1) };
+
+        Ok(())
     }
 
     pub fn write_descriptor_set(&self, vertices: &NodeVertices) {
@@ -724,5 +791,43 @@ impl NodeTranslatePipeline {
         }
 
         (pipeline, layout)
+    }
+}
+
+pub struct RectPushConstants {
+    rect: Rect,
+}
+
+impl RectPushConstants {
+    #[inline]
+    pub fn new(p0: Point, p1: Point) -> Self {
+        let rect = Rect::new(p0, p1);
+
+        Self { rect }
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
+
+        {
+            let mut offset = 0;
+
+            let mut add_float = |f: f32| {
+                let f_bytes = f.to_ne_bytes();
+                for i in 0..4 {
+                    bytes[offset] = f_bytes[i];
+                    offset += 1;
+                }
+            };
+
+            add_float(self.rect.min().x);
+            add_float(self.rect.min().y);
+
+            add_float(self.rect.max().x);
+            add_float(self.rect.max().y);
+        }
+
+        bytes
     }
 }
