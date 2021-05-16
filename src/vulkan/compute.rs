@@ -185,41 +185,103 @@ pub struct GpuSelection {
 }
 
 impl GpuSelection {
-    /*
-    pub fn new(device: &Device, node_count: usize) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
+        let device = app.vk_context().device();
+
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        let (pipeline, pipeline_layout) =
-            Self::create_pipeline(device, desc_set_layout);
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
 
-        let descriptor_pool = {
-            let pool_size = vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::STORAGE_BUFFER,
-                descriptor_count: 1,
-            };
-
-            let pool_sizes = [pool_size];
-
-            let pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&pool_sizes)
-                .max_sets(1)
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(8)
                 .build();
 
-            unsafe { device.create_descriptor_pool(&pool_info, None) }
+            let pc_ranges = [];
+
+            let layouts = [desc_set_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
+
+        let compute_pipeline = ComputePipeline::new(
+            device,
+            desc_set_layout,
+            pipeline_layout,
+            include_bytes!("../../shaders/rect_select.comp.spv"),
+        )?;
 
         let descriptor_sets = {
             let layouts = vec![desc_set_layout];
 
             let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
+                .descriptor_pool(compute_pipeline.descriptor_pool)
                 .set_layouts(&layouts)
                 .build();
 
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
+
+        let selection_buffer = SelectionBuffer::new(app, node_count)?;
+
+        Ok(Self {
+            compute_pipeline,
+
+            descriptor_set: descriptor_sets[0],
+
+            selection_buffer,
+        })
     }
-    */
+
+    pub fn write_descriptor_set(&self, vertices: &NodeVertices) {
+        let sel_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.selection_buffer.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let sel_buf_infos = [sel_buf_info];
+
+        let sel_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&sel_buf_infos)
+            .build();
+
+        let node_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(vertices.buffer())
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let node_buf_infos = [node_buf_info];
+
+        let node_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&node_buf_infos)
+            .build();
+
+        dbg!();
+        let desc_writes = [sel_write, node_write];
+
+        unsafe {
+            self.compute_pipeline
+                .device
+                .update_descriptor_sets(&desc_writes, &[])
+        };
+    }
 
     fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;
@@ -232,7 +294,7 @@ impl GpuSelection {
             .build();
 
         let node_vertices = vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
+            .binding(1)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
             .stage_flags(Stages::COMPUTE)
@@ -279,11 +341,13 @@ pub struct ComputePipeline {
 }
 
 impl ComputePipeline {
-    /*
-    pub fn new(device: &Device,
-               descriptor_set_layout: vk::DescriptorSetLayout,
-               pipeline_layout: vk::PipelineLayout,
+    pub fn new(
+        device: &Device,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        pipeline_layout: vk::PipelineLayout,
+        shader: &[u8],
     ) -> Result<Self> {
+        let pipeline = Self::create_pipeline(device, pipeline_layout, shader)?;
 
         let descriptor_pool = {
             let pool_size = vk::DescriptorPoolSize {
@@ -301,6 +365,7 @@ impl ComputePipeline {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
+        /*
         let descriptor_sets = {
             let layouts = vec![desc_set_layout];
 
@@ -311,9 +376,18 @@ impl ComputePipeline {
 
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
+        */
 
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout,
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
     }
-    */
 
     pub(crate) fn create_pipeline(
         device: &Device,
