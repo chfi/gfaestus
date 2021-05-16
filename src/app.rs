@@ -1,6 +1,7 @@
 pub mod mainview;
 pub mod node_flags;
 pub mod settings;
+pub mod shared_state;
 pub mod theme;
 
 use crossbeam::{atomic::AtomicCell, channel::Sender};
@@ -25,16 +26,20 @@ use crate::{
 use theme::*;
 
 pub use settings::*;
+pub use shared_state::*;
 
 use self::mainview::MainViewMsg;
 
 pub struct App {
     pub themes: AppThemes,
     // themes: Themes,
-    mouse_pos: MousePos,
-    screen_dims: ScreenDims,
 
-    hover_node: Option<NodeId>,
+    // mouse_pos: MousePos,
+    // screen_dims: ScreenDims,
+
+    // hover_node: Option<NodeId>,
+    shared_state: SharedState,
+
     selected_nodes: FxHashSet<NodeId>,
     selection_changed: bool,
 
@@ -164,13 +169,13 @@ impl App {
     ) -> Result<Self> {
         let themes = AppThemes::default_themes();
 
+        let shared_state = SharedState::new(mouse_pos, screen_dims);
+
         Ok(Self {
             themes,
 
-            mouse_pos,
-            screen_dims: screen_dims.into(),
+            shared_state,
 
-            hover_node: None,
             selected_nodes: FxHashSet::default(),
             selection_changed: false,
 
@@ -187,8 +192,12 @@ impl App {
         })
     }
 
+    pub fn shared_state(&self) -> &SharedState {
+        &self.shared_state
+    }
+
     pub fn hover_node(&self) -> Option<NodeId> {
-        self.hover_node
+        self.shared_state.hover_node.load()
     }
 
     pub fn selection_changed(&self) -> bool {
@@ -206,15 +215,15 @@ impl App {
     }
 
     pub fn dims(&self) -> ScreenDims {
-        self.screen_dims
+        self.shared_state.screen_dims.load()
     }
 
     pub fn mouse_pos(&self) -> Point {
-        self.mouse_pos.read()
+        self.shared_state.mouse_pos.read()
     }
 
     pub fn update_dims<Dims: Into<ScreenDims>>(&mut self, screen_dims: Dims) {
-        self.screen_dims = screen_dims.into();
+        self.shared_state.screen_dims.store(screen_dims.into());
     }
 
     pub fn apply_app_msg(
@@ -237,7 +246,7 @@ impl App {
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }
             }
-            AppMsg::HoverNode(id) => self.hover_node = *id,
+            AppMsg::HoverNode(id) => self.shared_state.hover_node.store(*id),
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selection_changed = true;
