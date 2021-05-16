@@ -38,6 +38,8 @@ pub mod view;
 
 use view::*;
 
+use super::SharedState;
+
 pub struct MainView {
     pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
     pub node_id_buffer: NodeIdBuffer,
@@ -45,7 +47,7 @@ pub struct MainView {
 
     node_width: Arc<NodeWidth>,
 
-    view: Arc<AtomicCell<View>>,
+    // view: Arc<AtomicCell<View>>,
     anim_handler: AnimHandler,
 
     view_input_state: ViewInputState,
@@ -53,7 +55,8 @@ pub struct MainView {
     msg_tx: Sender<MainViewMsg>,
     msg_rx: Receiver<MainViewMsg>,
 
-    rectangle_select_start: AtomicCell<Option<Point>>,
+    // rectangle_select_start: AtomicCell<Option<Point>>,
+    shared_state: SharedState,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -69,6 +72,7 @@ impl MainView {
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        shared_state: SharedState,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
@@ -80,9 +84,9 @@ impl MainView {
             selection_buffer.buffer,
         )?;
 
-        let view = View::default();
+        // let view = View::default();
 
-        let view = Arc::new(AtomicCell::new(view));
+        // let view = Arc::new(AtomicCell::new(view));
 
         let screen_dims = {
             let extent = swapchain_props.extent;
@@ -98,8 +102,11 @@ impl MainView {
             screen_dims.height as u32,
         )?;
 
-        let anim_handler =
-            AnimHandler::new(view.clone(), Point::ZERO, screen_dims);
+        let anim_handler = AnimHandler::new(
+            shared_state.clone_view(),
+            Point::ZERO,
+            screen_dims,
+        );
 
         let (msg_tx, msg_rx) = channel::unbounded::<MainViewMsg>();
 
@@ -110,7 +117,7 @@ impl MainView {
 
             node_width,
 
-            view,
+            // view,
             anim_handler,
 
             view_input_state: Default::default(),
@@ -118,7 +125,8 @@ impl MainView {
             msg_tx,
             msg_rx,
 
-            rectangle_select_start: AtomicCell::new(None),
+            // rectangle_select_start: AtomicCell::new(None),
+            shared_state,
         };
 
         Ok(main_view)
@@ -151,7 +159,7 @@ impl MainView {
     }
 
     pub fn view(&self) -> View {
-        self.view.load()
+        self.shared_state.view.load()
     }
 
     pub fn set_initial_view(&self, center: Option<Point>, scale: Option<f32>) {
@@ -162,11 +170,12 @@ impl MainView {
     }
 
     pub fn reset_view(&self) {
-        self.view.store(self.anim_handler.initial_view.load());
+        self.shared_state
+            .set_view(self.anim_handler.initial_view.load());
     }
 
     pub fn set_view(&self, view: View) {
-        self.view.store(view);
+        self.shared_state.set_view(view);
     }
 
     pub fn node_id_buffer(&self) -> vk::Buffer {
@@ -214,7 +223,7 @@ impl MainView {
         offset: Point,
         use_overlay: bool,
     ) -> Result<()> {
-        let view = self.view.load();
+        let view = self.shared_state.view();
 
         let node_width = {
             let min = self.node_width.min_node_width();
@@ -290,15 +299,15 @@ impl MainView {
     }
 
     pub fn set_view_center(&self, center: Point) {
-        let mut view = self.view.load();
+        let mut view = self.shared_state.view();
         view.center = center;
-        self.view.store(view);
+        self.shared_state.set_view(view);
     }
 
     pub fn set_view_scale(&self, scale: f32) {
-        let mut view = self.view.load();
+        let mut view = self.shared_state.view();
         view.scale = scale;
-        self.view.store(view);
+        self.shared_state.set_view(view);
     }
 
     pub fn update_view_animation<D: Into<ScreenDims>>(
@@ -307,7 +316,7 @@ impl MainView {
         mouse_pos: Point,
     ) {
         let screen_dims = screen_dims.into();
-        let view = self.view.load();
+        let view = self.shared_state.view();
 
         let mouse_screen = mouse_pos;
         let mouse_world = view.screen_point_to_world(screen_dims, mouse_screen);
@@ -362,9 +371,8 @@ impl MainView {
                 match payload {
                     In::ButtonMousePan => {
                         if pressed {
-                            let rect = self.rectangle_select_start.load();
-                            if rect.is_none() {
-                                let view = self.view.load();
+                            if !self.shared_state.is_started_mouse_rect() {
+                                let view = self.shared_state.view();
                                 let mouse_world = view.screen_point_to_world(
                                     screen_dims,
                                     mouse_pos,
@@ -402,31 +410,36 @@ impl MainView {
                         use crate::app::Select;
 
                         if pressed {
-                            let view = self.view.load();
+                            let view = self.shared_state.view();
 
                             let mouse_pos_world = view
                                 .screen_point_to_world(screen_dims, mouse_pos);
 
-                            self.rectangle_select_start
-                                .store(Some(mouse_pos_world));
+                            self.shared_state.start_mouse_rect();
+                            // self.rectangle_select_start
+                            //     .store(Some(mouse_pos_world));
                             // self.rectangle_select_start.store(Some(mouse_pos));
                         } else {
-                            if let Some(start) =
-                                self.rectangle_select_start.load()
-                            {
-                                let view = self.view.load();
+                            // if let Some(start) =
+                            //     self.rectangle_select_start.load()
+                            if self.shared_state.is_started_mouse_rect() {
+                                // let view = self.shared_state.view();
 
-                                let mouse_pos_world = view
-                                    .screen_point_to_world(
-                                        screen_dims,
-                                        mouse_pos,
-                                    );
+                                // let mouse_pos_world = view
+                                //     .screen_point_to_world(
+                                //         screen_dims,
+                                //         mouse_pos,
+                                //     );
 
-                                let rect = Rect::new(start, mouse_pos_world);
+                                // let rect = Rect::new(start, mouse_pos_world);
 
-                                app_msg_tx
-                                    .send(AppMsg::RectSelect(rect))
-                                    .unwrap();
+                                if let Some(rect) =
+                                    self.shared_state.close_mouse_rect_world()
+                                {
+                                    app_msg_tx
+                                        .send(AppMsg::RectSelect(rect))
+                                        .unwrap();
+                                }
 
                                 /*
                                 let end = mouse_pos;
@@ -459,7 +472,7 @@ impl MainView {
                                 */
                             }
 
-                            self.rectangle_select_start.store(None);
+                            // self.rectangle_select_start.store(None);
                         }
                     }
                     _ => (),
@@ -468,7 +481,7 @@ impl MainView {
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelZoom = payload {
                     self.view_input_state.scroll_zoom(
-                        self.view.load(),
+                        self.shared_state.view(),
                         mouse_pos,
                         delta,
                     );

@@ -176,6 +176,7 @@ fn main() {
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.nodes,
+        app.shared_state().clone(),
     )
     .unwrap();
 

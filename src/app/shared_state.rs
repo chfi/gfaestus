@@ -56,6 +56,10 @@ impl SharedState {
         self.view.clone()
     }
 
+    pub fn set_view(&self, view: View) {
+        self.view.store(view)
+    }
+
     // pub fn clone_mouse_rect(&self) -> MouseRect {
     //     self.mouse_rect.clone()
     // }
@@ -89,7 +93,16 @@ impl SharedState {
 
         let end_pos = view.screen_point_to_world(screen_dims, screen_pos);
 
-        Some(Rect::new(start_pos, end_pos))
+        let rect = Rect::new(start_pos, end_pos);
+
+        self.mouse_rect.world_pos.store(None);
+        self.mouse_rect.screen_pos.store(None);
+
+        Some(rect)
+    }
+
+    pub fn is_started_mouse_rect(&self) -> bool {
+        self.mouse_rect.screen_pos.load().is_some()
     }
 }
 
