@@ -404,11 +404,31 @@ impl MainView {
                         if pressed {
                             let view = self.view.load();
 
-                            self.rectangle_select_start.store(Some(mouse_pos));
+                            let mouse_pos_world = view
+                                .screen_point_to_world(screen_dims, mouse_pos);
+
+                            self.rectangle_select_start
+                                .store(Some(mouse_pos_world));
+                            // self.rectangle_select_start.store(Some(mouse_pos));
                         } else {
                             if let Some(start) =
                                 self.rectangle_select_start.load()
                             {
+                                let view = self.view.load();
+
+                                let mouse_pos_world = view
+                                    .screen_point_to_world(
+                                        screen_dims,
+                                        mouse_pos,
+                                    );
+
+                                let rect = Rect::new(start, mouse_pos_world);
+
+                                app_msg_tx
+                                    .send(AppMsg::RectSelect(rect))
+                                    .unwrap();
+
+                                /*
                                 let end = mouse_pos;
 
                                 let min = Point {
@@ -436,6 +456,7 @@ impl MainView {
                                         clear: false,
                                     }))
                                     .unwrap();
+                                */
                             }
 
                             self.rectangle_select_start.store(None);

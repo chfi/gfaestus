@@ -21,7 +21,7 @@ pub struct SelectionBuffer {
 
     pub buffer: vk::Buffer,
     memory: vk::DeviceMemory,
-    size: vk::DeviceSize,
+    pub size: vk::DeviceSize,
 }
 
 impl SelectionBuffer {
@@ -153,7 +153,6 @@ impl SelectionBuffer {
         let removed = self.latest_selection.difference(new_selection);
         let added = new_selection.difference(&self.latest_selection);
 
-
         unsafe {
             let data_ptr = device.map_memory(
                 self.memory,
@@ -166,14 +165,12 @@ impl SelectionBuffer {
                 let val_ptr = data_ptr as *mut u32;
                 let ix = (node.0 - 1) as usize;
 
-
                 if ix >= (self.size / 4) as usize {
                     panic!("attempted to deselect a node that does not exist");
                 }
 
                 let val_ptr = val_ptr.add(ix);
                 val_ptr.write(0);
-
             }
 
             for &node in added {
@@ -190,7 +187,6 @@ impl SelectionBuffer {
 
             device.unmap_memory(self.memory);
         }
-
 
         self.latest_selection.clone_from(new_selection);
 

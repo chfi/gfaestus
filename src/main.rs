@@ -20,7 +20,9 @@ use gfaestus::vulkan::draw_system::selection::{
     SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,
 };
 
-use gfaestus::vulkan::compute::NodeTranslatePipeline;
+use gfaestus::vulkan::compute::{
+    ComputeManager, GpuSelection, NodeTranslatePipeline,
+};
 
 use anyhow::Result;
 
@@ -133,6 +135,18 @@ fn main() {
     }
 
     let mut gfaestus = gfaestus.unwrap();
+
+    let mut compute_manager = ComputeManager::new(
+        gfaestus.vk_context().device().clone(),
+        gfaestus.graphics_family_index,
+        gfaestus.graphics_queue,
+    )
+    .unwrap();
+
+    let mut gpu_selection =
+        GpuSelection::new(&gfaestus, graph_query.node_count()).unwrap();
+
+    let mut select_fence_id: Option<usize> = None;
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -345,6 +359,19 @@ fn main() {
                         &app_msg,
                         universe.layout().nodes(),
                     );
+
+                    if let AppMsg::RectSelect(rect) = app_msg {
+
+                        if select_fence_id.is_none() {
+                            let fence_id = gpu_selection.rectangle_select(
+                                &mut compute_manager,
+                                &main_view.node_draw_system.vertices,
+                                rect).unwrap();
+
+                            select_fence_id = Some(fence_id);
+                        }
+
+                    }
                 }
 
                 gui.apply_received_gui_msgs();
@@ -415,6 +442,22 @@ fn main() {
             }
             Event::RedrawEventsCleared => {
 
+
+                if let Some(fid) = select_fence_id {
+
+                    compute_manager.block_on_fence(fid).unwrap();
+                    compute_manager.free_fence(fid, false).unwrap();
+
+                    GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
+                                            gfaestus.transient_command_pool,
+                                            gfaestus.graphics_queue,
+                                            gpu_selection.selection_buffer.buffer,
+                                            main_view.selection_buffer.buffer,
+                                            main_view.selection_buffer.size);
+
+
+                    select_fence_id = None;
+                }
 
                 /*
                 if let Some(fid) = fence_id {

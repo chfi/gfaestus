@@ -74,12 +74,7 @@ impl ComputeManager {
         Ok(())
     }
 
-    pub fn free_fence(
-        &mut self,
-        command_pool: vk::CommandPool,
-        fence_id: usize,
-        block: bool,
-    ) -> Result<()> {
+    pub fn free_fence(&mut self, fence_id: usize, block: bool) -> Result<()> {
         let fence = *self.fences.get(&fence_id).unwrap();
 
         if block {
@@ -92,7 +87,8 @@ impl ComputeManager {
 
         unsafe {
             let cmd_bufs = [cmd_buf];
-            self.device.free_command_buffers(command_pool, &cmd_bufs);
+            self.device
+                .free_command_buffers(self.compute_cmd_pool, &cmd_bufs);
             self.device.destroy_fence(fence, None);
         }
 
@@ -182,15 +178,19 @@ pub struct GpuSelection {
 
     descriptor_set: vk::DescriptorSet,
 
-    selection_buffer: SelectionBuffer,
+    pub selection_buffer: SelectionBuffer,
 }
 
 impl GpuSelection {
     pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
+        println!("node count {}", node_count);
+
         let device = app.vk_context().device();
 
+        dbg!();
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
+        dbg!();
         let pipeline_layout = {
             use vk::ShaderStageFlags as Flags;
 
@@ -212,6 +212,7 @@ impl GpuSelection {
             unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
 
+        dbg!();
         let compute_pipeline = ComputePipeline::new(
             device,
             desc_set_layout,
@@ -219,9 +220,11 @@ impl GpuSelection {
             include_bytes!("../../shaders/rect_select.comp.spv"),
         )?;
 
+        dbg!();
         let descriptor_sets = {
             let layouts = vec![desc_set_layout];
 
+            dbg!();
             let alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(compute_pipeline.descriptor_pool)
                 .set_layouts(&layouts)
@@ -230,8 +233,10 @@ impl GpuSelection {
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
 
+        dbg!();
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
+        dbg!();
         Ok(Self {
             compute_pipeline,
 
@@ -419,7 +424,7 @@ impl ComputePipeline {
         let descriptor_pool = {
             let pool_size = vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::STORAGE_BUFFER,
-                descriptor_count: 1,
+                descriptor_count: 2,
             };
 
             let pool_sizes = [pool_size];
@@ -431,19 +436,6 @@ impl ComputePipeline {
 
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
-
-        /*
-        let descriptor_sets = {
-            let layouts = vec![desc_set_layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-        */
 
         Ok(Self {
             descriptor_pool,

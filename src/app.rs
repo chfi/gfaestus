@@ -138,6 +138,7 @@ pub enum AppMsg {
     Selection(Select),
     HoverNode(Option<NodeId>),
     GotoSelection,
+    RectSelect(Rect),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -157,7 +158,10 @@ pub enum RenderConfigOpts {
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(mouse_pos: MousePos, screen_dims: Dims) -> Result<Self> {
+    pub fn new<Dims: Into<ScreenDims>>(
+        mouse_pos: MousePos,
+        screen_dims: Dims,
+    ) -> Result<Self> {
         let themes = AppThemes::default_themes();
 
         Ok(Self {
@@ -220,9 +224,16 @@ impl App {
         node_positions: &[Node],
     ) {
         match msg {
+            AppMsg::RectSelect(rect) => {
+                //
+            }
             AppMsg::GotoSelection => {
                 if let Some(bounds) = self.selected_nodes_bounding_box {
-                    let view = View::from_dims_and_target(self.dims(), bounds.0, bounds.1);
+                    let view = View::from_dims_and_target(
+                        self.dims(),
+                        bounds.0,
+                        bounds.1,
+                    );
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }
             }
@@ -264,7 +275,8 @@ impl App {
                             y: old_max.y.max(node_pos.p0.y.max(node_pos.p1.y)),
                         };
 
-                        self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                        self.selected_nodes_bounding_box =
+                            Some((top_left, bottom_right));
                     } else {
                         let top_left = Point {
                             x: node_pos.p0.x.min(node_pos.p1.x),
@@ -276,7 +288,8 @@ impl App {
                             y: node_pos.p0.y.max(node_pos.p1.y),
                         };
 
-                        self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                        self.selected_nodes_bounding_box =
+                            Some((top_left, bottom_right));
                     }
                 }
                 Select::Many { nodes, clear } => {
@@ -286,36 +299,38 @@ impl App {
                         self.selected_nodes_bounding_box = None;
                     }
                     if self.selected_nodes.capacity() < nodes.len() {
-                        let additional = nodes.len() - self.selected_nodes.capacity();
+                        let additional =
+                            nodes.len() - self.selected_nodes.capacity();
                         self.selected_nodes.reserve(additional);
                     }
 
-                    let (mut top_left, mut bottom_right) =
-                        if let Some(bounds) = self.selected_nodes_bounding_box {
-                            let old_min = Point {
-                                x: bounds.0.x.min(bounds.1.x),
-                                y: bounds.0.y.min(bounds.1.y),
-                            };
-
-                            let old_max = Point {
-                                x: bounds.0.x.max(bounds.1.x),
-                                y: bounds.0.y.max(bounds.1.y),
-                            };
-
-                            (old_min, old_max)
-                        } else {
-                            let top_left = Point {
-                                x: std::f32::MAX,
-                                y: std::f32::MAX,
-                            };
-
-                            let bottom_right = Point {
-                                x: std::f32::MIN,
-                                y: std::f32::MIN,
-                            };
-
-                            (top_left, bottom_right)
+                    let (mut top_left, mut bottom_right) = if let Some(bounds) =
+                        self.selected_nodes_bounding_box
+                    {
+                        let old_min = Point {
+                            x: bounds.0.x.min(bounds.1.x),
+                            y: bounds.0.y.min(bounds.1.y),
                         };
+
+                        let old_max = Point {
+                            x: bounds.0.x.max(bounds.1.x),
+                            y: bounds.0.y.max(bounds.1.y),
+                        };
+
+                        (old_min, old_max)
+                    } else {
+                        let top_left = Point {
+                            x: std::f32::MAX,
+                            y: std::f32::MAX,
+                        };
+
+                        let bottom_right = Point {
+                            x: std::f32::MIN,
+                            y: std::f32::MIN,
+                        };
+
+                        (top_left, bottom_right)
+                    };
 
                     for &node in nodes.iter() {
                         let pos = node_positions[(node.0 - 1) as usize];
@@ -335,7 +350,8 @@ impl App {
                         self.selected_nodes.insert(node);
                     }
 
-                    self.selected_nodes_bounding_box = Some((top_left, bottom_right));
+                    self.selected_nodes_bounding_box =
+                        Some((top_left, bottom_right));
                 }
             },
         }
@@ -349,12 +365,20 @@ impl App {
             AppConfigMsg::ToggleSelectionEdgeBlur => {
                 self.selection_edge_blur = !self.selection_edge_blur
             }
-            AppConfigMsg::ToggleSelectionOutline => self.selection_edge = !self.selection_edge,
-            AppConfigMsg::ToggleNodesColor => self.nodes_color = !self.nodes_color,
+            AppConfigMsg::ToggleSelectionOutline => {
+                self.selection_edge = !self.selection_edge
+            }
+            AppConfigMsg::ToggleNodesColor => {
+                self.nodes_color = !self.nodes_color
+            }
         }
     }
 
-    pub fn apply_input(&mut self, input: SystemInput<AppInput>, gui_msg: &Sender<GuiMsg>) {
+    pub fn apply_input(
+        &mut self,
+        input: SystemInput<AppInput>,
+        gui_msg: &Sender<GuiMsg>,
+    ) {
         if let SystemInput::Keyboard { state, payload } = input {
             match payload {
                 AppInput::KeyClearSelection => {

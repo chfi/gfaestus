@@ -35,8 +35,8 @@ pub struct GfaestusVk {
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
 
-    graphics_family_index: u32,
-    present_family_index: u32,
+    pub graphics_family_index: u32,
+    pub present_family_index: u32,
 
     pub msaa_samples: vk::SampleCountFlags,
 
@@ -1018,7 +1018,7 @@ impl GfaestusVk {
         }
     }
 
-    fn create_command_pool(
+    pub(crate) fn create_command_pool(
         device: &Device,
         graphics_ix: u32,
         create_flags: vk::CommandPoolCreateFlags,
