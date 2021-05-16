@@ -51,6 +51,48 @@ impl SelectionBuffer {
         })
     }
 
+    pub fn selection_set(&self) -> &FxHashSet<NodeId> {
+        &self.latest_selection
+    }
+
+    /// fill `latest_selection` by reading from the buffer
+    pub fn fill_selection_set(&mut self, device: &Device) -> Result<()> {
+        let node_count = (self.size / 4) as usize;
+        println!("selection buffer node_count {}", node_count);
+
+        self.latest_selection.clear();
+        self.latest_selection.reserve(node_count);
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let val_ptr = data_ptr as *const u32;
+            let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
+
+            self.latest_selection.extend(
+                sel_slice.iter().enumerate().filter_map(|(ix, &val)| {
+                    let node_id = NodeId::from((ix + 1) as u64);
+                    if val == 1 {
+                        Some(node_id)
+                    } else {
+                        None
+                    }
+                }),
+            );
+
+            device.unmap_memory(self.memory);
+        }
+
+        self.latest_selection.shrink_to_fit();
+
+        Ok(())
+    }
+
     pub fn destroy(&mut self, device: &Device) {
         unsafe {
             device.destroy_buffer(self.buffer, None);

@@ -456,6 +456,24 @@ fn main() {
                                             main_view.selection_buffer.size);
 
 
+                    main_view
+                        .selection_buffer
+                        .fill_selection_set(gfaestus
+                                            .vk_context()
+                                            .device())
+                        .unwrap();
+
+                    use gfaestus::app::Select;
+
+                    app_msg_tx.send(AppMsg::Selection(Select::Many {
+                        nodes: main_view
+                            .selection_buffer
+                            .selection_set()
+                            .clone(),
+                        clear: true }))
+                        .unwrap();
+
+
                     select_fence_id = None;
                 }
 
