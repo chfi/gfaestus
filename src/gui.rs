@@ -22,7 +22,7 @@ use parking_lot::Mutex;
 // use theme_editor::*;
 
 use crate::{
-    app::{AppMsg, RenderConfigOpts},
+    app::{AppMsg, RenderConfigOpts, SharedState},
     graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
 };
@@ -447,6 +447,8 @@ pub struct Gui {
     ctx: egui::CtxRef,
     frame_input: FrameInput,
 
+    shared_state: SharedState,
+
     pub draw_system: GuiPipeline,
 
     hover_node_id: Option<NodeId>,
@@ -479,12 +481,12 @@ pub struct Gui {
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
+        shared_state: SharedState,
         overlay_state: OverlayState,
         gui_focus_state: GuiFocusState,
         node_width: Arc<NodeWidth>,
         app_msg_tx: crossbeam::channel::Sender<AppMsg>,
         graph_query: &GraphQuery,
-        swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         thread_pool: Arc<ThreadPool>,
@@ -544,6 +546,8 @@ impl Gui {
         let gui = Self {
             ctx,
             frame_input,
+
+            shared_state,
 
             draw_system,
 
@@ -667,6 +671,25 @@ impl Gui {
                 &self.ctx,
                 &self.thread_pool,
             );
+        }
+
+        if let Some(rect) = self.shared_state.active_mouse_rect_screen() {
+            let screen_rect = self.ctx.input().screen_rect();
+
+            let paint_area = egui::Ui::new(
+                self.ctx.clone(),
+                egui::LayerId::new(
+                    egui::Order::Background,
+                    egui::Id::new("gui_painter_background"),
+                ),
+                egui::Id::new("gui_painter_ui"),
+                screen_rect,
+                screen_rect,
+            );
+
+            let stroke =
+                egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
+            paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
         if self.open_windows.settings {

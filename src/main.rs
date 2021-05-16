@@ -185,12 +185,12 @@ fn main() {
 
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
+        app.shared_state().clone(),
         app.overlay_state.clone(),
         input_manager.gui_focus_state().clone(),
         app.settings.node_width().clone(),
         app_msg_tx.clone(),
         &graph_query,
-        gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
         thread_pool.clone(),
