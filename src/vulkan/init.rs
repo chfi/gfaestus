@@ -14,9 +14,14 @@ use std::ffi::{CStr, CString};
 
 use anyhow::Result;
 
-use super::{context::*, debug::*, SwapchainProperties, SwapchainSupportDetails};
+use super::{
+    context::*, debug::*, SwapchainProperties, SwapchainSupportDetails,
+};
 
-pub(super) fn create_instance(entry: &Entry, window: &Window) -> Result<Instance> {
+pub(super) fn create_instance(
+    entry: &Entry,
+    window: &Window,
+) -> Result<Instance> {
     let app_name = CString::new("Gfaestus")?;
 
     let app_info = vk::ApplicationInfo::builder()
@@ -27,7 +32,8 @@ pub(super) fn create_instance(entry: &Entry, window: &Window) -> Result<Instance
         .api_version(vk::make_version(1, 0, 0))
         .build();
 
-    let extension_names = ash_window::enumerate_required_extensions(window).unwrap();
+    let extension_names =
+        ash_window::enumerate_required_extensions(window).unwrap();
     let mut extension_names = extension_names
         .iter()
         .map(|ext| ext.as_ptr())
@@ -44,10 +50,12 @@ pub(super) fn create_instance(entry: &Entry, window: &Window) -> Result<Instance
         .enabled_extension_names(&extension_names);
     if super::debug::ENABLE_VALIDATION_LAYERS {
         check_validation_layer_support(&entry);
-        instance_create_info = instance_create_info.enabled_layer_names(&layer_names_ptrs);
+        instance_create_info =
+            instance_create_info.enabled_layer_names(&layer_names_ptrs);
     }
 
-    let instance = unsafe { entry.create_instance(&instance_create_info, None) }?;
+    let instance =
+        unsafe { entry.create_instance(&instance_create_info, None) }?;
 
     Ok(instance)
 }
@@ -57,30 +65,48 @@ pub(super) fn find_queue_families(
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
     device: vk::PhysicalDevice,
-) -> Result<(Option<u32>, Option<u32>)> {
+) -> Result<(Option<u32>, Option<u32>, Option<u32>)> {
     let mut graphics_ix: Option<u32> = None;
     let mut present_ix: Option<u32> = None;
+    let mut compute_ix: Option<u32> = None;
 
-    let props = unsafe { instance.get_physical_device_queue_family_properties(device) };
+    let props =
+        unsafe { instance.get_physical_device_queue_family_properties(device) };
 
-    for (ix, family) in props.iter().filter(|fam| fam.queue_count > 0).enumerate() {
-        if family.queue_flags.contains(vk::QueueFlags::GRAPHICS) && graphics_ix.is_none() {
+    for (ix, family) in
+        props.iter().filter(|fam| fam.queue_count > 0).enumerate()
+    {
+        if family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
+            && graphics_ix.is_none()
+        {
             graphics_ix = Some(ix as u32);
         }
 
-        let supports_present =
-            unsafe { surface.get_physical_device_surface_support(device, ix as u32, surface_khr) }?;
+        if family.queue_flags.contains(vk::QueueFlags::COMPUTE)
+            && compute_ix.is_none()
+        {
+            compute_ix = Some(ix as u32);
+        }
+
+        let supports_present = unsafe {
+            surface.get_physical_device_surface_support(
+                device,
+                ix as u32,
+                surface_khr,
+            )
+        }?;
 
         if supports_present && present_ix.is_none() {
             present_ix = Some(ix as u32);
         }
 
-        if graphics_ix.is_some() && present_ix.is_some() {
+        if graphics_ix.is_some() && present_ix.is_some() && compute_ix.is_some()
+        {
             break;
         }
     }
 
-    Ok((graphics_ix, present_ix))
+    Ok((graphics_ix, present_ix, compute_ix))
 }
 
 pub(super) fn device_supports_extensions(
@@ -89,7 +115,8 @@ pub(super) fn device_supports_extensions(
 ) -> Result<bool> {
     let required_exts = required_device_extensions();
 
-    let extension_props = unsafe { instance.enumerate_device_extension_properties(device) }?;
+    let extension_props =
+        unsafe { instance.enumerate_device_extension_properties(device) }?;
 
     for req in required_exts.iter() {
         let found = extension_props.iter().any(|ext| {
@@ -116,9 +143,10 @@ pub(super) fn device_is_suitable(
     surface_khr: SurfaceKHR,
     device: vk::PhysicalDevice,
 ) -> Result<bool> {
-    let (graphics_ix, present_ix) = find_queue_families(instance, surface, surface_khr, device)?;
+    let (graphics_ix, present_ix, compute_ix) =
+        find_queue_families(instance, surface, surface_khr, device)?;
 
-    if graphics_ix.is_none() || present_ix.is_none() {
+    if graphics_ix.is_none() || present_ix.is_none() || compute_ix.is_none() {
         return Ok(false);
     }
 
@@ -127,7 +155,8 @@ pub(super) fn device_is_suitable(
     }
 
     let swapchain_adequate = {
-        let details = SwapchainSupportDetails::new(device, surface, surface_khr)?;
+        let details =
+            SwapchainSupportDetails::new(device, surface, surface_khr)?;
         !details.formats.is_empty() && !details.present_modes.is_empty()
     };
 
@@ -145,13 +174,15 @@ pub(super) fn choose_physical_device(
     instance: &Instance,
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
-) -> Result<(vk::PhysicalDevice, u32, u32)> {
+) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
     let device = {
         let devices = unsafe { instance.enumerate_physical_devices() }?;
 
         devices
             .into_iter()
-            .find(|&dev| device_is_suitable(instance, surface, surface_khr, dev).unwrap())
+            .find(|&dev| {
+                device_is_suitable(instance, surface, surface_khr, dev).unwrap()
+            })
             .unwrap()
     };
 
@@ -164,9 +195,15 @@ pub(super) fn choose_physical_device(
         );
     }
 
-    let (graphics_ix, present_ix) = find_queue_families(instance, surface, surface_khr, device)?;
+    let (graphics_ix, present_ix, compute_ix) =
+        find_queue_families(instance, surface, surface_khr, device)?;
 
-    Ok((device, graphics_ix.unwrap(), present_ix.unwrap()))
+    Ok((
+        device,
+        graphics_ix.unwrap(),
+        present_ix.unwrap(),
+        compute_ix.unwrap(),
+    ))
 }
 
 pub(super) fn create_swapchain_and_images(
@@ -237,7 +274,8 @@ pub(super) fn create_swapchain_and_images(
     };
 
     let swapchain = Swapchain::new(vk_context.instance(), vk_context.device());
-    let swapchain_khr = unsafe { swapchain.create_swapchain(&create_info, None) }?;
+    let swapchain_khr =
+        unsafe { swapchain.create_swapchain(&create_info, None) }?;
     let images = unsafe { swapchain.get_swapchain_images(swapchain_khr) }?;
 
     Ok((swapchain, swapchain_khr, props, images))
@@ -270,12 +308,13 @@ pub(super) fn create_logical_device(
     device: vk::PhysicalDevice,
     graphics_ix: u32,
     present_ix: u32,
-) -> Result<(Device, vk::Queue, vk::Queue)> {
+    compute_ix: u32,
+) -> Result<(Device, vk::Queue, vk::Queue, vk::Queue)> {
     let queue_priorities = [1.0f32];
 
     let queue_infos = {
         use rustc_hash::FxHashSet;
-        let indices = [graphics_ix, present_ix]
+        let indices = [graphics_ix, present_ix, compute_ix]
             .iter()
             .copied()
             .collect::<FxHashSet<_>>();
@@ -317,12 +356,14 @@ pub(super) fn create_logical_device(
 
     let device_create_info = device_create_info_builder.build();
 
-    let device = unsafe { instance.create_device(device, &device_create_info, None) }?;
+    let device =
+        unsafe { instance.create_device(device, &device_create_info, None) }?;
 
     let graphics_queue = unsafe { device.get_device_queue(graphics_ix, 0) };
     let present_queue = unsafe { device.get_device_queue(present_ix, 0) };
+    let compute_queue = unsafe { device.get_device_queue(compute_ix, 0) };
 
-    Ok((device, graphics_queue, present_queue))
+    Ok((device, graphics_queue, present_queue, compute_queue))
 }
 
 pub(super) fn find_memory_type(
@@ -343,7 +384,10 @@ pub(super) fn find_memory_type(
     panic!("Failed to find suitable memory type");
 }
 
-pub(super) fn create_descriptor_pool(device: &Device, size: u32) -> Result<vk::DescriptorPool> {
+pub(super) fn create_descriptor_pool(
+    device: &Device,
+    size: u32,
+) -> Result<vk::DescriptorPool> {
     let ubo_pool_size = vk::DescriptorPoolSize {
         ty: vk::DescriptorType::UNIFORM_BUFFER,
         descriptor_count: size,

@@ -75,15 +75,25 @@ impl GfaestusVk {
         let debug_report_callback =
             debug::setup_debug_messenger(&entry, &instance);
 
-        let (physical_device, graphics_ix, present_ix) =
+        let (physical_device, graphics_ix, present_ix, compute_ix) =
             choose_physical_device(&instance, &surface, surface_khr)?;
 
-        let (device, graphics_queue, present_queue) = create_logical_device(
-            &instance,
-            physical_device,
-            graphics_ix,
-            present_ix,
-        )?;
+        let (device, graphics_queue, present_queue, compute_queue) =
+            create_logical_device(
+                &instance,
+                physical_device,
+                graphics_ix,
+                present_ix,
+                compute_ix,
+            )?;
+
+        println!("graphics_ix: {}", graphics_ix);
+        println!("present_ix: {}", present_ix);
+        println!("compute_ix: {}", compute_ix);
+
+        println!("graphics_queue: {:?}", graphics_queue);
+        println!("present_queue: {:?}", present_queue);
+        println!("compute_queue: {:?}", compute_queue);
 
         let vk_context = VkContext::new(
             entry,
