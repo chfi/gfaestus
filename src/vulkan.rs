@@ -864,7 +864,8 @@ impl GfaestusVk {
         let (buffer, memory, _) = self.create_buffer(
             size,
             Usage::TRANSFER_DST | usage,
-            MemPropFlags::DEVICE_LOCAL,
+            // MemPropFlags::DEVICE_LOCAL,
+            MemPropFlags::HOST_VISIBLE | MemPropFlags::HOST_COHERENT,
         )?;
 
         Self::copy_buffer(
