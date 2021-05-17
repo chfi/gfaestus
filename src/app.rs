@@ -32,12 +32,7 @@ use self::mainview::MainViewMsg;
 
 pub struct App {
     pub themes: AppThemes,
-    // themes: Themes,
 
-    // mouse_pos: MousePos,
-    // screen_dims: ScreenDims,
-
-    // hover_node: Option<NodeId>,
     shared_state: SharedState,
 
     selected_nodes: FxHashSet<NodeId>,
@@ -237,8 +232,13 @@ impl App {
             AppMsg::RectSelect(rect) => {
                 //
             }
-            AppMsg::TranslateSelected(_) => {
-                //
+            AppMsg::TranslateSelected(delta) => {
+                if let Some(bounds) = self.selected_nodes_bounding_box {
+                    let min = bounds.0 + delta;
+                    let max = bounds.1 + delta;
+
+                    self.selected_nodes_bounding_box = Some((min, max));
+                }
             }
             AppMsg::GotoSelection => {
                 if let Some(bounds) = self.selected_nodes_bounding_box {
