@@ -15,7 +15,10 @@ use anyhow::Result;
 
 use crate::app::node_flags::SelectionBuffer;
 
-use super::{draw_system::nodes::NodeVertices, GfaestusVk};
+use super::{
+    draw_system::{nodes::NodeVertices, Vertex},
+    GfaestusVk,
+};
 
 pub struct ComputeManager {
     pub(super) compute_cmd_pool: vk::CommandPool,
@@ -157,6 +160,49 @@ impl ComputeManager {
         self.next_fence += 1;
 
         Ok(fence_id)
+    }
+}
+
+pub struct NodeMotion {
+    translation: NodeTranslation,
+
+    vertices: NodeVertices,
+
+    node_count: usize,
+}
+
+impl NodeMotion {
+    pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
+        let translation = NodeTranslation::new(app, node_count)?;
+
+        let vertices = NodeVertices::new(app.vk_context().device());
+
+        Ok(Self {
+            translation,
+
+            vertices,
+
+            node_count,
+        })
+    }
+
+    pub fn upload_vertices(
+        &mut self,
+        app: &GfaestusVk,
+        vertices: &[Vertex],
+    ) -> Result<()> {
+        self.vertices.upload_vertices(app, vertices)
+    }
+
+    pub fn copy_vertices(&self, app: &GfaestusVk, other: &NodeVertices) {
+        GfaestusVk::copy_buffer(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            self.vertices.buffer(),
+            other.buffer(),
+            vk::WHOLE_SIZE,
+        )
     }
 }
 
