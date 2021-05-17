@@ -27,9 +27,86 @@ use winit::window::Window;
 
 use std::{mem::size_of, sync::Arc};
 
+use parking_lot::{Mutex, MutexGuard};
+
 use anyhow::Result;
 
 use render_pass::Framebuffers;
+
+#[derive(Clone)]
+pub struct Queues {
+    graphics_queue: Arc<Mutex<vk::Queue>>,
+    present_queue: Arc<Mutex<vk::Queue>>,
+    compute_queue: Arc<Mutex<vk::Queue>>,
+}
+
+impl Queues {
+    fn new(
+        graphics: vk::Queue,
+        present: vk::Queue,
+        compute: vk::Queue,
+    ) -> Self {
+        let graphics_queue: Arc<Mutex<vk::Queue>>;
+        let present_queue: Arc<Mutex<vk::Queue>>;
+        let compute_queue: Arc<Mutex<vk::Queue>>;
+
+        graphics_queue = Arc::new(Mutex::new(graphics));
+
+        if present == graphics {
+            present_queue = graphics_queue.clone();
+        } else {
+            present_queue = Arc::new(Mutex::new(present));
+        }
+
+        if compute == graphics {
+            compute_queue = graphics_queue.clone();
+        } else {
+            compute_queue = Arc::new(Mutex::new(compute));
+        }
+
+        Self {
+            graphics_queue,
+            present_queue,
+            compute_queue,
+        }
+    }
+
+    pub fn lock_graphics(&self) -> MutexGuard<'_, vk::Queue> {
+        self.graphics_queue.lock()
+    }
+
+    pub fn try_lock_graphics(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.graphics_queue.try_lock()
+    }
+
+    pub fn lock_present(&self) -> MutexGuard<'_, vk::Queue> {
+        self.present_queue.lock()
+    }
+
+    pub fn try_lock_present(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.present_queue.try_lock()
+    }
+
+    pub fn lock_compute(&self) -> MutexGuard<'_, vk::Queue> {
+        self.compute_queue.lock()
+    }
+
+    pub fn try_lock_compute(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.compute_queue.try_lock()
+    }
+
+    pub fn is_graphics_locked(&self) -> bool {
+        self.graphics_queue.is_locked()
+    }
+
+    pub fn is_present_locked(&self) -> bool {
+        self.present_queue.is_locked()
+    }
+
+    pub fn is_compute_locked(&self) -> bool {
+        self.compute_queue.is_locked()
+    }
+}
 
 pub struct GfaestusVk {
     pub graphics_queue: vk::Queue,
