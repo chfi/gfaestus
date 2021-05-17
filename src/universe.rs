@@ -1,3 +1,4 @@
+use ash::Device;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -12,8 +13,8 @@ use handlegraph::packedgraph::PackedGraph;
 
 use anyhow::Result;
 
-use crate::geometry::*;
 use crate::vulkan::draw_system::Vertex;
+use crate::{geometry::*, vulkan::draw_system::nodes::NodeVertices};
 
 pub mod config;
 pub mod grid;
@@ -97,6 +98,54 @@ impl Universe<FlatLayout> {
             angle,
         })
     }
+
+    pub fn update_positions_from_gpu(
+        &mut self,
+        device: &Device,
+        vertices: &NodeVertices,
+    ) -> Result<()> {
+        let node_count = self.graph_layout.nodes.len();
+
+        vertices.download_vertices(
+            device,
+            node_count,
+            &mut self.graph_layout.nodes,
+        )
+    }
+
+    /*
+    pub fn update_positions_from_gpu(&mut self,
+                                     device: &Device,
+                                     vertices: &NodeVertices) -> Result<()> {
+
+        let node_count = self.graph_layout.nodes.len();
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                vertices.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let val_ptr = data_ptr as *const u32;
+            let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
+
+            self.latest_selection.extend(
+                sel_slice.iter().enumerate().filter_map(|(ix, &val)| {
+                    let node_id = NodeId::from((ix + 1) as u64);
+                    if val == 1 {
+                        Some(node_id)
+                    } else {
+                        None
+                    }
+                }),
+            );
+
+            device.unmap_memory(self.memory);
+        }
+    }
+    */
 
     pub fn new_vertices(&self) -> Vec<Vertex> {
         let mut vertices = Vec::new();

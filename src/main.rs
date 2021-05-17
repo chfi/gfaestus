@@ -95,7 +95,7 @@ fn main() {
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
 
-    let (universe, stats) =
+    let (mut universe, stats) =
         universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
@@ -109,8 +109,6 @@ fn main() {
         bottom_right.x - top_left.x,
         bottom_right.y - top_left.y
     );
-
-    // let init_layout = layout.clone();
 
     eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
@@ -466,6 +464,9 @@ fn main() {
                 if let Some(fid) = translate_fence_id {
                     compute_manager.block_on_fence(fid).unwrap();
                     compute_manager.free_fence(fid, false).unwrap();
+
+                    universe.update_positions_from_gpu(gfaestus.vk_context().device(),
+                                                       &main_view.node_draw_system.vertices).unwrap();
 
                     translate_fence_id = None;
                 }

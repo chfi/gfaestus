@@ -694,6 +694,40 @@ impl NodeVertices {
 
         Ok(())
     }
+
+    pub fn download_vertices(
+        &self,
+        device: &Device,
+        node_count: usize,
+        target: &mut Vec<crate::universe::Node>,
+    ) -> Result<()> {
+        target.clear();
+        let cap = target.capacity();
+        if cap < node_count {
+            target.reserve(node_count - cap);
+        }
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                self.vertex_memory,
+                0,
+                vk::WHOLE_SIZE,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let val_ptr = data_ptr as *const crate::universe::Node;
+
+            let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
+
+            target.extend_from_slice(sel_slice);
+
+            device.unmap_memory(self.vertex_memory);
+        }
+
+        target.shrink_to_fit();
+
+        Ok(())
+    }
 }
 
 pub struct NodePushConstants {
