@@ -21,7 +21,7 @@ use gfaestus::vulkan::draw_system::selection::{
 };
 
 use gfaestus::vulkan::compute::{
-    ComputeManager, GpuSelection, NodeTranslatePipeline,
+    ComputeManager, GpuSelection, NodeTranslation,
 };
 
 use anyhow::Result;
@@ -146,7 +146,11 @@ fn main() {
     let mut gpu_selection =
         GpuSelection::new(&gfaestus, graph_query.node_count()).unwrap();
 
+    let mut node_translation =
+        NodeTranslation::new(&gfaestus, graph_query.node_count()).unwrap();
+
     let mut select_fence_id: Option<usize> = None;
+    let mut translate_fence_id: Option<usize> = None;
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -259,8 +263,8 @@ fn main() {
         main_view.node_draw_system.overlay_pipeline.overlay_names(),
     );
 
-    let mut translate_pipeline =
-        NodeTranslatePipeline::new(gfaestus.vk_context().device()).unwrap();
+    // let mut translate_pipeline =
+    //     NodeTranslatePipeline::new(gfaestus.vk_context().device()).unwrap();
 
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
