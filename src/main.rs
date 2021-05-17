@@ -367,7 +367,7 @@ fn main() {
 
                     if let AppMsg::RectSelect(rect) = app_msg {
 
-                        if select_fence_id.is_none() {
+                        if select_fence_id.is_none() && translate_fence_id.is_none() {
                             let fence_id = gpu_selection.rectangle_select(
                                 &mut compute_manager,
                                 &main_view.node_draw_system.vertices,
@@ -376,6 +376,21 @@ fn main() {
                             select_fence_id = Some(fence_id);
                         }
 
+                    }
+
+                    if let AppMsg::TranslateSelected(delta) = app_msg {
+                        if select_fence_id.is_none() && translate_fence_id.is_none() {
+
+                            let fence_id = node_translation
+                                .translate_nodes(
+                                    &mut compute_manager,
+                                    &main_view.node_draw_system.vertices,
+                                    &main_view.selection_buffer,
+                                    delta).unwrap();
+
+
+                            translate_fence_id = Some(fence_id);
+                        }
                     }
                 }
 
@@ -448,6 +463,13 @@ fn main() {
             Event::RedrawEventsCleared => {
 
 
+                if let Some(fid) = translate_fence_id {
+                    compute_manager.block_on_fence(fid).unwrap();
+                    compute_manager.free_fence(fid, false).unwrap();
+
+                    translate_fence_id = None;
+                }
+
                 if let Some(fid) = select_fence_id {
 
                     compute_manager.block_on_fence(fid).unwrap();
@@ -481,6 +503,7 @@ fn main() {
 
                     select_fence_id = None;
                 }
+
 
                 /*
                 if let Some(fid) = fence_id {

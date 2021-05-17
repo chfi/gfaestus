@@ -57,6 +57,8 @@ pub struct MainView {
 
     // rectangle_select_start: AtomicCell<Option<Point>>,
     shared_state: SharedState,
+
+    move_delta: AtomicCell<Option<Point>>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -125,7 +127,7 @@ impl MainView {
             msg_tx,
             msg_rx,
 
-            // rectangle_select_start: AtomicCell::new(None),
+            move_delta: AtomicCell::new(None),
             shared_state,
         };
 
@@ -371,7 +373,16 @@ impl MainView {
                 match payload {
                     In::ButtonMousePan => {
                         if pressed {
-                            if !self.shared_state.is_started_mouse_rect() {
+                            if self.shared_state.hover_node().is_some() {
+                                let view = self.shared_state.view();
+                                let mouse_world = view.screen_point_to_world(
+                                    screen_dims,
+                                    mouse_pos,
+                                );
+
+                                self.move_delta.store(Some(mouse_world));
+                            } else if !self.shared_state.is_started_mouse_rect()
+                            {
                                 let view = self.shared_state.view();
                                 let mouse_world = view.screen_point_to_world(
                                     screen_dims,
@@ -384,6 +395,23 @@ impl MainView {
                                 );
                             }
                         } else {
+                            if let Some(start) = self.move_delta.load() {
+                                use crate::app::AppMsg;
+
+                                let view = self.shared_state.view();
+                                let mouse_world = view.screen_point_to_world(
+                                    screen_dims,
+                                    mouse_pos,
+                                );
+
+                                let delta = mouse_world - start;
+
+                                app_msg_tx
+                                    .send(AppMsg::TranslateSelected(delta))
+                                    .unwrap();
+
+                                self.move_delta.store(None);
+                            }
                             self.view_input_state.mouse_released();
                         }
                     }

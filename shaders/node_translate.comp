@@ -17,7 +17,7 @@ layout (push_constant) uniform Delta {
 void main() {
     uint index = gl_GlobalInvocationID.x;
 
-    if (selection.data[index] == 1) {
+    if (selection.data[index] != 0) {
       vec4 node_delta = vec4(delta.d.x, delta.d.y, delta.d.x, delta.d.y);
       nodes.pos[index] += node_delta;
     }

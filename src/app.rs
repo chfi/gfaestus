@@ -144,6 +144,7 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
     GotoSelection,
     RectSelect(Rect),
+    TranslateSelected(Point),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -234,6 +235,9 @@ impl App {
     ) {
         match msg {
             AppMsg::RectSelect(rect) => {
+                //
+            }
+            AppMsg::TranslateSelected(_) => {
                 //
             }
             AppMsg::GotoSelection => {

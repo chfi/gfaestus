@@ -199,7 +199,7 @@ impl NodeTranslation {
             device,
             desc_set_layout,
             pipeline_layout,
-            include_bytes!("../../shaders/rect_select.comp.spv"),
+            include_bytes!("../../shaders/node_translate.comp.spv"),
         )?;
 
         let descriptor_sets = {
@@ -268,6 +268,8 @@ impl NodeTranslation {
                 &null,
             );
         };
+
+        println!("translating selection with {}, {}", delta.x, delta.y);
 
         let push_constants = DeltaPushConstants::new(delta);
         let pc_bytes = push_constants.bytes();
