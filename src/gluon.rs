@@ -32,6 +32,7 @@ use handlegraph::{
 use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
 pub mod bed;
+pub mod repl;
 
 pub struct GluonVM {
     vm: RootedThread,

@@ -894,6 +894,7 @@ dependencies = [
  "gfa",
  "gluon",
  "gluon_codegen",
+ "gluon_completion",
  "handlegraph",
  "image",
  "nalgebra",
@@ -1030,6 +1031,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "gluon_completion"
+version = "0.17.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "98b13d186dea4d24d2e4666f183fbe4fc00abb37a61f8b77c045a75d8f9cd634"
+dependencies = [
+ "codespan",
+ "either",
+ "gluon_base",
+ "itertools 0.9.0",
+ "walkdir",
 ]
 
 [[package]]

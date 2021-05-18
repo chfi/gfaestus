@@ -14,12 +14,8 @@ use render_pass::*;
 use init::*;
 
 use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk::SurfaceKHR,
+    extensions::khr::{Surface, Swapchain},
+    version::DeviceV1_0,
 };
 use ash::{vk, Device, Entry};
 

@@ -1,15 +1,6 @@
 use crate::geometry::{Point, Rect};
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-    vk::SurfaceKHR,
-};
-use ash::{vk, Device, Entry};
-
-use std::{collections::HashMap, ffi::CString, ops::RangeInclusive};
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use anyhow::Result;
 

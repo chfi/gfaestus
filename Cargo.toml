@@ -40,6 +40,7 @@ bstr = "0.2"
 
 gluon = "0.17.2"
 gluon_codegen = "0.17.2"
+gluon_completion = "0.17.2"
 
 [profile.dev]
 opt-level = 2
