@@ -28,6 +28,8 @@ pub struct NodeDetails {
     sequence: Vec<u8>,
     degree: (usize, usize),
     paths: Vec<(PathId, StepPtr, usize)>,
+
+    unique_paths: Vec<PathId>,
 }
 
 impl std::default::Default for NodeDetails {
@@ -38,6 +40,7 @@ impl std::default::Default for NodeDetails {
             sequence: Vec::new(),
             degree: (0, 0),
             paths: Vec::new(),
+            unique_paths: Vec::new(),
         }
     }
 }
@@ -83,6 +86,7 @@ impl NodeDetails {
         self.sequence.clear();
         self.degree = (0, 0);
         self.paths.clear();
+        self.unique_paths.clear();
 
         let graph = graph_query.graph();
 
@@ -95,11 +99,17 @@ impl NodeDetails {
 
         self.degree = (degree_l, degree_r);
 
-        let paths_fwd = graph_query.handle_positions(Handle::pack(node_id, false));
+        let paths_fwd =
+            graph_query.handle_positions(Handle::pack(node_id, false));
         // let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
 
         if let Some(p) = paths_fwd {
             self.paths.extend_from_slice(&p);
+
+            self.unique_paths
+                .extend(self.paths.iter().map(|(path, _, _)| path));
+            self.unique_paths.sort();
+            self.unique_paths.dedup();
         }
         // if let Some(p) = paths_rev {
         //     self.paths.extend_from_slice(&p);
@@ -141,7 +151,10 @@ impl NodeDetails {
                         ui.label(format!("Seq len: {}", self.sequence.len()));
                     }
 
-                    ui.label(format!("Degree ({}, {})", self.degree.0, self.degree.1));
+                    ui.label(format!(
+                        "Degree ({}, {})",
+                        self.degree.0, self.degree.1
+                    ));
 
                     ui.separator();
 
@@ -161,22 +174,33 @@ impl NodeDetails {
                                 ui.label("Base pos");
                                 ui.end_row();
 
-                                for (path_id, step_ptr, pos) in self.paths.iter() {
-                                    let path_name = graph_query.graph().get_path_name_vec(*path_id);
+                                for (path_id, step_ptr, pos) in
+                                    self.paths.iter()
+                                {
+                                    let path_name = graph_query
+                                        .graph()
+                                        .get_path_name_vec(*path_id);
 
-                                    let mut row = if let Some(name) = path_name {
+                                    let mut row = if let Some(name) = path_name
+                                    {
                                         ui.label(format!("{}", name.as_bstr()))
                                     } else {
-                                        ui.label(format!("Path ID {}", path_id.0))
+                                        ui.label(format!(
+                                            "Path ID {}",
+                                            path_id.0
+                                        ))
                                     };
 
                                     row = row.union(ui.add(separator()));
 
-                                    row = row
-                                        .union(ui.label(format!("{}", step_ptr.to_vector_value())));
+                                    row = row.union(ui.label(format!(
+                                        "{}",
+                                        step_ptr.to_vector_value()
+                                    )));
                                     row = row.union(ui.add(separator()));
 
-                                    row = row.union(ui.label(format!("{}", pos)));
+                                    row =
+                                        row.union(ui.label(format!("{}", pos)));
 
                                     let row_interact = ui.interact(
                                         row.rect,
@@ -189,7 +213,8 @@ impl NodeDetails {
                                     );
 
                                     if row_interact.clicked() {
-                                        path_details_id_cell.store(Some(*path_id));
+                                        path_details_id_cell
+                                            .store(Some(*path_id));
                                         *open_path_details = true;
                                     }
 
@@ -212,6 +237,7 @@ pub struct NodeListSlot {
     degree: (usize, usize),
 
     paths: Vec<(PathId, StepPtr, usize)>,
+    unique_paths: Vec<PathId>,
     visible: bool,
 }
 
@@ -230,25 +256,34 @@ impl NodeListSlot {
 
         let degree = (degree_l, degree_r);
 
-        let paths_fwd = graph_query.handle_positions(Handle::pack(node_id, false));
-        let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
+        let paths_fwd =
+            graph_query.handle_positions(Handle::pack(node_id, false));
+        let paths_rev =
+            graph_query.handle_positions(Handle::pack(node_id, true));
 
         let paths_len = paths_fwd.as_ref().map(|v| v.len()).unwrap_or_default()
             + paths_rev.as_ref().map(|v| v.len()).unwrap_or_default();
 
         let mut paths = Vec::with_capacity(paths_len);
+        let mut unique_paths = Vec::with_capacity(paths_len);
         if let Some(p) = paths_fwd {
             paths.extend_from_slice(&p);
+            unique_paths.extend(p.iter().map(|(path, _, _)| path));
         }
         if let Some(p) = paths_rev {
             paths.extend_from_slice(&p);
+            unique_paths.extend(p.iter().map(|(path, _, _)| path));
         }
+
+        unique_paths.sort();
+        unique_paths.dedup();
 
         Self {
             node_id,
             sequence,
             degree,
             paths,
+            unique_paths,
 
             visible,
         }
@@ -404,15 +439,17 @@ impl NodeList {
         // let end = start + self.page_size;
 
         if self.update_slots {
-            let page_start =
-                (self.page * self.page_size).min(nodes.len() - (nodes.len() % self.page_size));
+            let page_start = (self.page * self.page_size)
+                .min(nodes.len() - (nodes.len() % self.page_size));
             let page_end = (page_start + self.page_size).min(nodes.len());
 
             for slot in self.slots.iter_mut() {
                 slot.visible = false;
             }
 
-            for (slot, node) in self.slots.iter_mut().zip(&nodes[page_start..page_end]) {
+            for (slot, node) in
+                self.slots.iter_mut().zip(&nodes[page_start..page_end])
+            {
                 slot.visible = true;
 
                 slot.node_id = *node;
@@ -423,16 +460,22 @@ impl NodeList {
                 slot.sequence.extend(graph_query.graph().sequence(handle));
 
                 slot.paths.clear();
+                slot.unique_paths.clear();
 
                 let paths_fwd = graph_query.handle_positions(handle);
                 let paths_rev = graph_query.handle_positions(handle.flip());
 
                 if let Some(p) = paths_fwd {
                     slot.paths.extend_from_slice(&p);
+                    slot.unique_paths.extend(p.iter().map(|(path, _, _)| path));
                 }
                 if let Some(p) = paths_rev {
                     slot.paths.extend_from_slice(&p);
+                    slot.unique_paths.extend(p.iter().map(|(path, _, _)| path));
                 }
+
+                slot.unique_paths.sort();
+                slot.unique_paths.dedup();
             }
 
             self.update_slots = false;
@@ -453,7 +496,9 @@ impl NodeList {
 
                     if clear_selection_btn.clicked() {
                         use crate::app::Select;
-                        app_msg_tx.send(AppMsg::Selection(Select::Clear)).unwrap();
+                        app_msg_tx
+                            .send(AppMsg::Selection(Select::Clear))
+                            .unwrap();
                     }
 
                     if ui
@@ -510,9 +555,9 @@ impl NodeList {
                 let node_id_cell = &self.node_details_id;
 
                 egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
-                    egui::Grid::new("node_list_grid")
-                        .striped(true)
-                        .show(&mut ui, |ui| {
+                    egui::Grid::new("node_list_grid").striped(true).show(
+                        &mut ui,
+                        |ui| {
                             ui.label("Node");
                             ui.label("Degree");
                             ui.label("Seq. len");
@@ -521,15 +566,23 @@ impl NodeList {
 
                             for (ix, slot) in self.slots.iter().enumerate() {
                                 if slot.visible {
-                                    let mut row = ui.label(format!("{}", slot.node_id));
+                                    let mut row =
+                                        ui.label(format!("{}", slot.node_id));
 
-                                    row = row.union(
-                                        ui.label(format!("({}, {})", slot.degree.0, slot.degree.1)),
-                                    );
+                                    row = row.union(ui.label(format!(
+                                        "({}, {})",
+                                        slot.degree.0, slot.degree.1
+                                    )));
 
-                                    row = row.union(ui.label(format!("{}", slot.sequence.len())));
+                                    row = row.union(ui.label(format!(
+                                        "{}",
+                                        slot.sequence.len()
+                                    )));
 
-                                    row = row.union(ui.label(format!("{}", slot.paths.len())));
+                                    row = row.union(ui.label(format!(
+                                        "{}",
+                                        slot.unique_paths.len() // slot.paths.len()
+                                    )));
 
                                     let row_interact = ui.interact(
                                         row.rect,
@@ -546,7 +599,8 @@ impl NodeList {
                                     ui.end_row();
                                 }
                             }
-                        });
+                        },
+                    );
                 });
 
                 ui.shrink_width_to_current();
