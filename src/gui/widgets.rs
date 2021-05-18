@@ -16,7 +16,12 @@ use crate::{app::OverlayState, geometry::*};
 pub trait Widget {
     fn id() -> &'static str;
 
-    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response>;
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        size: Option<Point>,
+    ) -> Option<egui::Response>;
 }
 
 pub struct MenuBar {
@@ -56,6 +61,8 @@ impl MenuBar {
         let themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
 
+        let repl = &mut open_windows.repl_window;
+
         let resp = egui::TopPanel::top(Self::ID).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(*nodes, "Nodes").clicked() {
@@ -83,7 +90,10 @@ impl MenuBar {
                 }
 
                 if ui
-                    .selectable_label(self.overlay_state.use_overlay(), "Show overlay")
+                    .selectable_label(
+                        self.overlay_state.use_overlay(),
+                        "Show overlay",
+                    )
                     .clicked()
                 {
                     self.overlay_state.toggle_overlay()
@@ -91,6 +101,12 @@ impl MenuBar {
 
                 if ui.button("Goto selection").clicked() {
                     app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                }
+
+                ui.add_space(100.0);
+
+                if ui.button("REPL").clicked() {
+                    *repl = !*repl;
                 }
             });
         });
@@ -137,7 +153,12 @@ impl Widget for NodeSelection {
         "node_select_info"
     }
 
-    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        size: Option<Point>,
+    ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
         let size = size.unwrap_or(Point {
@@ -161,12 +182,16 @@ impl Widget for NodeSelection {
                     NodeSelection::One { info } => {
                         let node_info = info;
 
-                        let label = format!("Selected node: {}", node_info.node_id.0);
+                        let label =
+                            format!("Selected node: {}", node_info.node_id.0);
                         ui.label(label);
                         let lb_len = format!("Length: {}", node_info.len);
-                        let lb_deg =
-                            format!("Degree: ({}, {})", node_info.degree.0, node_info.degree.1);
-                        let lb_cov = format!("Coverage: {}", node_info.coverage);
+                        let lb_deg = format!(
+                            "Degree: ({}, {})",
+                            node_info.degree.0, node_info.degree.1
+                        );
+                        let lb_cov =
+                            format!("Coverage: {}", node_info.coverage);
 
                         ui.label(lb_len);
                         ui.label(lb_deg);
@@ -202,7 +227,12 @@ impl Widget for FrameRate {
         "frame_rate_box"
     }
 
-    fn ui(&self, ctx: &egui::CtxRef, pos: Point, size: Option<Point>) -> Option<egui::Response> {
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        size: Option<Point>,
+    ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
         let width = 100.0;
@@ -253,7 +283,12 @@ impl Widget for GraphStats {
         "graph_stats_box"
     }
 
-    fn ui(&self, ctx: &egui::CtxRef, pos: Point, _size: Option<Point>) -> Option<egui::Response> {
+    fn ui(
+        &self,
+        ctx: &egui::CtxRef,
+        pos: Point,
+        _size: Option<Point>,
+    ) -> Option<egui::Response> {
         egui::Window::new(Self::id())
             .title_bar(false)
             .collapsible(false)

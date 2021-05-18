@@ -34,7 +34,7 @@ use gluon::parser::{parse_partial_repl_line, ReplLine};
 
 use gluon_completion as completion;
 
-use vm::api::Function;
+use vm::{api::Function, internal::ValuePrinter};
 
 use anyhow::Result;
 
@@ -324,12 +324,12 @@ async fn eval_line_(vm: RootedThread, line: &str) -> gluon::Result<()> {
     let vm = value.vm();
     let env = vm.get_env();
     let debug_level = vm.global_env().get_debug_level();
-    // println!(
-    //     "{}",
-    //     ValuePrinter::new(&env, &typ, value.get_variant(), &debug_level)
-    //         .width(80)
-    //         .max_level(5)
-    // );
+    println!(
+        "{}",
+        ValuePrinter::new(&env, &typ, value.get_variant(), &debug_level)
+            .width(80)
+            .max_level(5)
+    );
     Ok(())
 }
 

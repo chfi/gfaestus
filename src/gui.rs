@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use futures::executor::ThreadPool;
+use gluon::vm::frunk_core::hlist::Sculptor;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -149,6 +150,7 @@ pub struct AppViewState {
     overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
     // overlay_editor: OverlayEditor,
     // overlay_list: OverlayList,
+    repl_window: ViewStateChannel<ReplWindow, ()>,
 }
 
 impl AppViewState {
@@ -203,6 +205,10 @@ impl AppViewState {
             OverlayCreatorMsg,
         >::new(overlay_creator_state);
 
+        let repl_window_state = ReplWindow::new().unwrap();
+        let repl_window =
+            ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
+
         Self {
             settings,
 
@@ -217,6 +223,8 @@ impl AppViewState {
 
             overlay_list,
             overlay_creator,
+
+            repl_window,
         }
     }
 
@@ -383,6 +391,8 @@ pub struct OpenWindows {
     overlays: bool,
     overlay_creator: bool,
 
+    repl_window: bool,
+
     egui_inspection: bool,
     egui_settings: bool,
     egui_memory: bool,
@@ -405,6 +415,8 @@ impl std::default::Default for OpenWindows {
             themes: false,
             overlays: false,
             overlay_creator: false,
+
+            repl_window: true,
 
             egui_inspection: false,
             egui_settings: false,
@@ -775,6 +787,15 @@ impl Gui {
                     &self.app_msg_tx,
                 );
             }
+        }
+
+        if self.open_windows.repl_window {
+            let repl_window = &mut self.open_windows.repl_window;
+            view_state.repl_window.state.ui(
+                repl_window,
+                &self.ctx,
+                &self.thread_pool,
+            );
         }
 
         if self.open_windows.egui_inspection {
