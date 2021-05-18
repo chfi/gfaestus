@@ -132,7 +132,7 @@ fn switch_debug_level(args: WithVM<&str>) -> IO<Result<String, String>> {
     IO::Value(Ok(vm.global_env().get_debug_level().to_string()))
 }
 
-fn complete(
+pub(super) fn complete(
     thread: &Thread,
     name: &str,
     fileinput: &str,
@@ -176,12 +176,16 @@ fn complete(
         .collect())
 }
 
-fn eval_line(
+pub(super) fn eval_line(
     WithVM { vm, value: line }: WithVM<&str>,
 ) -> impl Future<Output = IO<()>> {
+    println!("REPL eval_line");
+
     let vm = vm.new_thread().unwrap(); // TODO Reuse the current thread
+    println!("REPL new thread");
     let line = line.to_string();
     async move {
+        println!("in async block");
         eval_line_(vm.root_thread(), &line)
             .map(move |result| match result {
                 Ok(x) => IO::Value(x),
@@ -197,9 +201,11 @@ fn eval_line(
 }
 
 async fn eval_line_(vm: RootedThread, line: &str) -> gluon::Result<()> {
+    println!("REPL eval_line_");
     let mut is_let_binding = false;
     let mut eval_expr;
     let value = {
+        println!("REPL eval_line_ value");
         let mut db = vm.get_database();
         let mut module_compiler = vm.module_compiler(&mut db);
         eval_expr = {

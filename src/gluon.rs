@@ -1,6 +1,7 @@
 use std::{path::Path, sync::Arc};
 
 use bstr::ByteVec;
+use futures::Future;
 use gluon_codegen::*;
 
 use gluon::vm::{
@@ -9,7 +10,8 @@ use gluon::vm::{
 };
 use gluon::*;
 use gluon::{base::types::ArcType, import::add_extern_module};
-use vm::api::Function;
+use vm::api::IO;
+use vm::api::{Function, WithVM};
 
 use anyhow::Result;
 
@@ -41,6 +43,17 @@ pub struct GluonVM {
 pub type RGBTuple = (f32, f32, f32, f32);
 
 impl GluonVM {
+    pub fn eval_line(&self, line: &str) -> impl Future<Output = IO<()>> {
+        println!("GluonVM eval_line");
+        let with_vm = WithVM {
+            vm: self.vm.thread(),
+            value: line,
+        };
+
+        self.vm.run_io(true);
+        repl::eval_line(with_vm)
+    }
+
     pub fn new() -> Result<Self> {
         let vm = new_vm();
         gluon::import::add_extern_module(&vm, "gfaestus", packedgraph_module);
