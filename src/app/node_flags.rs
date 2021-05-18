@@ -34,6 +34,7 @@ impl SelectionBuffer {
             | vk::BufferUsageFlags::STORAGE_BUFFER;
 
         let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_CACHED
             | vk::MemoryPropertyFlags::HOST_COHERENT;
 
         let (buffer, memory, size) =

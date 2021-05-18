@@ -147,8 +147,8 @@ impl GpuSelection {
         };
 
         let x_group_count = {
-            let div = self.node_count / 64;
-            let rem = self.node_count % 64;
+            let div = self.node_count / 256;
+            let rem = self.node_count % 256;
 
             let mut count = div;
             if rem > 0 {

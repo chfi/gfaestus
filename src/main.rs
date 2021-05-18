@@ -462,47 +462,59 @@ fn main() {
 
 
                 if let Some(fid) = translate_fence_id {
-                    compute_manager.block_on_fence(fid).unwrap();
-                    compute_manager.free_fence(fid, false).unwrap();
+                    if compute_manager.is_fence_ready(fid).unwrap() {
+                        compute_manager.block_on_fence(fid).unwrap();
+                        compute_manager.free_fence(fid, false).unwrap();
 
-                    universe.update_positions_from_gpu(gfaestus.vk_context().device(),
-                                                       &main_view.node_draw_system.vertices).unwrap();
+                        universe.update_positions_from_gpu(gfaestus.vk_context().device(),
+                                                           &main_view.node_draw_system.vertices).unwrap();
 
-                    translate_fence_id = None;
+                        translate_fence_id = None;
+                    }
                 }
 
                 if let Some(fid) = select_fence_id {
 
-                    compute_manager.block_on_fence(fid).unwrap();
-                    compute_manager.free_fence(fid, false).unwrap();
+                    if compute_manager.is_fence_ready(fid).unwrap() {
+                        let t = std::time::Instant::now();
+                        compute_manager.block_on_fence(fid).unwrap();
+                        compute_manager.free_fence(fid, false).unwrap();
+                        println!("block & free took {} ns", t.elapsed().as_nanos());
 
-                    GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
-                                            gfaestus.transient_command_pool,
-                                            gfaestus.graphics_queue,
-                                            gpu_selection.selection_buffer.buffer,
-                                            main_view.selection_buffer.buffer,
-                                            main_view.selection_buffer.size);
+                        let t = std::time::Instant::now();
+                        GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
+                                                gfaestus.transient_command_pool,
+                                                gfaestus.graphics_queue,
+                                                gpu_selection.selection_buffer.buffer,
+                                                main_view.selection_buffer.buffer,
+                                                main_view.selection_buffer.size);
+                        println!("buffer copy took {} ns", t.elapsed().as_nanos());
 
 
-                    main_view
-                        .selection_buffer
-                        .fill_selection_set(gfaestus
-                                            .vk_context()
-                                            .device())
-                        .unwrap();
-
-                    use gfaestus::app::Select;
-
-                    app_msg_tx.send(AppMsg::Selection(Select::Many {
-                        nodes: main_view
+                        let t = std::time::Instant::now();
+                        main_view
                             .selection_buffer
-                            .selection_set()
-                            .clone(),
-                        clear: true }))
-                        .unwrap();
+                            .fill_selection_set(gfaestus
+                                                .vk_context()
+                                                .device())
+                            .unwrap();
+                        println!("fill_selection_set took {} ns", t.elapsed().as_nanos());
+
+                        use gfaestus::app::Select;
+
+                        let t = std::time::Instant::now();
+                        app_msg_tx.send(AppMsg::Selection(Select::Many {
+                            nodes: main_view
+                                .selection_buffer
+                                .selection_set()
+                                .clone(),
+                            clear: true }))
+                            .unwrap();
+                        println!("send took {} ns", t.elapsed().as_nanos());
 
 
-                    select_fence_id = None;
+                        select_fence_id = None;
+                    }
                 }
 
 
