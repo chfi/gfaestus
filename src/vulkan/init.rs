@@ -83,6 +83,7 @@ pub(super) fn find_queue_families(
         }
 
         if family.queue_flags.contains(vk::QueueFlags::COMPUTE)
+            && !family.queue_flags.contains(vk::QueueFlags::GRAPHICS)
             && compute_ix.is_none()
         {
             compute_ix = Some(ix as u32);
@@ -104,6 +105,10 @@ pub(super) fn find_queue_families(
         {
             break;
         }
+    }
+
+    if compute_ix.is_none() {
+        compute_ix = graphics_ix;
     }
 
     Ok((graphics_ix, present_ix, compute_ix))
