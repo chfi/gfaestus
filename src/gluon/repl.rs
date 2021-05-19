@@ -20,14 +20,15 @@ use gluon::{
     },
     compiler_pipeline::{Executable, ExecuteValue},
     import::add_extern_module,
+    new_vm,
     query::CompilerDatabase,
     vm::{
-        api::{FunctionRef, Hole, OpaqueValue, WithVM, IO},
+        api::{FunctionRef, Hole, OpaqueValue, Pushable, VmType, WithVM, IO},
         vm::RootedValue,
         ExternModule, {self, Error as VMError, Result as VMResult},
     },
     Error as GluonError, Result as GluonResult, RootedThread, Thread,
-    ThreadExt,
+    ThreadExt, *,
 };
 
 use gluon::parser::{parse_partial_repl_line, ReplLine};
@@ -43,6 +44,96 @@ use crate::{
     geometry::Point,
     view::View,
 };
+
+use super::GluonVM;
+
+#[derive(Debug, Clone, Trace, Userdata, VmType)]
+#[gluon_userdata(clone)]
+#[gluon_trace(skip)]
+#[gluon(vm_type = "ReplCtx")]
+pub struct ReplCtx {
+    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
+    main_view_msg_tx: crossbeam::channel::Sender<MainViewMsg>,
+}
+
+impl ReplCtx {
+    pub fn new(
+        app_msg_tx: crossbeam::channel::Sender<AppMsg>,
+        main_view_msg_tx: crossbeam::channel::Sender<MainViewMsg>,
+    ) -> Self {
+        Self {
+            app_msg_tx,
+            main_view_msg_tx,
+        }
+    }
+}
+
+fn goto_selection(ctx: &ReplCtx) {
+    ctx.app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+}
+
+fn repl_ctx_module(thread: &Thread) -> vm::Result<ExternModule> {
+    thread.register_type::<ReplCtx>("ReplCtx", &[])?;
+
+    let module = record! {
+        type ReplCtx => ReplCtx,
+
+        goto_selection => primitive!(1, goto_selection),
+    };
+
+    ExternModule::new(thread, module)
+}
+
+pub struct GluonRepl {
+    pub gluon_vm: GluonVM,
+
+    ctx: ReplCtx,
+}
+
+impl GluonRepl {
+    pub fn new(
+        app_msg_tx: crossbeam::channel::Sender<AppMsg>,
+        main_view_msg_tx: crossbeam::channel::Sender<MainViewMsg>,
+    ) -> Result<Self> {
+        let ctx = ReplCtx::new(app_msg_tx, main_view_msg_tx);
+
+        let gluon_vm = {
+            let vm = new_vm();
+
+            gluon::import::add_extern_module(
+                &vm,
+                "gfaestus",
+                super::packedgraph_module,
+            );
+            gluon::import::add_extern_module(
+                &vm,
+                "bed",
+                super::bed::bed_module,
+            );
+            gluon::import::add_extern_module(&vm, "repl", repl_ctx_module);
+
+            vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+            vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! repl")?;
+
+            let ctx_ty = ReplCtx::make_type(&vm);
+
+            let db = &mut vm.get_database_mut();
+
+            let value: RootedValue<RootedThread> = ctx.clone().marshal(&vm)?;
+
+            db.set_global(
+                "repl_ctx",
+                ctx_ty,
+                Default::default(),
+                value.get_value(),
+            );
+
+            GluonVM { vm }
+        };
+
+        Ok(Self { gluon_vm, ctx })
+    }
+}
 
 // taken and modified from gluon_repl
 
