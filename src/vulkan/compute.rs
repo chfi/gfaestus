@@ -7,9 +7,11 @@ use anyhow::Result;
 
 use super::GfaestusVk;
 
+pub mod binning;
 pub mod node_motion;
 pub mod selection;
 
+pub use binning::*;
 pub use node_motion::*;
 pub use selection::*;
 

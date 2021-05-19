@@ -1,0 +1,43 @@
+
+#version 450
+
+// for each node end position, get the corresponding bin ID, if any
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) readonly buffer Nodes {
+  vec2 pos[];
+} nodes;
+
+layout (set = 0, binding = 1) buffer NodeBins {
+  uint bin[];
+} nodes;
+
+/*
+layout (set = 0, binding = 2) buffer BinOffsets {
+  uint offset_len[];
+} bin_offsets;
+
+layout (set = 0, binding = 3) buffer Bins {
+  uint node[];
+} bins;
+*/
+
+layout (push_constant) uniform BinDefinition {
+  float dimension;
+  uint rows;
+  uint columns;
+  uint node_count;
+} bin_def;
+
+
+void main() {
+
+  uint index = gl_GlobalInvocationID.x;
+
+  if (index < node_count)  {
+    vec2 node_pos = nodes[index];
+
+
+  }
+}
