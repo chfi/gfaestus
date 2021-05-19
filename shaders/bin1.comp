@@ -1,7 +1,10 @@
+/*
+  Calculate the bin membership for each node position,
+  the size of each bin,
+  and the offset into each bin for each node.
+*/
 
 #version 450
-
-// for each node end position, get the corresponding bin ID, if any
 
 layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
 
@@ -10,25 +13,48 @@ layout (set = 0, binding = 0) readonly buffer Nodes {
 } nodes;
 
 layout (set = 0, binding = 1) buffer NodeBins {
-  uint bin[];
-} nodes;
+  int bin[];
+} node_bins;
 
-/*
-layout (set = 0, binding = 2) buffer BinOffsets {
+layout (set = 0, binding = 2) buffer NodeBinOffsets {
+  uint offset[];
+} node_bin_offset;
+
+layout (set = 0, binding = 3) buffer BinOffsets {
   uint offset_len[];
 } bin_offsets;
 
+/*
 layout (set = 0, binding = 3) buffer Bins {
   uint node[];
 } bins;
 */
 
 layout (push_constant) uniform BinDefinition {
+  vec2 top_left;
   float dimension;
   uint rows;
   uint columns;
   uint node_count;
 } bin_def;
+
+
+int bin_for_pos(vec2 pos) {
+  if (pos.x < top_left.x || pos.y < top_left.y) {
+    return -1;
+  }
+
+  vec2 local_pos = pos - bin_def.top_left;
+
+  uint column = uint(local_pos.x / float(bin_def.columns));
+  uint row = uint(local_pos.y / float(bin_def.rows));
+
+  if (column >= bin_def.columns || row >= bin_def.rows) {
+    return -1;
+  }
+
+  return int((row * bin_def.columns) + column);
+}
 
 
 void main() {
@@ -38,6 +64,18 @@ void main() {
   if (index < node_count)  {
     vec2 node_pos = nodes[index];
 
+    int bin_ix = bin_for_pos(node_pos);
 
+    node_bins[index] = bin_ix;
+
+    if (bin_ix == -1) {
+      return;
+    }
+
+    uint len_ix = uint(bin_ix * 2) + 1;
+
+    int offset = atomicAdd(bin_offsets[len_ix], 1);
+
+    node_bin_offset[index] = offset;
   }
 }
