@@ -143,10 +143,10 @@ fn main() {
     )
     .unwrap();
 
-    let mut gpu_selection =
+    let gpu_selection =
         GpuSelection::new(&gfaestus, graph_query.node_count()).unwrap();
 
-    let mut node_translation =
+    let node_translation =
         NodeTranslation::new(&gfaestus, graph_query.node_count()).unwrap();
 
     let mut select_fence_id: Option<usize> = None;
@@ -164,24 +164,23 @@ fn main() {
     let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
         .expect("error when creating App");
 
-    let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
-
     let node_vertices = universe.new_vertices();
 
     let mut main_view = MainView::new(
         &gfaestus,
+        app.clone_channels(),
+        app.shared_state().clone(),
         app.settings.node_width().clone(),
         graph_query.node_count(),
         gfaestus.swapchain_props,
         gfaestus.msaa_samples,
         gfaestus.render_passes.nodes,
-        app.shared_state().clone(),
     )
     .unwrap();
 
     let repl = gfaestus::gluon::repl::GluonRepl::new(
-        app_msg_tx.clone(),
-        main_view.main_view_msg_tx().clone(),
+        app.channels().app_tx.clone(),
+        app.channels().main_view_tx.clone(),
     )
     .unwrap();
 
@@ -193,7 +192,7 @@ fn main() {
         app.shared_state().clone(),
         input_manager.gui_focus_state().clone(),
         app.settings.node_width().clone(),
-        app_msg_tx.clone(),
+        app.channels().app_tx.clone(),
         &graph_query,
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
@@ -324,7 +323,7 @@ fn main() {
                     .read_node_id_at(mouse_pos)
                     .map(|nid| NodeId::from(nid as u64));
 
-                app_msg_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
+                app.channels().app_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
 
                 gui.set_hover_node(hover_node);
 
@@ -352,14 +351,14 @@ fn main() {
                 }
 
                 while let Ok(gui_in) = gui_rx.try_recv() {
-                    gui.apply_input(&app_msg_tx, gui_in);
+                    gui.apply_input(&app.channels().app_tx, gui_in);
                 }
 
                 while let Ok(main_view_in) = main_view_rx.try_recv() {
-                    main_view.apply_input(screen_dims, app.mouse_pos(), &app_msg_tx, main_view_in);
+                    main_view.apply_input(screen_dims, app.mouse_pos(), main_view_in);
                 }
 
-                while let Ok(app_msg) = app_msg_rx.try_recv() {
+                while let Ok(app_msg) = app.channels().app_rx.try_recv() {
                     app.apply_app_msg(
                         main_view.main_view_msg_tx(),
                         &app_msg,
@@ -502,7 +501,8 @@ fn main() {
                         use gfaestus::app::Select;
 
                         let t = std::time::Instant::now();
-                        app_msg_tx.send(AppMsg::Selection(Select::Many {
+                        app.channels().app_tx
+                            .send(AppMsg::Selection(Select::Many {
                             nodes: main_view
                                 .selection_buffer
                                 .selection_set()

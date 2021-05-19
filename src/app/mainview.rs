@@ -38,7 +38,7 @@ pub mod view;
 
 use view::*;
 
-use super::SharedState;
+use super::{AppChannels, SharedState};
 
 pub struct MainView {
     pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
@@ -51,10 +51,10 @@ pub struct MainView {
 
     view_input_state: ViewInputState,
 
-    msg_tx: Sender<MainViewMsg>,
-    msg_rx: Receiver<MainViewMsg>,
-
+    // msg_tx: Sender<MainViewMsg>,
+    // msg_rx: Receiver<MainViewMsg>,
     shared_state: SharedState,
+    channels: AppChannels,
 
     move_delta: AtomicCell<Option<Point>>,
 }
@@ -67,12 +67,13 @@ pub enum MainViewMsg {
 impl MainView {
     pub fn new(
         app: &GfaestusVk,
+        channels: AppChannels,
+        shared_state: SharedState,
         node_width: Arc<NodeWidth>,
         node_count: usize,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
-        shared_state: SharedState,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
@@ -118,22 +119,23 @@ impl MainView {
 
             view_input_state: Default::default(),
 
-            msg_tx,
-            msg_rx,
-
+            // msg_tx,
+            // msg_rx,
             move_delta: AtomicCell::new(None),
+
             shared_state,
+            channels,
         };
 
         Ok(main_view)
     }
 
     pub fn main_view_msg_tx(&self) -> &Sender<MainViewMsg> {
-        &self.msg_tx
+        &self.channels.main_view_tx
     }
 
     pub fn main_view_msg_rx(&self) -> &Receiver<MainViewMsg> {
-        &self.msg_rx
+        &self.channels.main_view_rx
     }
 
     pub fn apply_msg(&self, msg: MainViewMsg) {
@@ -331,7 +333,6 @@ impl MainView {
         &self,
         screen_dims: Dims,
         mouse_pos: Point,
-        app_msg_tx: &channel::Sender<crate::app::AppMsg>,
         input: SystemInput<MainViewInput>,
     ) {
         use MainViewInput as In;
@@ -400,7 +401,8 @@ impl MainView {
 
                                 let delta = mouse_world - start;
 
-                                app_msg_tx
+                                self.channels
+                                    .app_tx
                                     .send(AppMsg::TranslateSelected(delta))
                                     .unwrap();
 
@@ -418,7 +420,8 @@ impl MainView {
                             .map(|nid| NodeId::from(nid as u64));
 
                         if let Some(node) = selected_node {
-                            app_msg_tx
+                            self.channels
+                                .app_tx
                                 .send(AppMsg::Selection(Select::One {
                                     node,
                                     clear: false,
@@ -458,7 +461,8 @@ impl MainView {
                                 if let Some(rect) =
                                     self.shared_state.close_mouse_rect_world()
                                 {
-                                    app_msg_tx
+                                    self.channels
+                                        .app_tx
                                         .send(AppMsg::RectSelect(rect))
                                         .unwrap();
                                 }

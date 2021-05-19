@@ -1,3 +1,4 @@
+pub mod channels;
 pub mod mainview;
 pub mod node_flags;
 pub mod settings;
@@ -25,6 +26,7 @@ use crate::{
 
 use theme::*;
 
+pub use channels::*;
 pub use settings::*;
 pub use shared_state::*;
 
@@ -34,6 +36,7 @@ pub struct App {
     pub themes: AppThemes,
 
     shared_state: SharedState,
+    channels: AppChannels,
 
     selected_nodes: FxHashSet<NodeId>,
     selection_changed: bool,
@@ -111,6 +114,7 @@ impl App {
             themes,
 
             shared_state,
+            channels: AppChannels::new(),
 
             selected_nodes: FxHashSet::default(),
             selection_changed: false,
@@ -124,6 +128,14 @@ impl App {
 
     pub fn shared_state(&self) -> &SharedState {
         &self.shared_state
+    }
+
+    pub fn channels(&self) -> &AppChannels {
+        &self.channels
+    }
+
+    pub fn clone_channels(&self) -> AppChannels {
+        self.channels.clone()
     }
 
     pub fn hover_node(&self) -> Option<NodeId> {
