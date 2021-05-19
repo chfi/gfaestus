@@ -24,6 +24,7 @@ use parking_lot::Mutex;
 
 use crate::{
     app::{AppMsg, RenderConfigOpts, SharedState},
+    gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
 };
@@ -159,6 +160,8 @@ impl AppViewState {
         node_width: Arc<NodeWidth>,
         overlay_state: OverlayState,
         dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+        thread_pool: &ThreadPool,
+        repl: GluonRepl,
     ) -> Self {
         // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
 
@@ -205,7 +208,7 @@ impl AppViewState {
             OverlayCreatorMsg,
         >::new(overlay_creator_state);
 
-        let repl_window_state = ReplWindow::new().unwrap();
+        let repl_window_state = ReplWindow::new(repl).unwrap();
         let repl_window =
             ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
 
@@ -502,6 +505,7 @@ impl Gui {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         thread_pool: Arc<ThreadPool>,
+        repl: GluonRepl,
     ) -> Result<(Self, channel::Receiver<AppConfigState>)> {
         let draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
 
@@ -551,6 +555,8 @@ impl Gui {
             node_width,
             overlay_state.clone(),
             dropped_file.clone(),
+            &thread_pool,
+            repl,
         );
 
         let menu_bar = MenuBar::new(overlay_state);

@@ -16,12 +16,12 @@ use futures::executor::ThreadPool;
 use futures::task::{LocalSpawn, LocalSpawnExt, Spawn, SpawnExt};
 use futures::{Future, FutureExt};
 
-use crate::asynchronous::AsyncResult;
+use crate::{asynchronous::AsyncResult, gluon::repl::GluonRepl};
 
 use crate::gluon::GluonVM;
 
 pub struct ReplWindow {
-    gluon_vm: Arc<GluonVM>,
+    repl: GluonRepl,
 
     line_input: String,
     output: String,
@@ -33,16 +33,23 @@ pub struct ReplWindow {
 impl ReplWindow {
     pub const ID: &'static str = "repl_window";
 
-    pub fn new() -> Result<Self> {
-        let gluon_vm = Arc::new(crate::gluon::GluonVM::new()?);
-
+    pub fn new(repl: GluonRepl) -> Result<Self> {
         let line_input = String::new();
         let output = String::new();
 
         let (output_tx, output_rx) = futures::channel::mpsc::channel(16);
 
+        let future = async {
+            repl.gluon_vm
+                .eval_line("let io @ { ? } = import! std.io")
+                .await;
+            repl.gluon_vm.eval_line("let repl = import! repl").await;
+        };
+
+        futures::executor::block_on(future);
+
         Ok(Self {
-            gluon_vm,
+            repl,
 
             line_input,
             output,
@@ -83,7 +90,8 @@ impl ReplWindow {
                     ui.text_edit_singleline(&mut self.line_input);
 
                     if ui.button("Submit").clicked() {
-                        let future = self.gluon_vm.eval_line(&self.line_input);
+                        let future =
+                            self.repl.gluon_vm.eval_line(&self.line_input);
                         let sender = self.output_tx.clone();
                         thread_pool
                             .spawn(async move {

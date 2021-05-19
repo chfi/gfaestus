@@ -24,6 +24,8 @@ use gfaestus::vulkan::compute::{
     ComputeManager, GpuSelection, NodeTranslation,
 };
 
+use gfaestus::gluon::GluonVM;
+
 use anyhow::Result;
 
 use ash::version::DeviceV1_0;
@@ -182,6 +184,12 @@ fn main() {
     )
     .unwrap();
 
+    let repl = gfaestus::gluon::repl::GluonRepl::new(
+        app_msg_tx.clone(),
+        main_view.main_view_msg_tx().clone(),
+    )
+    .unwrap();
+
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
@@ -196,8 +204,15 @@ fn main() {
         gfaestus.msaa_samples,
         gfaestus.render_passes.gui,
         thread_pool.clone(),
+        repl,
     )
     .unwrap();
+
+    let graph_arc = graph_query.graph_arc().clone();
+    let graph_handle = gfaestus::gluon::GraphHandle::new(
+        graph_arc,
+        graph_query.path_positions_arc().clone(),
+    );
 
     let new_overlay_rx = gui.new_overlay_rx().clone();
 
@@ -249,11 +264,24 @@ fn main() {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
-    let graph_arc = graph_query.graph_arc().clone();
-    let graph_handle = gfaestus::gluon::GraphHandle::new(
-        graph_arc,
-        graph_query.path_positions_arc().clone(),
+    /*
+    let gluon_graph =
+        GluonVM::new_with_global_graph(graph_handle.clone()).unwrap();
+
+    let fut1 = gluon_graph.eval_line("let gfaestus = import! gfaestus");
+    let fut2 = gluon_graph.eval_line("let int = import! std.int");
+    let fut3 = gluon_graph.eval_line("let io @ { ? } = import! std.io");
+    let fut4 = gluon_graph.eval_line(
+        "io.println (int.show.show (gfaestus.node_count graph_ctx))",
     );
+
+    thread_pool.spawn_ok(async move {
+        fut1.await;
+        fut2.await;
+        fut3.await;
+        fut4.await;
+    });
+    */
 
     let mut next_overlay_id = 0;
 
