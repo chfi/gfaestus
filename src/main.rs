@@ -5,7 +5,7 @@ use winit::platform::unix::*;
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
-use gfaestus::app::{App, AppConfigMsg, AppConfigState, AppMsg};
+use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
 use gfaestus::input::*;
@@ -165,11 +165,6 @@ fn main() {
         .expect("error when creating App");
 
     let (app_msg_tx, app_msg_rx) = crossbeam::channel::unbounded::<AppMsg>();
-    let (cfg_msg_tx, cfg_msg_rx) =
-        crossbeam::channel::unbounded::<AppConfigMsg>();
-
-    let (opts_to_gui, opts_from_app) =
-        crossbeam::channel::unbounded::<AppConfigState>();
 
     let node_vertices = universe.new_vertices();
 
@@ -196,7 +191,6 @@ fn main() {
     let (mut gui, opts_from_gui) = Gui::new(
         &gfaestus,
         app.shared_state().clone(),
-        app.overlay_state.clone(),
         input_manager.gui_focus_state().clone(),
         app.settings.node_width().clone(),
         app_msg_tx.clone(),
@@ -263,25 +257,6 @@ fn main() {
     .unwrap();
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
-
-    /*
-    let gluon_graph =
-        GluonVM::new_with_global_graph(graph_handle.clone()).unwrap();
-
-    let fut1 = gluon_graph.eval_line("let gfaestus = import! gfaestus");
-    let fut2 = gluon_graph.eval_line("let int = import! std.int");
-    let fut3 = gluon_graph.eval_line("let io @ { ? } = import! std.io");
-    let fut4 = gluon_graph.eval_line(
-        "io.println (int.show.show (gfaestus.node_count graph_ctx))",
-    );
-
-    thread_pool.spawn_ok(async move {
-        fut1.await;
-        fut2.await;
-        fut3.await;
-        fut4.await;
-    });
-    */
 
     let mut next_overlay_id = 0;
 
@@ -377,7 +352,7 @@ fn main() {
                 }
 
                 while let Ok(gui_in) = gui_rx.try_recv() {
-                    gui.apply_input(&app_msg_tx, &cfg_msg_tx, gui_in);
+                    gui.apply_input(&app_msg_tx, gui_in);
                 }
 
                 while let Ok(main_view_in) = main_view_rx.try_recv() {
@@ -421,10 +396,6 @@ fn main() {
                 }
 
                 gui.apply_received_gui_msgs();
-
-                while let Ok(cfg_msg) = cfg_msg_rx.try_recv() {
-                    app.apply_app_config_msg(&cfg_msg);
-                }
 
                 while let Ok(main_view_msg) = main_view.main_view_msg_rx().try_recv() {
                     main_view.apply_msg(main_view_msg);
@@ -561,7 +532,7 @@ fn main() {
                 main_view
                     .node_draw_system
                     .overlay_pipeline
-                    .set_active_overlay(app.overlay_state.current_overlay());
+                    .set_active_overlay(app.shared_state().overlay_state().current_overlay());
 
                 if dirty_swapchain {
                     let size = window.inner_size();
@@ -637,7 +608,7 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
-                let use_overlay = app.overlay_state.use_overlay();
+                let use_overlay = app.shared_state().overlay_state().use_overlay();
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {

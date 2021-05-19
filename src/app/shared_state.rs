@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
+use crate::geometry::*;
+use crate::input::MousePos;
 use crate::view::*;
-use crate::{geometry::*, input::binds::SystemInputBindings};
-use crate::{gui::GuiMsg, input::MousePos};
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -17,6 +17,8 @@ pub struct SharedState {
     pub(super) hover_node: Arc<AtomicCell<Option<NodeId>>>,
 
     pub(super) mouse_rect: MouseRect,
+
+    pub(super) overlay_state: OverlayState,
 }
 
 impl SharedState {
@@ -33,6 +35,8 @@ impl SharedState {
             hover_node: Arc::new(AtomicCell::new(None)),
 
             mouse_rect: MouseRect::default(),
+
+            overlay_state: OverlayState::default(),
         }
     }
 
@@ -50,6 +54,10 @@ impl SharedState {
 
     pub fn hover_node(&self) -> Option<NodeId> {
         self.hover_node.load()
+    }
+
+    pub fn overlay_state(&self) -> &OverlayState {
+        &self.overlay_state
     }
 
     pub fn clone_view(&self) -> Arc<AtomicCell<View>> {
@@ -117,6 +125,46 @@ impl std::default::Default for MouseRect {
         Self {
             world_pos: Arc::new(AtomicCell::new(None)),
             screen_pos: Arc::new(AtomicCell::new(None)),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OverlayState {
+    use_overlay: Arc<AtomicCell<bool>>,
+    current_overlay: Arc<AtomicCell<Option<usize>>>,
+}
+
+impl OverlayState {
+    pub fn use_overlay(&self) -> bool {
+        self.use_overlay.load()
+    }
+
+    pub fn current_overlay(&self) -> Option<usize> {
+        self.current_overlay.load()
+    }
+
+    pub fn set_use_overlay(&self, use_overlay: bool) {
+        self.use_overlay.store(use_overlay);
+    }
+
+    pub fn toggle_overlay(&self) {
+        self.use_overlay.fetch_xor(true);
+    }
+
+    pub fn set_current_overlay(&self, overlay_id: Option<usize>) {
+        self.current_overlay.store(overlay_id);
+    }
+}
+
+impl std::default::Default for OverlayState {
+    fn default() -> Self {
+        let use_overlay = Arc::new(AtomicCell::new(false));
+        let current_overlay = Arc::new(AtomicCell::new(None));
+
+        Self {
+            use_overlay,
+            current_overlay,
         }
     }
 }

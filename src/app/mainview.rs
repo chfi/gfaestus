@@ -47,7 +47,6 @@ pub struct MainView {
 
     node_width: Arc<NodeWidth>,
 
-    // view: Arc<AtomicCell<View>>,
     anim_handler: AnimHandler,
 
     view_input_state: ViewInputState,
@@ -55,7 +54,6 @@ pub struct MainView {
     msg_tx: Sender<MainViewMsg>,
     msg_rx: Receiver<MainViewMsg>,
 
-    // rectangle_select_start: AtomicCell<Option<Point>>,
     shared_state: SharedState,
 
     move_delta: AtomicCell<Option<Point>>,
@@ -85,10 +83,6 @@ impl MainView {
             render_pass,
             selection_buffer.buffer,
         )?;
-
-        // let view = View::default();
-
-        // let view = Arc::new(AtomicCell::new(view));
 
         let screen_dims = {
             let extent = swapchain_props.extent;

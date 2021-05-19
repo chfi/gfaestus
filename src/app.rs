@@ -40,54 +40,7 @@ pub struct App {
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
-    pub selection_edge_detect: bool,
-    pub selection_edge_blur: bool,
-    pub selection_edge: bool,
-    pub nodes_color: bool,
-
-    pub overlay_state: OverlayState,
-
     pub settings: AppSettings,
-}
-
-#[derive(Debug, Clone)]
-pub struct OverlayState {
-    use_overlay: Arc<AtomicCell<bool>>,
-    current_overlay: Arc<AtomicCell<Option<usize>>>,
-}
-
-impl OverlayState {
-    pub fn use_overlay(&self) -> bool {
-        self.use_overlay.load()
-    }
-
-    pub fn current_overlay(&self) -> Option<usize> {
-        self.current_overlay.load()
-    }
-
-    pub fn set_use_overlay(&self, use_overlay: bool) {
-        self.use_overlay.store(use_overlay);
-    }
-
-    pub fn toggle_overlay(&self) {
-        self.use_overlay.fetch_xor(true);
-    }
-
-    pub fn set_current_overlay(&self, overlay_id: Option<usize>) {
-        self.current_overlay.store(overlay_id);
-    }
-}
-
-impl std::default::Default for OverlayState {
-    fn default() -> Self {
-        let use_overlay = Arc::new(AtomicCell::new(false));
-        let current_overlay = Arc::new(AtomicCell::new(None));
-
-        Self {
-            use_overlay,
-            current_overlay,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -136,26 +89,13 @@ pub enum Select {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppMsg {
     Selection(Select),
-    HoverNode(Option<NodeId>),
     GotoSelection,
     RectSelect(Rect),
     TranslateSelected(Point),
-}
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum AppConfigMsg {
-    ToggleSelectionEdgeDetect,
-    ToggleSelectionEdgeBlur,
-    ToggleSelectionOutline,
-    ToggleNodesColor,
-}
+    HoverNode(Option<NodeId>),
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum RenderConfigOpts {
-    SelOutlineEdge,
-    SelOutlineBlur,
-    SelOutline,
-    NodesColor,
+    ToggleOverlay,
 }
 
 impl App {
@@ -177,13 +117,7 @@ impl App {
 
             selected_nodes_bounding_box: None,
 
-            selection_edge_detect: true,
-            selection_edge_blur: true,
-            selection_edge: true,
-            nodes_color: true,
-
-            overlay_state: OverlayState::default(),
-
+            // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
         })
     }
@@ -251,6 +185,7 @@ impl App {
                 }
             }
             AppMsg::HoverNode(id) => self.shared_state.hover_node.store(*id),
+
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selection_changed = true;
@@ -367,22 +302,8 @@ impl App {
                         Some((top_left, bottom_right));
                 }
             },
-        }
-    }
-
-    pub fn apply_app_config_msg(&mut self, msg: &AppConfigMsg) {
-        match msg {
-            AppConfigMsg::ToggleSelectionEdgeDetect => {
-                self.selection_edge_detect = !self.selection_edge_detect
-            }
-            AppConfigMsg::ToggleSelectionEdgeBlur => {
-                self.selection_edge_blur = !self.selection_edge_blur
-            }
-            AppConfigMsg::ToggleSelectionOutline => {
-                self.selection_edge = !self.selection_edge
-            }
-            AppConfigMsg::ToggleNodesColor => {
-                self.nodes_color = !self.nodes_color
+            AppMsg::ToggleOverlay => {
+                self.shared_state.overlay_state.toggle_overlay();
             }
         }
     }
@@ -416,20 +337,9 @@ impl App {
                 }
                 AppInput::KeyToggleOverlay => {
                     if state.pressed() {
-                        self.overlay_state.toggle_overlay();
+                        self.shared_state.overlay_state.toggle_overlay();
                     }
                 }
-            }
-        }
-    }
-
-    pub fn apply_app_config_state(&mut self, app_cfg: AppConfigState) {
-        match app_cfg {
-            // AppConfigState::Theme { id, def } => {
-            //     self.themes.replace_theme_def(id, def).unwrap();
-            // }
-            AppConfigState::ToggleOverlay => {
-                self.overlay_state.toggle_overlay();
             }
         }
     }

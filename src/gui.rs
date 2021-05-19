@@ -23,7 +23,7 @@ use parking_lot::Mutex;
 // use theme_editor::*;
 
 use crate::{
-    app::{AppMsg, RenderConfigOpts, SharedState},
+    app::{AppMsg, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
@@ -486,18 +486,12 @@ pub struct Gui {
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
-    // widgets: FxHashMap<String,
-
-    // windows:
-    // details_win: NodeList,
-    // theme_editor_win: ThemeEditor,
 }
 
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
         shared_state: SharedState,
-        overlay_state: OverlayState,
         gui_focus_state: GuiFocusState,
         node_width: Arc<NodeWidth>,
         app_msg_tx: crossbeam::channel::Sender<AppMsg>,
@@ -553,13 +547,13 @@ impl Gui {
         let view_state = AppViewState::new(
             graph_query,
             node_width,
-            overlay_state.clone(),
+            shared_state.overlay_state().clone(),
             dropped_file.clone(),
             &thread_pool,
             repl,
         );
 
-        let menu_bar = MenuBar::new(overlay_state);
+        let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
         let gui = Self {
             ctx,
@@ -931,7 +925,6 @@ impl Gui {
     pub fn apply_input(
         &mut self,
         app_msg_tx: &crossbeam::channel::Sender<crate::app::AppMsg>,
-        cfg_msg_tx: &crossbeam::channel::Sender<crate::app::AppConfigMsg>,
         input: SystemInput<GuiInput>,
     ) {
         use GuiInput as In;
@@ -965,23 +958,23 @@ impl Gui {
                                 })
                                 .unwrap();
                         }
-                        GuiInput::KeyToggleRender(opt) => {
-                            use crate::app::AppConfigMsg as Msg;
-                            use crate::app::RenderConfigOpts as Opts;
+                        // GuiInput::KeyToggleRender(opt) => {
+                        //     use crate::app::AppConfigMsg as Msg;
+                        //     use crate::app::RenderConfigOpts as Opts;
 
-                            let cfg_msg = match opt {
-                                Opts::SelOutlineEdge => {
-                                    Msg::ToggleSelectionEdgeDetect
-                                }
-                                Opts::SelOutlineBlur => {
-                                    Msg::ToggleSelectionEdgeBlur
-                                }
-                                Opts::SelOutline => Msg::ToggleSelectionOutline,
-                                Opts::NodesColor => Msg::ToggleNodesColor,
-                            };
+                        //     let cfg_msg = match opt {
+                        //         Opts::SelOutlineEdge => {
+                        //             Msg::ToggleSelectionEdgeDetect
+                        //         }
+                        //         Opts::SelOutlineBlur => {
+                        //             Msg::ToggleSelectionEdgeBlur
+                        //         }
+                        //         Opts::SelOutline => Msg::ToggleSelectionOutline,
+                        //         Opts::NodesColor => Msg::ToggleNodesColor,
+                        //     };
 
-                            cfg_msg_tx.send(cfg_msg).unwrap();
-                        }
+                        //     cfg_msg_tx.send(cfg_msg).unwrap();
+                        // }
                         _ => (),
                     }
                 }
@@ -1064,7 +1057,7 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
-    KeyToggleRender(RenderConfigOpts),
+    // KeyToggleRender(RenderConfigOpts),
 }
 
 impl BindableInput for GuiInput {
@@ -1077,22 +1070,22 @@ impl BindableInput for GuiInput {
             (Key::F1, Input::KeyEguiInspectionUi),
             (Key::F2, Input::KeyEguiSettingsUi),
             (Key::F3, Input::KeyEguiMemoryUi),
-            (
-                Key::Key1,
-                Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
-            ),
-            (
-                Key::Key2,
-                Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
-            ),
-            (
-                Key::Key3,
-                Input::KeyToggleRender(RenderConfigOpts::SelOutline),
-            ),
-            (
-                Key::Key4,
-                Input::KeyToggleRender(RenderConfigOpts::NodesColor),
-            ),
+            // (
+            //     Key::Key1,
+            //     Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
+            // ),
+            // (
+            //     Key::Key2,
+            //     Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
+            // ),
+            // (
+            //     Key::Key3,
+            //     Input::KeyToggleRender(RenderConfigOpts::SelOutline),
+            // ),
+            // (
+            //     Key::Key4,
+            //     Input::KeyToggleRender(RenderConfigOpts::NodesColor),
+            // ),
         ]
         .iter()
         .copied()
