@@ -2,6 +2,8 @@
   Calculate the bin membership for each node position,
   the size of each bin,
   and the offset into each bin for each node.
+
+  Computed over the nodes
 */
 
 #version 450
