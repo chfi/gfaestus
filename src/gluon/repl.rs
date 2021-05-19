@@ -305,20 +305,15 @@ pub(super) fn complete(
 pub(super) fn eval_line(
     WithVM { vm, value: line }: WithVM<&str>,
 ) -> impl Future<Output = IO<()>> {
-    println!("REPL eval_line");
-
     let vm = vm.new_thread().unwrap(); // TODO Reuse the current thread
-    println!("REPL new thread");
     let line = line.to_string();
+
     async move {
-        println!("in async block");
         eval_line_(vm.root_thread(), &line)
             .map(move |result| match result {
                 Ok(x) => IO::Value(x),
                 Err(err) => {
-                    // if let Err(err) = err.emit(&mut stderr) {
                     eprintln!("{}", err);
-                    // }
                     IO::Value(())
                 }
             })
