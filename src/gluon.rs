@@ -5,7 +5,8 @@ use futures::Future;
 use gluon_codegen::*;
 
 use gluon::vm::{
-    api::{FunctionRef, Hole, OpaqueValue},
+    api::{FunctionRef, Hole, OpaqueValue, Pushable, VmType},
+    vm::RootedValue,
     ExternModule,
 };
 use gluon::*;
@@ -54,12 +55,46 @@ impl GluonVM {
         repl::eval_line(with_vm)
     }
 
+    pub fn new_with_global_graph(graph: GraphHandle) -> Result<Self> {
+        let vm = new_vm();
+        gluon::import::add_extern_module(&vm, "gfaestus", packedgraph_module);
+        gluon::import::add_extern_module(&vm, "bed", bed::bed_module);
+
+        vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+        // vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+        // vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+
+        {
+            let graph_ty = GraphHandle::make_type(&vm);
+
+            dbg!();
+            let db = &mut vm.get_database_mut();
+
+            dbg!();
+
+            dbg!();
+            let value: RootedValue<RootedThread> = graph.marshal(&vm)?;
+
+            dbg!();
+            db.set_global(
+                "graph_ctx",
+                graph_ty,
+                Default::default(),
+                value.get_value(),
+            );
+            dbg!();
+        }
+
+        Ok(Self { vm })
+    }
+
     pub fn new() -> Result<Self> {
         let vm = new_vm();
         gluon::import::add_extern_module(&vm, "gfaestus", packedgraph_module);
         gluon::import::add_extern_module(&vm, "bed", bed::bed_module);
 
         vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! gfaestus")?;
+        vm.run_expr::<OpaqueValue<&Thread, Hole>>("", "import! bed")?;
 
         Ok(Self { vm })
     }
