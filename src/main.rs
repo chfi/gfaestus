@@ -172,9 +172,6 @@ fn main() {
         app.shared_state().clone(),
         app.settings.node_width().clone(),
         graph_query.node_count(),
-        gfaestus.swapchain_props,
-        gfaestus.msaa_samples,
-        gfaestus.render_passes.nodes,
     )
     .unwrap();
 
@@ -187,15 +184,13 @@ fn main() {
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
-    let (mut gui, opts_from_gui) = Gui::new(
+    let mut gui = Gui::new(
         &gfaestus,
         app.shared_state().clone(),
+        app.channels(),
         input_manager.gui_focus_state().clone(),
         app.settings.node_width().clone(),
-        app.channels().app_tx.clone(),
         &graph_query,
-        gfaestus.msaa_samples,
-        gfaestus.render_passes.gui,
         thread_pool.clone(),
         repl,
     )

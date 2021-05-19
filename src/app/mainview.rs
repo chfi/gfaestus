@@ -71,11 +71,12 @@ impl MainView {
         shared_state: SharedState,
         node_width: Arc<NodeWidth>,
         node_count: usize,
-        swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
+
+        let swapchain_props = app.swapchain_props;
+        let msaa_samples = app.msaa_samples;
+        let render_pass = app.render_passes.nodes;
 
         let node_draw_system = NodePipelines::new(
             app,

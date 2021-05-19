@@ -37,13 +37,12 @@ pub struct App {
 
     shared_state: SharedState,
     channels: AppChannels,
+    pub settings: AppSettings,
 
     selected_nodes: FxHashSet<NodeId>,
     selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
-
-    pub settings: AppSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

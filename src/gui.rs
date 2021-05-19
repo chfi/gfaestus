@@ -23,7 +23,7 @@ use parking_lot::Mutex;
 // use theme_editor::*;
 
 use crate::{
-    app::{AppMsg, SharedState},
+    app::{AppChannels, AppMsg, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
@@ -492,15 +492,16 @@ impl Gui {
     pub fn new(
         app: &GfaestusVk,
         shared_state: SharedState,
+        channels: &AppChannels,
         gui_focus_state: GuiFocusState,
         node_width: Arc<NodeWidth>,
-        app_msg_tx: crossbeam::channel::Sender<AppMsg>,
         graph_query: &GraphQuery,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
         thread_pool: Arc<ThreadPool>,
         repl: GluonRepl,
-    ) -> Result<(Self, channel::Receiver<AppConfigState>)> {
+    ) -> Result<Self> {
+        let msaa_samples = app.msaa_samples;
+        let render_pass = app.render_passes.gui;
+
         let draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
 
         let ctx = egui::CtxRef::default();
@@ -538,9 +539,9 @@ impl Gui {
 
         let frame_input = FrameInput::default();
 
-        let (sender, receiver) = channel::unbounded::<AppConfigState>();
-
-        let (gui_msg_tx, gui_msg_rx) = channel::unbounded::<GuiMsg>();
+        let app_msg_tx = channels.app_tx.clone();
+        let gui_msg_tx = channels.gui_tx.clone();
+        let gui_msg_rx = channels.gui_rx.clone();
 
         let dropped_file = Arc::new(std::sync::Mutex::new(None));
 
@@ -585,7 +586,7 @@ impl Gui {
             thread_pool,
         };
 
-        Ok((gui, receiver))
+        Ok(gui)
     }
 
     pub fn clone_gui_msg_tx(&self) -> crossbeam::channel::Sender<GuiMsg> {
