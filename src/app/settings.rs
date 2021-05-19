@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use super::theme::ThemeDef;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct AppSettings {
     node_width: Arc<NodeWidth>,
 }
@@ -155,11 +155,4 @@ impl ActiveRenderLayers {
             gui: if with.gui { !self.gui } else { self.gui },
         }
     }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum AppConfigState {
-    // Theme { id: ThemeId, def: ThemeDef },
-    ToggleOverlay,
-    // RenderLayers { active: ActiveRenderLayers },
 }

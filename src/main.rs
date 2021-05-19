@@ -155,14 +155,13 @@ fn main() {
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
-    let input_manager = InputManager::new(winit_rx);
+    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
+
+    let input_manager = InputManager::new(winit_rx, app.shared_state());
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
-
-    let mut app = App::new(input_manager.clone_mouse_pos(), (100.0, 100.0))
-        .expect("error when creating App");
 
     let node_vertices = universe.new_vertices();
 
@@ -175,26 +174,18 @@ fn main() {
     )
     .unwrap();
 
-    let repl = gfaestus::gluon::repl::GluonRepl::new(
-        app.channels().app_tx.clone(),
-        app.channels().main_view_tx.clone(),
+    let mut gui = Gui::new(
+        &gfaestus,
+        app.shared_state().clone(),
+        app.channels(),
+        app.settings.clone(),
+        &graph_query,
+        thread_pool.clone(),
     )
     .unwrap();
 
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
-
-    let mut gui = Gui::new(
-        &gfaestus,
-        app.shared_state().clone(),
-        app.channels(),
-        input_manager.gui_focus_state().clone(),
-        app.settings.node_width().clone(),
-        &graph_query,
-        thread_pool.clone(),
-        repl,
-    )
-    .unwrap();
 
     let graph_arc = graph_query.graph_arc().clone();
     let graph_handle = gfaestus::gluon::GraphHandle::new(
@@ -244,9 +235,7 @@ fn main() {
         &gfaestus,
         1,
         gfaestus.render_passes.selection_blur,
-        // gfaestus.render_passes.gui,
         gfaestus.node_attachments.mask_resolve,
-        // gfaestus.offscreen_attachment.color,
     )
     .unwrap();
 
@@ -257,9 +246,6 @@ fn main() {
     gui.populate_overlay_list(
         main_view.node_draw_system.overlay_pipeline.overlay_names(),
     );
-
-    // let mut translate_pipeline =
-    //     NodeTranslatePipeline::new(gfaestus.vk_context().device()).unwrap();
 
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
@@ -432,24 +418,6 @@ fn main() {
                 let mouse_pos = app.mouse_pos();
                 main_view.update_view_animation(screen_dims, mouse_pos);
 
-                /*
-                if translate_timer.elapsed().as_secs_f64() > 2.0 {
-                    if fence_id.is_none() {
-                        println!("dispatching translation");
-                        let new_fence_id = translate_pipeline
-                        .dispatch(
-                            gfaestus.graphics_queue,
-                            gfaestus.command_pool,
-                            &main_view.node_draw_system.vertices,
-                        )
-                            .unwrap();
-
-                        fence_id = Some(new_fence_id);
-                        translate_timer = std::time::Instant::now();
-                    }
-                }
-                */
-
             }
             Event::RedrawEventsCleared => {
 
@@ -510,17 +478,6 @@ fn main() {
                         select_fence_id = None;
                     }
                 }
-
-
-                /*
-                if let Some(fid) = fence_id {
-                    println!("waiting on compute fence");
-                    translate_pipeline.block_on_fence(fid).unwrap();
-                    translate_pipeline.free_fence(gfaestus.command_pool, fid, false).unwrap();
-                    println!("compute fence signaled");
-                    fence_id = None;
-                }
-                */
 
                 let frame_t = std::time::Instant::now();
 

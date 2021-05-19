@@ -9,10 +9,10 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
-use crate::app::AppInput;
-use crate::geometry::*;
 use crate::gui::GuiInput;
 use crate::{app::mainview::MainViewInput, gui::GuiMsg};
+use crate::{app::AppInput, gui::GuiFocusState};
+use crate::{app::SharedState, geometry::*};
 
 pub mod binds;
 
@@ -29,7 +29,7 @@ pub struct MousePos {
 }
 
 impl MousePos {
-    fn new(point: Point) -> Self {
+    pub fn new(point: Point) -> Self {
         Self {
             pos: Arc::new(AtomicCell::new(point)),
         }
@@ -78,15 +78,13 @@ pub struct InputManager {
 }
 
 impl InputManager {
-    pub fn gui_focus_state(&self) -> &crate::gui::GuiFocusState {
-        &self.gui_focus_state
-    }
-
     pub fn clone_app_rx(&self) -> channel::Receiver<SystemInput<AppInput>> {
         self.app.clone_rx()
     }
 
-    pub fn clone_main_view_rx(&self) -> channel::Receiver<SystemInput<MainViewInput>> {
+    pub fn clone_main_view_rx(
+        &self,
+    ) -> channel::Receiver<SystemInput<MainViewInput>> {
         self.main_view.clone_rx()
     }
 
@@ -113,7 +111,8 @@ impl InputManager {
 
             let mouse_pos = self.mouse_screen_pos.read();
 
-            let gui_wants_keyboard = self.gui_focus_state.wants_keyboard_input();
+            let gui_wants_keyboard =
+                self.gui_focus_state.wants_keyboard_input();
             let mouse_over_gui = self.gui_focus_state.mouse_over_gui();
 
             // NB: on my machine at least, after a file is dropped,
@@ -127,11 +126,12 @@ impl InputManager {
             }
 
             if gui_wants_keyboard {
-                if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
-                    if let Some(event) = input
-                        .virtual_keycode
-                        .and_then(|key| winit_to_egui_text_event(input.state, key))
-                    {
+                if let event::WindowEvent::KeyboardInput { input, .. } =
+                    winit_ev
+                {
+                    if let Some(event) = input.virtual_keycode.and_then(|key| {
+                        winit_to_egui_text_event(input.state, key)
+                    }) {
                         gui_msg_tx
                             .send(crate::gui::GuiMsg::EguiEvent(event))
                             .unwrap();
@@ -148,7 +148,9 @@ impl InputManager {
                 }
             }
 
-            if let Some(app_inputs) = self.app.bindings.apply(&winit_ev, mouse_pos) {
+            if let Some(app_inputs) =
+                self.app.bindings.apply(&winit_ev, mouse_pos)
+            {
                 for input in app_inputs {
                     if !(input.is_keyboard() && gui_wants_keyboard) {
                         self.app.tx.send(input).unwrap();
@@ -156,13 +158,17 @@ impl InputManager {
                 }
             }
 
-            if let Some(gui_inputs) = self.gui.bindings.apply(&winit_ev, mouse_pos) {
+            if let Some(gui_inputs) =
+                self.gui.bindings.apply(&winit_ev, mouse_pos)
+            {
                 for input in gui_inputs {
                     self.gui.tx.send(input).unwrap();
                 }
             }
 
-            if let Some(main_view_inputs) = self.main_view.bindings.apply(&winit_ev, mouse_pos) {
+            if let Some(main_view_inputs) =
+                self.main_view.bindings.apply(&winit_ev, mouse_pos)
+            {
                 for input in main_view_inputs {
                     if (input.is_keyboard() && !gui_wants_keyboard)
                         || (input.is_mouse() && !mouse_over_gui)
@@ -175,8 +181,13 @@ impl InputManager {
         }
     }
 
-    pub fn new(winit_rx: channel::Receiver<event::WindowEvent<'static>>) -> Self {
-        let mouse_screen_pos = MousePos::new(Point::ZERO);
+    pub fn new(
+        winit_rx: channel::Receiver<event::WindowEvent<'static>>,
+        shared_state: &SharedState,
+    ) -> Self {
+        let mouse_screen_pos = shared_state.clone_mouse_pos();
+
+        let gui_focus_state = shared_state.gui_focus_state.clone();
 
         let app = SubsystemInput::<AppInput>::from_default_binds();
         let main_view = SubsystemInput::<MainViewInput>::from_default_binds();
@@ -190,7 +201,7 @@ impl InputManager {
             main_view,
             gui,
 
-            gui_focus_state: Default::default(),
+            gui_focus_state,
         }
     }
 }

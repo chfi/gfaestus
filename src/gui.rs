@@ -18,12 +18,8 @@ use rustc_hash::FxHashMap;
 use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
-// mod theme_editor;
-
-// use theme_editor::*;
-
 use crate::{
-    app::{AppChannels, AppMsg, SharedState},
+    app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::render_pass::Framebuffers,
@@ -43,8 +39,6 @@ use crate::input::binds::{
 use crate::input::MousePos;
 
 // use super::theme::{ThemeDef, ThemeId};
-
-use crate::app::settings::AppConfigState;
 
 use crate::vulkan::{
     context::VkContext,
@@ -463,6 +457,7 @@ pub struct Gui {
     frame_input: FrameInput,
 
     shared_state: SharedState,
+    settings: AppSettings,
 
     pub draw_system: GuiPipeline,
 
@@ -481,8 +476,6 @@ pub struct Gui {
 
     menu_bar: MenuBar,
 
-    gui_focus_state: GuiFocusState,
-
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
@@ -493,16 +486,20 @@ impl Gui {
         app: &GfaestusVk,
         shared_state: SharedState,
         channels: &AppChannels,
-        gui_focus_state: GuiFocusState,
-        node_width: Arc<NodeWidth>,
+        settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
-        repl: GluonRepl,
     ) -> Result<Self> {
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
 
         let draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
+
+        let repl = GluonRepl::new(
+            channels.app_tx.clone(),
+            channels.main_view_tx.clone(),
+        )
+        .unwrap();
 
         let ctx = egui::CtxRef::default();
 
@@ -547,7 +544,7 @@ impl Gui {
 
         let view_state = AppViewState::new(
             graph_query,
-            node_width,
+            settings.node_width().clone(),
             shared_state.overlay_state().clone(),
             dropped_file.clone(),
             &thread_pool,
@@ -561,6 +558,7 @@ impl Gui {
             frame_input,
 
             shared_state,
+            settings,
 
             draw_system,
 
@@ -578,8 +576,6 @@ impl Gui {
             app_msg_tx,
 
             menu_bar,
-
-            gui_focus_state,
 
             dropped_file,
 
@@ -639,15 +635,17 @@ impl Gui {
                     false
                 };
 
-            self.gui_focus_state.mouse_over_gui.store(
+            self.shared_state.gui_focus_state.mouse_over_gui.store(
                 self.ctx.is_pointer_over_area() || pointer_over_menu_bar,
             );
         }
 
-        self.gui_focus_state
+        self.shared_state
+            .gui_focus_state
             .wants_keyboard_input
             .store(self.ctx.wants_keyboard_input());
-        self.gui_focus_state
+        self.shared_state
+            .gui_focus_state
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 

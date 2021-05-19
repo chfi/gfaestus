@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
-use crate::geometry::*;
 use crate::input::MousePos;
 use crate::view::*;
+use crate::{geometry::*, gui::GuiFocusState};
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -19,15 +19,14 @@ pub struct SharedState {
     pub(super) mouse_rect: MouseRect,
 
     pub(super) overlay_state: OverlayState,
+
+    pub gui_focus_state: GuiFocusState,
 }
 
 impl SharedState {
-    pub fn new<Dims: Into<ScreenDims>>(
-        mouse_pos: MousePos,
-        screen_dims: Dims,
-    ) -> Self {
+    pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Self {
         Self {
-            mouse_pos,
+            mouse_pos: MousePos::new(Point::ZERO),
             screen_dims: Arc::new(AtomicCell::new(screen_dims.into())),
 
             view: Arc::new(AtomicCell::new(View::default())),
@@ -37,6 +36,8 @@ impl SharedState {
             mouse_rect: MouseRect::default(),
 
             overlay_state: OverlayState::default(),
+
+            gui_focus_state: GuiFocusState::default(),
         }
     }
 
@@ -58,6 +59,10 @@ impl SharedState {
 
     pub fn overlay_state(&self) -> &OverlayState {
         &self.overlay_state
+    }
+
+    pub fn clone_mouse_pos(&self) -> MousePos {
+        self.mouse_pos.clone()
     }
 
     pub fn clone_view(&self) -> Arc<AtomicCell<View>> {

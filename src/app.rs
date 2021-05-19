@@ -101,13 +101,10 @@ pub enum AppMsg {
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(
-        mouse_pos: MousePos,
-        screen_dims: Dims,
-    ) -> Result<Self> {
+    pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Result<Self> {
         let themes = AppThemes::default_themes();
 
-        let shared_state = SharedState::new(mouse_pos, screen_dims);
+        let shared_state = SharedState::new(screen_dims);
 
         Ok(Self {
             themes,

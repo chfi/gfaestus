@@ -4,7 +4,6 @@ use rgb::*;
 
 use crossbeam::channel;
 
-use crate::app::settings::AppConfigState;
 use crate::app::theme::{AppThemeMsg, ThemeDef};
 
 fn rgb_to_color32(color: RGB<f32>) -> egui::Color32 {
