@@ -87,11 +87,18 @@ impl ReplWindow {
 
                     ui.add(history);
 
-                    ui.text_edit_singleline(&mut self.line_input);
+                    let input_box =
+                        ui.text_edit_singleline(&mut self.line_input);
 
-                    if ui.button("Submit").clicked() {
+                    if ui.button("Submit").clicked()
+                        || (input_box.lost_focus()
+                            && ui.input().key_pressed(egui::Key::Enter))
+                    {
                         let future =
                             self.repl.gluon_vm.eval_line(&self.line_input);
+
+                        self.line_input.clear();
+
                         let sender = self.output_tx.clone();
                         thread_pool
                             .spawn(async move {
