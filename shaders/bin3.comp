@@ -48,8 +48,8 @@ void main() {
     return;
   }
 
-  uint bin_offset = bin_offsets[bin_id];
-  uint inner_offset = node_bin_offset[index];
+  uint bin_offset = bin_offsets.offset_len[bin_id];
+  uint inner_offset = node_bin_offset.offset[index];
 
   bins.node[bin_offset + inner_offset] = index;
 }

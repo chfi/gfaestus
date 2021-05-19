@@ -43,20 +43,20 @@ layout (push_constant) uniform BinDefinition {
 void main() {
   uint index = gl_GlobalInvocationID.x;
 
-  if (index >= bin_def.rows * bin_def * columns
+  if (index >= bin_def.rows * bin_def.columns
       || index == 0) {
     return;
   }
 
-  uint len_ix = uint(len_ix * 2) + 1;
+  uint len_ix = uint(index * 2) + 1;
   uint offset = 0;
 
   for (uint x = 0; x < index; x++) {
     uint sub_len_ix = uint(x * 2) + 1;
 
-    offset += bin_offsets[sub_len_ix];
+    offset += bin_offsets.offset_len[sub_len_ix];
   }
 
-  bin_offsets[index * 2] = offset;
+  bin_offsets.offset_len[index * 2] = offset;
 
 }

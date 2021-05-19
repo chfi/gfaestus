@@ -42,7 +42,7 @@ layout (push_constant) uniform BinDefinition {
 
 
 int bin_for_pos(vec2 pos) {
-  if (pos.x < top_left.x || pos.y < top_left.y) {
+  if (pos.x < bin_def.top_left.x || pos.y < bin_def.top_left.y) {
     return -1;
   }
 
@@ -63,12 +63,12 @@ void main() {
 
   uint index = gl_GlobalInvocationID.x;
 
-  if (index < node_count)  {
-    vec2 node_pos = nodes[index];
+  if (index < bin_def.node_count)  {
+    vec2 node_pos = nodes.pos[index];
 
     int bin_ix = bin_for_pos(node_pos);
 
-    node_bins[index] = bin_ix;
+    node_bins.bin[index] = bin_ix;
 
     if (bin_ix == -1) {
       return;
@@ -76,8 +76,8 @@ void main() {
 
     uint len_ix = uint(bin_ix * 2) + 1;
 
-    int offset = atomicAdd(bin_offsets[len_ix], 1);
+    uint offset = atomicAdd(bin_offsets.offset_len[len_ix], 1);
 
-    node_bin_offset[index] = offset;
+    node_bin_offset.offset[index] = offset;
   }
 }

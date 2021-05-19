@@ -54,6 +54,20 @@ impl ReplWindow {
             self.output.push_str(&msg);
         }
 
+        let line_count = self.output.lines().count();
+        if line_count > 20 {
+            let mut new_output = String::new();
+
+            let lines = self.output.lines().skip(line_count - 20);
+
+            for line in lines {
+                new_output.push_str(line);
+                new_output.push_str("\n");
+            }
+
+            self.output = new_output;
+        }
+
         egui::Window::new("REPL")
             .id(egui::Id::new(Self::ID))
             .open(open)
