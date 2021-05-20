@@ -413,6 +413,33 @@ fn is_path_on_node(graph: &GraphHandle, path_id: u64, node_id: u64) -> bool {
     }
 }
 
+fn node_step_count(graph: &GraphHandle, node_id: u64) -> usize {
+    if let Some(mut steps) =
+        graph.graph.steps_on_handle(Handle::pack(node_id, false))
+    {
+        steps.count()
+    } else {
+        0
+    }
+}
+
+fn node_path_count(graph: &GraphHandle, node_id: u64) -> usize {
+    if let Some(mut steps) =
+        graph.graph.steps_on_handle(Handle::pack(node_id, false))
+    {
+        use rustc_hash::FxHashSet;
+        let paths = steps.map(|(path, _)| path).collect::<FxHashSet<_>>();
+        paths.len()
+
+        // let mut paths = steps.map(|(path, _)| { path }).collect::<Vec<_>>();
+        // paths.sort();
+        // paths.dedup();
+        // paths.len()
+    } else {
+        0
+    }
+}
+
 fn path_len(graph: &GraphHandle, path_id: u64) -> Option<usize> {
     graph.graph.path_len(PathId(path_id))
 }
@@ -553,6 +580,9 @@ fn packedgraph_module(thread: &Thread) -> vm::Result<ExternModule> {
         node_len => primitive!(2, node_len),
         degree => primitive!(3, degree),
         is_path_on_node => primitive!(3, is_path_on_node),
+
+        node_step_count => primitive!(2, node_step_count),
+        node_path_count => primitive!(2, node_path_count),
 
         path_len => primitive!(2, path_len),
 
