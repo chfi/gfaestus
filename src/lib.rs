@@ -14,3 +14,10 @@ pub mod view;
 
 pub mod asynchronous;
 pub mod gluon;
+
+#[macro_export]
+macro_rules! include_shader {
+    ($file:expr) => {
+        include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/shaders/", $file))
+    };
+}

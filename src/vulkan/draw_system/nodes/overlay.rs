@@ -27,7 +27,10 @@ impl NodeOverlayPipeline {
         self.overlays.iter().map(|(id, ov)| (*id, ov.name.as_str()))
     }
 
-    pub fn set_active_overlay(&mut self, overlay_id: Option<usize>) -> Option<()> {
+    pub fn set_active_overlay(
+        &mut self,
+        overlay_id: Option<usize>,
+    ) -> Option<()> {
         if overlay_id.is_none() {
             self.overlay_set_id = None;
             return Some(());
@@ -67,7 +70,9 @@ impl NodeOverlayPipeline {
             .build()
     }
 
-    fn create_descriptor_set_layout(device: &Device) -> Result<vk::DescriptorSetLayout> {
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
         let binding = Self::overlay_layout_binding();
         let bindings = [binding];
 
@@ -75,7 +80,8 @@ impl NodeOverlayPipeline {
             .bindings(&bindings)
             .build();
 
-        let layout = unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
 
         Ok(layout)
     }
@@ -92,7 +98,7 @@ impl NodeOverlayPipeline {
             msaa_samples,
             render_pass,
             &[descriptor_set_layout, selection_set_layout],
-            include_bytes!("../../../../shaders/nodes_overlay.frag.spv"),
+            crate::include_shader!("nodes_overlay.frag.spv"),
         )
     }
 
@@ -161,8 +167,10 @@ impl NodeOverlayPipeline {
 
     pub fn destroy(&mut self) {
         unsafe {
-            self.device
-                .destroy_descriptor_set_layout(self.descriptor_set_layout, None);
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
 
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
@@ -190,15 +198,22 @@ impl NodeOverlay {
     /// Create a new overlay that can be written to by the CPU after construction
     ///
     /// Uses host-visible and host-coherent memory
-    pub fn new_empty(name: &str, app: &GfaestusVk, node_count: usize) -> Result<Self> {
-        let size = ((node_count * std::mem::size_of::<[u8; 4]>()) as u32) as vk::DeviceSize;
+    pub fn new_empty(
+        name: &str,
+        app: &GfaestusVk,
+        node_count: usize,
+    ) -> Result<Self> {
+        let size = ((node_count * std::mem::size_of::<[u8; 4]>()) as u32)
+            as vk::DeviceSize;
 
-        let usage = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER | vk::BufferUsageFlags::TRANSFER_DST;
+        let usage = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST;
 
-        let mem_props =
-            vk::MemoryPropertyFlags::HOST_VISIBLE | vk::MemoryPropertyFlags::HOST_COHERENT;
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
 
-        let (buffer, memory, size) = app.create_buffer(size, usage, mem_props)?;
+        let (buffer, memory, size) =
+            app.create_buffer(size, usage, mem_props)?;
 
         let bufview_info = vk::BufferViewCreateInfo::builder()
             .buffer(buffer)
@@ -209,7 +224,8 @@ impl NodeOverlay {
 
         let device = app.vk_context().device();
 
-        let buffer_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
+        let buffer_view =
+            unsafe { device.create_buffer_view(&bufview_info, None) }?;
 
         Ok(Self {
             name: name.into(),
@@ -226,14 +242,23 @@ impl NodeOverlay {
 
     /// Update the colors for a host-visible overlay by providing a
     /// set of node IDs and new colors
-    pub fn update_overlay<I>(&mut self, device: &Device, new_colors: I) -> Result<()>
+    pub fn update_overlay<I>(
+        &mut self,
+        device: &Device,
+        new_colors: I,
+    ) -> Result<()>
     where
         I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGB<f32>)>,
     {
         assert!(self.host_visible);
 
         unsafe {
-            let ptr = device.map_memory(self.memory, 0, self.size, vk::MemoryMapFlags::empty())?;
+            let ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
 
             for (node, color) in new_colors.into_iter() {
                 let val_ptr = ptr as *mut u32;
@@ -277,7 +302,8 @@ impl NodeOverlay {
 
         let device = app.vk_context().device();
 
-        let buffer_size = (graph.node_count() * std::mem::size_of::<[u8; 4]>()) as vk::DeviceSize;
+        let buffer_size = (graph.node_count() * std::mem::size_of::<[u8; 4]>())
+            as vk::DeviceSize;
 
         let mut pixels: Vec<u8> = Vec::with_capacity(buffer_size as usize);
 
@@ -298,10 +324,12 @@ impl NodeOverlay {
             }
         }
 
-        let (buffer, memory) = app.create_device_local_buffer_with_data::<[u8; 4], _>(
-            vk::BufferUsageFlags::TRANSFER_DST | vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
-            &pixels,
-        )?;
+        let (buffer, memory) = app
+            .create_device_local_buffer_with_data::<[u8; 4], _>(
+                vk::BufferUsageFlags::TRANSFER_DST
+                    | vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
+                &pixels,
+            )?;
 
         let bufview_info = vk::BufferViewCreateInfo::builder()
             .buffer(buffer)
@@ -310,7 +338,8 @@ impl NodeOverlay {
             .format(vk::Format::R8G8B8A8_UNORM)
             .build();
 
-        let buffer_view = unsafe { device.create_buffer_view(&bufview_info, None) }?;
+        let buffer_view =
+            unsafe { device.create_buffer_view(&bufview_info, None) }?;
 
         Ok(Self {
             name: name.into(),

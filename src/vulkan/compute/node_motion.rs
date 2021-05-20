@@ -95,7 +95,7 @@ impl NodeTranslation {
             device,
             desc_set_layout,
             pipeline_layout,
-            include_bytes!("../../../shaders/node_translate.comp.spv"),
+            crate::include_shader!("node_translate.comp.spv"),
         )?;
 
         let descriptor_sets = {
