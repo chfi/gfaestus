@@ -1,5 +1,10 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
+use gluon::{
+    base::types::ArcType,
+    vm::api::{Function, VmType, IO},
+    RootedThread, Thread, ThreadExt,
+};
 
 use std::ffi::CString;
 
@@ -9,8 +14,54 @@ use anyhow::Result;
 
 use handlegraph::handle::NodeId;
 
-use crate::geometry::Point;
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
+use crate::{geometry::Point, gluon::GraphHandle};
 
 use crate::vulkan::draw_system::nodes::NodeOverlay;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Defines the type of mapping from node ID to colors used by an
+/// overlay script
+pub enum OverlayKind {
+    /// Overlay scripts that produce an RGB color for each node
+    RGB,
+    /// Overlay scripts that produce a single value for each node,
+    /// that can then be mapped to a color, e.g. using a perceptual
+    /// color scheme
+    Value,
+}
+
+pub type OverlayScriptType<T> = Function<
+    RootedThread,
+    fn(GraphHandle) -> IO<Function<RootedThread, fn(u64) -> T>>,
+>;
+
+impl OverlayKind {
+    fn type_for(&self, vm: &Thread) -> ArcType {
+        match self {
+            OverlayKind::RGB => {
+                <OverlayScriptType<(f32, f32, f32)> as VmType>::make_type(vm)
+            }
+            OverlayKind::Value => {
+                <OverlayScriptType<f32> as VmType>::make_type(vm)
+            }
+        }
+    }
+
+    pub fn typecheck_script(vm: &Thread, script: &str) -> Result<OverlayKind> {
+        let rgb_type = OverlayKind::RGB.type_for(vm);
+
+        if let Ok(_) = vm.typecheck_str("", script, Some(&rgb_type)) {
+            return Ok(OverlayKind::RGB);
+        }
+
+        let value_type = OverlayKind::Value.type_for(vm);
+
+        if let Ok(_) = vm.typecheck_str("", script, Some(&value_type)) {
+            return Ok(OverlayKind::Value);
+        }
+
+        anyhow::bail!("Overlay script has incorrect type")
+    }
+}
