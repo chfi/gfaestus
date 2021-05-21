@@ -9,10 +9,12 @@ use nalgebra_glm as glm;
 
 use anyhow::Result;
 
-use crate::geometry::Point;
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
 use crate::vulkan::SwapchainProperties;
+use crate::{
+    geometry::Point, overlays::OverlayKind, vulkan::texture::GradientTexture,
+};
 
 use crate::vulkan::render_pass::Framebuffers;
 
@@ -28,6 +30,8 @@ pub use theme::*;
 pub struct NodePipelines {
     pub theme_pipeline: NodeThemePipeline,
     pub overlay_pipeline: NodeOverlayPipeline,
+
+    pub overlay_pipelines: OverlayPipelines,
 
     selection_descriptors: SelectionDescriptors,
 
@@ -67,9 +71,17 @@ impl NodePipelines {
             selection_descriptors.layout,
         )?;
 
+        let overlay_pipelines = OverlayPipelines::new(
+            device,
+            msaa_samples,
+            render_pass,
+            selection_descriptors.layout,
+        )?;
+
         Ok(Self {
             theme_pipeline,
             overlay_pipeline,
+            overlay_pipelines,
             vertices,
             selection_descriptors,
         })
@@ -77,6 +89,10 @@ impl NodePipelines {
 
     pub fn device(&self) -> &Device {
         &self.theme_pipeline.device
+    }
+
+    pub fn has_overlay_new(&self) -> bool {
+        self.overlay_pipelines.overlay_set_id.is_some()
     }
 
     pub fn has_overlay(&self) -> bool {
@@ -183,6 +199,117 @@ impl NodePipelines {
             device.cmd_push_constants(
                 cmd_buf,
                 self.theme_pipeline.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe {
+            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
+        };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
+    }
+
+    pub fn draw_overlay_new(
+        &mut self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        viewport_dims: [f32; 2],
+        node_width: f32,
+        view: View,
+        offset: Point,
+        overlay: (usize, OverlayKind),
+        color_scheme: &GradientTexture,
+    ) -> Result<()> {
+        self.overlay_pipelines
+            .write_overlay(overlay, color_scheme)?;
+
+        let device = &self.overlay_pipeline.device;
+
+        let clear_values = {
+            let bg = self.theme_pipeline.active_background_color();
+            [
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [bg.r, bg.g, bg.b, 1.0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        uint32: [0, 0, 0, 0],
+                    },
+                },
+                vk::ClearValue {
+                    color: vk::ClearColorValue {
+                        float32: [0.0, 0.0, 0.0, 1.0],
+                    },
+                },
+            ]
+        };
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.nodes)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        self.overlay_pipelines
+            .bind_pipeline(device, cmd_buf, overlay.1);
+
+        let vx_bufs = [self.vertices.vertex_buffer];
+        let offsets = [0];
+
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+        }
+
+        self.overlay_pipelines.bind_descriptor_sets(
+            device,
+            cmd_buf,
+            overlay,
+            self.selection_descriptors.descriptor_set,
+        )?;
+
+        let push_constants = NodePushConstants::new(
+            [offset.x, offset.y],
+            viewport_dims,
+            view,
+            node_width,
+            7,
+        );
+
+        let pc_bytes = push_constants.bytes();
+
+        let layout = self.overlay_pipelines.pipeline_layout_kind(overlay.1);
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                layout,
                 Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
                 0,
                 &pc_bytes,

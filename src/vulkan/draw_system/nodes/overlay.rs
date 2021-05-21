@@ -18,7 +18,7 @@ pub struct OverlayPipelines {
     pipeline_rgb: OverlayPipelineRGB,
     pipeline_value: OverlayPipelineValue,
 
-    overlay_set_id: Option<(usize, OverlayKind)>,
+    pub(super) overlay_set_id: Option<(usize, OverlayKind)>,
 
     next_overlay_id: usize,
 
@@ -145,6 +145,57 @@ impl OverlayPipelines {
         }
 
         Ok(())
+    }
+
+    pub(super) fn overlay_names(&self) -> Vec<(usize, OverlayKind, &str)> {
+        let mut overlays = Vec::with_capacity(
+            self.pipeline_rgb.overlays.len()
+                + self.pipeline_value.overlays.len(),
+        );
+
+        overlays.extend(self.pipeline_rgb.overlays.iter().map(
+            |(id, overlay)| (*id, OverlayKind::RGB, overlay.name.as_str()),
+        ));
+
+        overlays.extend(self.pipeline_value.overlays.iter().map(
+            |(id, overlay)| (*id, OverlayKind::Value, overlay.name.as_str()),
+        ));
+
+        overlays.sort_by_key(|(id, _, _)| *id);
+
+        overlays
+    }
+
+    pub(super) fn create_overlay(&mut self, overlay: Overlay) -> usize {
+        let overlay_id = self.next_overlay_id;
+        self.next_overlay_id += 1;
+
+        match overlay {
+            Overlay::RGB(o) => self.update_rgb_overlay(overlay_id, o),
+            Overlay::Value(o) => self.update_value_overlay(overlay_id, o),
+        }
+
+        overlay_id
+    }
+
+    fn update_rgb_overlay(&mut self, overlay_id: usize, overlay: NodeOverlay) {
+        if self.pipeline_value.overlays.contains_key(&overlay_id) {
+            panic!("Tried to update a Value overlay ID with an RGB overlay");
+        }
+
+        self.pipeline_rgb.overlays.insert(overlay_id, overlay);
+    }
+
+    fn update_value_overlay(
+        &mut self,
+        overlay_id: usize,
+        overlay: NodeOverlayValue,
+    ) {
+        if self.pipeline_rgb.overlays.contains_key(&overlay_id) {
+            panic!("Tried to update an RGB overlay ID with a Value overlay");
+        }
+
+        self.pipeline_value.overlays.insert(overlay_id, overlay);
     }
 }
 
@@ -635,6 +686,11 @@ impl NodeOverlayPipeline {
                 .destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
+}
+
+pub enum Overlay {
+    RGB(NodeOverlay),
+    Value(NodeOverlayValue),
 }
 
 pub struct NodeOverlayValue {
