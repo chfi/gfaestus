@@ -249,8 +249,8 @@ impl SelectionOutlineEdgePipeline {
             device,
             render_pass,
             descriptor_set_layout,
-            crate::include_shader!("post.vert.spv"),
-            crate::include_shader!("post_edge.frag.spv"),
+            crate::include_shader!("post/post.vert.spv"),
+            crate::include_shader!("post/post_edge.frag.spv"),
         )
     }
 }
@@ -488,8 +488,8 @@ impl SelectionOutlineBlurPipeline {
             device,
             render_pass,
             descriptor_set_layout,
-            crate::include_shader!("post.vert.spv"),
-            crate::include_shader!("post_blur.frag.spv"),
+            crate::include_shader!("post/post.vert.spv"),
+            crate::include_shader!("post/post_blur.frag.spv"),
         )
     }
 }

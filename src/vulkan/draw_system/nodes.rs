@@ -824,8 +824,8 @@ fn create_pipeline(
     layouts: &[vk::DescriptorSetLayout],
     frag_shader: &[u8],
 ) -> (vk::Pipeline, vk::PipelineLayout) {
-    let vert_src = crate::load_shader!("nodes_simple.vert.spv");
-    let geom_src = crate::load_shader!("nodes_simple.geom.spv");
+    let vert_src = crate::load_shader!("nodes/base.vert.spv");
+    let geom_src = crate::load_shader!("nodes/base.geom.spv");
     let frag_src = {
         let mut cursor = std::io::Cursor::new(frag_shader);
         ash::util::read_spv(&mut cursor).unwrap()

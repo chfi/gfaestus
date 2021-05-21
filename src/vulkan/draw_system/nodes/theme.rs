@@ -95,7 +95,7 @@ impl NodeThemePipeline {
             msaa_samples,
             render_pass,
             &[descriptor_set_layout, selection_set_layout],
-            crate::include_shader!("nodes_themed.frag.spv"),
+            crate::include_shader!("nodes/themed.frag.spv"),
         )
     }
 

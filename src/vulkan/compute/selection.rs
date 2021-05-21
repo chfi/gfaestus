@@ -54,7 +54,7 @@ impl GpuSelection {
             device,
             desc_set_layout,
             pipeline_layout,
-            crate::include_shader!("rect_select.comp.spv"),
+            crate::include_shader!("compute/rect_select.comp.spv"),
         )?;
 
         let descriptor_sets = {
