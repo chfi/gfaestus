@@ -386,7 +386,7 @@ fn main() {
                         OverlayCreatorMsg::NewOverlay { name, colors } => {
                             println!("Received new overlay");
                             let mut overlay =
-                                NodeOverlay::new_empty(&name, &gfaestus, graph_query.node_count())
+                                NodeOverlay::new_empty_rgb(&name, &gfaestus, graph_query.node_count())
                                     .unwrap();
 
                             overlay

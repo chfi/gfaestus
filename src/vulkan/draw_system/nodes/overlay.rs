@@ -4,16 +4,148 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
-use crate::vulkan::texture::{GradientTexture, Texture1D};
+use crate::{
+    geometry::Point,
+    view::View,
+    vulkan::{
+        render_pass::Framebuffers,
+        texture::{GradientTexture, Texture1D},
+    },
+};
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
 pub struct OverlayPipelines {
-    pub(super) overlay_set_id: Option<(usize, OverlayKind)>,
+    pipeline_rgb: OverlayPipelineRGB,
+    pipeline_value: OverlayPipelineValue,
 
-    // pub(super) overlays: FxHashMap<usize, NodeOverlay>,
+    overlay_set_id: Option<(usize, OverlayKind)>,
+
     next_overlay_id: usize,
 
     pub(super) device: Device,
+}
+
+impl OverlayPipelines {
+    pub(super) fn new(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        let pipeline_rgb = OverlayPipelineRGB::new(
+            device,
+            msaa_samples,
+            render_pass,
+            selection_set_layout,
+        )?;
+        let pipeline_value = OverlayPipelineValue::new(
+            device,
+            msaa_samples,
+            render_pass,
+            selection_set_layout,
+        )?;
+
+        Ok(Self {
+            pipeline_rgb,
+            pipeline_value,
+
+            overlay_set_id: None,
+
+            next_overlay_id: 0,
+
+            device: device.clone(),
+        })
+    }
+
+    pub(super) fn bind_pipeline(
+        &self,
+        device: &Device,
+        cmd_buf: vk::CommandBuffer,
+        overlay_kind: OverlayKind,
+    ) {
+        unsafe {
+            match overlay_kind {
+                OverlayKind::RGB => device.cmd_bind_pipeline(
+                    cmd_buf,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline_rgb.pipeline,
+                ),
+                OverlayKind::Value => device.cmd_bind_pipeline(
+                    cmd_buf,
+                    vk::PipelineBindPoint::GRAPHICS,
+                    self.pipeline_value.pipeline,
+                ),
+            }
+        };
+    }
+
+    pub(super) fn pipeline_layout_kind(
+        &self,
+        overlay_kind: OverlayKind,
+    ) -> vk::PipelineLayout {
+        match overlay_kind {
+            OverlayKind::RGB => self.pipeline_rgb.pipeline_layout,
+            OverlayKind::Value => self.pipeline_value.pipeline_layout,
+        }
+    }
+
+    pub(super) fn write_overlay(
+        &mut self,
+        overlay: (usize, OverlayKind),
+        color_scheme: &GradientTexture,
+    ) -> Result<()> {
+        if self.overlay_set_id != Some(overlay) {
+            match overlay.1 {
+                OverlayKind::RGB => {
+                    self.pipeline_rgb.write_active_overlay(overlay.0)?;
+                }
+                OverlayKind::Value => {
+                    self.pipeline_value
+                        .write_active_overlay(color_scheme, overlay.0)?;
+                }
+            }
+            self.overlay_set_id = Some(overlay);
+        }
+
+        Ok(())
+    }
+
+    pub(super) fn bind_descriptor_sets(
+        &self,
+        device: &Device,
+        cmd_buf: vk::CommandBuffer,
+        overlay: (usize, OverlayKind),
+        selection_descriptor: vk::DescriptorSet,
+    ) -> Result<()> {
+        unsafe {
+            let (desc_sets, layout) = match overlay.1 {
+                OverlayKind::RGB => {
+                    let sets =
+                        [self.pipeline_rgb.overlay_set, selection_descriptor];
+                    let layout = self.pipeline_rgb.pipeline_layout;
+                    (sets, layout)
+                }
+                OverlayKind::Value => {
+                    let sets =
+                        [self.pipeline_value.overlay_set, selection_descriptor];
+                    let layout = self.pipeline_value.pipeline_layout;
+                    (sets, layout)
+                }
+            };
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                layout,
+                0,
+                &desc_sets[0..=1],
+                &null,
+            );
+        }
+
+        Ok(())
+    }
 }
 
 pub struct OverlayPipelineRGB {
@@ -24,6 +156,8 @@ pub struct OverlayPipelineRGB {
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
+
+    pub(super) overlays: FxHashMap<usize, NodeOverlay>,
 
     pub(super) device: Device,
 }
@@ -39,12 +173,27 @@ pub struct OverlayPipelineValue {
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
 
+    pub(super) overlays: FxHashMap<usize, NodeOverlayValue>,
+
     pub(super) device: Device,
 }
 
 impl OverlayPipelineValue {
-    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {
-        unimplemented!();
+    fn write_active_overlay(
+        &mut self,
+        color_scheme: &GradientTexture,
+        overlay_id: usize,
+    ) -> Result<()> {
+        if let Some(overlay) = self.overlays.get(&overlay_id) {
+            overlay.write_descriptor_set(
+                &self.device,
+                color_scheme,
+                self.sampler,
+                &self.overlay_set,
+            )?;
+        }
+
+        Ok(())
     }
 
     fn layout_bindings() -> [vk::DescriptorSetLayoutBinding; 2] {
@@ -161,6 +310,8 @@ impl OverlayPipelineValue {
             pipeline_layout,
             pipeline,
 
+            overlays: Default::default(),
+
             device: device.clone(),
         })
     }
@@ -183,8 +334,12 @@ impl OverlayPipelineValue {
 }
 
 impl OverlayPipelineRGB {
-    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {
-        unimplemented!();
+    fn write_active_overlay(&mut self, overlay_id: usize) -> Result<()> {
+        if let Some(overlay) = self.overlays.get(&overlay_id) {
+            overlay.write_descriptor_set(&self.device, &self.overlay_set)?;
+        }
+
+        Ok(())
     }
 
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
@@ -283,6 +438,8 @@ impl OverlayPipelineRGB {
 
             pipeline_layout,
             pipeline,
+
+            overlays: Default::default(),
 
             device: device.clone(),
         })
@@ -652,7 +809,6 @@ impl NodeOverlayValue {
 pub struct NodeOverlay {
     name: String,
 
-    // kind: OverlayKind,
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
