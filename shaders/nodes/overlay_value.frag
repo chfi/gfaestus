@@ -8,19 +8,15 @@ layout (location = 0) out vec4 f_color;
 layout (location = 1) out uint f_id;
 layout (location = 2) out vec4 f_mask;
 
-layout (set = 0, binding = 0) uniform samplerBuffer overlay;
+layout (set = 0, binding = 0) uniform sampler1D overlay;
+
+layout (set = 0, binding = 1) readonly buffer OverlayValue {
+  float value[];
+} node_value;
 
 layout (set = 1, binding = 0) readonly buffer Selection {
   uint flag[];
 } selection;
-
-// layout (set = 1, binding = 0) buffer Data {
-//   uint data[];
-// } data;
-
-// layout (set = 1, binding = 1) readonly buffer Selection {
-//   int flag[];
-// } selection;
 
 layout (push_constant) uniform NodePC {
   mat4 view_transform;
@@ -31,7 +27,6 @@ layout (push_constant) uniform NodePC {
 } node_uniform;
 
 void main() {
-
   uint is_selected = selection.flag[node_id - 1];
 
   f_id = uint(node_id);
@@ -42,7 +37,6 @@ void main() {
     f_mask = vec4(0.0, 0.0, 0.0, 0.0);
   }
 
-
-  int color_u = node_id - 1;
-  f_color = texelFetch(overlay, color_u);
+  float node_val = node_value.value[node_id];
+  f_color = texture(overlay, node_val);
 }
