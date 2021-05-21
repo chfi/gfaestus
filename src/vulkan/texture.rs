@@ -2,6 +2,10 @@ use ash::{version::DeviceV1_0, vk, Device};
 
 use anyhow::Result;
 
+pub mod color_schemes;
+
+pub use color_schemes::*;
+
 #[derive(Clone, Copy)]
 pub struct Texture {
     pub image: vk::Image,

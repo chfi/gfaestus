@@ -355,6 +355,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
 
 [[package]]
+name = "colorous"
+version = "1.0.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3709fbbf6c748d84846a3ad0f7b97e6c7acc6126defcebc4b09fb77dce300750"
+
+[[package]]
 name = "const_fn"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -888,6 +894,7 @@ dependencies = [
  "ash 0.31.0",
  "ash-window",
  "bstr",
+ "colorous",
  "crossbeam",
  "egui",
  "futures 0.3.15",
