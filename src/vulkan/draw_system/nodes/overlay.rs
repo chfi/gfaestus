@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
-use crate::vulkan::texture::Texture1D;
+use crate::vulkan::texture::{GradientTexture, Texture1D};
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
 pub struct OverlayPipelines {
@@ -32,6 +32,8 @@ pub struct OverlayPipelineValue {
     pub(super) descriptor_pool: vk::DescriptorPool,
     pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
 
+    sampler: vk::Sampler,
+
     pub(super) overlay_set: vk::DescriptorSet,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
@@ -41,7 +43,9 @@ pub struct OverlayPipelineValue {
 }
 
 impl OverlayPipelineValue {
-    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {}
+    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {
+        unimplemented!();
+    }
 
     fn layout_bindings() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;
@@ -144,11 +148,15 @@ impl OverlayPipelineValue {
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
 
+        let sampler = GradientTexture::create_sampler(device)?;
+
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
 
             overlay_set: descriptor_sets[0],
+
+            sampler,
 
             pipeline_layout,
             pipeline,
@@ -175,7 +183,9 @@ impl OverlayPipelineValue {
 }
 
 impl OverlayPipelineRGB {
-    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {}
+    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {
+        unimplemented!();
+    }
 
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
@@ -470,9 +480,179 @@ impl NodeOverlayPipeline {
     }
 }
 
+pub struct NodeOverlayValue {
+    name: String,
+
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    size: vk::DeviceSize,
+
+    host_visible: bool,
+}
+
+impl NodeOverlayValue {
+    /// Create a new overlay that can be written to by the CPU after construction
+    ///
+    /// Uses host-visible and host-coherent memory
+    pub fn new_empty_rgb(
+        name: &str,
+        app: &GfaestusVk,
+        node_count: usize,
+    ) -> Result<Self> {
+        let size = ((node_count * std::mem::size_of::<f32>()) as u32)
+            as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST;
+
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+        let (buffer, memory, size) =
+            app.create_buffer(size, usage, mem_props)?;
+
+        let device = app.vk_context().device();
+
+        Ok(Self {
+            name: name.into(),
+
+            buffer,
+            memory,
+            size,
+
+            host_visible: true,
+        })
+    }
+
+    /// Update the colors for a host-visible overlay by providing a
+    /// set of node IDs and new colors
+    pub fn update_overlay<I>(
+        &mut self,
+        device: &Device,
+        new_values: I,
+    ) -> Result<()>
+    where
+        I: IntoIterator<Item = (handlegraph::handle::NodeId, f32)>,
+    {
+        assert!(self.host_visible);
+
+        unsafe {
+            let ptr = device.map_memory(
+                self.memory,
+                0,
+                self.size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            for (node, value) in new_values.into_iter() {
+                let val_ptr = ptr as *mut f32;
+                let ix = (node.0 - 1) as usize;
+
+                val_ptr.write(value);
+            }
+
+            device.unmap_memory(self.memory);
+        }
+
+        Ok(())
+    }
+
+    /// Create a new overlay that's filled during construction and immutable afterward
+    ///
+    /// Uses device memory if available
+    pub fn new_static<F>(
+        name: &str,
+        app: &GfaestusVk,
+        graph: &crate::graph_query::GraphQuery,
+        mut overlay_fn: F,
+    ) -> Result<Self>
+    where
+        F: FnMut(
+            &handlegraph::packedgraph::PackedGraph,
+            handlegraph::handle::NodeId,
+        ) -> f32,
+    {
+        use handlegraph::handlegraph::IntoHandles;
+
+        let device = app.vk_context().device();
+
+        let buffer_size =
+            (graph.node_count() * std::mem::size_of::<f32>()) as vk::DeviceSize;
+
+        let mut values: Vec<f32> = Vec::with_capacity(buffer_size as usize);
+
+        {
+            let graph = graph.graph();
+
+            let mut nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+
+            nodes.sort();
+
+            for node in nodes {
+                let value = overlay_fn(graph, node);
+                values.push(value);
+            }
+        }
+
+        let (buffer, memory) = app
+            .create_device_local_buffer_with_data::<[u8; 4], _>(
+                vk::BufferUsageFlags::TRANSFER_DST
+                    | vk::BufferUsageFlags::STORAGE_BUFFER,
+                &values,
+            )?;
+
+        Ok(Self {
+            name: name.into(),
+
+            buffer,
+            memory,
+            size: buffer_size,
+
+            host_visible: false,
+        })
+    }
+
+    pub fn destroy(&self, device: &Device) {
+        unsafe {
+            device.destroy_buffer(self.buffer, None);
+            device.free_memory(self.memory, None);
+        }
+    }
+
+    pub fn write_descriptor_set(
+        &self,
+        device: &Device,
+        color_scheme: &GradientTexture,
+        sampler: vk::Sampler,
+        descriptor_set: &vk::DescriptorSet,
+    ) -> Result<()> {
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(color_scheme.texture.view)
+            .sampler(sampler)
+            .build();
+        let image_infos = [image_info];
+
+        let descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(*descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)
+            .build();
+
+        let descriptor_writes = [descriptor_write];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
+    }
+}
+
 pub struct NodeOverlay {
     name: String,
 
+    // kind: OverlayKind,
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
@@ -486,7 +666,7 @@ impl NodeOverlay {
     /// Create a new overlay that can be written to by the CPU after construction
     ///
     /// Uses host-visible and host-coherent memory
-    pub fn new_empty(
+    pub fn new_empty_rgb(
         name: &str,
         app: &GfaestusVk,
         node_count: usize,
