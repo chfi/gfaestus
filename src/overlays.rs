@@ -20,7 +20,7 @@ use crate::{geometry::Point, gluon::GraphHandle};
 
 use crate::vulkan::draw_system::nodes::NodeOverlay;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Defines the type of mapping from node ID to colors used by an
 /// overlay script
 pub enum OverlayKind {

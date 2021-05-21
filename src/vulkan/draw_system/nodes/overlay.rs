@@ -4,7 +4,295 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
-use crate::vulkan::GfaestusVk;
+use crate::vulkan::texture::Texture1D;
+use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
+
+pub struct OverlayPipelines {
+    pub(super) overlay_set_id: Option<(usize, OverlayKind)>,
+
+    // pub(super) overlays: FxHashMap<usize, NodeOverlay>,
+    next_overlay_id: usize,
+
+    pub(super) device: Device,
+}
+
+pub struct OverlayPipelineRGB {
+    pub(super) descriptor_pool: vk::DescriptorPool,
+    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+
+    pub(super) overlay_set: vk::DescriptorSet,
+
+    pub(super) pipeline_layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+
+    pub(super) device: Device,
+}
+
+pub struct OverlayPipelineValue {
+    pub(super) descriptor_pool: vk::DescriptorPool,
+    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+
+    pub(super) overlay_set: vk::DescriptorSet,
+
+    pub(super) pipeline_layout: vk::PipelineLayout,
+    pub(super) pipeline: vk::Pipeline,
+
+    pub(super) device: Device,
+}
+
+impl OverlayPipelineValue {
+    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {}
+
+    fn layout_bindings() -> [vk::DescriptorSetLayoutBinding; 2] {
+        use vk::ShaderStageFlags as Stages;
+
+        let sampler = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build();
+
+        let values = vk::DescriptorSetLayoutBinding::builder()
+            .binding(1)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build();
+
+        [sampler, values]
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let bindings = Self::layout_bindings();
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
+    fn create_pipeline(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        super::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            &[descriptor_set_layout, selection_set_layout],
+            crate::include_shader!("nodes/overlay_value.frag.spv"),
+        )
+    }
+
+    pub(super) fn new(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            desc_set_layout,
+            selection_set_layout,
+        );
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let sampler_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count,
+            };
+
+            let value_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [sampler_size, value_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+
+            overlay_set: descriptor_sets[0],
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
+    }
+
+    pub fn destroy(&mut self) {
+        unsafe {
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
+    }
+}
+
+impl OverlayPipelineRGB {
+    fn write_active_overlay(&mut self, overlay_id: Option<usize>) {}
+
+    fn layout_binding() -> vk::DescriptorSetLayoutBinding {
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build()
+    }
+
+    fn create_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
+    fn create_pipeline(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> (vk::Pipeline, vk::PipelineLayout) {
+        super::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            &[descriptor_set_layout, selection_set_layout],
+            crate::include_shader!("nodes/overlay_rgb.frag.spv"),
+        )
+    }
+
+    pub(super) fn new(
+        device: &Device,
+        msaa_samples: vk::SampleCountFlags,
+        render_pass: vk::RenderPass,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
+        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let (pipeline, pipeline_layout) = Self::create_pipeline(
+            device,
+            msaa_samples,
+            render_pass,
+            desc_set_layout,
+            selection_set_layout,
+        );
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+
+            overlay_set: descriptor_sets[0],
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
+    }
+    pub fn destroy(&mut self) {
+        unsafe {
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
+    }
+}
 
 pub struct NodeOverlayPipeline {
     pub(super) descriptor_pool: vk::DescriptorPool,
