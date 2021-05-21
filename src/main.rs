@@ -1,4 +1,5 @@
-use draw_system::nodes::NodeOverlay;
+use draw_system::nodes::{NodeOverlay, NodeOverlayValue, Overlay};
+use texture::GradientTexture;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::unix::*;
@@ -242,6 +243,47 @@ fn main() {
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
     let mut next_overlay_id = 0;
+
+    let gradient_0 = GradientTexture::new(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        colorous::MAGMA,
+        1024,
+    )
+    .unwrap();
+
+    let gradient_1 = GradientTexture::new(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        colorous::PLASMA,
+        1024,
+    )
+    .unwrap();
+
+    let node_count = graph_query.node_count();
+
+    let val_overlay_0 = NodeOverlayValue::new_static(
+        "node ID",
+        &gfaestus,
+        &graph_query,
+        |_graph, node_id| {
+            let id = node_id.0 - 1;
+            let v = (id as f32) / (node_count as f32);
+            v
+        },
+    )
+    .unwrap();
+
+    let overlay_id = main_view
+        .node_draw_system
+        .overlay_pipelines
+        .create_overlay(Overlay::Value(val_overlay_0));
+
+    let overlay = (overlay_id, OverlayKind::Value);
+
+    // main_view.node_draw_system.
 
     gui.populate_overlay_list(
         main_view.node_draw_system.overlay_pipeline.overlay_names(),
@@ -598,6 +640,16 @@ fn main() {
                             );
                         }
 
+                        main_view.draw_nodes_new(
+                            cmd_buf,
+                                node_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                                Point::ZERO,
+                            overlay,
+                            &gradient_0).unwrap();
+
+                        /*
                         main_view
                             .draw_nodes(
                                 cmd_buf,
@@ -608,6 +660,7 @@ fn main() {
                                 use_overlay,
                             )
                             .unwrap();
+                        */
 
                         unsafe {
                             // let (image_memory_barrier, _src_stage, _dst_stage) =

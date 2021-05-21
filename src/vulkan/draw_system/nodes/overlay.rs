@@ -166,7 +166,7 @@ impl OverlayPipelines {
         overlays
     }
 
-    pub(super) fn create_overlay(&mut self, overlay: Overlay) -> usize {
+    pub fn create_overlay(&mut self, overlay: Overlay) -> usize {
         let overlay_id = self.next_overlay_id;
         self.next_overlay_id += 1;
 
@@ -808,7 +808,7 @@ impl NodeOverlayValue {
         }
 
         let (buffer, memory) = app
-            .create_device_local_buffer_with_data::<[u8; 4], _>(
+            .create_device_local_buffer_with_data::<f32, _>(
                 vk::BufferUsageFlags::TRANSFER_DST
                     | vk::BufferUsageFlags::STORAGE_BUFFER,
                 &values,
@@ -846,7 +846,7 @@ impl NodeOverlayValue {
             .build();
         let image_infos = [image_info];
 
-        let descriptor_write = vk::WriteDescriptorSet::builder()
+        let sampler_write = vk::WriteDescriptorSet::builder()
             .dst_set(*descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
@@ -854,7 +854,23 @@ impl NodeOverlayValue {
             .image_info(&image_infos)
             .build();
 
-        let descriptor_writes = [descriptor_write];
+        let buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let buf_infos = [buf_info];
+
+        let values_write = vk::WriteDescriptorSet::builder()
+            .dst_set(*descriptor_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&buf_infos)
+            .build();
+
+        let descriptor_writes = [sampler_write, values_write];
 
         unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
 

@@ -14,8 +14,12 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::app::{node_flags::SelectionBuffer, NodeWidth};
 use crate::view::{ScreenDims, View};
+use crate::{
+    app::{node_flags::SelectionBuffer, NodeWidth},
+    overlays::OverlayKind,
+    vulkan::texture::GradientTexture,
+};
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
@@ -211,6 +215,81 @@ impl MainView {
 
         self.node_id_buffer
             .read(self.node_draw_system.device(), x, y)
+    }
+
+    pub fn draw_nodes_new(
+        &mut self,
+        cmd_buf: vk::CommandBuffer,
+        render_pass: vk::RenderPass,
+        framebuffers: &Framebuffers,
+        screen_dims: [f32; 2],
+        offset: Point,
+        overlay: (usize, OverlayKind),
+        color_scheme: &GradientTexture,
+        // use_overlay: bool,
+    ) -> Result<()> {
+        let view = self.shared_state.view();
+
+        let node_width = {
+            let min = self.node_width.min_node_width();
+            let max = self.node_width.max_node_width();
+
+            let min_scale = self.node_width.min_scale();
+            let max_scale = self.node_width.max_scale();
+
+            let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
+
+            let easing_val =
+                EasingExpoOut::value_at_normalized_time(norm_scale as f64)
+                    as f32;
+
+            let mut width = min + easing_val * (max - min);
+
+            if view.scale > max_scale {
+                width *= view.scale / (min_scale - max_scale);
+            } else if view.scale < min_scale {
+                width = min
+            }
+            width
+        };
+
+        self.node_draw_system.draw_overlay_new(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+            node_width,
+            view,
+            offset,
+            overlay,
+            color_scheme,
+        )
+
+        /*
+        let has_overlay = self.node_draw_system.has_overlay();
+
+        if use_overlay && has_overlay {
+            self.node_draw_system.draw_overlay(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+            )
+        } else {
+            self.node_draw_system.draw_themed(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+            )
+        }
+        */
     }
 
     pub fn draw_nodes(
