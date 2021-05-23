@@ -32,6 +32,11 @@ pub enum OverlayKind {
     Value,
 }
 
+pub enum OverlayData {
+    RGB(Vec<rgb::RGB<f32>>),
+    Value(Vec<f32>),
+}
+
 pub type OverlayScriptType<T> = Function<
     RootedThread,
     fn(GraphHandle) -> IO<Function<RootedThread, fn(u64) -> T>>,
