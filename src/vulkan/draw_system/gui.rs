@@ -11,11 +11,7 @@ use crate::vulkan::{render_pass::Framebuffers, GfaestusVk};
 use super::create_shader_module;
 
 pub struct GuiPipeline {
-    descriptor_pool: vk::DescriptorPool,
-
     descriptor_set_layout: vk::DescriptorSetLayout,
-    egui_descriptor_set: vk::DescriptorSet,
-    gradient_descriptor_set: vk::DescriptorSet,
 
     sampler: vk::Sampler,
     texture: Texture,
@@ -23,8 +19,11 @@ pub struct GuiPipeline {
 
     pub vertices: GuiVertices,
 
-    pipeline_layout: vk::PipelineLayout,
-    pipeline: vk::Pipeline,
+    tex_2d_pipeline_layout: vk::PipelineLayout,
+    tex_2d_pipeline: vk::Pipeline,
+
+    tex_1d_pipeline_layout: vk::PipelineLayout,
+    tex_1d_pipeline: vk::Pipeline,
 
     device: Device,
 }
@@ -39,8 +38,19 @@ impl GuiPipeline {
 
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        let (pipeline, pipeline_layout) =
-            Self::create_pipeline(device, render_pass, desc_set_layout);
+        let (tex_2d_pipeline, tex_2d_pipeline_layout) = Self::create_pipeline(
+            device,
+            render_pass,
+            desc_set_layout,
+            crate::load_shader!("gui/gui_2d.frag.spv"),
+        );
+
+        let (tex_1d_pipeline, tex_1d_pipeline_layout) = Self::create_pipeline(
+            device,
+            render_pass,
+            desc_set_layout,
+            crate::load_shader!("gui/gui_1d.frag.spv"),
+        );
 
         let sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
@@ -61,44 +71,12 @@ impl GuiPipeline {
             unsafe { device.create_sampler(&sampler_info, None) }
         }?;
 
-        let image_count = 1;
-
-        let descriptor_pool = {
-            let sampler_pool_size = vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                descriptor_count: image_count * 2,
-            };
-
-            let pool_sizes = [sampler_pool_size];
-
-            let pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&pool_sizes)
-                .max_sets(image_count * 2)
-                .build();
-
-            unsafe { device.create_descriptor_pool(&pool_info, None) }
-        }?;
-
-        let descriptor_sets = {
-            let layouts = vec![desc_set_layout, desc_set_layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
         let texture = Texture::null();
 
         let vertices = GuiVertices::new(device);
 
         Ok(Self {
-            descriptor_pool,
             descriptor_set_layout: desc_set_layout,
-            egui_descriptor_set: descriptor_sets[0],
-            gradient_descriptor_set: descriptor_sets[1],
 
             sampler,
             texture,
@@ -106,8 +84,11 @@ impl GuiPipeline {
 
             vertices,
 
-            pipeline_layout,
-            pipeline,
+            tex_2d_pipeline_layout,
+            tex_2d_pipeline,
+
+            tex_1d_pipeline_layout,
+            tex_1d_pipeline,
 
             device: device.clone(),
         })
@@ -149,17 +130,7 @@ impl GuiPipeline {
             )
         };
 
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline,
-            )
-        };
-
         let vx_bufs = [self.vertices.vertex_buffer];
-        let egui_desc_sets = [self.egui_descriptor_set];
-        let gradient_desc_sets = [self.gradient_descriptor_set];
 
         let pc_bytes = {
             let push_constants = GuiPushConstants::new(viewport_dims);
@@ -199,19 +170,42 @@ impl GuiPipeline {
                     vk::IndexType::UINT32,
                 );
 
-                let null = [];
                 match texture_id {
                     egui::TextureId::Egui => {
-                        device.cmd_bind_descriptor_sets(
+                        device.cmd_bind_pipeline(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
+                            self.tex_2d_pipeline,
+                        );
+
+                        let desc_write = self.egui_descriptor_write();
+
+                        let desc_writes = [desc_write];
+
+                        push_descriptor.cmd_push_descriptor_set(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.tex_2d_pipeline_layout,
                             0,
-                            &egui_desc_sets[0..=0],
-                            &null,
+                            &desc_writes,
+                        );
+
+                        use vk::ShaderStageFlags as Flags;
+                        device.cmd_push_constants(
+                            cmd_buf,
+                            self.tex_2d_pipeline_layout,
+                            Flags::VERTEX,
+                            0,
+                            &pc_bytes,
                         );
                     }
                     egui::TextureId::User(_) => {
+                        device.cmd_bind_pipeline(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.tex_1d_pipeline,
+                        );
+
                         let desc_write = self
                             .gradient_descriptor_write(texture_id, gradients);
 
@@ -220,30 +214,21 @@ impl GuiPipeline {
                         push_descriptor.cmd_push_descriptor_set(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
+                            self.tex_1d_pipeline_layout,
                             0,
                             &desc_writes,
                         );
 
-                        device.cmd_bind_descriptor_sets(
+                        use vk::ShaderStageFlags as Flags;
+                        device.cmd_push_constants(
                             cmd_buf,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.pipeline_layout,
+                            self.tex_1d_pipeline_layout,
+                            Flags::VERTEX,
                             0,
-                            &gradient_desc_sets[0..=0],
-                            &null,
+                            &pc_bytes,
                         );
                     }
                 }
-
-                use vk::ShaderStageFlags as Flags;
-                device.cmd_push_constants(
-                    cmd_buf,
-                    self.pipeline_layout,
-                    Flags::VERTEX,
-                    0,
-                    &pc_bytes,
-                );
 
                 device.cmd_draw_indexed(
                     cmd_buf,
@@ -270,12 +255,13 @@ impl GuiPipeline {
                 None,
             );
 
-            device.destroy_descriptor_pool(self.descriptor_pool, None);
-
             device.destroy_sampler(self.sampler, None);
 
-            device.destroy_pipeline(self.pipeline, None);
-            device.destroy_pipeline_layout(self.pipeline_layout, None);
+            device.destroy_pipeline(self.tex_2d_pipeline, None);
+            device.destroy_pipeline_layout(self.tex_2d_pipeline_layout, None);
+
+            device.destroy_pipeline(self.tex_1d_pipeline, None);
+            device.destroy_pipeline_layout(self.tex_1d_pipeline_layout, None);
 
             self.vertices.destroy();
 
@@ -322,31 +308,26 @@ impl GuiPipeline {
         self.texture = texture;
         self.texture_version = version;
 
-        // update the descriptor set
+        Ok(())
+    }
+
+    fn egui_descriptor_write(&self) -> vk::WriteDescriptorSet {
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(texture.view)
+            .image_view(self.texture.view)
             .sampler(self.sampler)
             .build();
         let image_infos = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.egui_descriptor_set)
+            .dst_set(vk::DescriptorSet::null())
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .image_info(&image_infos)
             .build();
 
-        let descriptor_writes = [sampler_descriptor_write];
-
-        unsafe {
-            app.vk_context()
-                .device()
-                .update_descriptor_sets(&descriptor_writes, &[])
-        }
-
-        Ok(())
+        sampler_descriptor_write
     }
 
     fn gradient_descriptor_write(
@@ -358,13 +339,13 @@ impl GuiPipeline {
 
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-            .image_view(self.texture.view)
+            .image_view(texture.texture.view)
             .sampler(self.sampler)
             .build();
         let image_infos = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.gradient_descriptor_set)
+            .dst_set(vk::DescriptorSet::null())
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -372,72 +353,6 @@ impl GuiPipeline {
             .build();
 
         sampler_descriptor_write
-    }
-
-    pub fn write_descriptor_set(
-        &self,
-        app: &GfaestusVk,
-        texture_id: egui::TextureId,
-        gradients: &Gradients,
-    ) {
-        match texture_id {
-            egui::TextureId::Egui => {
-                let image_info = vk::DescriptorImageInfo::builder()
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image_view(self.texture.view)
-                    .sampler(self.sampler)
-                    .build();
-                let image_infos = [image_info];
-
-                let sampler_descriptor_write =
-                    vk::WriteDescriptorSet::builder()
-                        .dst_set(self.egui_descriptor_set)
-                        .dst_binding(0)
-                        .dst_array_element(0)
-                        .descriptor_type(
-                            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                        )
-                        .image_info(&image_infos)
-                        .build();
-
-                let descriptor_writes = [sampler_descriptor_write];
-
-                unsafe {
-                    app.vk_context()
-                        .device()
-                        .update_descriptor_sets(&descriptor_writes, &[])
-                }
-            }
-            egui::TextureId::User(id) => {
-                let texture = gradients.gradient_from_id(texture_id).unwrap();
-
-                let image_info = vk::DescriptorImageInfo::builder()
-                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                    .image_view(self.texture.view)
-                    .sampler(self.sampler)
-                    .build();
-                let image_infos = [image_info];
-
-                let sampler_descriptor_write =
-                    vk::WriteDescriptorSet::builder()
-                        .dst_set(self.gradient_descriptor_set)
-                        .dst_binding(0)
-                        .dst_array_element(0)
-                        .descriptor_type(
-                            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                        )
-                        .image_info(&image_infos)
-                        .build();
-
-                let descriptor_writes = [sampler_descriptor_write];
-
-                unsafe {
-                    app.vk_context()
-                        .device()
-                        .update_descriptor_sets(&descriptor_writes, &[])
-                }
-            }
-        }
     }
 
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
@@ -449,23 +364,6 @@ impl GuiPipeline {
             .descriptor_count(1)
             .stage_flags(Stages::FRAGMENT)
             .build()
-    }
-
-    fn gradient_descriptor_set_layout(
-        device: &Device,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let binding = Self::layout_binding();
-        let bindings = [binding];
-
-        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&bindings)
-            .flags(vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR)
-            .build();
-
-        let layout =
-            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
-
-        Ok(layout)
     }
 
     fn create_descriptor_set_layout(
@@ -489,9 +387,9 @@ impl GuiPipeline {
         device: &Device,
         render_pass: vk::RenderPass,
         descriptor_set_layout: vk::DescriptorSetLayout,
+        frag_src: Vec<u32>,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("gui/gui.vert.spv");
-        let frag_src = crate::load_shader!("gui/gui.frag.spv");
 
         let vert_module = create_shader_module(device, &vert_src);
         let frag_module = create_shader_module(device, &frag_src);

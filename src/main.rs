@@ -650,8 +650,6 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
-                gui.set_gradient(&gfaestus, &gradients);
-
 
                 let mut use_overlay = app.shared_state().overlay_state().use_overlay();
 

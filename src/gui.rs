@@ -863,14 +863,6 @@ impl Gui {
         self.draw_system.vertices.upload_meshes(app, meshes)
     }
 
-    pub fn set_gradient(&self, app: &GfaestusVk, gradients: &Gradients) {
-        let gradient = self.shared_state.overlay_state().gradient();
-        let texture_id = gradient.texture_id();
-
-        self.draw_system
-            .write_descriptor_set(app, texture_id, gradients);
-    }
-
     pub fn draw(
         &self,
         cmd_buf: vk::CommandBuffer,
