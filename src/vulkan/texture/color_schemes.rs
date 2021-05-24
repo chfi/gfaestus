@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use ash::{version::DeviceV1_0, vk, Device};
 
 use anyhow::Result;
@@ -8,6 +10,81 @@ use crate::vulkan::GfaestusVk;
 
 use super::Texture1D;
 
+pub struct Gradients {
+    pub gradients: HashMap<GradientName, GradientTexture>,
+}
+
+impl Gradients {
+    pub fn initialize(
+        app: &GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        width: usize,
+    ) -> Result<Self> {
+        use GradientName::*;
+        let names = [
+            Blues,
+            BlueGreen,
+            BluePurple,
+            BrownGreen,
+            Cividis,
+            Cool,
+            CubeHelix,
+            Greens,
+            GreenBlue,
+            Greys,
+            Inferno,
+            Magma,
+            Oranges,
+            OrangeRed,
+            PinkGreen,
+            Plasma,
+            Purples,
+            PurpleBlue,
+            PurpleBlueGreen,
+            PurpleGreen,
+            PurpleOrange,
+            PurpleRed,
+            Rainbow,
+            Reds,
+            RedBlue,
+            RedGray,
+            RedPurple,
+            RedYellowBlue,
+            RedYellowGreen,
+            Sinebow,
+            Spectral,
+            Turbo,
+            Viridis,
+            Warm,
+            YellowGreen,
+            YellowGreenBlue,
+            YellowOrangeBrown,
+            YellowOrangeRed,
+        ];
+
+        let mut gradients: HashMap<GradientName, GradientTexture> =
+            HashMap::new();
+
+        for name in std::array::IntoIter::new(names) {
+            let gradient = name.gradient();
+
+            let texture = GradientTexture::new(
+                app,
+                command_pool,
+                transition_queue,
+                gradient,
+                width,
+            )?;
+
+            gradients.insert(name, texture);
+        }
+
+        Ok(Self { gradients })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GradientName {
     Blues,
     BlueGreen,

@@ -1,5 +1,5 @@
 use draw_system::nodes::{NodeOverlay, NodeOverlayValue, Overlay};
-use texture::GradientTexture;
+use texture::{GradientTexture, Gradients};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::unix::*;
@@ -243,6 +243,14 @@ fn main() {
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
     let mut next_overlay_id = 0;
+
+    let gradients = Gradients::initialize(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        1024,
+    )
+    .unwrap();
 
     let gradient_0 = GradientTexture::new(
         &gfaestus,
