@@ -9,7 +9,7 @@ use crate::{
     view::View,
     vulkan::{
         render_pass::Framebuffers,
-        texture::{GradientTexture, Texture1D},
+        texture::{GradientName, GradientTexture, Texture1D},
     },
 };
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
@@ -94,18 +94,18 @@ impl OverlayPipelines {
         overlay: (usize, OverlayKind),
         color_scheme: &GradientTexture,
     ) -> Result<()> {
-        if self.overlay_set_id != Some(overlay) {
-            match overlay.1 {
-                OverlayKind::RGB => {
-                    self.pipeline_rgb.write_active_overlay(overlay.0)?;
-                }
-                OverlayKind::Value => {
-                    self.pipeline_value
-                        .write_active_overlay(color_scheme, overlay.0)?;
-                }
+        // if self.overlay_set_id != Some(overlay) {
+        match overlay.1 {
+            OverlayKind::RGB => {
+                self.pipeline_rgb.write_active_overlay(overlay.0)?;
             }
-            self.overlay_set_id = Some(overlay);
+            OverlayKind::Value => {
+                self.pipeline_value
+                    .write_active_overlay(color_scheme, overlay.0)?;
+            }
         }
+        self.overlay_set_id = Some(overlay);
+        // }
 
         Ok(())
     }

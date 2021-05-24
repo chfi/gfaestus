@@ -261,9 +261,6 @@ impl GradientName {
     }
 }
 
-// pub struct Gradients {
-// }
-
 pub struct GradientTexture {
     pub texture: Texture1D,
     gradient: Gradient,
