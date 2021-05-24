@@ -1,0 +1,10 @@
+let io @ { ? }  = import! std.io
+let float = import! std.float
+let gfaestus = import! gfaestus
+
+let node_color_io graph : gfaestus.GraphHandle
+                       -> IO (Int -> Float) =
+    let node_color id = float.from_int id
+    io.wrap node_color
+
+node_color_io
