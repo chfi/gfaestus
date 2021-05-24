@@ -286,7 +286,12 @@ fn main() {
     // main_view.node_draw_system.
 
     gui.populate_overlay_list(
-        main_view.node_draw_system.overlay_pipeline.overlay_names(),
+        main_view
+            .node_draw_system
+            .overlay_pipelines
+            .overlay_names()
+            .into_iter(),
+        // .map(|(id, kind, name)| (id, kind, name)),
     );
 
     dbg!();
@@ -425,31 +430,71 @@ fn main() {
 
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {
                     match new_overlay {
-                        OverlayCreatorMsg::NewOverlay { name, colors } => {
+                        OverlayCreatorMsg::NewOverlay { name, data } => {
                             println!("Received new overlay");
-                            let mut overlay =
-                                NodeOverlay::new_empty_rgb(&name, &gfaestus, graph_query.node_count())
-                                    .unwrap();
 
-                            overlay
-                                .update_overlay(
-                                    gfaestus.vk_context().device(),
-                                    colors
-                                        .iter()
-                                        .enumerate()
-                                        .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
-                                )
-                                .unwrap();
+                            match data {
+                                OverlayData::RGB(colors) => {
+                                    let mut overlay =
+                                        NodeOverlay::new_empty_rgb(&name, &gfaestus, graph_query.node_count())
+                                        .unwrap();
 
-                            main_view
-                                .node_draw_system
-                                .overlay_pipeline
-                                .update_overlay(next_overlay_id, overlay);
+                                    overlay
+                                        .update_overlay(
+                                            gfaestus.vk_context().device(),
+                                            colors
+                                                .iter()
+                                                .enumerate()
+                                                .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
+                                        )
+                                        .unwrap();
 
-                            next_overlay_id += 1;
+                                    let overlay_id = main_view
+                                        .node_draw_system
+                                        .overlay_pipelines
+                                        .create_overlay(Overlay::RGB(overlay));
+
+                                    // let overlay = (overlay_id, OverlayKind::RGB);
+
+                                    // main_view
+                                    //     .node_draw_system
+                                    //     .overlay_pipelines
+                                    //     .update_rgb_overlay(next_overlay_id, overlay_id);
+
+
+                                    //
+                                }
+                                OverlayData::Value(values) => {
+
+                                    let mut overlay =
+                                        NodeOverlayValue::new_empty_value(&name, &gfaestus, graph_query.node_count())
+                                        .unwrap();
+
+                                    overlay
+                                        .update_overlay(
+                                            gfaestus.vk_context().device(),
+                                            values
+                                                .iter()
+                                                .enumerate()
+                                                .map(|(ix, v)| (NodeId::from((ix as u64) + 1), *v)),
+                                        )
+                                        .unwrap();
+
+
+                                    main_view
+                                        .node_draw_system
+                                        .overlay_pipelines
+                                        .create_overlay(Overlay::Value(overlay));
+                                }
+                            }
 
                             gui.populate_overlay_list(
-                                main_view.node_draw_system.overlay_pipeline.overlay_names(),
+                                main_view
+                                    .node_draw_system
+                                    .overlay_pipelines
+                                    .overlay_names()
+                                    .into_iter(),
+                                    // .map(|(id, _, name)| (id, name))
                             );
                         }
                     }
@@ -522,11 +567,6 @@ fn main() {
                 }
 
                 let frame_t = std::time::Instant::now();
-
-                main_view
-                    .node_draw_system
-                    .overlay_pipeline
-                    .set_active_overlay(app.shared_state().overlay_state().current_overlay());
 
                 if dirty_swapchain {
                     let size = window.inner_size();
@@ -642,12 +682,14 @@ fn main() {
 
                         main_view.draw_nodes_new(
                             cmd_buf,
-                                node_pass,
-                                framebuffers,
-                                [size.width as f32, size.height as f32],
-                                Point::ZERO,
+                            node_pass,
+                            framebuffers,
+                            [size.width as f32, size.height as f32],
+                            Point::ZERO,
                             overlay,
-                            &gradient_0).unwrap();
+                            &gradient_1,
+                            use_overlay,
+                        ).unwrap();
 
                         /*
                         main_view

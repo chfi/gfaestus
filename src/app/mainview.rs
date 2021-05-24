@@ -226,7 +226,7 @@ impl MainView {
         offset: Point,
         overlay: (usize, OverlayKind),
         color_scheme: &GradientTexture,
-        // use_overlay: bool,
+        use_overlay: bool,
     ) -> Result<()> {
         let view = self.shared_state.view();
 
@@ -253,17 +253,29 @@ impl MainView {
             width
         };
 
-        self.node_draw_system.draw_overlay_new(
-            cmd_buf,
-            render_pass,
-            framebuffers,
-            screen_dims,
-            node_width,
-            view,
-            offset,
-            overlay,
-            color_scheme,
-        )
+        if use_overlay {
+            self.node_draw_system.draw_overlay_new(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+                overlay,
+                color_scheme,
+            )
+        } else {
+            self.node_draw_system.draw_themed(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+            )
+        }
 
         /*
         let has_overlay = self.node_draw_system.has_overlay();

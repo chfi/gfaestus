@@ -12,6 +12,7 @@ use futures::executor::ThreadPool;
 
 use crate::asynchronous::AsyncResult;
 
+use crate::overlays::{OverlayData, OverlayKind};
 use crate::{app::OverlayState, gluon::GraphHandle, graph_query::GraphQuery};
 
 use crate::gluon::GluonVM;
@@ -19,7 +20,7 @@ use crate::gluon::GluonVM;
 pub struct OverlayList {
     overlay_state: OverlayState,
 
-    overlay_names: FxHashMap<usize, String>,
+    overlay_names: FxHashMap<usize, (OverlayKind, String)>,
 }
 
 impl OverlayList {
@@ -34,11 +35,11 @@ impl OverlayList {
 
     pub fn populate_names<'a>(
         &mut self,
-        names: impl Iterator<Item = (usize, &'a str)>,
+        names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
         self.overlay_names.clear();
         self.overlay_names
-            .extend(names.map(|(x, n)| (x, n.to_string())));
+            .extend(names.map(|(x, k, n)| (x, (k, n.to_string()))));
     }
 
     pub fn ui(
@@ -80,11 +81,11 @@ impl OverlayList {
                         let mut current_overlay =
                             self.overlay_state.current_overlay();
 
-                        for (id, name) in overlay_names {
+                        for (id, (kind, name)) in overlay_names {
                             if ui
                                 .radio_value(
                                     &mut current_overlay,
-                                    Some(*id),
+                                    Some((*id, *kind)),
                                     name,
                                 )
                                 .clicked()
@@ -121,7 +122,7 @@ pub struct OverlayCreator {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    script_query: Option<AsyncResult<anyhow::Result<Vec<rgb::RGB<f32>>>>>,
+    script_query: Option<AsyncResult<anyhow::Result<OverlayData>>>,
 }
 
 impl OverlayCreator {
@@ -229,7 +230,8 @@ impl OverlayCreator {
                         let graph = graph_;
 
                         gluon_vm
-                            .load_overlay_per_node_expr_async(&graph, &path)
+                            .overlay_per_node_expr(&graph, &path)
+                            // .load_overlay_per_node_expr_async(&graph, &path)
                             .await
                     });
 
@@ -246,10 +248,10 @@ impl OverlayCreator {
                     .and_then(|r| r.take_result_if_ready())
                 {
                     match script_result {
-                        Ok(colors) => {
+                        Ok(data) => {
                             let msg = OverlayCreatorMsg::NewOverlay {
                                 name: name.to_owned(),
-                                colors,
+                                data,
                             };
                             self.script_path_input.clear();
                             self.name.clear();
@@ -288,8 +290,18 @@ impl OverlayCreator {
 }
 
 pub enum OverlayCreatorMsg {
-    NewOverlay {
+    NewOverlay { name: String, data: OverlayData },
+}
+
+/*
+pub enum OverlayCreatorMsg {
+    NewRGB {
         name: String,
         colors: Vec<rgb::RGB<f32>>,
-    },
+    }
+    NewValue {
+        name: String,
+        values: Vec<f32>,
+    }
 }
+*/

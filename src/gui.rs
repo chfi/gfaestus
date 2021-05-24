@@ -28,6 +28,8 @@ use crate::{
     app::{NodeWidth, OverlayState},
     geometry::*,
 };
+
+use crate::overlays::{OverlayData, OverlayKind};
 use crate::{gluon::GraphHandle, view::View};
 
 use crate::graph_query::GraphQuery;
@@ -600,7 +602,7 @@ impl Gui {
     // TODO this should be handled better
     pub fn populate_overlay_list<'a>(
         &mut self,
-        names: impl Iterator<Item = (usize, &'a str)>,
+        names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
         self.view_state.overlay_list.state.populate_names(names);
     }

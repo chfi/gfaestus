@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
-use crate::input::MousePos;
 use crate::view::*;
 use crate::{geometry::*, gui::GuiFocusState};
+use crate::{input::MousePos, overlays::OverlayKind};
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -137,7 +137,7 @@ impl std::default::Default for MouseRect {
 #[derive(Debug, Clone)]
 pub struct OverlayState {
     use_overlay: Arc<AtomicCell<bool>>,
-    current_overlay: Arc<AtomicCell<Option<usize>>>,
+    current_overlay: Arc<AtomicCell<Option<(usize, OverlayKind)>>>,
 }
 
 impl OverlayState {
@@ -145,7 +145,7 @@ impl OverlayState {
         self.use_overlay.load()
     }
 
-    pub fn current_overlay(&self) -> Option<usize> {
+    pub fn current_overlay(&self) -> Option<(usize, OverlayKind)> {
         self.current_overlay.load()
     }
 
@@ -157,7 +157,10 @@ impl OverlayState {
         self.use_overlay.fetch_xor(true);
     }
 
-    pub fn set_current_overlay(&self, overlay_id: Option<usize>) {
+    pub fn set_current_overlay(
+        &self,
+        overlay_id: Option<(usize, OverlayKind)>,
+    ) {
         self.current_overlay.store(overlay_id);
     }
 }

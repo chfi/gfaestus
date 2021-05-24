@@ -147,7 +147,7 @@ impl OverlayPipelines {
         Ok(())
     }
 
-    pub(super) fn overlay_names(&self) -> Vec<(usize, OverlayKind, &str)> {
+    pub fn overlay_names(&self) -> Vec<(usize, OverlayKind, &str)> {
         let mut overlays = Vec::with_capacity(
             self.pipeline_rgb.overlays.len()
                 + self.pipeline_value.overlays.len(),
@@ -707,7 +707,7 @@ impl NodeOverlayValue {
     /// Create a new overlay that can be written to by the CPU after construction
     ///
     /// Uses host-visible and host-coherent memory
-    pub fn new_empty_rgb(
+    pub fn new_empty_value(
         name: &str,
         app: &GfaestusVk,
         node_count: usize,
