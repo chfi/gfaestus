@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
-use crate::view::*;
 use crate::{geometry::*, gui::GuiFocusState};
 use crate::{input::MousePos, overlays::OverlayKind};
+use crate::{view::*, vulkan::texture::GradientName};
 
 #[derive(Clone)]
 pub struct SharedState {
@@ -138,6 +138,8 @@ impl std::default::Default for MouseRect {
 pub struct OverlayState {
     use_overlay: Arc<AtomicCell<bool>>,
     current_overlay: Arc<AtomicCell<Option<(usize, OverlayKind)>>>,
+
+    gradient: Arc<AtomicCell<GradientName>>,
 }
 
 impl OverlayState {
@@ -147,6 +149,10 @@ impl OverlayState {
 
     pub fn current_overlay(&self) -> Option<(usize, OverlayKind)> {
         self.current_overlay.load()
+    }
+
+    pub fn gradient(&self) -> GradientName {
+        self.gradient.load()
     }
 
     pub fn set_use_overlay(&self, use_overlay: bool) {
@@ -163,6 +169,10 @@ impl OverlayState {
     ) {
         self.current_overlay.store(overlay_id);
     }
+
+    pub fn set_gradient(&self, gradient: GradientName) {
+        self.gradient.store(gradient);
+    }
 }
 
 impl std::default::Default for OverlayState {
@@ -170,9 +180,12 @@ impl std::default::Default for OverlayState {
         let use_overlay = Arc::new(AtomicCell::new(false));
         let current_overlay = Arc::new(AtomicCell::new(None));
 
+        let gradient = Arc::new(AtomicCell::new(GradientName::Magma));
+
         Self {
             use_overlay,
             current_overlay,
+            gradient,
         }
     }
 }

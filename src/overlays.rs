@@ -66,6 +66,9 @@ impl OverlayKind {
         if let Ok(_) = vm.typecheck_str("", script, Some(&value_type)) {
             return Ok(OverlayKind::Value);
         }
+        anyhow::bail!("Overlay script has incorrect type")
+    }
+
     pub async fn typecheck_script_(
         vm: &Thread,
         script: &str,

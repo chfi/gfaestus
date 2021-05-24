@@ -15,6 +15,50 @@ pub struct Gradients {
 }
 
 impl Gradients {
+    pub const GRADIENT_NAMES: [GradientName; 38] = {
+        use GradientName::*;
+        [
+            Blues,
+            BlueGreen,
+            BluePurple,
+            BrownGreen,
+            Cividis,
+            Cool,
+            CubeHelix,
+            Greens,
+            GreenBlue,
+            Greys,
+            Inferno,
+            Magma,
+            Oranges,
+            OrangeRed,
+            PinkGreen,
+            Plasma,
+            Purples,
+            PurpleBlue,
+            PurpleBlueGreen,
+            PurpleGreen,
+            PurpleOrange,
+            PurpleRed,
+            Rainbow,
+            Reds,
+            RedBlue,
+            RedGray,
+            RedPurple,
+            RedYellowBlue,
+            RedYellowGreen,
+            Sinebow,
+            Spectral,
+            Turbo,
+            Viridis,
+            Warm,
+            YellowGreen,
+            YellowGreenBlue,
+            YellowOrangeBrown,
+            YellowOrangeRed,
+        ]
+    };
+
     pub fn initialize(
         app: &GfaestusVk,
         command_pool: vk::CommandPool,

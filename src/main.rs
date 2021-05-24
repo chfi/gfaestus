@@ -657,6 +657,7 @@ fn main() {
                     app.shared_state().overlay_state().current_overlay();
 
 
+
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
@@ -694,6 +695,11 @@ fn main() {
                         }
 
                         if let Some(overlay) = overlay {
+
+                            let gradient_name = app.shared_state().overlay_state().gradient();
+
+                            let gradient = gradients.gradients.get(&gradient_name).unwrap();
+
                             main_view.draw_nodes_new(
                                 cmd_buf,
                                 node_pass,
@@ -701,7 +707,7 @@ fn main() {
                                 [size.width as f32, size.height as f32],
                                 Point::ZERO,
                                 overlay,
-                                &gradient_1,
+                                gradient,
                                 use_overlay,
                             ).unwrap();
                         } else {

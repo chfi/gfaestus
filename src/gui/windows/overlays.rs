@@ -10,7 +10,10 @@ use anyhow::Result;
 
 use futures::executor::ThreadPool;
 
-use crate::asynchronous::AsyncResult;
+use crate::{
+    asynchronous::AsyncResult,
+    vulkan::texture::{GradientName, Gradients},
+};
 
 use crate::overlays::{OverlayData, OverlayKind};
 use crate::{app::OverlayState, gluon::GraphHandle, graph_query::GraphQuery};
@@ -21,15 +24,61 @@ pub struct OverlayList {
     overlay_state: OverlayState,
 
     overlay_names: FxHashMap<usize, (OverlayKind, String)>,
+
+    gradient_names: Vec<GradientName>,
 }
 
 impl OverlayList {
     pub const ID: &'static str = "overlay_list_window";
 
     pub fn new(overlay_state: OverlayState) -> Self {
+        use GradientName::*;
+        let gradient_names = vec![
+            Blues,
+            BlueGreen,
+            BluePurple,
+            BrownGreen,
+            Cividis,
+            Cool,
+            CubeHelix,
+            Greens,
+            GreenBlue,
+            Greys,
+            Inferno,
+            Magma,
+            Oranges,
+            OrangeRed,
+            PinkGreen,
+            Plasma,
+            Purples,
+            PurpleBlue,
+            PurpleBlueGreen,
+            PurpleGreen,
+            PurpleOrange,
+            PurpleRed,
+            Rainbow,
+            Reds,
+            RedBlue,
+            RedGray,
+            RedPurple,
+            RedYellowBlue,
+            RedYellowGreen,
+            Sinebow,
+            Spectral,
+            Turbo,
+            Viridis,
+            Warm,
+            YellowGreen,
+            YellowGreenBlue,
+            YellowOrangeBrown,
+            YellowOrangeRed,
+        ];
+
         Self {
             overlay_state,
             overlay_names: Default::default(),
+
+            gradient_names,
         }
     }
 
@@ -50,6 +99,8 @@ impl OverlayList {
         egui::Window::new("Overlay List")
             .id(egui::Id::new(Self::ID))
             .show(ctx, |mut ui| {
+                ui.set_min_width(300.0);
+
                 let use_overlay = self.overlay_state.use_overlay();
 
                 ui.horizontal(|ui| {
@@ -67,6 +118,24 @@ impl OverlayList {
                         *open_creator = !*open_creator;
                     }
                 });
+
+                let mut selected = self.overlay_state.gradient();
+
+                let gradient_picker = egui::ComboBox::from_label("Gradient")
+                    .selected_text(selected.to_string())
+                    .show_ui(ui, |ui| {
+                        for name in
+                            std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
+                        {
+                            ui.selectable_value(
+                                &mut selected,
+                                name,
+                                name.to_string(),
+                            );
+                        }
+                    });
+
+                self.overlay_state.set_gradient(selected);
 
                 egui::Grid::new("overlay_list_window_grid").show(
                     &mut ui,
