@@ -178,7 +178,90 @@ impl GluonVM {
         Ok(colors)
     }
 
-    pub async fn overlay_per_node_expr<'a>(
+    async fn rgb_overlay_expr<'a>(
+        &'a self,
+        graph: &GraphHandle,
+        script: &str,
+    ) -> Result<OverlayData> {
+        let node_count = graph.graph.node_count();
+
+        let (mut node_color, _): (
+            Function<
+                RootedThread,
+                fn(
+                    GraphHandle,
+                ) -> vm::api::IO<
+                    Function<RootedThread, fn(u64) -> (f32, f32, f32)>,
+                >,
+            >,
+            _,
+        ) = self.vm.run_expr_async("node_color_fun", &script).await?;
+
+        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+
+        let node_color = node_color.call(graph.clone())?;
+
+        let mut node_color = match node_color {
+            vm::api::IO::Value(v) => v,
+            vm::api::IO::Exception(err) => anyhow::bail!(err),
+        };
+
+        for node_id in 0..node_count {
+            let node_id = (node_id + 1) as u64;
+            let (r, g, b) = node_color.call(node_id)?;
+
+            colors.push(rgb::RGB::new(r, g, b));
+        }
+
+        Ok(OverlayData::RGB(colors))
+    }
+
+    async fn value_overlay_expr<'a>(
+        &'a self,
+        graph: &GraphHandle,
+        script: &str,
+    ) -> Result<OverlayData> {
+        let node_count = graph.graph.node_count();
+
+        let (mut node_value, _): (
+            Function<
+                RootedThread,
+                fn(
+                    GraphHandle,
+                )
+                    -> vm::api::IO<Function<RootedThread, fn(u64) -> f32>>,
+            >,
+            _,
+        ) = self.vm.run_expr_async("node_value_fun", &script).await?;
+
+        let mut values: Vec<f32> = Vec::with_capacity(node_count);
+
+        let node_value = node_value.call(graph.clone())?;
+
+        let mut node_value = match node_value {
+            vm::api::IO::Value(v) => v,
+            vm::api::IO::Exception(err) => anyhow::bail!(err),
+        };
+
+        let mut max_val = std::f32::MIN;
+
+        for node_id in 0..node_count {
+            let node_id = (node_id + 1) as u64;
+            let v = node_value.call(node_id)?;
+
+            max_val = v.min(max_val);
+
+            values.push(v);
+        }
+
+        for v in values.iter_mut() {
+            *v /= max_val;
+        }
+
+        Ok(OverlayData::Value(values))
+    }
+
+    pub async fn overlay_per_node_expr_<'a>(
         &'a self,
         graph: &GraphHandle,
         script_path: &Path,
@@ -191,7 +274,8 @@ impl GluonVM {
 
         let node_count = graph.graph.node_count();
 
-        let overlay_kind = OverlayKind::typecheck_script(&self.vm, &source)?;
+        let overlay_kind =
+            OverlayKind::typecheck_script_(&self.vm, &source).await?;
 
         self.vm.run_io(true);
         let result = match overlay_kind {
@@ -250,21 +334,59 @@ impl GluonVM {
                 };
 
                 let mut max_val = std::f32::MIN;
+                let mut min_val = std::f32::MAX;
 
                 for node_id in 0..node_count {
                     let node_id = (node_id + 1) as u64;
                     let v = node_value.call(node_id)?;
 
-                    max_val = v.min(max_val);
+                    max_val = v.max(max_val);
+                    min_val = v.min(min_val);
 
                     values.push(v);
                 }
 
                 for v in values.iter_mut() {
-                    *v /= max_val;
+                    *v = (*v - min_val) / (max_val - min_val);
                 }
 
                 OverlayData::Value(values)
+            }
+        };
+        self.vm.run_io(false);
+
+        Ok(result)
+    }
+
+    pub fn overlay_per_node_expr<'a, 'b>(
+        &'a self,
+        graph: &'b GraphHandle,
+        script_path: &Path,
+    ) -> Result<impl Future<Output = Result<OverlayData>> + 'a>
+    where
+        'b: 'a,
+    {
+        use std::{fs::File, io::Read};
+
+        dbg!();
+        let mut file = File::open(script_path)?;
+        let mut source = String::new();
+        file.read_to_string(&mut source)?;
+
+        dbg!();
+        let node_count = graph.graph.node_count();
+        dbg!();
+
+        let overlay_kind = OverlayKind::typecheck_script(&self.vm, &source)?;
+        dbg!();
+
+        self.vm.run_io(true);
+        let result = async move {
+            match overlay_kind {
+                OverlayKind::RGB => self.rgb_overlay_expr(graph, &source).await,
+                OverlayKind::Value => {
+                    self.value_overlay_expr(graph, &source).await
+                }
             }
         };
         self.vm.run_io(false);

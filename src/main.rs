@@ -642,7 +642,12 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
-                let use_overlay = app.shared_state().overlay_state().use_overlay();
+                let mut use_overlay = app.shared_state().overlay_state().use_overlay();
+
+
+                let overlay =
+                    app.shared_state().overlay_state().current_overlay();
+
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
@@ -680,16 +685,29 @@ fn main() {
                             );
                         }
 
-                        main_view.draw_nodes_new(
-                            cmd_buf,
-                            node_pass,
-                            framebuffers,
-                            [size.width as f32, size.height as f32],
-                            Point::ZERO,
-                            overlay,
-                            &gradient_1,
-                            use_overlay,
-                        ).unwrap();
+                        if let Some(overlay) = overlay {
+                            main_view.draw_nodes_new(
+                                cmd_buf,
+                                node_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                                Point::ZERO,
+                                overlay,
+                                &gradient_1,
+                                use_overlay,
+                            ).unwrap();
+                        } else {
+                        main_view
+                            .draw_nodes(
+                                cmd_buf,
+                                node_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                                Point::ZERO,
+                                false,
+                            )
+                            .unwrap();
+                        }
 
                         /*
                         main_view

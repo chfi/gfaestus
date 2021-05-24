@@ -224,15 +224,13 @@ impl OverlayCreator {
                     let gluon_ = self.gluon.clone();
                     let graph_ = graph.clone();
 
+                    dbg!();
                     let query = AsyncResult::new(thread_pool, async move {
                         let path = path;
                         let gluon_vm = gluon_;
                         let graph = graph_;
 
-                        gluon_vm
-                            .overlay_per_node_expr(&graph, &path)
-                            // .load_overlay_per_node_expr_async(&graph, &path)
-                            .await
+                        gluon_vm.overlay_per_node_expr_(&graph, &path).await
                     });
 
                     self.script_query = Some(query);

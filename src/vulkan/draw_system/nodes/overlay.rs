@@ -761,6 +761,7 @@ impl NodeOverlayValue {
                 let val_ptr = ptr as *mut f32;
                 let ix = (node.0 - 1) as usize;
 
+                let val_ptr = (val_ptr.add(ix)) as *mut f32;
                 val_ptr.write(value);
             }
 

@@ -66,6 +66,28 @@ impl OverlayKind {
         if let Ok(_) = vm.typecheck_str("", script, Some(&value_type)) {
             return Ok(OverlayKind::Value);
         }
+    pub async fn typecheck_script_(
+        vm: &Thread,
+        script: &str,
+    ) -> Result<OverlayKind> {
+        dbg!();
+        let rgb_type = OverlayKind::RGB.type_for(vm);
+
+        dbg!();
+        if let Ok(_) = vm.typecheck_str_async("", script, Some(&rgb_type)).await
+        {
+            return Ok(OverlayKind::RGB);
+        }
+
+        dbg!();
+        let value_type = OverlayKind::Value.type_for(vm);
+
+        if let Ok(_) =
+            vm.typecheck_str_async("", script, Some(&value_type)).await
+        {
+            return Ok(OverlayKind::Value);
+        }
+        dbg!();
 
         anyhow::bail!("Overlay script has incorrect type")
     }
