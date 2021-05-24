@@ -650,6 +650,9 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
+                gui.set_gradient(&gfaestus, &gradients);
+
+
                 let mut use_overlay = app.shared_state().overlay_state().use_overlay();
 
 
@@ -698,7 +701,7 @@ fn main() {
 
                             let gradient_name = app.shared_state().overlay_state().gradient();
 
-                            let gradient = gradients.gradients.get(&gradient_name).unwrap();
+                            let gradient = gradients.gradient(gradient_name).unwrap();
 
                             main_view.draw_nodes_new(
                                 cmd_buf,
@@ -822,7 +825,6 @@ fn main() {
                             .draw(
                                 &device,
                                 cmd_buf,
-                                // gui_pass,
                                 blur_pass,
                                 framebuffers,
                                 [size.width as f32, size.height as f32],
@@ -834,6 +836,7 @@ fn main() {
                             gui_pass,
                             framebuffers,
                             [size.width as f32, size.height as f32],
+                            &gradients,
                         )
                         .unwrap();
                     };

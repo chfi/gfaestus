@@ -22,7 +22,7 @@ use crate::{
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
-    vulkan::render_pass::Framebuffers,
+    vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
 use crate::{
     app::{NodeWidth, OverlayState},
@@ -853,15 +853,31 @@ impl Gui {
         self.draw_system.vertices.upload_meshes(app, meshes)
     }
 
+    pub fn set_gradient(&self, app: &GfaestusVk, gradients: &Gradients) {
+        let gradient = self.shared_state.overlay_state().gradient();
+        let texture_id = gradient.texture_id();
+
+        self.draw_system
+            .write_descriptor_set(app, texture_id, gradients);
+    }
+
     pub fn draw(
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
+        gradients: &Gradients,
     ) -> Result<()> {
-        self.draw_system
-            .draw(cmd_buf, render_pass, framebuffers, screen_dims)
+        let gradient = self.shared_state.overlay_state().gradient();
+        self.draw_system.draw(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+            gradients,
+            gradient,
+        )
     }
 
     pub fn push_event(&mut self, event: egui::Event) {

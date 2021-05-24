@@ -5,8 +5,8 @@ use std::ffi::CString;
 
 use anyhow::Result;
 
-use crate::vulkan::render_pass::Framebuffers;
-use crate::vulkan::texture::Texture;
+use crate::vulkan::texture::{GradientName, Gradients, Texture};
+use crate::vulkan::{render_pass::Framebuffers, GfaestusVk};
 
 use super::create_shader_module;
 
@@ -14,7 +14,8 @@ pub struct GuiPipeline {
     descriptor_pool: vk::DescriptorPool,
 
     descriptor_set_layout: vk::DescriptorSetLayout,
-    descriptor_set: vk::DescriptorSet,
+    egui_descriptor_set: vk::DescriptorSet,
+    gradient_descriptor_set: vk::DescriptorSet,
 
     sampler: vk::Sampler,
     texture: Texture,
@@ -65,21 +66,21 @@ impl GuiPipeline {
         let descriptor_pool = {
             let sampler_pool_size = vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                descriptor_count: image_count,
+                descriptor_count: image_count * 2,
             };
 
             let pool_sizes = [sampler_pool_size];
 
             let pool_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
-                .max_sets(image_count)
+                .max_sets(image_count * 2)
                 .build();
 
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
         let descriptor_sets = {
-            let layouts = vec![desc_set_layout];
+            let layouts = vec![desc_set_layout, desc_set_layout];
 
             let alloc_info = vk::DescriptorSetAllocateInfo::builder()
                 .descriptor_pool(descriptor_pool)
@@ -96,7 +97,8 @@ impl GuiPipeline {
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
-            descriptor_set: descriptor_sets[0],
+            egui_descriptor_set: descriptor_sets[0],
+            gradient_descriptor_set: descriptor_sets[1],
 
             sampler,
             texture,
@@ -117,6 +119,8 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
+        gradients: &Gradients,
+        gradient: GradientName,
     ) -> Result<()> {
         let device = &self.device;
 
@@ -154,7 +158,8 @@ impl GuiPipeline {
         };
 
         let vx_bufs = [self.vertices.vertex_buffer];
-        let desc_sets = [self.descriptor_set];
+        let egui_desc_sets = [self.egui_descriptor_set];
+        let gradient_desc_sets = [self.gradient_descriptor_set];
 
         let pc_bytes = {
             let push_constants = GuiPushConstants::new(viewport_dims);
@@ -179,6 +184,8 @@ impl GuiPipeline {
             let scissor = vk::Rect2D { offset, extent };
             let scissors = [scissor];
 
+            let texture_id = self.vertices.texture_ids[ix];
+
             unsafe {
                 device.cmd_set_scissor(cmd_buf, 0, &scissors);
 
@@ -193,14 +200,28 @@ impl GuiPipeline {
                 );
 
                 let null = [];
-                device.cmd_bind_descriptor_sets(
-                    cmd_buf,
-                    vk::PipelineBindPoint::GRAPHICS,
-                    self.pipeline_layout,
-                    0,
-                    &desc_sets[0..=0],
-                    &null,
-                );
+                match texture_id {
+                    egui::TextureId::Egui => {
+                        device.cmd_bind_descriptor_sets(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.pipeline_layout,
+                            0,
+                            &egui_desc_sets[0..=0],
+                            &null,
+                        );
+                    }
+                    egui::TextureId::User(_) => {
+                        device.cmd_bind_descriptor_sets(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.pipeline_layout,
+                            0,
+                            &gradient_desc_sets[0..=0],
+                            &null,
+                        );
+                    }
+                }
 
                 use vk::ShaderStageFlags as Flags;
                 device.cmd_push_constants(
@@ -297,7 +318,7 @@ impl GuiPipeline {
         let image_infos = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.descriptor_set)
+            .dst_set(self.egui_descriptor_set)
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -313,6 +334,72 @@ impl GuiPipeline {
         }
 
         Ok(())
+    }
+
+    pub fn write_descriptor_set(
+        &self,
+        app: &GfaestusVk,
+        texture_id: egui::TextureId,
+        gradients: &Gradients,
+    ) {
+        match texture_id {
+            egui::TextureId::Egui => {
+                let image_info = vk::DescriptorImageInfo::builder()
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image_view(self.texture.view)
+                    .sampler(self.sampler)
+                    .build();
+                let image_infos = [image_info];
+
+                let sampler_descriptor_write =
+                    vk::WriteDescriptorSet::builder()
+                        .dst_set(self.egui_descriptor_set)
+                        .dst_binding(0)
+                        .dst_array_element(0)
+                        .descriptor_type(
+                            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        )
+                        .image_info(&image_infos)
+                        .build();
+
+                let descriptor_writes = [sampler_descriptor_write];
+
+                unsafe {
+                    app.vk_context()
+                        .device()
+                        .update_descriptor_sets(&descriptor_writes, &[])
+                }
+            }
+            egui::TextureId::User(id) => {
+                let texture = gradients.gradient_from_id(texture_id).unwrap();
+
+                let image_info = vk::DescriptorImageInfo::builder()
+                    .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+                    .image_view(self.texture.view)
+                    .sampler(self.sampler)
+                    .build();
+                let image_infos = [image_info];
+
+                let sampler_descriptor_write =
+                    vk::WriteDescriptorSet::builder()
+                        .dst_set(self.gradient_descriptor_set)
+                        .dst_binding(0)
+                        .dst_array_element(0)
+                        .descriptor_type(
+                            vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                        )
+                        .image_info(&image_infos)
+                        .build();
+
+                let descriptor_writes = [sampler_descriptor_write];
+
+                unsafe {
+                    app.vk_context()
+                        .device()
+                        .update_descriptor_sets(&descriptor_writes, &[])
+                }
+            }
+        }
     }
 
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
@@ -511,6 +598,8 @@ pub struct GuiVertices {
     vertex_offsets: Vec<u32>,
     clips: Vec<egui::Rect>,
 
+    texture_ids: Vec<egui::TextureId>,
+
     device: Device,
 }
 
@@ -526,6 +615,8 @@ impl GuiVertices {
         let vertex_offsets = Vec::new();
         let clips = Vec::new();
 
+        let texture_ids = Vec::new();
+
         let device = device.clone();
 
         Self {
@@ -540,6 +631,8 @@ impl GuiVertices {
             ranges,
             vertex_offsets,
             clips,
+
+            texture_ids,
 
             device,
         }
@@ -562,6 +655,8 @@ impl GuiVertices {
         let mut ranges: Vec<(u32, u32)> = Vec::new();
         let mut vertex_offsets: Vec<u32> = Vec::new();
         let mut clips: Vec<egui::Rect> = Vec::new();
+
+        let mut texture_ids: Vec<egui::TextureId> = Vec::new();
 
         let mut offset = 0u32;
         let mut vertex_offset = 0u32;
@@ -589,6 +684,7 @@ impl GuiVertices {
 
             ranges.push((offset, len));
             vertex_offsets.push(vertex_offset);
+            texture_ids.push(mesh.texture_id);
 
             offset += len;
             vertex_offset += vx_len;
@@ -615,6 +711,8 @@ impl GuiVertices {
         self.ranges.clone_from(&ranges);
         self.vertex_offsets.clone_from(&vertex_offsets);
         self.clips.clone_from(&clips);
+
+        self.texture_ids.clone_from(&texture_ids);
 
         Ok(())
     }
