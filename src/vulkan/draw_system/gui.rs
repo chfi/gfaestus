@@ -119,8 +119,6 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
-        gradients: &Gradients,
-        gradient: GradientName,
     ) -> Result<()> {
         let device = &self.device;
 

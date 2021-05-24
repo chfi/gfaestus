@@ -1,7 +1,7 @@
 use ash::{
     extensions::{
         ext::DebugReport,
-        khr::{Surface, Swapchain},
+        khr::{PushDescriptor, Surface, Swapchain},
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::SurfaceKHR,
@@ -42,6 +42,10 @@ pub(super) fn create_instance(
     if super::debug::ENABLE_VALIDATION_LAYERS {
         extension_names.push(DebugReport::name().as_ptr());
     }
+
+    let phys_device_properties2 =
+        CString::new("VK_KHR_get_physical_device_properties2")?;
+    extension_names.push(phys_device_properties2.as_ptr());
 
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
@@ -336,10 +340,12 @@ pub(super) fn create_logical_device(
     };
 
     let device_extensions = required_device_extensions();
-    let device_extensions_ptrs = device_extensions
+    let mut device_extensions_ptrs = device_extensions
         .iter()
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
+
+    device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
 
     let device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)

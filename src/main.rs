@@ -836,7 +836,6 @@ fn main() {
                             gui_pass,
                             framebuffers,
                             [size.width as f32, size.height as f32],
-                            &gradients,
                         )
                         .unwrap();
                     };
