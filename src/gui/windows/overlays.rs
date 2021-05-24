@@ -361,16 +361,25 @@ impl GradientPicker {
                         ui.label("Gradient");
                         ui.end_row();
 
+                        let mut current_gradient =
+                            self.overlay_state.gradient();
+
                         for (gradient_name, name) in self.gradient_names.iter()
                         {
-                            // let gradient = gradients.gradient(gradient_name).unwrap();
-
-                            ui.label(name);
+                            let gradient_select = ui.selectable_value(
+                                &mut current_gradient,
+                                *gradient_name,
+                                name,
+                            );
                             ui.separator();
+
+                            if gradient_select.clicked() {
+                                self.overlay_state.set_gradient(*gradient_name);
+                            }
 
                             ui.image(
                                 gradient_name.texture_id(),
-                                Point { x: 200.0, y: 30.0 },
+                                Point { x: 130.0, y: 15.0 },
                             );
                             ui.end_row();
                         }
