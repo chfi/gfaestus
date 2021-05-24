@@ -11,10 +11,22 @@ use crate::vulkan::GfaestusVk;
 use super::Texture1D;
 
 pub struct Gradients {
-    pub gradients: HashMap<GradientName, GradientTexture>,
+    gradients: HashMap<egui::TextureId, GradientTexture>,
 }
 
 impl Gradients {
+    pub fn gradient(&self, name: GradientName) -> Option<&GradientTexture> {
+        let key = name.texture_id();
+        self.gradients.get(&key)
+    }
+
+    pub fn gradient_from_id(
+        &self,
+        texture_id: egui::TextureId,
+    ) -> Option<&GradientTexture> {
+        self.gradients.get(&texture_id)
+    }
+
     pub const GRADIENT_NAMES: [GradientName; 38] = {
         use GradientName::*;
         [
@@ -65,52 +77,10 @@ impl Gradients {
         transition_queue: vk::Queue,
         width: usize,
     ) -> Result<Self> {
-        use GradientName::*;
-        let names = [
-            Blues,
-            BlueGreen,
-            BluePurple,
-            BrownGreen,
-            Cividis,
-            Cool,
-            CubeHelix,
-            Greens,
-            GreenBlue,
-            Greys,
-            Inferno,
-            Magma,
-            Oranges,
-            OrangeRed,
-            PinkGreen,
-            Plasma,
-            Purples,
-            PurpleBlue,
-            PurpleBlueGreen,
-            PurpleGreen,
-            PurpleOrange,
-            PurpleRed,
-            Rainbow,
-            Reds,
-            RedBlue,
-            RedGray,
-            RedPurple,
-            RedYellowBlue,
-            RedYellowGreen,
-            Sinebow,
-            Spectral,
-            Turbo,
-            Viridis,
-            Warm,
-            YellowGreen,
-            YellowGreenBlue,
-            YellowOrangeBrown,
-            YellowOrangeRed,
-        ];
-
-        let mut gradients: HashMap<GradientName, GradientTexture> =
+        let mut gradients: HashMap<egui::TextureId, GradientTexture> =
             HashMap::new();
 
-        for name in std::array::IntoIter::new(names) {
+        for name in std::array::IntoIter::new(Self::GRADIENT_NAMES) {
             let gradient = name.gradient();
 
             let texture = GradientTexture::new(
@@ -121,7 +91,9 @@ impl Gradients {
                 width,
             )?;
 
-            gradients.insert(name, texture);
+            let key = name.texture_id();
+
+            gradients.insert(key, texture);
         }
 
         Ok(Self { gradients })
@@ -258,6 +230,19 @@ impl GradientName {
             GradientName::YellowOrangeBrown => YELLOW_ORANGE_BROWN,
             GradientName::YellowOrangeRed => YELLOW_ORANGE_RED,
         }
+    }
+
+    pub fn texture_id(&self) -> egui::TextureId {
+        use std::collections::hash_map::DefaultHasher;
+        use std::hash::{Hash, Hasher};
+
+        let mut hasher = DefaultHasher::default();
+
+        self.hash(&mut hasher);
+
+        let hash = hasher.finish();
+
+        egui::TextureId::User(hash)
     }
 }
 
