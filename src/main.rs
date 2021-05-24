@@ -658,6 +658,7 @@ fn main() {
                     app.shared_state().overlay_state().current_overlay();
                 let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
 
+                // let dims = app.dims();
 
 
                 let draw =

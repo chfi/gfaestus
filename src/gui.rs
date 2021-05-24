@@ -481,8 +481,6 @@ pub struct Gui {
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
-
-    gradient_picker: GradientPicker,
 }
 
 impl Gui {
@@ -557,9 +555,6 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
-        let gradient_picker =
-            GradientPicker::new(shared_state.overlay_state().clone());
-
         let gui = Self {
             ctx,
             frame_input,
@@ -587,8 +582,6 @@ impl Gui {
             dropped_file,
 
             thread_pool,
-
-            gradient_picker,
         };
 
         Ok(gui)
@@ -691,6 +684,8 @@ impl Gui {
                 &self.ctx,
                 &self.thread_pool,
             );
+
+            view_state.overlay_list.state.gradient_picker_ui(&self.ctx);
         }
 
         if let Some(rect) = self.shared_state.active_mouse_rect_screen() {
@@ -711,9 +706,6 @@ impl Gui {
                 egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
-
-        // let gradient_picker
-        self.gradient_picker.ui(&self.ctx);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);

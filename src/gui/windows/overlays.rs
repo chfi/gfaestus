@@ -27,6 +27,10 @@ pub struct OverlayList {
     overlay_names: FxHashMap<usize, (OverlayKind, String)>,
 
     gradient_names: Vec<GradientName>,
+
+    gradient_picker: GradientPicker,
+
+    gradient_picker_open: AtomicCell<bool>,
 }
 
 impl OverlayList {
@@ -37,11 +41,17 @@ impl OverlayList {
             std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
                 .collect::<Vec<_>>();
 
+        let gradient_picker = GradientPicker::new(overlay_state.clone());
+
         Self {
             overlay_state,
             overlay_names: Default::default(),
 
             gradient_names,
+
+            gradient_picker,
+
+            gradient_picker_open: AtomicCell::new(false),
         }
     }
 
@@ -84,21 +94,13 @@ impl OverlayList {
 
                 let mut selected = self.overlay_state.gradient();
 
-                let gradient_picker = egui::ComboBox::from_label("Gradient")
-                    .selected_text(selected.to_string())
-                    .show_ui(ui, |ui| {
-                        for name in
-                            std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
-                        {
-                            ui.selectable_value(
-                                &mut selected,
-                                name,
-                                name.to_string(),
-                            );
-                        }
-                    });
-
-                self.overlay_state.set_gradient(selected);
+                let mut open_gradient_picker = self.gradient_picker_open.load();
+                if ui
+                    .selectable_label(open_gradient_picker, "Gradients")
+                    .clicked()
+                {
+                    self.gradient_picker_open.store(!open_gradient_picker);
+                }
 
                 egui::Grid::new("overlay_list_window_grid").show(
                     &mut ui,
@@ -131,6 +133,17 @@ impl OverlayList {
                     },
                 );
             })
+    }
+
+    pub fn gradient_picker_ui(
+        &self,
+        ctx: &egui::CtxRef,
+    ) -> Option<egui::Response> {
+        let mut open = self.gradient_picker_open.load();
+        let resp = self.gradient_picker.ui(&mut open, ctx);
+
+        self.gradient_picker_open.store(open);
+        resp
     }
 }
 
@@ -345,13 +358,13 @@ impl GradientPicker {
 
     pub fn ui(
         &self,
-        // open: &mut bool,
+        open: &mut bool,
         ctx: &egui::CtxRef,
         // gradients: &Gradients,
     ) -> Option<egui::Response> {
         egui::Window::new("Gradients")
             .id(egui::Id::new(Self::ID))
-            // .open(open)
+            .open(open)
             .show(ctx, |ui| {
                 egui::ScrollArea::auto_sized().show(ui, |ui| {
                     egui::Grid::new("gradient_picker_list").show(ui, |ui| {
