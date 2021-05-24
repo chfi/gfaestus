@@ -658,6 +658,7 @@ fn main() {
 
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
+                let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
 
 
 
@@ -836,6 +837,8 @@ fn main() {
                             gui_pass,
                             framebuffers,
                             [size.width as f32, size.height as f32],
+                            &push_descriptor,
+                            &gradients,
                         )
                         .unwrap();
                     };

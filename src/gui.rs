@@ -48,7 +48,7 @@ use crate::vulkan::{
     GfaestusVk, SwapchainProperties,
 };
 
-use ash::vk;
+use ash::{extensions::khr::PushDescriptor, vk};
 
 pub mod widgets;
 pub mod windows;
@@ -481,6 +481,8 @@ pub struct Gui {
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
+
+    gradient_picker: GradientPicker,
 }
 
 impl Gui {
@@ -555,6 +557,9 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
+        let gradient_picker =
+            GradientPicker::new(shared_state.overlay_state().clone());
+
         let gui = Self {
             ctx,
             frame_input,
@@ -582,6 +587,8 @@ impl Gui {
             dropped_file,
 
             thread_pool,
+
+            gradient_picker,
         };
 
         Ok(gui)
@@ -704,6 +711,9 @@ impl Gui {
                 egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
+
+        // let gradient_picker
+        self.gradient_picker.ui(&self.ctx);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
@@ -867,9 +877,17 @@ impl Gui {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
+        push_descriptor: &PushDescriptor,
+        gradients: &Gradients,
     ) -> Result<()> {
-        self.draw_system
-            .draw(cmd_buf, render_pass, framebuffers, screen_dims)
+        self.draw_system.draw(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+            push_descriptor,
+            gradients,
+        )
     }
 
     pub fn push_event(&mut self, event: egui::Event) {

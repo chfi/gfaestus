@@ -12,6 +12,7 @@ use futures::executor::ThreadPool;
 
 use crate::{
     asynchronous::AsyncResult,
+    geometry::Point,
     vulkan::texture::{GradientName, Gradients},
 };
 
@@ -32,47 +33,9 @@ impl OverlayList {
     pub const ID: &'static str = "overlay_list_window";
 
     pub fn new(overlay_state: OverlayState) -> Self {
-        use GradientName::*;
-        let gradient_names = vec![
-            Blues,
-            BlueGreen,
-            BluePurple,
-            BrownGreen,
-            Cividis,
-            Cool,
-            CubeHelix,
-            Greens,
-            GreenBlue,
-            Greys,
-            Inferno,
-            Magma,
-            Oranges,
-            OrangeRed,
-            PinkGreen,
-            Plasma,
-            Purples,
-            PurpleBlue,
-            PurpleBlueGreen,
-            PurpleGreen,
-            PurpleOrange,
-            PurpleRed,
-            Rainbow,
-            Reds,
-            RedBlue,
-            RedGray,
-            RedPurple,
-            RedYellowBlue,
-            RedYellowGreen,
-            Sinebow,
-            Spectral,
-            Turbo,
-            Viridis,
-            Warm,
-            YellowGreen,
-            YellowGreenBlue,
-            YellowOrangeBrown,
-            YellowOrangeRed,
-        ];
+        let gradient_names =
+            std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
+                .collect::<Vec<_>>();
 
         Self {
             overlay_state,
@@ -360,15 +323,59 @@ pub enum OverlayCreatorMsg {
     NewOverlay { name: String, data: OverlayData },
 }
 
-/*
-pub enum OverlayCreatorMsg {
-    NewRGB {
-        name: String,
-        colors: Vec<rgb::RGB<f32>>,
+pub struct GradientPicker {
+    overlay_state: OverlayState,
+    gradient_names: Vec<(GradientName, String)>,
+}
+
+impl GradientPicker {
+    pub const ID: &'static str = "gradient_picker_window";
+
+    pub fn new(overlay_state: OverlayState) -> Self {
+        let gradient_names =
+            std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
+                .map(|name| (name, name.to_string()))
+                .collect::<Vec<_>>();
+
+        Self {
+            overlay_state,
+            gradient_names,
+        }
     }
-    NewValue {
-        name: String,
-        values: Vec<f32>,
+
+    pub fn ui(
+        &self,
+        // open: &mut bool,
+        ctx: &egui::CtxRef,
+        // gradients: &Gradients,
+    ) -> Option<egui::Response> {
+        egui::Window::new("Gradients")
+            .id(egui::Id::new(Self::ID))
+            // .open(open)
+            .show(ctx, |ui| {
+                egui::ScrollArea::auto_sized().show(ui, |ui| {
+                    egui::Grid::new("gradient_picker_list").show(ui, |ui| {
+                        ui.label("Name");
+                        ui.separator();
+
+                        ui.label("Gradient");
+                        ui.end_row();
+
+                        for (gradient_name, name) in self.gradient_names.iter()
+                        {
+                            // let gradient = gradients.gradient(gradient_name).unwrap();
+
+                            ui.label(name);
+                            ui.separator();
+
+                            ui.image(
+                                gradient_name.texture_id(),
+                                Point { x: 200.0, y: 30.0 },
+                            );
+                            ui.end_row();
+                        }
+                    });
+                });
+            })
     }
 }
-*/

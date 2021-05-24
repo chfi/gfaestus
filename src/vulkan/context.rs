@@ -1,5 +1,8 @@
 use ash::{
-    extensions::{ext::DebugReport, khr::Surface},
+    extensions::{
+        ext::DebugReport,
+        khr::{PushDescriptor, Surface},
+    },
     version::{DeviceV1_0, InstanceV1_0},
     vk, Device, Entry, Instance,
 };
@@ -12,9 +15,15 @@ pub struct VkContext {
     surface_khr: vk::SurfaceKHR,
     physical_device: vk::PhysicalDevice,
     device: Device,
+
+    push_descriptor: PushDescriptor,
 }
 
 impl VkContext {
+    pub fn push_descriptor(&self) -> &PushDescriptor {
+        &self.push_descriptor
+    }
+
     pub fn instance(&self) -> &Instance {
         &self.instance
     }
@@ -49,6 +58,8 @@ impl VkContext {
         physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
+        let push_descriptor = PushDescriptor::new(&instance, &device);
+
         VkContext {
             _entry: entry,
             instance,
@@ -57,6 +68,8 @@ impl VkContext {
             surface_khr,
             physical_device,
             device,
+
+            push_descriptor,
         }
     }
 }

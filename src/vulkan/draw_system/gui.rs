@@ -1,4 +1,4 @@
-use ash::version::DeviceV1_0;
+use ash::{extensions::khr::PushDescriptor, version::DeviceV1_0};
 use ash::{vk, Device};
 
 use std::ffi::CString;
@@ -119,6 +119,8 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
+        push_descriptor: &PushDescriptor,
+        gradients: &Gradients,
     ) -> Result<()> {
         let device = &self.device;
 
@@ -210,6 +212,19 @@ impl GuiPipeline {
                         );
                     }
                     egui::TextureId::User(_) => {
+                        let desc_write = self
+                            .gradient_descriptor_write(texture_id, gradients);
+
+                        let desc_writes = [desc_write];
+
+                        push_descriptor.cmd_push_descriptor_set(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.pipeline_layout,
+                            0,
+                            &desc_writes,
+                        );
+
                         device.cmd_bind_descriptor_sets(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -334,6 +349,31 @@ impl GuiPipeline {
         Ok(())
     }
 
+    fn gradient_descriptor_write(
+        &self,
+        texture_id: egui::TextureId,
+        gradients: &Gradients,
+    ) -> vk::WriteDescriptorSet {
+        let texture = gradients.gradient_from_id(texture_id).unwrap();
+
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(self.texture.view)
+            .sampler(self.sampler)
+            .build();
+        let image_infos = [image_info];
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(self.gradient_descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)
+            .build();
+
+        sampler_descriptor_write
+    }
+
     pub fn write_descriptor_set(
         &self,
         app: &GfaestusVk,
@@ -411,6 +451,23 @@ impl GuiPipeline {
             .build()
     }
 
+    fn gradient_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        let binding = Self::layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .flags(vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
     fn create_descriptor_set_layout(
         device: &Device,
     ) -> Result<vk::DescriptorSetLayout> {
@@ -419,6 +476,7 @@ impl GuiPipeline {
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(&bindings)
+            .flags(vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR)
             .build();
 
         let layout =
