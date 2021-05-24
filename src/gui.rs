@@ -415,7 +415,7 @@ impl std::default::Default for OpenWindows {
             overlays: false,
             overlay_creator: false,
 
-            repl_window: true,
+            repl_window: false,
 
             egui_inspection: false,
             egui_settings: false,
@@ -1015,6 +1015,11 @@ impl Gui {
             }
             SystemInput::Wheel { delta, .. } => {
                 if let In::WheelScroll = payload {
+                    let mut delta = delta;
+                    if delta.abs() < 4.0 {
+                        delta = delta.signum() * 4.0;
+                    }
+
                     self.frame_input.scroll_delta += delta;
                 }
             }
