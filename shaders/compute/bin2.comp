@@ -33,7 +33,6 @@ layout (set = 0, binding = 3) buffer Bins {
 
 layout (push_constant) uniform BinDefinition {
   vec2 top_left;
-  float dimension;
   uint rows;
   uint columns;
   uint node_count;

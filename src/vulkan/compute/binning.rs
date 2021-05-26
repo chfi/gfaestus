@@ -36,7 +36,7 @@ impl Binner {
                 pipeline_layout,
                 crate::include_shader!("compute/bin1.comp.spv"),
             )
-        };
+        }?;
 
         let step_2 = {
             let (desc_set_layout, pipeline_layout) = Self::layouts(device)?;
@@ -47,7 +47,7 @@ impl Binner {
                 pipeline_layout,
                 crate::include_shader!("compute/bin2.comp.spv"),
             )
-        };
+        }?;
 
         let step_3 = {
             let (desc_set_layout, pipeline_layout) = Self::layouts(device)?;
@@ -58,7 +58,7 @@ impl Binner {
                 pipeline_layout,
                 crate::include_shader!("compute/bin3.comp.spv"),
             )
-        };
+        }?;
 
         Ok(Self {
             buffers,
@@ -79,7 +79,7 @@ impl Binner {
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(24)
+                .size(20)
                 .build();
 
             let pc_ranges = [pc_range];
@@ -207,3 +207,64 @@ impl BinBuffers {
 // pub struct ScreenBins {
 
 // }
+
+pub struct BinPushConstants {
+    top_left: Point,
+    rows: u32,
+    columns: u32,
+    node_count: u32,
+}
+
+impl BinPushConstants {
+    #[inline]
+    pub fn new(
+        top_left: Point,
+        rows: u32,
+        columns: u32,
+        node_count: u32,
+    ) -> Self {
+        Self {
+            top_left,
+            rows,
+            columns,
+            node_count,
+        }
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> [u8; 20] {
+        let mut bytes = [0u8; 20];
+
+        {
+            let mut offset = 0;
+
+            {
+                let mut add_float = |f: f32| {
+                    let f_bytes = f.to_ne_bytes();
+                    for i in 0..4 {
+                        bytes[offset] = f_bytes[i];
+                        offset += 1;
+                    }
+                };
+                add_float(self.top_left.x);
+                add_float(self.top_left.y);
+            }
+
+            {
+                let mut add_u32 = |i: u32| {
+                    let i_bytes = i.to_ne_bytes();
+                    for i in 0..4 {
+                        bytes[offset] = i_bytes[i];
+                        offset += 1;
+                    }
+                };
+
+                add_u32(self.rows);
+                add_u32(self.columns);
+                add_u32(self.node_count);
+            }
+        }
+
+        bytes
+    }
+}
