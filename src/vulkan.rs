@@ -902,11 +902,129 @@ impl GfaestusVk {
         Ok((buf, mem))
     }
 
+    pub fn download_buffer<A, T>(
+        &self,
+        src: vk::Buffer,
+        element_count: usize,
+        dst: &mut Vec<T>,
+    ) -> Result<()>
+    where
+        T: Copy,
+    {
+        use vk::BufferUsageFlags as Usage;
+        use vk::MemoryPropertyFlags as MemPropFlags;
+
+        let vk_context = &self.vk_context;
+        let device = vk_context.device();
+        let size = (element_count * size_of::<T>()) as vk::DeviceSize;
+
+        let (staging_buf, staging_mem, staging_mem_size) = self.create_buffer(
+            size,
+            Usage::TRANSFER_DST,
+            MemPropFlags::HOST_VISIBLE
+                | MemPropFlags::HOST_COHERENT
+                | MemPropFlags::HOST_CACHED,
+        )?;
+
+        GfaestusVk::copy_buffer(
+            device,
+            self.transient_command_pool,
+            self.graphics_queue,
+            src,
+            staging_buf,
+            size,
+        );
+
+        dst.clear();
+
+        if dst.capacity() < element_count {
+            let extra = element_count - dst.capacity();
+            dst.reserve(extra);
+        }
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                staging_mem,
+                0,
+                size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let val_ptr = data_ptr as *const T;
+
+            let slice = std::slice::from_raw_parts(val_ptr, element_count);
+
+            dst.copy_from_slice(slice);
+
+            device.unmap_memory(staging_mem);
+        }
+
+        unsafe {
+            device.destroy_buffer(staging_buf, None);
+            device.free_memory(staging_mem, None);
+        }
+
+        Ok(())
+    }
+
+    pub fn copy_data_to_buffer<A, T>(
+        &self,
+        data: &[T],
+        dst: vk::Buffer,
+    ) -> Result<()>
+    where
+        T: Copy,
+    {
+        use vk::BufferUsageFlags as Usage;
+        use vk::MemoryPropertyFlags as MemPropFlags;
+
+        let vk_context = &self.vk_context;
+        let device = vk_context.device();
+        let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
+
+        let (staging_buf, staging_mem, staging_mem_size) = self.create_buffer(
+            size,
+            Usage::TRANSFER_SRC,
+            MemPropFlags::HOST_VISIBLE | MemPropFlags::HOST_COHERENT,
+        )?;
+
+        unsafe {
+            let data_ptr = device.map_memory(
+                staging_mem,
+                0,
+                size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
+            let mut align = ash::util::Align::new(
+                data_ptr,
+                std::mem::align_of::<A>() as u64,
+                staging_mem_size,
+            );
+
+            align.copy_from_slice(data);
+            device.unmap_memory(staging_mem);
+        }
+
+        GfaestusVk::copy_buffer(
+            device,
+            self.transient_command_pool,
+            self.graphics_queue,
+            staging_buf,
+            dst,
+            size,
+        );
+
+        unsafe {
+            device.destroy_buffer(staging_buf, None);
+            device.free_memory(staging_mem, None);
+        }
+
+        Ok(())
+    }
+
     pub fn create_device_local_buffer_with_data<A, T>(
         &self,
-        // vk_context: &VkContext,
-        // command_pool: vk::CommandPool,
-        // transfer_queue: vk::Queue,
         usage: vk::BufferUsageFlags,
         data: &[T],
     ) -> Result<(vk::Buffer, vk::DeviceMemory)>
