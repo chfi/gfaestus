@@ -1,0 +1,134 @@
+#version 450
+
+#define TILES_WIDE 128
+#define TILES_HIGH 96
+
+layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
+
+// could also process batches of tiles
+// layout(local_size_x = 16, local_size_y = 8, local_size_z = 8) in;
+
+layout (set = 0, binding = 0) readonly buffer Nodes {
+  vec2 pos[];
+} nodes;
+
+layout (set = 0, binding = 1) readonly buffer Edges {
+  uvec2 edge[];
+} edges;
+
+layout (set = 0, binding = 2) buffer Masks {
+  uint tile[];
+} masks;
+
+shared uint tile_masks[TILES_WIDE][TILES_HIGH];
+
+// shared vec2 points_0[gl_WorkGroupSize.x];
+// shared vec2 points_1[gl_WorkGroupSize.x];
+
+
+float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
+  vec2 pos_0 = pos - p0;
+  vec2 pos_1 = p1 - p0;
+
+  float h = clamp(dot(pos_0, pos_1) / dot(pos_1, pos_1), 0.0, 1.0);
+  return length(pos_0 - pos_1*h) - 4.0;
+}
+
+void main() {
+
+  uvec2 this_edge = edges.edge[gl_GlobalInvocationID.x];
+
+  vec2 p0 = nodes.pos[this_edge.x];
+  vec2 p1 = nodes.pos[this_edge.y];
+
+  // points_0[gl_LocalInvocationIndex] = p0;
+  // points_1[gl_LocalInvocationIndex] = p1;
+
+  if (gl_LocalInvocationIndex == 0) {
+    for (uint column = 0; column < TILES_WIDE; column++) {
+      for (uint row = 0; row < TILES_HIGH; row++) {
+        tile_masks[column][row] = 0;
+      }
+    }
+  }
+
+  barrier();
+
+
+  uint bitmask = 1 << gl_LocalInvocationIndex;
+
+  for (uint column = 0; column < TILES_WIDE; column++) {
+    for (uint row = 0; row < TILES_HIGH; row++) {
+
+      float left = float(column) * 16.0;
+      float right = left + 16.0;
+
+      float up = float(row) * 16.0;
+      float down = up + 16.0;
+
+      vec2 center = vec2(7.5 + float(column) * 16,
+                         7.5 + float(row) * 16);
+
+      float sdf_at_center = line_segment_sdf(center, p0, p1);
+
+      if (sdf_at_center < 8.0) {
+        atomicOr(tile_masks[column][row], bitmask);
+      }
+    }
+  }
+
+
+  barrier();
+
+  for (uint column = 0; column < TILES_WIDE; column++) {
+    for (uint row = 0; row < TILES_HIGH; row++) {
+      uint tile_ix = (row * TILES_WIDE) + column;
+      atomicOr(masks.tile[tile_ix], tile_masks[column][row]);
+    }
+  }
+
+}
+
+
+float dot2(in vec2 a) {
+  return dot(a, a);
+}
+
+// from inigo quilez' article on 2D SDFs
+float sdBezier( in vec2 pos, in vec2 A, in vec2 B, in vec2 C )
+{
+    vec2 a = B - A;
+    vec2 b = A - 2.0*B + C;
+    vec2 c = a * 2.0;
+    vec2 d = A - pos;
+    float kk = 1.0/dot(b,b);
+    float kx = kk * dot(a,b);
+    float ky = kk * (2.0*dot(a,a)+dot(d,b)) / 3.0;
+    float kz = kk * dot(d,a);
+    float res = 0.0;
+    float p = ky - kx*kx;
+    float p3 = p*p*p;
+    float q = kx*(2.0*kx*kx-3.0*ky) + kz;
+    float h = q*q + 4.0*p3;
+    if( h >= 0.0)
+    {
+        h = sqrt(h);
+        vec2 x = (vec2(h,-h)-q)/2.0;
+        vec2 uv = sign(x)*pow(abs(x), vec2(1.0/3.0));
+        float t = clamp( uv.x+uv.y-kx, 0.0, 1.0 );
+        res = dot2(d + (c + b*t)*t);
+    }
+    else
+    {
+        float z = sqrt(-p);
+        float v = acos( q/(p*z*2.0) ) / 3.0;
+        float m = cos(v);
+        float n = sin(v)*1.732050808;
+        vec3  t = clamp(vec3(m+m,-n-m,n-m)*z-kx,0.0,1.0);
+        res = min( dot2(d+(c+b*t.x)*t.x),
+                   dot2(d+(c+b*t.y)*t.y) );
+        // the third root cannot be the closest
+        // res = min(res,dot2(d+(c+b*t.z)*t.z));
+    }
+    return sqrt( res );
+}
