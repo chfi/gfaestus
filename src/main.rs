@@ -1,4 +1,3 @@
-use draw_system::nodes::{NodeOverlay, NodeOverlayValue, Overlay};
 use texture::{GradientTexture, Gradients};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -16,6 +15,10 @@ use gfaestus::view::View;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
 use gfaestus::gui::{widgets::*, windows::*, *};
+
+use gfaestus::vulkan::draw_system::nodes::{
+    NodeOverlay, NodeOverlayValue, Overlay,
+};
 
 use gfaestus::vulkan::draw_system::selection::{
     SelectionOutlineBlurPipeline, SelectionOutlineEdgePipeline,

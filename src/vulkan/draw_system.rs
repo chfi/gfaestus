@@ -5,6 +5,7 @@ use anyhow::Result;
 
 pub mod gui;
 pub mod nodes;
+pub mod post;
 pub mod selection;
 
 #[derive(Clone, Copy)]
