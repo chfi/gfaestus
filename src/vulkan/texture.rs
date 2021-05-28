@@ -29,6 +29,158 @@ impl Texture {
         }
     }
 
+    pub fn allocate(
+        app: &super::GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        width: usize,
+        height: usize,
+        format: vk::Format,
+    ) -> Result<Self> {
+        use vk::BufferUsageFlags as BufUsage;
+        use vk::ImageLayout as Layout;
+        use vk::ImageUsageFlags as ImgUsage;
+        use vk::MemoryPropertyFlags as MemProps;
+
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let element_size = match format {
+            vk::Format::R8_UNORM => std::mem::size_of::<u8>(),
+            vk::Format::R8G8_UNORM => std::mem::size_of::<[u8; 2]>(),
+            vk::Format::R8G8B8_UNORM => std::mem::size_of::<[u8; 3]>(),
+            vk::Format::R8G8B8A8_UNORM => std::mem::size_of::<[u8; 4]>(),
+            _ => panic!("unsupported image format in Texture::allocate"),
+        };
+
+        // let image_size = (width * height * element_size) as vk::DeviceSize;
+
+        let extent = vk::Extent3D {
+            width: width as u32,
+            height: height as u32,
+            depth: 1,
+        };
+
+        let img_info = vk::ImageCreateInfo::builder()
+            .image_type(vk::ImageType::TYPE_2D)
+            .extent(extent)
+            .mip_levels(1)
+            .array_layers(1)
+            .format(format)
+            .tiling(vk::ImageTiling::LINEAR)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .usage(
+                ImgUsage::TRANSFER_SRC
+                    | ImgUsage::TRANSFER_DST
+                    | vk::ImageUsageFlags::SAMPLED,
+            )
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .flags(vk::ImageCreateFlags::empty())
+            .build();
+
+        let image = unsafe { device.create_image(&img_info, None) }?;
+        let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
+        let mem_type_ix = super::find_memory_type(
+            mem_reqs,
+            vk_context.get_mem_properties(),
+            vk::MemoryPropertyFlags::DEVICE_LOCAL,
+        );
+
+        let alloc_info = vk::MemoryAllocateInfo::builder()
+            .allocation_size(mem_reqs.size)
+            .memory_type_index(mem_type_ix)
+            .build();
+
+        let memory = unsafe {
+            let mem = device.allocate_memory(&alloc_info, None)?;
+            device.bind_image_memory(image, mem, 0)?;
+            mem
+        };
+
+        super::GfaestusVk::transition_image(
+            device,
+            command_pool,
+            transition_queue,
+            image,
+            format,
+            Layout::UNDEFINED,
+            Layout::SHADER_READ_ONLY_OPTIMAL,
+        )?;
+
+        let view = {
+            let create_info = vk::ImageViewCreateInfo::builder()
+                .image(image)
+                .view_type(vk::ImageViewType::TYPE_2D)
+                .format(format)
+                .subresource_range(vk::ImageSubresourceRange {
+                    aspect_mask: vk::ImageAspectFlags::COLOR,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    layer_count: 1,
+                })
+                .build();
+
+            unsafe { device.create_image_view(&create_info, None) }
+        }?;
+
+        let mut texture = Self::new(image, memory, view, None);
+
+        Ok(texture)
+    }
+
+    pub fn copy_from_buffer(
+        &self,
+        app: &super::GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        buffer: vk::Buffer,
+        format: vk::Format,
+        width: usize,
+        height: usize,
+    ) -> Result<()> {
+        use vk::ImageLayout as Layout;
+
+        let extent = vk::Extent2D {
+            width: width as u32,
+            height: height as u32,
+        };
+
+        let device = app.vk_context().device();
+
+        super::GfaestusVk::transition_image(
+            device,
+            command_pool,
+            transition_queue,
+            self.image,
+            format,
+            Layout::UNDEFINED,
+            Layout::TRANSFER_DST_OPTIMAL,
+        )?;
+
+        super::GfaestusVk::copy_buffer_to_image(
+            device,
+            command_pool,
+            transition_queue,
+            buffer,
+            self.image,
+            extent,
+        )?;
+
+        super::GfaestusVk::transition_image(
+            device,
+            command_pool,
+            transition_queue,
+            self.image,
+            format,
+            Layout::TRANSFER_DST_OPTIMAL,
+            Layout::SHADER_READ_ONLY_OPTIMAL,
+        )?;
+
+        Ok(())
+    }
+
     pub fn from_pixel_bytes(
         app: &super::GfaestusVk,
         command_pool: vk::CommandPool,

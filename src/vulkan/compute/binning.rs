@@ -168,6 +168,42 @@ impl ComputeBuffer {
             element_count,
         })
     }
+
+    pub fn copy_from_buffer(
+        &self,
+        app: &GfaestusVk,
+        other: vk::Buffer,
+        size: Option<vk::DeviceSize>,
+    ) {
+        let size = size.unwrap_or(vk::WHOLE_SIZE);
+
+        GfaestusVk::copy_buffer(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            other,
+            self.buffer,
+            size,
+        );
+    }
+
+    pub fn copy_into_buffer(
+        &self,
+        app: &GfaestusVk,
+        other: vk::Buffer,
+        size: Option<vk::DeviceSize>,
+    ) {
+        let size = size.unwrap_or(vk::WHOLE_SIZE);
+
+        GfaestusVk::copy_buffer(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            self.buffer,
+            other,
+            size,
+        );
+    }
 }
 
 pub struct BinBuffers {
