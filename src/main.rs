@@ -16,8 +16,9 @@ use gfaestus::vulkan::render_pass::Framebuffers;
 
 use gfaestus::gui::{widgets::*, windows::*, *};
 
-use gfaestus::vulkan::draw_system::nodes::{
-    NodeOverlay, NodeOverlayValue, Overlay,
+use gfaestus::vulkan::draw_system::{
+    nodes::{NodeOverlay, NodeOverlayValue, Overlay},
+    post::PostProcessPipeline,
 };
 
 use gfaestus::vulkan::draw_system::selection::{
@@ -321,6 +322,15 @@ fn main() {
     } else {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
+
+    let mut flip_pipeline = PostProcessPipeline::new(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_blur,
+        // gfaestus.node_attachments.mask_resolve,
+        gfaestus::include_shader!("post/example.frag.spv"),
+    )
+    .unwrap();
 
     /*
     let mut fence_id: Option<usize> = None;
@@ -663,6 +673,11 @@ fn main() {
 
                 // let dims = app.dims();
 
+                flip_pipeline
+                    .write_descriptor_set(gfaestus.vk_context().device(),
+                                          gfaestus.offscreen_attachment.color);
+
+
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
@@ -833,6 +848,8 @@ fn main() {
                                 [size.width as f32, size.height as f32],
                             )
                             .unwrap();
+
+                        flip_pipeline.draw(&device, cmd_buf, blur_pass, framebuffers, [size.width as f32, size.height as f32]).unwrap();
 
                         gui.draw(
                             cmd_buf,
