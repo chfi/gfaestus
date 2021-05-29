@@ -7,8 +7,8 @@ use anyhow::Result;
 
 use super::create_shader_module;
 
-use crate::vulkan::render_pass::Framebuffers;
 use crate::vulkan::{texture::Texture, GfaestusVk};
+use crate::{geometry::Point, vulkan::render_pass::Framebuffers};
 
 pub struct PostProcessPipeline {
     descriptor_pool: vk::DescriptorPool,
@@ -98,11 +98,14 @@ impl PostProcessPipeline {
         &mut self,
         device: &Device,
         new_image: Texture,
+        sampler: Option<vk::Sampler>,
     ) {
+        let sampler = sampler.unwrap_or_else(|| new_image.sampler.unwrap());
+
         let image_info = vk::DescriptorImageInfo::builder()
             .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
             .image_view(new_image.view)
-            .sampler(new_image.sampler.unwrap())
+            .sampler(sampler)
             .build();
         let image_infos = [image_info];
 
@@ -125,7 +128,8 @@ impl PostProcessPipeline {
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
-        viewport_dims: [f32; 2],
+        screen_size: Point,
+        sample_size: Point,
     ) -> Result<()> {
         let clear_values = {
             [vk::ClearValue {
@@ -136,8 +140,8 @@ impl PostProcessPipeline {
         };
 
         let extent = vk::Extent2D {
-            width: viewport_dims[0] as u32,
-            height: viewport_dims[1] as u32,
+            width: screen_size.x as u32,
+            height: screen_size.y as u32,
         };
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
@@ -180,7 +184,7 @@ impl PostProcessPipeline {
             );
         };
 
-        let push_constants = PushConstants::new(viewport_dims, true);
+        let push_constants = PushConstants::new(sample_size, screen_size, true);
 
         let pc_bytes = push_constants.bytes();
 
@@ -367,7 +371,7 @@ pub(crate) fn create_pipeline(
         let pc_range = vk::PushConstantRange::builder()
             .stage_flags(Flags::VERTEX | Flags::FRAGMENT)
             .offset(0)
-            .size(12)
+            .size(PushConstants::PC_RANGE)
             .build();
 
         let pc_ranges = [pc_range];
@@ -415,27 +419,27 @@ pub(crate) fn create_pipeline(
 }
 
 pub struct PushConstants {
-    width: f32,
-    height: f32,
+    source_size: Point,
+    target_size: Point,
     enabled: bool,
 }
 
 impl PushConstants {
-    #[inline]
-    pub fn new(viewport_dims: [f32; 2], enabled: bool) -> Self {
-        let width = viewport_dims[0];
-        let height = viewport_dims[1];
+    pub const PC_RANGE: u32 =
+        (std::mem::size_of::<u32>() + std::mem::size_of::<f32>() * 4) as u32;
 
+    #[inline]
+    pub fn new(source_size: Point, target_size: Point, enabled: bool) -> Self {
         Self {
-            width,
-            height,
+            source_size,
+            target_size,
             enabled,
         }
     }
 
     #[inline]
-    pub fn bytes(&self) -> [u8; 12] {
-        let mut bytes = [0u8; 12];
+    pub fn bytes(&self) -> [u8; 20] {
+        let mut bytes = [0u8; Self::PC_RANGE as usize];
 
         {
             let mut offset = 0;
@@ -448,14 +452,17 @@ impl PushConstants {
                 }
             };
 
-            add_float(self.width);
-            add_float(self.height);
+            add_float(self.source_size.x);
+            add_float(self.source_size.y);
+
+            add_float(self.target_size.x);
+            add_float(self.target_size.y);
         }
 
         if self.enabled {
-            bytes[11] = 1;
+            bytes[19] = 1;
         } else {
-            bytes[11] = 0;
+            bytes[19] = 0;
         }
 
         bytes
