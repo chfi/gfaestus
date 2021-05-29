@@ -72,6 +72,10 @@ impl GraphQuery {
         self.graph.node_count()
     }
 
+    pub fn edge_count(&self) -> usize {
+        self.graph.edge_count()
+    }
+
     pub fn new(graph: PackedGraph, path_positions: PathPositionMap) -> Self {
         let graph = Arc::new(graph);
         let path_positions = Arc::new(path_positions);

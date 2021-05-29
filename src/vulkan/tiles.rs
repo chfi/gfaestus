@@ -5,13 +5,14 @@ use std::{collections::HashMap, ffi::CString};
 
 use anyhow::Result;
 
-use super::GfaestusVk;
+use super::{render_pass::Framebuffers, GfaestusVk};
 use crate::geometry::*;
 use crate::view::*;
 use crate::vulkan::texture::Texture;
 
 pub struct ScreenTiles {
-    tile_texture: Texture,
+    pub tile_texture: Texture,
+    pub sampler: vk::Sampler,
 
     rows: usize,
     columns: usize,
@@ -64,8 +65,43 @@ impl ScreenTiles {
             vk::Format::R8G8B8A8_UNORM,
         )?;
 
+        let device = app.vk_context().device();
+
+        let sampler = {
+            let sampler_info = vk::SamplerCreateInfo::builder()
+                .mag_filter(vk::Filter::LINEAR)
+                .min_filter(vk::Filter::LINEAR)
+                .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
+                .anisotropy_enable(false)
+                .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
+                .unnormalized_coordinates(false)
+                .mipmap_mode(vk::SamplerMipmapMode::NEAREST)
+                .mip_lod_bias(0.0)
+                .min_lod(0.0)
+                .max_lod(1.0)
+                .build();
+
+            unsafe { device.create_sampler(&sampler_info, None) }
+        }?;
+
+        /*
+        use vk::ImageLayout as Layout;
+        super::GfaestusVk::transition_image(
+            device,
+            app.transient_command_pool,
+            app.graphics_queue,
+            tile_texture.image,
+            vk::Format::R8G8B8A8_UNORM,
+            Layout::SHADER_READ_ONLY_OPTIMAL,
+            Layout::GENERAL,
+        )?;
+        */
+
         Ok(Self {
             tile_texture,
+            sampler,
 
             rows,
             columns,
@@ -76,5 +112,40 @@ impl ScreenTiles {
             offset,
             size,
         })
+    }
+
+    pub fn transition_to_shader_read_only(
+        &self,
+        app: &GfaestusVk,
+    ) -> Result<()> {
+        use vk::ImageLayout as Layout;
+
+        super::GfaestusVk::transition_image(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            self.tile_texture.image,
+            vk::Format::R8G8B8A8_UNORM,
+            Layout::GENERAL,
+            Layout::SHADER_READ_ONLY_OPTIMAL,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn transition_to_general(&self, app: &GfaestusVk) -> Result<()> {
+        use vk::ImageLayout as Layout;
+
+        super::GfaestusVk::transition_image(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            self.tile_texture.image,
+            vk::Format::R8G8B8A8_UNORM,
+            Layout::SHADER_READ_ONLY_OPTIMAL,
+            Layout::GENERAL,
+        )?;
+
+        Ok(())
     }
 }

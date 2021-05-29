@@ -72,6 +72,7 @@ impl Texture {
             .usage(
                 ImgUsage::TRANSFER_SRC
                     | ImgUsage::TRANSFER_DST
+                    | ImgUsage::STORAGE
                     | vk::ImageUsageFlags::SAMPLED,
             )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)

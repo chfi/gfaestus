@@ -580,6 +580,33 @@ impl GfaestusVk {
                     vk::PipelineStageFlags::TOP_OF_PIPE,
                     vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                 ),
+                (
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    vk::ImageLayout::GENERAL,
+                ) => (
+                    vk::AccessFlags::SHADER_READ,
+                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    // | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    vk::AccessFlags::MEMORY_READ
+                        | vk::AccessFlags::MEMORY_WRITE,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                ),
+                (
+                    vk::ImageLayout::GENERAL,
+                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                ) => (
+                    // vk::AccessFlags::empty(),
+                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    // vk::AccessFlags::COLOR_ATTACHMENT_WRITE
+                    vk::AccessFlags::MEMORY_READ
+                        | vk::AccessFlags::MEMORY_WRITE,
+                    vk::AccessFlags::SHADER_READ,
+                    vk::PipelineStageFlags::BOTTOM_OF_PIPE,
+                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                    vk::PipelineStageFlags::FRAGMENT_SHADER,
+                ),
                 (vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL) => (
                     vk::AccessFlags::empty(),
                     vk::AccessFlags::COLOR_ATTACHMENT_READ
