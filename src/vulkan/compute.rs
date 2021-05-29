@@ -184,6 +184,37 @@ pub struct ComputePipeline {
 }
 
 impl ComputePipeline {
+    pub fn new_with_pool_size(
+        device: &Device,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        pool_size: vk::DescriptorPoolSize,
+        pipeline_layout: vk::PipelineLayout,
+        shader: &[u8],
+    ) -> Result<Self> {
+        let pipeline = Self::create_pipeline(device, pipeline_layout, shader)?;
+
+        let descriptor_pool = {
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(1)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout,
+
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
+    }
+
     pub fn new(
         device: &Device,
         descriptor_set_layout: vk::DescriptorSetLayout,

@@ -1,3 +1,4 @@
+use compute::EdgeRenderer;
 use texture::{GradientTexture, Gradients};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -331,6 +332,10 @@ fn main() {
         gfaestus::include_shader!("post/example.frag.spv"),
     )
     .unwrap();
+
+    let mut edge_pipeline =
+        EdgeRenderer::new(&gfaestus, app.dims(), graph_query.edge_count())
+            .unwrap();
 
     /*
     let mut fence_id: Option<usize> = None;
@@ -675,13 +680,17 @@ fn main() {
 
                 flip_pipeline
                     .write_descriptor_set(gfaestus.vk_context().device(),
-                                          gfaestus.offscreen_attachment.color);
+                                          edge_pipeline.tiles.tile_texture,
+                                          Some(edge_pipeline.tiles.sampler),
+                    );
 
 
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
+
+
 
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
@@ -714,6 +723,50 @@ fn main() {
                                 &image_memory_barriers,
                             );
                         }
+
+                        unsafe {
+                            let (barrier, src_stage, dst_stage) =
+                                GfaestusVk::image_transition_barrier(
+                                    edge_pipeline.tiles.tile_texture.image,
+                                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                    vk::ImageLayout::GENERAL);
+
+
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                src_stage,
+                                dst_stage,
+                                vk::DependencyFlags::empty(),
+                                &[],
+                                &[],
+                                &[barrier],
+                            );
+                        };
+
+                        edge_pipeline.test_draw_cmd(
+                            cmd_buf,
+                            [size.width as f32, size.height as f32]
+                        ).unwrap();
+
+                        unsafe {
+                            let (barrier, src_stage, dst_stage) =
+                                GfaestusVk::image_transition_barrier(
+                                    edge_pipeline.tiles.tile_texture.image,
+                                    vk::ImageLayout::GENERAL,
+                                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                                );
+
+
+                            device.cmd_pipeline_barrier(
+                                cmd_buf,
+                                src_stage,
+                                dst_stage,
+                                vk::DependencyFlags::empty(),
+                                &[],
+                                &[],
+                                &[barrier],
+                            );
+                        };
 
                         if let Some(overlay) = overlay {
 
@@ -756,6 +809,7 @@ fn main() {
                             )
                             .unwrap();
                         */
+
 
                         unsafe {
                             // let (image_memory_barrier, _src_stage, _dst_stage) =
@@ -849,7 +903,24 @@ fn main() {
                             )
                             .unwrap();
 
-                        flip_pipeline.draw(&device, cmd_buf, blur_pass, framebuffers, [size.width as f32, size.height as f32]).unwrap();
+                        let screen_size = Point::new(size.width as f32,
+                                                     size.height as f32);
+
+                        let tile_texture_size = Point::new(128.0 * 16.0,
+                                                           128.0 * 16.0);
+
+                        // let tile_size = [128.0 * 16.0,
+                        //                  128.0 * 16.0];
+
+                        flip_pipeline.draw(&device,
+                                           cmd_buf,
+                                           blur_pass,
+                                           framebuffers,
+                                           screen_size,
+                                           tile_texture_size,
+                                           // [size.width as f32, size.height as f32]
+                        )
+                            .unwrap();
 
                         gui.draw(
                             cmd_buf,

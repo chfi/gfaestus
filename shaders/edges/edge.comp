@@ -1,5 +1,59 @@
-
 #version 450
 
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout (rgba8, set = 0, binding = 0) writeonly uniform image2D dst;
+
+layout (push_constant) uniform Dimensions {
+  vec2 screen_size;
+  vec2 tile_texture_size;
+} dims;
+
 void main() {
+
+  vec2 pos = vec2(gl_GlobalInvocationID.xy);
+
+
+  // vec2 uv = 2.0 * ((pos / dims.screen_size) - vec2(0.5));
+
+  vec2 uv = (pos) / dims.tile_texture_size;
+  // uv = uv - vec2(1.0);
+  // uv = uv * 2.0;
+
+  // uv = uv * (dims.screen_size / dims.tile_texture_size);
+
+  ivec2 pixel = ivec2(pos);
+
+  /*
+
+  vec4 color;
+
+  if ((gl_WorkGroupID.x + gl_WorkGroupID.y) % 2 == 0) {
+    color = vec4(1.0, 1.0, 1.0, 0.7);
+  } else {
+    color = vec4(0.0, 0.0, 0.0, 0.7);
+  }
+  */
+
+
+  /*
+  for (uint y = 0; y < 16; y++) {
+    for (uint x = 0; x < 16; x++) {
+
+      ivec2 point = ivec2(gl_WorkGroupID.xy);
+      point = point + ivec2(x, y);
+      imageStore(dst, point, color);
+    }
+  }
+  */
+
+
+  if ((gl_WorkGroupID.x + gl_WorkGroupID.y) % 2 == 0) {
+  // if (gl_WorkGroupID.x % 2 == 0
+      // || gl_WorkGroupID.y % 2 == 0) {
+    // imageStore(dst, pixel, color);
+    imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, 0.5));
+  } else {
+    imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, 0.0));
+  }
 }
