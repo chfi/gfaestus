@@ -1,6 +1,6 @@
 use crate::{
     geometry::{Point, Rect},
-    view::ScreenDims,
+    view::{ScreenDims, View},
     vulkan::tiles::ScreenTiles,
 };
 
@@ -9,6 +9,8 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 use handlegraph::handle::Handle;
+
+use nalgebra_glm as glm;
 
 use crate::app::node_flags::SelectionBuffer;
 
@@ -154,6 +156,7 @@ impl EdgeRenderer {
     pub fn bin_draw_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
+        view: View,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
         let device = &self.bin_pipeline.device;
@@ -180,11 +183,16 @@ impl EdgeRenderer {
             );
         };
 
-        let screen_size = Point {
-            x: viewport_dims[0],
-            y: viewport_dims[1],
-        };
-        let push_constants = PushConstants::new(screen_size, 128, 128);
+        // let screen_size = Point {
+        //     x: viewport_dims[0],
+        //     y: viewport_dims[1],
+        // };
+        let push_constants = BinPushConstants::new(
+            [0.0, 0.0],
+            viewport_dims,
+            view,
+            self.edges.edge_count as u32,
+        );
         let pc_bytes = push_constants.bytes();
 
         unsafe {
@@ -218,12 +226,10 @@ impl EdgeRenderer {
 
         // println!("dispatching edge bin groups: {}", x_group_count);
 
-        /*
         println!("edge binning");
         println!("  x_group_count: {}", x_group_count);
         println!("  y_group_count: {}", y_group_count);
         println!("  z_group_count: {}", z_group_count);
-        */
         // let y_group_count = 128;
 
         unsafe {
@@ -422,7 +428,7 @@ impl EdgeRenderer {
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(PushConstants::PC_RANGE)
+                .size(BinPushConstants::PC_RANGE)
                 .build();
 
             let pc_ranges = [pc_range];
@@ -723,6 +729,91 @@ impl PushConstants {
             add_float(self.screen_size.y);
             add_float(self.tile_texture_size.x);
             add_float(self.tile_texture_size.y);
+        }
+
+        bytes
+    }
+}
+
+pub struct BinPushConstants {
+    view_transform: glm::Mat4,
+    viewport_dims: [f32; 2],
+    edge_count: u32,
+}
+
+impl BinPushConstants {
+    pub const PC_RANGE: u32 = (std::mem::size_of::<f32>() * 19) as u32;
+
+    #[inline]
+    pub fn new(
+        offset: [f32; 2],
+        viewport_dims: [f32; 2],
+        view: crate::view::View,
+        edge_count: u32,
+        // node_width: f32,
+        // texture_period: u32,
+    ) -> Self {
+        use crate::view;
+
+        let model_mat = glm::mat4(
+            1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0,
+            0.0, 0.0, 0.0, 0.0, 1.0,
+        );
+
+        let view_mat = view.to_scaled_matrix();
+
+        let width = viewport_dims[0];
+        let height = viewport_dims[1];
+
+        let viewport_mat = view::viewport_scale(width, height);
+
+        let matrix = viewport_mat * view_mat * model_mat;
+
+        Self {
+            view_transform: matrix,
+            // node_width,
+            viewport_dims,
+            edge_count,
+            // scale: view.scale,
+            // texture_period,
+        }
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> [u8; Self::PC_RANGE as usize] {
+        use crate::view;
+
+        let mut bytes = [0u8; 76];
+
+        let view_transform_array = view::mat4_to_array(&self.view_transform);
+
+        let mut offset = 0;
+
+        {
+            let mut add_float = |f: f32| {
+                let f_bytes = f.to_ne_bytes();
+                for i in 0..4 {
+                    bytes[offset] = f_bytes[i];
+                    offset += 1;
+                }
+            };
+
+            for i in 0..4 {
+                let row = view_transform_array[i];
+                for j in 0..4 {
+                    let val = row[j];
+                    add_float(val);
+                }
+            }
+
+            add_float(self.viewport_dims[0]);
+            add_float(self.viewport_dims[1]);
+        }
+
+        let ec_bytes = self.edge_count.to_ne_bytes();
+        for i in 0..4 {
+            bytes[offset] = ec_bytes[i];
+            offset += 1;
         }
 
         bytes

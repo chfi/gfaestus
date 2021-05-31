@@ -24,6 +24,12 @@ layout (set = 0, binding = 2) buffer Masks {
 
 layout (rgba8, set = 0, binding = 3) uniform image2D dst;
 
+layout (push_constant) uniform BinPushConstants {
+  mat4 view_transform;
+  vec2 viewport_dims;
+  uint edge_count;
+} bin_pc;
+
 // shared uint tile_masks[TILES_WIDE][TILES_HIGH];
 shared uint tile_masks[32][32];
 
@@ -41,51 +47,48 @@ float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
 
 void main() {
 
-  // hardcoded edge count lol
-  // if (gl_GlobalInvocationID.z >= 3) {
+  // if (gl_GlobalInvocationID.z * 16 >= bin_pc.edge_count) {
   //   return;
   // }
+
+  // hardcoded edge count lol
+  if (gl_GlobalInvocationID.z > 8) {
+    return;
+  }
 
   // uvec2 this_edge = edges.edge[gl_GlobalInvocationID.x];
 
   // vec2 p0 = nodes.pos[this_edge.x];
   // vec2 p1 = nodes.pos[this_edge.y];
 
+  uint edge_ix_offset = gl_GlobalInvocationID.z * 16;
+  // uint edge_ix_offset = 0;
 
-  // points_0[gl_LocalInvocationIndex] = p0;
-  // points_1[gl_LocalInvocationIndex] = p1;
+  uint local_edge_count = min(bin_pc.edge_count - edge_ix_offset,
+                              // 8);
+                              16);
 
-  // uint column = gl_GlobalInvocationID.x;
-  // uint row = gl_GlobalInvocationID.y;
+  // uint local_edge_count = 8;
 
   uint column = gl_LocalInvocationID.x;
   uint row = gl_LocalInvocationID.y;
 
   tile_masks[column][row] = 0;
 
-  // if (gl_LocalInvocationIndex == 0) {
-    // for (uint column = 0; column < TILES_WIDE; column++) {
-    //   for (uint row = 0; row < TILES_HIGH; row++) {
-    //     tile_masks[column][row] = 0;
-    //   }
-    // }
-  // }
-
-  // uint local_edge_count = 3;
-
   barrier();
 
+  if (edge_ix_offset >= bin_pc.edge_count) {
+    return;
+  }
 
   vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
                           16.0 * gl_GlobalInvocationID.y);
 
   vec2 center = tile_offset + vec2(7.5);
-  // vec2 tile_offset = chunk_offset +
 
-  // hardcoded edge count lol
-  for (uint edge_ix = 0; edge_ix < 3; edge_ix++) {
+  for (uint edge_ix = 0; edge_ix < local_edge_count; edge_ix++) {
 
-    uvec2 this_edge = edges.edge[edge_ix];
+    uvec2 this_edge = edges.edge[edge_ix_offset + edge_ix];
 
     uint bitmask = 1 << edge_ix;
 
@@ -107,6 +110,12 @@ void main() {
 
     vec2 p0 = nodes.pos[this_edge.x];
     vec2 p1 = nodes.pos[this_edge.y];
+
+    vec4 p0_4 = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
+    vec4 p1_4 = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
+
+    p0 = p0_4.xy;
+    p1 = p1_4.xy;
 
     float sdf_at_center = line_segment_sdf(center, p0, p1);
 
@@ -156,11 +165,12 @@ void main() {
     for (uint y = 0; y < 16; y++) {
       ivec2 pixel = tile_pixel_offset + ivec2(x, y);
 
-      // vec4 old_val = imageLoad(dst, pixel);
-      // float local_value = max(old_val.a, value);
-      // imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, local_value));
+      // imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value));
 
-      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value));
+      vec4 old_val = imageLoad(dst, pixel);
+      float local_value = max(old_val.a, value);
+      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, local_value));
+
     }
   }
 

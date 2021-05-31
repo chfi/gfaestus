@@ -334,9 +334,28 @@ fn main() {
     .unwrap();
 
     let mut edge_pipeline =
+        // EdgeRenderer::new(&gfaestus, app.dims(), 3)
         EdgeRenderer::new(&gfaestus, app.dims(), graph_query.edge_count())
             .unwrap();
 
+    dbg!();
+    // edge_pipeline.upload_example_data(&gfaestus).unwrap();
+
+    edge_pipeline
+        .upload_edges(
+            &gfaestus,
+            graph_query.graph().edges().map(|x| (x.0, x.1)),
+        )
+        .unwrap();
+
+    dbg!();
+
+    edge_pipeline
+        .write_bin_descriptor_set(
+            gfaestus.vk_context().device(),
+            &main_view.node_draw_system.vertices,
+        )
+        .unwrap();
     /*
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
@@ -669,6 +688,7 @@ fn main() {
                     .unwrap();
 
 
+
                 let mut use_overlay = app.shared_state().overlay_state().use_overlay();
 
 
@@ -683,6 +703,8 @@ fn main() {
                                           edge_pipeline.tiles.tile_texture,
                                           Some(edge_pipeline.tiles.sampler),
                     );
+
+                let current_view = app.shared_state().view();
 
 
 
@@ -743,8 +765,14 @@ fn main() {
                             );
                         };
 
-                        edge_pipeline.test_draw_cmd(
+                        // edge_pipeline.test_draw_cmd(
+                        //     cmd_buf,
+                        //     [size.width as f32, size.height as f32]
+                        // ).unwrap();
+
+                        edge_pipeline.bin_draw_cmd(
                             cmd_buf,
+                            current_view,
                             [size.width as f32, size.height as f32]
                         ).unwrap();
 
