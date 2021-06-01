@@ -768,17 +768,34 @@ impl BinPushConstants {
 
         // view.center -= offset;
 
-        let matrix = view.to_scaled_matrix();
+        let model_mat = glm::mat4(
+            1.0,
+            0.0,
+            0.0,
+            viewport_dims[0] * 0.5,
+            0.0,
+            1.0,
+            0.0,
+            viewport_dims[1] * 0.5,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        );
+
+        let view_mat = view.to_scaled_matrix();
+
+        let matrix = model_mat * view_mat;
 
         // let s = view.scale;
 
         // let matrix = glm::mat4(
 
         /*
-        let model_mat = glm::mat4(
-            1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0,
-            0.0, 0.0, 0.0, 0.0, 1.0,
-        );
 
         let view_mat = view.to_scaled_matrix();
 

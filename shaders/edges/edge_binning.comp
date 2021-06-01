@@ -52,7 +52,9 @@ void main() {
   // }
 
   // hardcoded edge count lol
-  if (gl_GlobalInvocationID.z > 1) {
+  // if (gl_GlobalInvocationID.z > 8) {
+  if (gl_GlobalInvocationID.z > 0) {
+  // if ((gl_GlobalInvocationID.z / 32) > bin_pc.edge_count) {
     return;
   }
 
@@ -168,8 +170,10 @@ void main() {
     // float sdf_at_center = line_segment_sdf(center, p0, p1);
     float sdf_at_center = line_segment_sdf(center, q0, q1);
 
+    if (sdf_at_center < 8.0) {
+    // if (sdf_at_center < 16.0) {
+    // if (sdf_at_center < 32.0) {
     // if (sdf_at_center < 64.0) {
-    if (sdf_at_center < 64.0) {
       atomicOr(tile_masks[column][row], bitmask);
     }
   }
@@ -194,6 +198,13 @@ void main() {
   */
 
 
+  for (uint i = 0; i < 32; i++) {
+    if ((tile_masks[column][row] & (1 << i)) != 0) {
+      value += 0.1;
+    }
+  }
+
+  /*
   if (tile_masks[column][row] > 2) {
     value = 1.0;
   } else if (tile_masks[column][row] > 1) {
@@ -201,6 +212,7 @@ void main() {
   } else {
     value = 0.5;
   }
+  */
 
   /*
   if (gl_GlobalInvocationID.x % 2 == 0) {
@@ -211,15 +223,25 @@ void main() {
   */
 
 
+  // value = float(gl_GlobalInvocationID.x) / 2048.0;
+
   for (uint x = 0; x < 16; x++) {
     for (uint y = 0; y < 16; y++) {
       ivec2 pixel = tile_pixel_offset + ivec2(x, y);
 
-      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value));
+      /*
+      vec4 color;
 
-      // vec4 old_val = imageLoad(dst, pixel);
-      // float local_value = max(old_val.a, value);
-      // imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, local_value));
+      if ((gl_GlobalInvocationID.x + gl_GlobalInvocationID.y) % 2 == 0) {
+        color = vec4(0.0, 0.0, 0.0, 0.6);
+      } else {
+        color = vec4(0.0, 0.0, 0.0, 0.2);
+      }
+
+      imageStore(dst, pixel, color);
+      */
+
+      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value * 0.8));
 
     }
   }
