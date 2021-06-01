@@ -52,7 +52,7 @@ void main() {
   // }
 
   // hardcoded edge count lol
-  if (gl_GlobalInvocationID.z > 8) {
+  if (gl_GlobalInvocationID.z > 1) {
     return;
   }
 
@@ -86,6 +86,10 @@ void main() {
 
   vec2 center = tile_offset + vec2(7.5);
 
+  // vec4 center_4 = bin_pc.view_transform *  vec4(center, 0.0, 1.0);
+
+  // center = center_4.xy;
+
   for (uint edge_ix = 0; edge_ix < local_edge_count; edge_ix++) {
 
     uvec2 this_edge = edges.edge[edge_ix_offset + edge_ix];
@@ -111,15 +115,61 @@ void main() {
     vec2 p0 = nodes.pos[this_edge.x];
     vec2 p1 = nodes.pos[this_edge.y];
 
+
+    // vec2 q0 = p0;
+    // vec2 q1 = p1;
+
+    vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
+    vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
+
+
+    vec2 q0 = a.xy;
+    vec2 q1 = b.xy;
+
+    // vec2 q0 = (0.5 * (vec2(1.0) + a.xy));
+    // vec2 q1 = (0.5 * (vec2(1.0) + b.xy));
+
+    // vec2 q0 = (0.5 * (vec2(1.0) + a.xy)) * bin_pc.viewport_dims.xy;
+    // vec2 q1 = (0.5 * (vec2(1.0) + b.xy)) * bin_pc.viewport_dims.xy;
+
+    // vec2 q0 = a.xy;
+    // vec2 q1 = b.xy;
+    // vec2 q0 = abs(p0 / 10000.0) * 800.0;
+
+
+    // vec2 q1 = abs(p1 / 10000.0) * 800.0;
+
+    // vec2 q0 = vec2(((p0.x - 8917.6) / (34842.9 - 8917.6)) * 2048.0,
+    //                ((p0.y + 4481.54) / (2317.5 + 4481.54)) * 1536.0);
+
+    // vec2 q1 = vec2(((p1.x - 8917.6) / (34842.9 - 8917.6)) * 2048.0,
+    //                ((p1.y + 4481.54) / (2317.5 + 4481.54)) * 1536.0);
+
+    // vec2 q0 = vec2((p0.x / 26000.0) * 800.0,
+    //                (p0.y / 6800.0) * 800.0);
+
+    // vec2 q1 = vec2((p1.x / 26000.0) * 800.0,
+    //                (p1.y / 6800.0) * 800.0);
+
+    // vec2 q0 = vec2(clamp(p0.x, 0.0, 1000.0),
+    //                clamp(p0.y, 0.0, 1000.0));
+
+    // vec2 q1 = vec2(clamp(p1.x, 0.0, 1000.0),
+    //                clamp(p1.y, 0.0, 1000.0));
+
+    /*
     vec4 p0_4 = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
     vec4 p1_4 = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
 
     p0 = p0_4.xy;
     p1 = p1_4.xy;
+    */
 
-    float sdf_at_center = line_segment_sdf(center, p0, p1);
+    // float sdf_at_center = line_segment_sdf(center, p0, p1);
+    float sdf_at_center = line_segment_sdf(center, q0, q1);
 
-    if (sdf_at_center < 16.0) {
+    // if (sdf_at_center < 64.0) {
+    if (sdf_at_center < 64.0) {
       atomicOr(tile_masks[column][row], bitmask);
     }
   }
@@ -149,7 +199,7 @@ void main() {
   } else if (tile_masks[column][row] > 1) {
     value = 0.7;
   } else {
-    value = 0.3;
+    value = 0.5;
   }
 
   /*
@@ -165,11 +215,11 @@ void main() {
     for (uint y = 0; y < 16; y++) {
       ivec2 pixel = tile_pixel_offset + ivec2(x, y);
 
-      // imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value));
+      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value));
 
-      vec4 old_val = imageLoad(dst, pixel);
-      float local_value = max(old_val.a, value);
-      imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, local_value));
+      // vec4 old_val = imageLoad(dst, pixel);
+      // float local_value = max(old_val.a, value);
+      // imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, local_value));
 
     }
   }

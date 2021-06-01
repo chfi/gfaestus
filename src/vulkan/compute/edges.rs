@@ -187,7 +187,11 @@ impl EdgeRenderer {
         //     x: viewport_dims[0],
         //     y: viewport_dims[1],
         // };
+
+        let offset = [view.center.x, view.center.y];
+
         let push_constants = BinPushConstants::new(
+            // offset,
             [0.0, 0.0],
             viewport_dims,
             view,
@@ -755,6 +759,22 @@ impl BinPushConstants {
     ) -> Self {
         use crate::view;
 
+        let mut view = view;
+
+        // let offset = Point {
+        //     x: viewport_dims[0],
+        //     y: viewport_dims[1],
+        // } * 0.5;
+
+        // view.center -= offset;
+
+        let matrix = view.to_scaled_matrix();
+
+        // let s = view.scale;
+
+        // let matrix = glm::mat4(
+
+        /*
         let model_mat = glm::mat4(
             1.0, 0.0, 0.0, offset[0], 0.0, 1.0, 0.0, offset[1], 0.0, 0.0, 1.0,
             0.0, 0.0, 0.0, 0.0, 1.0,
@@ -765,9 +785,13 @@ impl BinPushConstants {
         let width = viewport_dims[0];
         let height = viewport_dims[1];
 
-        let viewport_mat = view::viewport_scale(width, height);
+        // let viewport_mat = view::viewport_scale(1.0 / width, 1.0 / height);
+        // let viewport_mat = view::viewport_scale(width, height);
+        // let viewport_mat = view::viewport_scale(1.0, 1.0);
 
-        let matrix = viewport_mat * view_mat * model_mat;
+        let matrix = view_mat * model_mat;
+        // let matrix = viewport_mat * view_mat * model_mat;
+        */
 
         Self {
             view_transform: matrix,

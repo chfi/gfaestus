@@ -170,6 +170,27 @@ impl View {
 
     #[rustfmt::skip]
     #[inline]
+    pub fn world_to_screen_map<Dims: Into<ScreenDims>>(&self, dims: Dims) -> glm::Mat4 {
+        let dims = dims.into();
+
+        let w = dims.width;
+        let h = dims.height;
+
+        let s = self.scale;
+        let vcx = self.center.x;
+        let vcy = self.center.y;
+
+        let view_scale_screen =
+            glm::mat4(s,   0.0, 0.0, vcx - (s * 0.5),
+                      0.0, s,   0.0, vcy - (s * 0.5),
+                      0.0, 0.0, 1.0, 0.0,
+                      0.0, 0.0, 0.0, 1.0);
+
+        view_scale_screen
+    }
+
+    #[rustfmt::skip]
+    #[inline]
     pub fn screen_to_world_map<Dims: Into<ScreenDims>>(&self, dims: Dims) -> glm::Mat4 {
         let dims = dims.into();
 
