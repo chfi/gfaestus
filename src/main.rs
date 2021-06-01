@@ -934,8 +934,8 @@ fn main() {
                         let screen_size = Point::new(size.width as f32,
                                                      size.height as f32);
 
-                        let tile_texture_size = Point::new(128.0 * 16.0,
-                                                           128.0 * 16.0);
+                        let tile_texture_size = Point::new(2.0 * 128.0 * 16.0,
+                                                           2.0 * 128.0 * 16.0);
 
                         // let tile_size = [128.0 * 16.0,
                         //                  128.0 * 16.0];

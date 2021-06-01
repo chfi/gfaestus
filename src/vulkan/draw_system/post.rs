@@ -338,7 +338,7 @@ pub(crate) fn create_pipeline(
         .sample_shading_enable(false)
         .rasterization_samples(vk::SampleCountFlags::TYPE_1)
         .min_sample_shading(1.0)
-        .alpha_to_coverage_enable(true)
+        .alpha_to_coverage_enable(false)
         .alpha_to_one_enable(false)
         .build();
 
