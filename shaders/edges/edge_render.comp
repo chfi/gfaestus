@@ -2,10 +2,11 @@
 
 #define TILES_WIDE 128
 #define TILES_HIGH 96
-#extension GL_EXT_shader_atomic_float : enable
+// #extension GL_EXT_shader_atomic_float : enable
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
+/*
 layout (set = 0, binding = 0) readonly buffer Masks {
   uint tile[];
 } masks;
@@ -23,6 +24,31 @@ layout (push_constant) uniform Dimensions {
   uint width;
   uint height;
 } dimensions;
+*/
+
+layout (set = 0, binding = 0) readonly buffer Nodes {
+  vec2 pos[];
+} nodes;
+
+layout (set = 0, binding = 1) readonly buffer Edges {
+  uvec2 edge[];
+} edges;
+
+layout (set = 0, binding = 2) readonly buffer Masks {
+  uint tile[];
+} masks;
+
+// layout (rgba8, set = 0, binding = 3) uniform image2D dst;
+layout (set = 0, binding = 3) buffer Image {
+  uint pixel[];
+  // vec4 pixel[];
+} tiles;
+
+layout (push_constant) uniform BinPushConstants {
+  mat4 view_transform;
+  vec2 viewport_dims;
+  uint edge_count;
+} bin_pc;
 
 shared vec4 shared_edges[gl_WorkGroupSize.x];
 
@@ -37,6 +63,7 @@ float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
 
 void main() {
 
+  /*
   uint edge_offset = gl_WorkGroupID.x * gl_WorkGroupSize.x;
 
   if (gl_LocalInvocationIndex < 15) {
@@ -85,5 +112,6 @@ void main() {
   uint u_value = uint(value * 255.0);
 
   atomicMax(tiles.pixel[pixel_start], u_value);
+  */
 
 }

@@ -7,8 +7,8 @@ use std::{
 };
 
 fn main() {
-    if Command::new("glslangValidator").output().is_err() {
-        eprintln!("Error compiling shaders: 'glslangValidator' not found, do you have the Vulkan SDK installed?");
+    if Command::new("glslc").output().is_err() {
+        eprintln!("Error compiling shaders: 'glslc' not found, do you have the Vulkan SDK installed?");
         eprintln!("Get it at https://vulkan.lunarg.com/");
         std::process::exit(1);
     }
@@ -39,6 +39,7 @@ fn find_shader_files() -> Vec<PathBuf> {
                     directories.push_back(path.path());
                 } else if path.file_type().unwrap().is_file()
                     && path.path().extension() != Some(OsStr::new("spv"))
+                    && path.path().extension() != Some(OsStr::new("glsl"))
                 {
                     result.push(path.path());
                 }
@@ -57,8 +58,7 @@ fn compile_shaders(files: &[PathBuf]) {
         output_path.pop();
         output_path.push(output_name);
 
-        let result = Command::new("glslangValidator")
-            .arg("-V")
+        let result = Command::new("glslc")
             .arg(&path)
             .arg("-o")
             .arg(output_path)
