@@ -3,6 +3,8 @@
 #define TILES_WIDE 128
 #define TILES_HIGH 96
 
+#define EDGES_PER_WORKGROUP 256
+
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
 // layout(local_size_x = 16, local_size_y = 1, local_size_z = 1) in;
@@ -30,8 +32,9 @@ layout (push_constant) uniform BinPushConstants {
   uint edge_count;
 } bin_pc;
 
-// shared uint tile_masks[TILES_WIDE][TILES_HIGH];
-shared uint tile_masks[32][32];
+
+// [rows][columns][depth]
+shared uint tile_masks[32][32][8];
 
 // shared vec2 points_0[gl_WorkGroupSize.x];
 // shared vec2 points_1[gl_WorkGroupSize.x];
@@ -47,35 +50,38 @@ float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
 
 void main() {
 
-  // if (gl_GlobalInvocationID.z * 16 >= bin_pc.edge_count) {
-  //   return;
-  // }
+  uint edge_ix_offset = gl_GlobalInvocationID.z * EDGES_PER_WORKGROUP;
 
-  // hardcoded edge count lol
-  // if (gl_GlobalInvocationID.z > 8) {
-  if (gl_GlobalInvocationID.z > 0) {
-  // if ((gl_GlobalInvocationID.z / 32) > bin_pc.edge_count) {
+  // if (edge_ix_offset >= 256) {
+  if (edge_ix_offset >= 1024) {
+  // if (edge_ix_offset >= 2048) {
+  // if (edge_ix_offset >= 4096) {
+  // if (edge_ix_offset >= 8192) {
+  // if (edge_ix_offset >= 16384) {
+  // if (edge_ix_offset >= bin_pc.edge_count) {
     return;
   }
 
-  // uvec2 this_edge = edges.edge[gl_GlobalInvocationID.x];
+  uint edge_ix_end = min(edge_ix_offset + EDGES_PER_WORKGROUP,
+                         bin_pc.edge_count);
 
-  // vec2 p0 = nodes.pos[this_edge.x];
-  // vec2 p1 = nodes.pos[this_edge.y];
+  // divide by 32 since masks are stored in u32s
+  uint mask_offset = gl_GlobalInvocationID.z * (EDGES_PER_WORKGROUP / 32);
 
-  uint edge_ix_offset = gl_GlobalInvocationID.z * 16;
-  // uint edge_ix_offset = 0;
 
-  uint local_edge_count = min(bin_pc.edge_count - edge_ix_offset,
-                              // 8);
-                              16);
+  uint local_edge_count = edge_ix_end - edge_ix_offset;
 
-  // uint local_edge_count = 8;
 
   uint column = gl_LocalInvocationID.x;
   uint row = gl_LocalInvocationID.y;
 
-  tile_masks[column][row] = 0;
+  for (uint z = 0; z < 8; z++) {
+    tile_masks[column][row][z] = 0;
+
+    uint ix = (column * row) + z;
+
+    masks.tile[ix] = 0;
+  }
 
   barrier();
 
@@ -88,244 +94,89 @@ void main() {
 
   vec2 center = tile_offset + vec2(7.5);
 
-  // vec4 center_4 = bin_pc.view_transform *  vec4(center, 0.0, 1.0);
 
-  // center = center_4.xy;
 
-  for (uint edge_ix = 0; edge_ix < local_edge_count; edge_ix++) {
+  for (uint edge_ix = edge_ix_offset; edge_ix < edge_ix_end; edge_ix++) {
 
-    uvec2 this_edge = edges.edge[edge_ix_offset + edge_ix];
+    uvec2 this_edge = edges.edge[edge_ix];
 
-    uint bitmask = 1 << edge_ix;
+    uint mask_ix = edge_ix / 32;
+    uint bit_shift = edge_ix % 32;
 
-    /*
-    vec2 p0;
-    vec2 p1;
+    uint mask_z = (edge_ix - edge_ix_offset) / 8;
 
-    if (edge_ix == 0) {
-      p0 = vec2(170.0, 100.0);
-      p1 = vec2(230.0, 200.0);
-    } else if (edge_ix == 1) {
-      p0 = vec2(270.0, 180.0);
-      p1 = vec2(500.0, 500.0);
-    } else {
-      p0 = vec2(270.0, 180.0);
-      p1 = vec2(300.0, 500.0);
-    }
-    */
+    uint bitmask = 1 << bit_shift;
 
     vec2 p0 = nodes.pos[this_edge.x];
     vec2 p1 = nodes.pos[this_edge.y];
 
-
-    // vec2 q0 = p0;
-    // vec2 q1 = p1;
-
     vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
     vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
-
 
     vec2 q0 = a.xy;
     vec2 q1 = b.xy;
 
-    // vec2 q0 = (0.5 * (vec2(1.0) + a.xy));
-    // vec2 q1 = (0.5 * (vec2(1.0) + b.xy));
-
-    // vec2 q0 = (0.5 * (vec2(1.0) + a.xy)) * bin_pc.viewport_dims.xy;
-    // vec2 q1 = (0.5 * (vec2(1.0) + b.xy)) * bin_pc.viewport_dims.xy;
-
-    // vec2 q0 = a.xy;
-    // vec2 q1 = b.xy;
-    // vec2 q0 = abs(p0 / 10000.0) * 800.0;
-
-
-    // vec2 q1 = abs(p1 / 10000.0) * 800.0;
-
-    // vec2 q0 = vec2(((p0.x - 8917.6) / (34842.9 - 8917.6)) * 2048.0,
-    //                ((p0.y + 4481.54) / (2317.5 + 4481.54)) * 1536.0);
-
-    // vec2 q1 = vec2(((p1.x - 8917.6) / (34842.9 - 8917.6)) * 2048.0,
-    //                ((p1.y + 4481.54) / (2317.5 + 4481.54)) * 1536.0);
-
-    // vec2 q0 = vec2((p0.x / 26000.0) * 800.0,
-    //                (p0.y / 6800.0) * 800.0);
-
-    // vec2 q1 = vec2((p1.x / 26000.0) * 800.0,
-    //                (p1.y / 6800.0) * 800.0);
-
-    // vec2 q0 = vec2(clamp(p0.x, 0.0, 1000.0),
-    //                clamp(p0.y, 0.0, 1000.0));
-
-    // vec2 q1 = vec2(clamp(p1.x, 0.0, 1000.0),
-    //                clamp(p1.y, 0.0, 1000.0));
-
-    /*
-    vec4 p0_4 = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
-    vec4 p1_4 = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
-
-    p0 = p0_4.xy;
-    p1 = p1_4.xy;
-    */
-
-    // float sdf_at_center = line_segment_sdf(center, p0, p1);
     float sdf_at_center = line_segment_sdf(center, q0, q1);
 
     if (sdf_at_center < 8.0) {
     // if (sdf_at_center < 16.0) {
     // if (sdf_at_center < 32.0) {
     // if (sdf_at_center < 64.0) {
-      atomicOr(tile_masks[column][row], bitmask);
+      tile_masks[column][row][mask_z] |= bitmask;
+      // atomicOr(tile_masks[column][row][mask_z], bitmask);
     }
   }
 
-  barrier();
 
-  atomicOr(masks.tile[column * row], tile_masks[column][row]);
+  // barrier();
 
-  barrier();
 
+  for (uint z = 0; z < 8; z++) {
+    uint ix = (column * row) + z;
+    atomicOr(masks.tile[ix], tile_masks[column][row][z]);
+  }
+
+  // barrier();
+
+
+  /*
   ivec2 tile_pixel_offset = ivec2(gl_GlobalInvocationID.xy) * ivec2(16);
 
   float value = 0.0;
 
 
-  /*
-  if (tile_masks[column][row] == 0) {
-    value = 0.7;
-  } else {
-    value = 1.0;
-  }
-  */
+  for (uint z = 0; z < 8; z++) {
+    uint ix = (column * row) + z;
 
-
-  for (uint i = 0; i < 32; i++) {
-    if ((tile_masks[column][row] & (1 << i)) != 0) {
-      value += 0.1;
+    for (uint i = 0; i < 32; i++) {
+      // if ((masks.tile[ix] & (1 << i)) != 0) {
+      if ((tile_masks[column][row][z] & (1 << i)) != 0) {
+        value += 0.1;
+      }
     }
   }
-
-  /*
-  if (tile_masks[column][row] > 2) {
-    value = 1.0;
-  } else if (tile_masks[column][row] > 1) {
-    value = 0.7;
-  } else {
-    value = 0.5;
-  }
   */
 
   /*
-  if (gl_GlobalInvocationID.x % 2 == 0) {
-    value = 1.0;
-  } else {
-    value = 0.3;
-  }
-  */
-
-
-  // value = float(gl_GlobalInvocationID.x) / 2048.0;
-
   for (uint x = 0; x < 16; x++) {
     for (uint y = 0; y < 16; y++) {
       ivec2 pixel = tile_pixel_offset + ivec2(x, y);
 
-      /*
-      vec4 color;
+      // vec4 color;
 
-      if ((gl_GlobalInvocationID.x + gl_GlobalInvocationID.y) % 2 == 0) {
-        color = vec4(0.0, 0.0, 0.0, 0.6);
-      } else {
-        color = vec4(0.0, 0.0, 0.0, 0.2);
-      }
+      // if ((gl_GlobalInvocationID.x + gl_GlobalInvocationID.y) % 2 == 0) {
+      //   color = vec4(0.0, 0.0, 0.0, 0.6);
+      // } else {
+      //   color = vec4(0.0, 0.0, 0.0, 0.2);
+      // }
 
-      imageStore(dst, pixel, color);
-      */
+      // imageStore(dst, pixel, color);
 
       imageStore(dst, pixel, vec4(0.0, 0.0, 0.0, value * 0.8));
 
     }
   }
-
-  // for (uint column = 0; column < TILES_WIDE; column++) {
-  //   for (uint row = 0; row < TILES_HIGH; row++) {
-  //     uint tile_ix = (row * TILES_WIDE) + column;
-  //     atomicOr(masks.tile[tile_ix], tile_masks[column][row]);
-  //   }
-  // }
-
-  /*
-
-  uint bitmask = 1 << gl_LocalInvocationIndex;
-
-  for (uint column = 0; column < TILES_WIDE; column++) {
-    for (uint row = 0; row < TILES_HIGH; row++) {
-
-      float left = float(column) * 16.0;
-      float right = left + 16.0;
-
-      float up = float(row) * 16.0;
-      float down = up + 16.0;
-
-      vec2 center = vec2(7.5 + float(column) * 16,
-                         7.5 + float(row) * 16);
-
-      float sdf_at_center = line_segment_sdf(center, p0, p1);
-
-      if (sdf_at_center < 8.0) {
-        atomicOr(tile_masks[column][row], bitmask);
-      }
-    }
-  }
-
-
-
-  barrier();
-
-  for (uint column = 0; column < TILES_WIDE; column++) {
-    for (uint row = 0; row < TILES_HIGH; row++) {
-      uint tile_ix = (row * TILES_WIDE) + column;
-      atomicOr(masks.tile[tile_ix], tile_masks[column][row]);
-    }
-  }
-
   */
-
-  // barrier();
-
-  // for
-
-
-  /*
-  if (gl_GlobalInvocationID.x < (128 * 128)) {
-
-    uint tile_id = gl_GlobalInvocationID.x;
-
-    ivec2 offset = ivec2(16 * (tile_id % 128),
-                         16 * (tile_id / 128));
-
-
-    // ivec2 offset = (ivec2(16, 16) * gl_GlobalInvocationID.x);
-
-    float value = 0.0;
-
-    uint mask = masks.tile[gl_GlobalInvocationID.x];
-
-    for (uint b = 0; b < 32; b++) {
-      if (((mask >> b) & 1) != 0) {
-        value += 1.0 / 32.0;
-      }
-    }
-
-    for (uint x = 0; x < 16; x++) {
-      for (uint y = 0; y < 16; x++) {
-        ivec2 pixel = offset + ivec2(x, y);
-
-        imageStore(dst, pixel, vec4(0.7, 0.7, 0.7, value));
-      }
-    }
-  }
-  */
-
 
 }
 
