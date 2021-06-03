@@ -41,7 +41,7 @@ impl EdgeRenderer {
     ) -> Result<Self> {
         let tiles = ScreenTiles::new(app, 128, 128, Point::ZERO, dims)?;
 
-        let mask = MaskBuffer::new(app, 128, 128)?;
+        let mask = MaskBuffer::new(app, 128, 128, edge_count)?;
 
         let device = app.vk_context().device();
 
@@ -213,8 +213,8 @@ impl EdgeRenderer {
         let x_group_count: u32 = 128 / 32;
         let y_group_count: u32 = 96 / 32;
         let z_group_count: u32 = {
-            let mut size = self.edges.edge_count / 16;
-            if self.edges.edge_count % 16 != 0 {
+            let mut size = self.edges.edge_count / 32;
+            if self.edges.edge_count % 32 != 0 {
                 size += 1;
             }
             size as u32
@@ -576,12 +576,38 @@ pub struct MaskBuffer {
 
 impl MaskBuffer {
     // pub fn new(app: &GfaestusVk, rows: usize, columns: usize, depth: usize) -> Result<Self> {
-    pub fn new(app: &GfaestusVk, rows: usize, columns: usize) -> Result<Self> {
+    pub fn new(
+        app: &GfaestusVk,
+        rows: usize,
+        columns: usize,
+        edge_count: usize,
+    ) -> Result<Self> {
         let tile_count = rows * columns;
 
+        // we use one bit per edge in the mask, and the masks are
+        // `uint`s on the GPU, i.e. `u32`s in Rust
+        let mut mask_depth = edge_count / 32;
+
+        if edge_count % 32 != 0 {
+            mask_depth += 1;
+        }
+
+        let buffer_size =
+            (tile_count * mask_depth) * std::mem::size_of::<u32>();
+
+        println!();
+        println!("------------------------------------");
+        println!("edge: {}", edge_count);
+        println!("tiles: {}", tile_count);
+        println!("mask depth: {}", mask_depth);
+        println!("mask buffer size: {}", buffer_size);
+        println!("------------------------------------");
+        println!();
+
         let (buffer, memory, size) = {
-            let size = ((tile_count * std::mem::size_of::<u32>()) as u32)
-                as vk::DeviceSize;
+            let size = buffer_size as vk::DeviceSize;
+            // let size = ((tile_count * std::mem::size_of::<u32>()) as u32)
+            //     as vk::DeviceSize;
 
             let usage = vk::BufferUsageFlags::TRANSFER_DST
                 | vk::BufferUsageFlags::TRANSFER_SRC
