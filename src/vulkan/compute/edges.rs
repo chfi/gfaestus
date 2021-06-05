@@ -188,6 +188,76 @@ impl EdgeRenderer {
         Ok(())
     }
 
+    pub fn bin_render_memory_barrier(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+    ) -> Result<()> {
+        let device = &self.bin_pipeline.device;
+
+        let mask_barrier = vk::BufferMemoryBarrier::builder()
+            .buffer(self.mask.buffer)
+            .offset(0)
+            .size(self.mask.size)
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .build();
+
+        let memory_barriers = [];
+        let buffer_memory_barriers = [mask_barrier];
+        let image_memory_barriers = [];
+
+        unsafe {
+            device.cmd_pipeline_barrier(
+                cmd_buf,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
+                vk::DependencyFlags::BY_REGION,
+                &memory_barriers,
+                &buffer_memory_barriers,
+                &image_memory_barriers,
+            );
+        }
+
+        Ok(())
+    }
+
+    pub fn pixels_memory_barrier(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+    ) -> Result<()> {
+        let device = &self.render_pipeline.device;
+
+        let pixels_barrier = vk::BufferMemoryBarrier::builder()
+            .buffer(self.pixels.buffer)
+            .offset(0)
+            .size(self.pixels.size)
+            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
+            .dst_access_mask(vk::AccessFlags::SHADER_READ)
+            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
+            .build();
+
+        let memory_barriers = [];
+        let buffer_memory_barriers = [pixels_barrier];
+        let image_memory_barriers = [];
+
+        unsafe {
+            device.cmd_pipeline_barrier(
+                cmd_buf,
+                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                vk::PipelineStageFlags::FRAGMENT_SHADER,
+                vk::DependencyFlags::BY_REGION,
+                &memory_barriers,
+                &buffer_memory_barriers,
+                &image_memory_barriers,
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn bin_draw_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
@@ -270,6 +340,97 @@ impl EdgeRenderer {
         println!("  y_group_count: {}", y_group_count);
         println!("  z_group_count: {}", z_group_count);
         // let y_group_count = 128;
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count,
+                y_group_count,
+                z_group_count,
+            )
+        };
+
+        Ok(())
+    }
+
+    pub fn edge_render_cmd(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        view: View,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
+        let device = &self.render_pipeline.device;
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.render_pipeline.pipeline,
+            );
+
+            let desc_sets = [self.render_desc_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.render_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        let offset = [view.center.x, view.center.y];
+
+        let push_constants = BinPushConstants::new(
+            // offset,
+            [0.0, 0.0],
+            viewport_dims,
+            view,
+            self.edges.edge_count as u32,
+        );
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.render_pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        // let x_group_count: u32 = 4096 / 16;
+        // let y_group_count: u32 = 4096 / 16;
+        // let z_group_count: u32 = {
+        //     let mut size = self.edges.edge_count / 32;
+        //     if self.edges.edge_count % 32 != 0 {
+        //         size += 1;
+        //     }
+        //     size as u32
+        // };
+
+        // let edge_z_group_count: u32 = {
+        //     let mut size = self.edges.edge_count / 32;
+        //     if self.edges.edge_count % 32 != 0 {
+        //         size += 1;
+        //     }
+        //     size as u32
+        // };
+
+        // println!("edge z group count: {}", edge_z_group_count);
+
+        let x_group_count = 96u32;
+        let y_group_count = 64u32;
+        let z_group_count = 16u32;
+
+        println!("edge rendering");
+        println!("  x_group_count: {}", x_group_count);
+        println!("  y_group_count: {}", y_group_count);
+        println!("  z_group_count: {}", z_group_count);
 
         unsafe {
             device.cmd_dispatch(
@@ -861,12 +1022,12 @@ impl EdgeBuffers {
 }
 
 pub struct PixelBuffer {
-    buffer: vk::Buffer,
+    pub buffer: vk::Buffer,
     memory: vk::DeviceMemory,
     size: vk::DeviceSize,
 
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
 }
 
 impl PixelBuffer {

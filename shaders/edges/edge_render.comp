@@ -50,7 +50,7 @@ layout (push_constant) uniform BinPushConstants {
   uint edge_count;
 } bin_pc;
 
-shared vec4 shared_edges[gl_WorkGroupSize.x];
+// shared vec4 shared_edges[gl_WorkGroupSize.x];
 
 
 float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
