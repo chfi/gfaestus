@@ -26,11 +26,15 @@ pub struct EdgeRenderer {
     bin_pipeline: ComputePipeline,
     bin_desc_set: vk::DescriptorSet,
 
+    render_pipeline: ComputePipeline,
+    render_desc_set: vk::DescriptorSet,
+
     // edge_buffer: EdgeBuffer,
     pub tiles: ScreenTiles,
 
     pub edges: EdgeBuffers,
     pub mask: MaskBuffer,
+    pub pixels: PixelBuffer,
 }
 
 impl EdgeRenderer {
@@ -96,16 +100,47 @@ impl EdgeRenderer {
 
         let bin_desc_set = bin_descriptor_sets[0];
 
+        let render_pipeline = Self::create_render_pipeline(device)?;
+
+        let render_descriptor_sets = {
+            let layouts = vec![render_pipeline.descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(render_pipeline.descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let render_desc_set = render_descriptor_sets[0];
+
         let edges = EdgeBuffers::new(app, edge_count)?;
+
+        let pixels = {
+            let pixels = PixelBuffer::new(app, 4096, 4096)?;
+
+            let data: Vec<u32> = vec![4096 * 4096];
+
+            app.copy_data_to_buffer::<u32, u32>(&data, pixels.buffer)?;
+
+            pixels
+        };
 
         Ok(Self {
             test_pipeline,
             test_desc_set,
+
             bin_pipeline,
             bin_desc_set,
+
+            render_pipeline,
+            render_desc_set,
+
             tiles,
             mask,
             edges,
+            pixels,
         })
     }
 
@@ -358,22 +393,7 @@ impl EdgeRenderer {
             .buffer_info(&mask_buf_infos)
             .build();
 
-        let image_info = vk::DescriptorImageInfo::builder()
-            .image_layout(vk::ImageLayout::GENERAL)
-            .image_view(self.tiles.tile_texture.view)
-            .sampler(self.tiles.sampler)
-            .build();
-        let image_infos = [image_info];
-
-        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(self.bin_desc_set)
-            .dst_binding(3)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-            .image_info(&image_infos)
-            .build();
-
-        let descriptor_writes = [nodes, edges, masks, sampler_descriptor_write];
+        let descriptor_writes = [nodes, edges, masks];
 
         unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
 
@@ -405,14 +425,7 @@ impl EdgeRenderer {
                 .stage_flags(Stages::COMPUTE)
                 .build();
 
-            let image = vk::DescriptorSetLayoutBinding::builder()
-                .binding(3)
-                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
-                .descriptor_count(1)
-                .stage_flags(Stages::COMPUTE)
-                .build();
-
-            [nodes, edges, masks, image]
+            [nodes, edges, masks]
         };
 
         let descriptor_set_layout = {
@@ -462,18 +475,7 @@ impl EdgeRenderer {
             descriptor_count: 1,
         };
 
-        let image_pool_size = vk::DescriptorPoolSize {
-            ty: vk::DescriptorType::STORAGE_IMAGE,
-            descriptor_count: 1,
-        };
-
-        // let pool_sizes = [nodes_pool_size, edges_pool_size, masks_pool_size];
-        let pool_sizes = [
-            nodes_pool_size,
-            edges_pool_size,
-            masks_pool_size,
-            image_pool_size,
-        ];
+        let pool_sizes = [nodes_pool_size, edges_pool_size, masks_pool_size];
 
         let bin_pipeline = ComputePipeline::new_with_pool_size(
             device,
@@ -481,6 +483,187 @@ impl EdgeRenderer {
             &pool_sizes,
             pipeline_layout,
             crate::include_shader!("edges/edge_binning.comp.spv"),
+        )?;
+
+        Ok(bin_pipeline)
+    }
+
+    pub fn write_render_descriptor_set(
+        &self,
+        device: &Device,
+        nodes: &NodeVertices,
+    ) -> Result<()> {
+        let node_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(nodes.buffer())
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let node_buf_infos = [node_buf_info];
+
+        let nodes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.render_desc_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&node_buf_infos)
+            .build();
+
+        let edge_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.edges.edges_by_id_buf)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let edge_buf_infos = [edge_buf_info];
+
+        let edges = vk::WriteDescriptorSet::builder()
+            .dst_set(self.render_desc_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&edge_buf_infos)
+            .build();
+
+        let mask_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.mask.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let mask_buf_infos = [mask_buf_info];
+
+        let masks = vk::WriteDescriptorSet::builder()
+            .dst_set(self.render_desc_set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&mask_buf_infos)
+            .build();
+
+        let pixels_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.pixels.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let pixels_buf_infos = [pixels_buf_info];
+
+        let pixels = vk::WriteDescriptorSet::builder()
+            .dst_set(self.render_desc_set)
+            .dst_binding(3)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&pixels_buf_infos)
+            .build();
+
+        let descriptor_writes = [nodes, edges, masks, pixels];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
+    }
+
+    fn create_render_pipeline(device: &Device) -> Result<ComputePipeline> {
+        let bindings = {
+            use vk::ShaderStageFlags as Stages;
+
+            let nodes = vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let edges = vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let masks = vk::DescriptorSetLayoutBinding::builder()
+                .binding(2)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let pixels = vk::DescriptorSetLayoutBinding::builder()
+                .binding(3)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            [nodes, edges, masks, pixels]
+        };
+
+        let descriptor_set_layout = {
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&bindings)
+                .build();
+
+            let layout = unsafe {
+                device.create_descriptor_set_layout(&layout_info, None)
+            }?;
+            layout
+        };
+
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
+
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(BinPushConstants::PC_RANGE)
+                .build();
+
+            let pc_ranges = [pc_range];
+
+            let layouts = [descriptor_set_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
+        }?;
+
+        let nodes_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let edges_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let masks_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pixels_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [
+            nodes_pool_size,
+            edges_pool_size,
+            masks_pool_size,
+            pixels_pool_size,
+        ];
+
+        let bin_pipeline = ComputePipeline::new_with_pool_size(
+            device,
+            descriptor_set_layout,
+            &pool_sizes,
+            pipeline_layout,
+            crate::include_shader!("edges/edge_render.comp.spv"),
         )?;
 
         Ok(bin_pipeline)
@@ -673,6 +856,40 @@ impl EdgeBuffers {
             edges_pos_size,
 
             edge_count,
+        })
+    }
+}
+
+pub struct PixelBuffer {
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    size: vk::DeviceSize,
+
+    width: usize,
+    height: usize,
+}
+
+impl PixelBuffer {
+    pub fn new(app: &GfaestusVk, width: usize, height: usize) -> Result<Self> {
+        let size = ((width * height * std::mem::size_of::<u32>()) as u32)
+            as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::TRANSFER_SRC
+            | vk::BufferUsageFlags::STORAGE_BUFFER;
+
+        let mem_props = vk::MemoryPropertyFlags::DEVICE_LOCAL;
+
+        let (buffer, memory, size) =
+            app.create_buffer(size, usage, mem_props)?;
+
+        Ok(Self {
+            buffer,
+            memory,
+            size,
+
+            width,
+            height,
         })
     }
 }
