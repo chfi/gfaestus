@@ -333,6 +333,14 @@ fn main() {
     )
     .unwrap();
 
+    let mut edge_pixels_pipeline = PostProcessPipeline::new_buffer_read(
+        &gfaestus,
+        1,
+        gfaestus.render_passes.selection_blur,
+        gfaestus::include_shader!("post/pixels_buffer_copy.frag.spv"),
+    )
+    .unwrap();
+
     let mut edge_pipeline =
         // EdgeRenderer::new(&gfaestus, app.dims(), 3)
         EdgeRenderer::new(&gfaestus, app.dims(), graph_query.edge_count())
@@ -699,10 +707,19 @@ fn main() {
                 // let dims = app.dims();
 
                 flip_pipeline
-                    .write_descriptor_set(gfaestus.vk_context().device(),
-                                          edge_pipeline.tiles.tile_texture,
-                                          Some(edge_pipeline.tiles.sampler),
+                    .write_descriptor_set(
+                        gfaestus.vk_context().device(),
+                        edge_pipeline.tiles.tile_texture,
+                        Some(edge_pipeline.tiles.sampler),
                     );
+
+                edge_pixels_pipeline
+                    .write_buffer_descriptor_set(
+                        gfaestus.vk_context().device(),
+                        edge_pipeline.pixels.buffer
+                    );
+
+
 
                 let current_view = app.shared_state().view();
 
@@ -775,6 +792,16 @@ fn main() {
                             current_view,
                             [size.width as f32, size.height as f32]
                         ).unwrap();
+
+                        edge_pipeline.bin_render_memory_barrier(cmd_buf).unwrap();
+
+                        edge_pipeline.edge_render_cmd(
+                            cmd_buf,
+                            current_view,
+                            [size.width as f32, size.height as f32]
+                        ).unwrap();
+
+                        // edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
 
                         unsafe {
                             let (barrier, src_stage, dst_stage) =

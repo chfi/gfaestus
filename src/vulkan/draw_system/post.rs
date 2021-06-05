@@ -24,7 +24,6 @@ impl PostProcessPipeline {
         app: &GfaestusVk,
         image_count: u32,
         render_pass: vk::RenderPass,
-        // input_image: Texture,
         frag_src: &[u8],
     ) -> Result<Self> {
         let vk_context = app.vk_context();
@@ -59,28 +58,55 @@ impl PostProcessPipeline {
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
 
-        /*
-        for set in descriptor_sets.iter() {
-            let image_info = vk::DescriptorImageInfo::builder()
-                .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
-                .image_view(input_image.view)
-                .sampler(input_image.sampler.unwrap())
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(device, render_pass, layout, frag_src);
+
+        Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: layout,
+            descriptor_set: descriptor_sets[0],
+            pipeline_layout,
+            pipeline,
+        })
+    }
+
+    pub fn new_buffer_read(
+        app: &GfaestusVk,
+        image_count: u32,
+        render_pass: vk::RenderPass,
+        frag_src: &[u8],
+    ) -> Result<Self> {
+        let vk_context = app.vk_context();
+        let device = vk_context.device();
+
+        let layout = Self::create_buffer_descriptor_set_layout(device)?;
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
                 .build();
-            let image_infos = [image_info];
 
-            let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-                .dst_set(*set)
-                .dst_binding(0)
-                .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-                .image_info(&image_infos)
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
                 .build();
 
-            let descriptor_writes = [sampler_descriptor_write];
-
-            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
-        }
-        */
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
 
         let (pipeline, pipeline_layout) =
             Self::create_pipeline(device, render_pass, layout, frag_src);
@@ -92,6 +118,32 @@ impl PostProcessPipeline {
             pipeline_layout,
             pipeline,
         })
+    }
+
+    pub fn write_buffer_descriptor_set(
+        &mut self,
+        device: &Device,
+        buffer: vk::Buffer,
+    ) {
+        let pixels_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let pixels_buf_infos = [pixels_buf_info];
+
+        let pixels = vk::WriteDescriptorSet::builder()
+            .dst_set(self.descriptor_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&pixels_buf_infos)
+            .build();
+
+        let descriptor_writes = [pixels];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
     }
 
     pub fn write_descriptor_set(
@@ -235,6 +287,30 @@ impl PostProcessPipeline {
         device: &Device,
     ) -> Result<vk::DescriptorSetLayout> {
         let binding = Self::layout_binding();
+        let bindings = [binding];
+
+        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+            .bindings(&bindings)
+            .build();
+
+        let layout =
+            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
+
+        Ok(layout)
+    }
+
+    fn create_buffer_descriptor_set_layout(
+        device: &Device,
+    ) -> Result<vk::DescriptorSetLayout> {
+        use vk::ShaderStageFlags as Stages;
+
+        let binding = vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(Stages::FRAGMENT)
+            .build();
+
         let bindings = [binding];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
