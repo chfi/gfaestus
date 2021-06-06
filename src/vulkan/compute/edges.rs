@@ -246,7 +246,7 @@ impl EdgeRenderer {
         unsafe {
             device.cmd_pipeline_barrier(
                 cmd_buf,
-                vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                vk::PipelineStageFlags::COMPUTE_SHADER,
                 vk::PipelineStageFlags::FRAGMENT_SHADER,
                 vk::DependencyFlags::BY_REGION,
                 &memory_barriers,
@@ -317,13 +317,14 @@ impl EdgeRenderer {
 
         let x_group_count: u32 = 128 / 32;
         let y_group_count: u32 = 96 / 32;
-        let z_group_count: u32 = {
-            let mut size = self.edges.edge_count / 32;
-            if self.edges.edge_count % 32 != 0 {
-                size += 1;
-            }
-            size as u32
-        };
+        let z_group_count: u32 = 1;
+        // let z_group_count: u32 = {
+        //     let mut size = self.edges.edge_count / 32;
+        //     if self.edges.edge_count % 32 != 0 {
+        //         size += 1;
+        //     }
+        //     size as u32
+        // };
 
         // let x_group_count = {
         //     let mut size = self.edges.edge_count / 16;
@@ -425,7 +426,9 @@ impl EdgeRenderer {
 
         let x_group_count = 96u32;
         let y_group_count = 64u32;
-        let z_group_count = 16u32;
+        // let z_group_count = 16u32;
+        // let z_group_count = 4u32;
+        let z_group_count = 1u32;
 
         println!("edge rendering");
         println!("  x_group_count: {}", x_group_count);

@@ -364,6 +364,14 @@ fn main() {
             &main_view.node_draw_system.vertices,
         )
         .unwrap();
+
+    edge_pipeline
+        .write_render_descriptor_set(
+            gfaestus.vk_context().device(),
+            &main_view.node_draw_system.vertices,
+        )
+        .unwrap();
+
     /*
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
@@ -801,7 +809,7 @@ fn main() {
                             [size.width as f32, size.height as f32]
                         ).unwrap();
 
-                        // edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
+                        edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
 
                         unsafe {
                             let (barrier, src_stage, dst_stage) =
@@ -967,15 +975,25 @@ fn main() {
                         // let tile_size = [128.0 * 16.0,
                         //                  128.0 * 16.0];
 
-                        flip_pipeline.draw(&device,
-                                           cmd_buf,
-                                           blur_pass,
-                                           framebuffers,
-                                           screen_size,
-                                           tile_texture_size,
-                                           // [size.width as f32, size.height as f32]
-                        )
-                            .unwrap();
+                        flip_pipeline.draw(
+                            &device,
+                            cmd_buf,
+                            blur_pass,
+                            framebuffers,
+                            screen_size,
+                            tile_texture_size,
+                            // [size.width as f32, size.height as f32]
+                        ).unwrap();
+
+                        edge_pixels_pipeline.draw(
+                            &device,
+                            cmd_buf,
+                            blur_pass,
+                            framebuffers,
+                            screen_size,
+                            tile_texture_size,
+                            // [size.width as f32, size.height as f32]
+                        ).unwrap();
 
                         gui.draw(
                             cmd_buf,
