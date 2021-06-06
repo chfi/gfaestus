@@ -25,13 +25,15 @@ void main() {
 
   uvec2 uv = uvec2(fc);
 
-  uint index = (uv.y * uint(dims.texture_size.x)) + uv.x;
+  uvec2 u_fc = uvec2(gl_FragCoord.xy);
+
+  uint index = (u_fc.y * uint(dims.texture_size.x)) + u_fc.x;
 
   uint pixel = pixels.pixel[index];
 
   float value = float(pixel) / 255.0;
 
-  vec4 color = vec4(value);
+  vec4 color = vec4(0.0, 0.0, 0.0, value);
 
   f_color = color;
 }
