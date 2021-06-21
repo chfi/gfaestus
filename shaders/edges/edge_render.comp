@@ -4,6 +4,10 @@
 #define TILES_HIGH 96
 // #extension GL_EXT_shader_atomic_float : enable
 
+#define EDGES_PER_WORKGROUP 256
+
+#include "sdf.glsl"
+
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
 /*
@@ -51,67 +55,168 @@ layout (push_constant) uniform BinPushConstants {
 } bin_pc;
 
 // shared vec4 shared_edges[gl_WorkGroupSize.x];
+shared vec4 shared_edges[EDGES_PER_WORKGROUP];
+shared uint local_edge_count;
 
+uint pixel_index(vec2 tile_rel) {
+  uint x = uint(tile_rel.x);
+  uint y = uint(tile_rel.y);
 
-float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
-  vec2 pos_0 = pos - p0;
-  vec2 pos_1 = p1 - p0;
+  uvec2 offset = uvec2(16 * gl_WorkGroupID.xy);
 
-  float h = clamp(dot(pos_0, pos_1) / dot(pos_1, pos_1), 0.0, 1.0);
-  return length(pos_0 - pos_1*h) - 4.0;
+  uvec2 point = offset + uvec2(x, y);
+
+  return point.x + (point.y * 4096);
 }
 
 void main() {
 
+  uint edge_ix_offset = gl_GlobalInvocationID.z * EDGES_PER_WORKGROUP;
+
+
+  // uint mask_offset = gl_GlobalInvocationID.z * (EDGES_PER_WORKGROUP / 32);
+
+  uint mask_depth = bin_pc.edge_count / 32;
+
+  if (bin_pc.edge_count % 32 != 0) {
+    mask_depth += 1;
+  }
+
+  uint mask_offset = gl_GlobalInvocationID.z * 32;
+  // uint tile_mask_offset = gl_GlobalInvocationID.y + (128 * gl_GlobalInvocationID.x) + mask_offset;
+  uint tile_mask_offset = gl_GlobalInvocationID.y + (128 * gl_GlobalInvocationID.x);
+
+  uint column = gl_WorkGroupID.x;
+  uint row = gl_WorkGroupID.y;
+  // uint column = gl_GlobalInvocationID.x;
+  // uint row = gl_GlobalInvocationID.y;
+
+
+  vec2 pixel_pos = vec2(gl_GlobalInvocationID.xy);
+
+  uint pixel_ix = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * 4096;
+  // uint pixel_ix = pixel_index(gl_LocalInvocationID.xy);
+
   /*
-  uint edge_offset = gl_WorkGroupID.x * gl_WorkGroupSize.x;
+  if (gl_GlobalInvocationID.z == 0 &&
+      gl_LocalInvocationID.x == 0 &&
+      gl_LocalInvocationID.y == 0 &&
+      gl_LocalInvocationID.z == 0) {
+    tiles.pixel[pixel_ix] = 0;
+  }
+  */
 
-  if (gl_LocalInvocationIndex < 15) {
-    // uint edge_local_offset = gl_LocalInvocationIndex;
-    uint edge_ix = edge_offset + gl_LocalInvocationIndex;
-
-    vec4 edge = edges.edge_points[edge_ix];
-
-    shared_edges[gl_LocalInvocationIndex] = edge;
+  if (gl_GlobalInvocationID.x == 0 &&
+      gl_GlobalInvocationID.y == 0 &&
+      gl_GlobalInvocationID.z == 0) {
+    local_edge_count = 0;
   }
 
   barrier();
 
-  uint this_tile = gl_WorkGroupID.x;
 
-  uint column = this_tile % TILES_WIDE;
-  uint row = this_tile / TILES_WIDE;
 
-  uvec2 tile_px_offset = uvec2(column * 16,
-                               row * 16);
+  uint edge_ix = gl_LocalInvocationIndex;
 
-  vec2 tile_offset = vec2(float(column) * 16.0,
-                          float(row) * 16.0);
+  uvec2 this_edge = edges.edge[edge_ix];
 
-  vec2 local_offset = vec2(gl_LocalInvocationID.x,
-                           gl_LocalInvocationID.y) + vec2(0.5);
+  vec2 p0 = nodes.pos[this_edge.x];
+  vec2 p1 = nodes.pos[this_edge.y];
 
-  uvec2 local_px_offset = uvec2(gl_LocalInvocationID.xy);
+  vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
+  vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
 
-  uvec2 pixel_offset = tile_px_offset + local_px_offset;
+  vec2 q0 = a.xy;
+  vec2 q1 = b.xy;
 
-  uint pixel_start = pixel_offset.x + pixel_offset.y * dimensions.width;
+  vec4 edge = vec4(q0.x, q0.y, q1.x, q1.y);
 
-  float value = 0.0;
+  uint local_edge_ix = atomicAdd(local_edge_count, 1);
+  shared_edges[gl_LocalInvocationIndex] = edge;
 
-  for (uint edge_ix = 0; edge_ix < gl_WorkGroupSize.x; edge_ix++) {
+  /*
+  if (gl_LocalInvocationID.y < 2) {
+
+
+    uint local_mask_ix = gl_LocalInvocationID.x + (gl_LocalInvocationID.y * 16);
+
+    uint mask_ix = gl_LocalInvocationID.x;
+
+    uint global_mask_ix = local_mask_ix + tile_mask_offset;
+    // uint global_mask_ix = mask_ix + (8 * gl_GlobalInvocationID.z);
+
+    // uint mask = masks.tile[(row + 128 * column) + global_mask_ix];
+    uint mask = masks.tile[global_mask_ix];
+
+
+    // for (uint bit_offset = 0; bit_offset < 2; bit_offset++) {
+    for (uint bit_ix = 0; bit_ix < 32; bit_ix++) {
+
+      // uint bit_ix = (gl_LocalInvocationID.y * 2) + bit_offset;
+
+      // if ((mask & (1 << bit_ix)) != 0) {
+
+        uint edge_ix = global_mask_ix + bit_ix;
+        // uint edge_ix = edge_ix_offset + (mask_ix * 32) + bit_ix;
+
+        uvec2 this_edge = edges.edge[edge_ix];
+
+        vec2 p0 = nodes.pos[this_edge.x];
+        vec2 p1 = nodes.pos[this_edge.y];
+
+        vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
+        vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
+
+        vec2 q0 = a.xy;
+        vec2 q1 = b.xy;
+
+        vec4 edge = vec4(q0.x, q0.y, q1.x, q1.y);
+
+        uint local_edge_ix = atomicAdd(local_edge_count, 1);
+        shared_edges[gl_LocalInvocationIndex] = edge;
+        // shared_edges[local_edge_ix] = edge;
+      // }
+
+    }
+  }
+  */
+
+  barrier();
+
+  // vec2 tile_offset = vec2(16.0 * gl_WorkGroupID.x,
+  //                         16.0 * gl_WorkGroupID.y);
+
+  float max_sdf = 0.0;
+  float min_sdf = 10000000.0;
+
+  // for (uint edge_ix = 0; edge_ix < local_edge_count; edge_ix++) {
+  for (uint edge_ix = 0; edge_ix < 256; edge_ix++) {
     vec4 edge = shared_edges[edge_ix];
 
-    float sdf = line_segment_sdf(tile_offset + local_offset,
-                                 edge.xy,
-                                 edge.zw);
+    float sdf_at_pixel = line_segment_sdf(pixel_pos, edge.xy, edge.zw);
 
-    value = clamp(sdf + value, 0.0, 1.0);
+    max_sdf = max(max_sdf, sdf_at_pixel);
+    min_sdf = min(min_sdf, sdf_at_pixel);
   }
 
-  uint u_value = uint(value * 255.0);
+  // uint value = clamp(uint(max_sdf), 0, 255);
 
-  atomicMax(tiles.pixel[pixel_start], u_value);
-  */
+
+  // tiles.pixel[pixel_ix] = value;
+  // tiles.pixel[pixel_ix] = clamp(local_edge_count % 256, 0, 255);
+
+
+  uint value = 0;
+
+  if (min_sdf < 32.0) {
+    // value = uint((1.0 - (max_sdf / 32.0)) * 255.0);
+    float v = clamp(min_sdf / 32.0, 0.0, 1.0);
+    v = 1.0 - v;
+    value = uint(v * 255.0);
+    // value = uint((min_sdf / 32.0) * 255.0);
+  }
+
+  tiles.pixel[pixel_ix] = value;
+
 
 }
