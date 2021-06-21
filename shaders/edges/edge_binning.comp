@@ -72,7 +72,9 @@ void main() {
   for (uint z = 0; z < 8; z++) {
     tile_masks[column][row][z] = 0;
 
-    uint ix = (column * row) + z;
+    // uint ix = (column * row) + z;
+    // uint ix = (column + 128 * row) + z;
+    uint ix = (row + 128 * column) + z;
 
     masks.tile[ix] = 0;
   }
@@ -126,7 +128,10 @@ void main() {
 
 
   for (uint z = 0; z < 8; z++) {
-    uint ix = (column * row) + z;
+    // uint ix = (column * row) + z;
+    uint ix = (row + 128 * column) + z;
+
+    // atomicOr(masks.tile[ix], 256);
     atomicOr(masks.tile[ix], tile_masks[column][row][z]);
   }
 
