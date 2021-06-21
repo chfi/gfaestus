@@ -6,6 +6,7 @@
 #define EDGES_PER_WORKGROUP 256
 
 #include "sdf.glsl"
+#include "edge_orient.glsl"
 
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in;
 
@@ -96,6 +97,8 @@ void main() {
 
     uvec2 this_edge = edges.edge[edge_ix];
 
+    uvec2 oriented_ixs = oriented_edge_ixs(this_edge);
+
     uint mask_ix = edge_ix / 32;
     uint bit_shift = edge_ix % 32;
 
@@ -103,8 +106,8 @@ void main() {
 
     uint bitmask = 1 << bit_shift;
 
-    vec2 p0 = nodes.pos[this_edge.x];
-    vec2 p1 = nodes.pos[this_edge.y];
+    vec2 p0 = nodes.pos[oriented_ixs.x];
+    vec2 p1 = nodes.pos[oriented_ixs.y];
 
     vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
     vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
