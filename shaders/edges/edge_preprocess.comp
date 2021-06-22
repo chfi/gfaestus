@@ -1,0 +1,74 @@
+#version 450
+
+#define TILES_WIDE 128
+#define TILES_HIGH 96
+
+#include "sdf.glsl"
+#include "edge_orient.glsl"
+#include "geometry.glsl"
+
+layout (local_size_x = 1024) in;
+
+layout (set = 0, binding = 0) readonly buffer Nodes {
+  vec2 pos[];
+} nodes;
+
+layout (set = 0, binding = 1) readonly buffer Edges {
+  uvec2 edge[];
+} edges;
+
+layout (set = 0, binding = 2) writeonly buffer EdgeBeziers {
+  uint edge_count;
+  vec2 curve[];
+} beziers;
+
+layout (push_constant) uniform BinPushConstants {
+  mat4 view_transform;
+  vec2 viewport_dims;
+  uint edge_count;
+} bin_pc;
+
+
+shared uint edge_count;
+
+void main() {
+  if (gl_LocalInvocationIndex == 0) {
+    edge_count = 0;
+  }
+
+  barrier();
+
+  if (gl_LocalInvocationIndex >= bin_pc.edge_count) {
+    return;
+  }
+
+  uint edge_ix = gl_LocalInvocationIndex;
+
+  uvec2 this_edge = edges.edge[edge_ix];
+  uvec2 oriented_ixs = oriented_edge_ixs(this_edge);
+
+  vec2 p0 = nodes.pos[oriented_ixs.x];
+  vec2 p1 = nodes.pos[oriented_ixs.y];
+
+  vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
+  vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
+
+
+  vec2 q0 = a.xy;
+  vec2 q1 = b.xy;
+
+  vec2 ctrl = edge_control_point(q0, q1);
+
+  // TODO compare Bezier points to viewport & filter;
+  // need to either calculate or pass the visible area
+
+  uint offset = atomicAdd(edge_count, 3);
+
+  beziers.curve[offset] = q0;
+  beziers.curve[offset + 1] = ctrl;
+  beziers.curve[offset + 2] = q1;
+
+  barrier();
+
+  beziers.edge_count = edge_count;
+}
