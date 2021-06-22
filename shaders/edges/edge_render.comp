@@ -212,7 +212,7 @@ void main() {
 
   uint value = 0;
 
-  if (min_sdf < 32.0) {
+  if (min_sdf < 2.0) {
     // value = uint((1.0 - (max_sdf / 32.0)) * 255.0);
     float v = clamp(min_sdf / 32.0, 0.0, 1.0);
     v = 1.0 - v;
