@@ -23,6 +23,15 @@ vec2 bezier_quad(in vec2 p0, in vec2 ctrl, in vec2 p1, in float t) {
 
 }
 
+int bezier_interval(in vec2 p0, in vec2 ctrl, in vec2 p1) {
+  float p0_ctrl = length(ctrl - p0);
+  float ctrl_p1 = length(p1 - ctrl);
+
+  return int((p0_ctrl / 4.0) + (ctrl_p1 / 4.0));
+}
+
+
+
 uint tile_border_index(in vec2 p) {
   uint x = uint(clamp(p.x, 0.0, 15.0));
   uint y = uint(clamp(p.y, 0.0, 15.0));

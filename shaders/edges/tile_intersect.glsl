@@ -2,6 +2,8 @@
 #define TILE_I 16
 #define LINE_WIDTH 2.0
 
+#include "geometry.glsl"
+
 ivec2 tile_coords(in vec2 pixel_c) {
     return ivec2(pixel_c / TILE_F);
 }
@@ -100,4 +102,82 @@ vec2 intersect2(in vec3 l0, in vec3 l1) {
    float den = intersect.z == 0.0 ? 1.0 : intersect.z;
 
    return vec2(intersect.xy / den);
+}
+
+vec2 bezier_grid_intersect(in vec2 p0,
+                           in vec2 ctrl,
+                           in vec2 p1,
+                           in float t0
+                           in float t1) {
+
+  vec2 b0 = bezier_quad(p0, ctrl, p1, t0);
+  vec2 b1 = bezier_quad(p0, ctrl, p1, t1);
+
+  vec3 b_line;
+
+  if (b0.x == b1.x) {
+    b_line = vec3(1.0, 0.0, -b0.x);
+  } else {
+
+    float slope = (b1.y - b0.y) / (b1.x - b1.y);
+    float intercept = (b1.x * b0.y - b0.x * b1.y) / slope;
+
+    b_line = vec3(1.0, slope, -intercept);
+  }
+
+  mat4x3 grid_lines = tile_lines(fragCoord);
+
+  for (int i = 0; i < 4; i++) {
+    vec2 grid_intersect = line_line_intersect(b_line, grid_lines[i]);
+
+    if (grid_intersect != vec2(0.0)) {
+      return grid_intersect;
+    }
+  }
+
+  return vec2(0.0);
+}
+
+void eval_lines_test(out vec4 color, in vec2 pixel_coord) {
+    vec3 l0 = vec3(0.0, 1.0, 100.0);
+    vec3 l1 = vec3(1.0, -0.45 + (5.5 * sin(iTime)), 200.0);
+
+    vec3 l2 = tile_hor_line_above(fragCoord);
+
+    mat4x3 grid_lines = tile_lines(fragCoord);
+
+    vec2 g0 = line_line_intersect(l1, grid_lines[0]);
+    vec2 g1 = line_line_intersect(l1, grid_lines[1]);
+    vec2 g2 = line_line_intersect(l1, grid_lines[2]);
+    vec2 g3 = line_line_intersect(l1, grid_lines[3]);
+
+    vec2 pt1 = line_line_intersect(l2, l1);
+    vec2 pt2 = line_line_intersect(l0, l1);
+
+    vec2 fc = pixel_coord;
+
+    float dl0 = line_sdf2(fc, l0);
+    float dl1 = line_sdf2(fc, l1);
+    float dl2 = line_sdf2(fc, l2);
+
+    float gl0 = line_sdf2(fc, grid_lines[0]);
+    float gl1 = line_sdf2(fc, grid_lines[1]);
+    float gl2 = line_sdf2(fc, grid_lines[2]);
+    float gl3 = line_sdf2(fc, grid_lines[3]);
+
+    float d1 = length(pt1 - fc) / 10.0;
+    float d2 = length(pt2 - fc) / 10.0;
+
+    float dg0 = length(g0 - fc) / 8.0;
+    float dg1 = length(g1 - fc) / 8.0;
+    float dg2 = length(g2 - fc) / 8.0;
+    float dg3 = length(g3 - fc) / 8.0;
+
+    float v = min(dl0, dl1);
+    v = min(v, dl2);
+
+    v = min(v, min(dg0, min(dg1, min(dg2, dg3))));
+    v = min(v, min(gl0, min(gl1, min(gl2, gl3))));
+
+    fragColor = vec4(v, v, v, 1.0);
 }
