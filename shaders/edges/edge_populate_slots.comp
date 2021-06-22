@@ -1,0 +1,94 @@
+#version 450
+
+#define TILES_WIDE 128
+#define TILES_HIGH 96
+
+#define EDGES_PER_GROUP 256
+
+#include "tile_intersect.glsl"
+
+layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+layout (set = 0, binding = 0) readonly buffer EdgeBeziers {
+  uint edge_count;
+  vec2 curve[];
+} beziers;
+
+layout (set = 0, binding = 1) writeonly buffer TileSlots {
+  uint slots[32];
+} tiles;
+
+shared uint tile_slots[16][16][32];
+
+void main() {
+
+  uint edge_offset = gl_GlobalInvocationID.z * EDGES_PER_GROUP;
+  uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
+
+  if (gl_GlobalInvocationID.z == 0) {
+    for (uint i = 0; i < 32; i++) {
+      tile_slots[gl_LocalInvocationID.x][gl_LocalInvocationID.y][i] = 0;
+    }
+  }
+
+  barrier();
+
+  vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
+                          16.0 * gl_GlobalInvocationID.y);
+
+  vec2 tile_center = tile_offset + vec2(7.0);
+
+  // for now we evaluate each group's edges sequentially;
+  // later we can use the 16x16 threads we already have to parallelize it
+
+
+  uint local_x = gl_LocalInvocationID.x;
+  uint local_y = gl_LocalInvocationID.y;
+
+  for (uint edge_ix = edge_offset; edge_ix < edge_end; edge_ix++) {
+    uint offset = edge_ix * 3;
+
+    vec2 p0   = beziers.curve[offset];
+    vec2 ctrl = beziers.curve[offset+1];
+    vec2 p1   = beziers.curve[offset+2];
+
+    int count = bezier_interval(p0, ctrl, p1);
+    float t_del = 1.0 / float(count);
+
+    vec2 prev_intersect = vec2(0.0);
+
+    for (uint i = 1; i < count; i++) {
+
+      // t_cur = t_del * float(i);
+      // cur = bezier_quad(p0, ctrl, p1);
+
+      float t0 = t_del * float(i - 1);
+      float t1 = t_del * float(i);
+
+      vec2 intersect = bezier_grid_intersect(tile_center, p0, ctrl, p1, t0, t1);
+
+      if (prev_intersect != vec2(0.0) &&
+          intersect != vec2(0.0)) {
+        uint ix0 = tile_border_index(prev_intersect);
+        uint ix1 = tile_border_index(intersect);
+
+        tile_slots[local_x][local_y][ix0] |= (1 << ix1);
+      }
+
+      prev_intersect = intersect;
+    }
+  }
+
+
+  barrier();
+
+  uint global_x = gl_GlobalInvocationID.x;
+  uint global_y = gl_GlobalInvocationID.y;
+
+  uint tile_slot_offset = global_x + global_y * TILES_WIDE;
+
+  for (uint i = 0; i < 32; i++) {
+    tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
+  }
+
+}

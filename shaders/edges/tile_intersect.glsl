@@ -50,6 +50,7 @@ float line_segment_sdf(in vec2 pos, in vec2 p0, in vec2 p1) {
   return length(pos_0 - pos_1*h) - LINE_WIDTH;
 }
 
+/*
 float line_sdf(in vec2 pos, in vec3 line) {
   float x0 = 0.0;
   float y0 = line.y * x0 + line.z;
@@ -63,6 +64,7 @@ float line_sdf(in vec2 pos, in vec3 line) {
 float line_sdf2(in vec2 pos, in vec3 line) {
   return abs(pos.x * line.x + pos.y * line.y - line.z) * 0.5;
 }
+*/
 
 vec3 points_line(in vec2 p0, in vec2 p1) {
    float slope = (p1.y - p0.y) / (p1.x - p0.x);
@@ -104,10 +106,11 @@ vec2 intersect2(in vec3 l0, in vec3 l1) {
    return vec2(intersect.xy / den);
 }
 
-vec2 bezier_grid_intersect(in vec2 p0,
+vec2 bezier_grid_intersect(in vec2 pixel,
+                           in vec2 p0,
                            in vec2 ctrl,
                            in vec2 p1,
-                           in float t0
+                           in float t0,
                            in float t1) {
 
   vec2 b0 = bezier_quad(p0, ctrl, p1, t0);
@@ -125,7 +128,7 @@ vec2 bezier_grid_intersect(in vec2 p0,
     b_line = vec3(1.0, slope, -intercept);
   }
 
-  mat4x3 grid_lines = tile_lines(fragCoord);
+  mat4x3 grid_lines = tile_lines(pixel);
 
   for (int i = 0; i < 4; i++) {
     vec2 grid_intersect = line_line_intersect(b_line, grid_lines[i]);
@@ -138,6 +141,7 @@ vec2 bezier_grid_intersect(in vec2 p0,
   return vec2(0.0);
 }
 
+/*
 void eval_lines_test(out vec4 color, in vec2 pixel_coord) {
     vec3 l0 = vec3(0.0, 1.0, 100.0);
     vec3 l1 = vec3(1.0, -0.45 + (5.5 * sin(iTime)), 200.0);
@@ -181,3 +185,4 @@ void eval_lines_test(out vec4 color, in vec2 pixel_coord) {
 
     fragColor = vec4(v, v, v, 1.0);
 }
+*/
