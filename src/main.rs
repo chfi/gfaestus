@@ -324,15 +324,6 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
-    let mut flip_pipeline = PostProcessPipeline::new(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_blur,
-        // gfaestus.node_attachments.mask_resolve,
-        gfaestus::include_shader!("post/example.frag.spv"),
-    )
-    .unwrap();
-
     let mut edge_pixels_pipeline = PostProcessPipeline::new_buffer_read(
         &gfaestus,
         1,
@@ -703,31 +694,17 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
-
-
                 let mut use_overlay = app.shared_state().overlay_state().use_overlay();
-
 
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
                 let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
-
-                // let dims = app.dims();
-
-                flip_pipeline
-                    .write_descriptor_set(
-                        gfaestus.vk_context().device(),
-                        edge_pipeline.tiles.tile_texture,
-                        Some(edge_pipeline.tiles.sampler),
-                    );
 
                 edge_pixels_pipeline
                     .write_buffer_descriptor_set(
                         gfaestus.vk_context().device(),
                         edge_pipeline.pixels.buffer
                     );
-
-
 
                 let current_view = app.shared_state().view();
 
@@ -974,16 +951,6 @@ fn main() {
 
                         // let tile_size = [128.0 * 16.0,
                         //                  128.0 * 16.0];
-
-                        flip_pipeline.draw(
-                            &device,
-                            cmd_buf,
-                            blur_pass,
-                            framebuffers,
-                            screen_size,
-                            tile_texture_size,
-                            // [size.width as f32, size.height as f32]
-                        ).unwrap();
 
                         edge_pixels_pipeline.draw(
                             &device,
