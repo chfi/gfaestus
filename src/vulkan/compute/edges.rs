@@ -43,6 +43,7 @@ pub struct EdgeRenderer {
 
     pub edges: EdgeBuffers,
     pub mask: MaskBuffer,
+    pub tile_slots: TileSlots,
     pub pixels: PixelBuffer,
 }
 
@@ -172,6 +173,8 @@ impl EdgeRenderer {
 
         let edges = EdgeBuffers::new(app, edge_count)?;
 
+        let tile_slots = TileSlots::new(app, 96, 128)?;
+
         let pixels = {
             let pixels = PixelBuffer::new(app, 4096, 4096)?;
 
@@ -203,6 +206,7 @@ impl EdgeRenderer {
 
             tiles,
             mask,
+            tile_slots,
             edges,
             pixels,
         })
@@ -1426,6 +1430,57 @@ pub struct EdgeBuffers {
     edges_pos_size: vk::DeviceSize,
 
     edge_count: usize,
+}
+
+pub struct TileSlots {
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    size: vk::DeviceSize,
+
+    rows: usize,
+    columns: usize,
+}
+
+impl TileSlots {
+    // pub fn new(app: &GfaestusVk, rows: usize, columns: usize, depth: usize) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, rows: usize, columns: usize) -> Result<Self> {
+        let tile_count = rows * columns;
+
+        /*
+        // we use one bit per edge in the mask, and the masks are
+        // `uint`s on the GPU, i.e. `u32`s in Rust
+        let mut mask_depth = edge_count / 32;
+
+        if edge_count % 32 != 0 {
+            mask_depth += 1;
+        }
+        */
+
+        let buffer_size = tile_count * 32 * std::mem::size_of::<u32>();
+
+        let (buffer, memory, size) = {
+            let size = buffer_size as vk::DeviceSize;
+
+            let usage = vk::BufferUsageFlags::TRANSFER_DST
+                | vk::BufferUsageFlags::TRANSFER_SRC
+                | vk::BufferUsageFlags::STORAGE_BUFFER;
+
+            let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+                | vk::MemoryPropertyFlags::HOST_CACHED
+                | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+            app.create_buffer(size, usage, mem_props)
+        }?;
+
+        Ok(Self {
+            buffer,
+            memory,
+            size,
+
+            rows,
+            columns,
+        })
+    }
 }
 
 pub struct MaskBuffer {
