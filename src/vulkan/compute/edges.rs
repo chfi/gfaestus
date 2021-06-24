@@ -776,6 +776,152 @@ impl EdgeRenderer {
         Ok(())
     }
 
+    pub fn write_preprocess_descriptor_set(
+        &self,
+        device: &Device,
+        nodes: &NodeVertices,
+    ) -> Result<()> {
+        let node_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(nodes.buffer())
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let node_buf_infos = [node_buf_info];
+
+        let nodes = vk::WriteDescriptorSet::builder()
+            .dst_set(self.preprocess_desc_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&node_buf_infos)
+            .build();
+
+        let edge_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.edges.edges_by_id_buf)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let edge_buf_infos = [edge_buf_info];
+
+        let edges = vk::WriteDescriptorSet::builder()
+            .dst_set(self.preprocess_desc_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&edge_buf_infos)
+            .build();
+
+        let bezier_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.edges.edges_pos_buf)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let bezier_buf_infos = [bezier_buf_info];
+
+        let beziers = vk::WriteDescriptorSet::builder()
+            .dst_set(self.preprocess_desc_set)
+            .dst_binding(2)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&bezier_buf_infos)
+            .build();
+
+        let descriptor_writes = [nodes, edges, beziers];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
+    }
+
+    pub fn write_populate_slots_descriptor_set(
+        &self,
+        device: &Device,
+    ) -> Result<()> {
+        let bezier_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.edges.edges_pos_buf)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let bezier_buf_infos = [bezier_buf_info];
+
+        let beziers = vk::WriteDescriptorSet::builder()
+            .dst_set(self.populate_slot_desc_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&bezier_buf_infos)
+            .build();
+
+        let slots_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.tile_slots.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let slots_buf_infos = [slots_buf_info];
+
+        let slots = vk::WriteDescriptorSet::builder()
+            .dst_set(self.populate_slot_desc_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&bezier_buf_infos)
+            .build();
+
+        let descriptor_writes = [beziers, slots];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
+    }
+
+    pub fn write_slot_render_descriptor_set(
+        &self,
+        device: &Device,
+    ) -> Result<()> {
+        let slots_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.tile_slots.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let slots_buf_infos = [slots_buf_info];
+
+        let slots = vk::WriteDescriptorSet::builder()
+            .dst_set(self.slot_render_desc_set)
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&slots_buf_infos)
+            .build();
+
+        let pixels_buf_info = vk::DescriptorBufferInfo::builder()
+            .buffer(self.pixels.buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .build();
+
+        let pixels_buf_infos = [pixels_buf_info];
+
+        let pixels = vk::WriteDescriptorSet::builder()
+            .dst_set(self.slot_render_desc_set)
+            .dst_binding(1)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .buffer_info(&pixels_buf_infos)
+            .build();
+
+        let descriptor_writes = [slots, pixels];
+
+        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+
+        Ok(())
+    }
+
     pub fn write_bin_descriptor_set(
         &self,
         device: &Device,

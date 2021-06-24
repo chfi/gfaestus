@@ -363,6 +363,21 @@ fn main() {
         )
         .unwrap();
 
+    edge_pipeline
+        .write_preprocess_descriptor_set(
+            gfaestus.vk_context().device(),
+            &main_view.node_draw_system.vertices,
+        )
+        .unwrap();
+
+    edge_pipeline
+        .write_populate_slots_descriptor_set(gfaestus.vk_context().device())
+        .unwrap();
+
+    edge_pipeline
+        .write_slot_render_descriptor_set(gfaestus.vk_context().device())
+        .unwrap();
+
     /*
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
