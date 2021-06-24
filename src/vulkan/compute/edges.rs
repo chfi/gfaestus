@@ -322,6 +322,210 @@ impl EdgeRenderer {
         Ok(())
     }
 
+    pub fn preprocess_cmd(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        view: View,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
+        let device = &self.preprocess_pipeline.device;
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.preprocess_pipeline.pipeline,
+            )
+        };
+
+        unsafe {
+            let desc_sets = [self.preprocess_desc_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.preprocess_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        // let screen_size = Point {
+        //     x: viewport_dims[0],
+        //     y: viewport_dims[1],
+        // };
+
+        let offset = [view.center.x, view.center.y];
+
+        let push_constants = BinPushConstants::new(
+            // offset,
+            [0.0, 0.0],
+            viewport_dims,
+            view,
+            self.edges.edge_count as u32,
+        );
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.preprocess_pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        let x_group_count: u32 = {
+            let mut size = self.edges.edge_count / 1024;
+            if self.edges.edge_count % 1024 != 0 {
+                size += 1;
+            }
+            size as u32
+        };
+        let y_group_count: u32 = 1;
+        let z_group_count: u32 = 1;
+
+        println!("edge preprocessing");
+        println!("  x_group_count: {}", x_group_count);
+        println!("  y_group_count: {}", y_group_count);
+        println!("  z_group_count: {}", z_group_count);
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count,
+                y_group_count,
+                z_group_count,
+            )
+        };
+
+        Ok(())
+    }
+
+    pub fn populate_slots_cmd(&self, cmd_buf: vk::CommandBuffer) -> Result<()> {
+        let device = &self.populate_slot_pipeline.device;
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.populate_slot_pipeline.pipeline,
+            )
+        };
+
+        unsafe {
+            let desc_sets = [self.populate_slot_desc_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.populate_slot_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        // let screen_size = Point {
+        //     x: viewport_dims[0],
+        //     y: viewport_dims[1],
+        // };
+
+        /*
+        let offset = [view.center.x, view.center.y];
+
+        let push_constants = BinPushConstants::new(
+            // offset,
+            [0.0, 0.0],
+            viewport_dims,
+            view,
+            self.edges.edge_count as u32,
+        );
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.preprocess_pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                &pc_bytes,
+            )
+        };
+        */
+
+        let x_group_count: u32 = 128 / 16;
+        let y_group_count: u32 = 96 / 16;
+        let z_group_count: u32 = 1;
+
+        // TODO use edge count from the preprocessing output buffer
+        // let z_group_count: u32 = {
+        //     let mut size = self.edges.edge_count / 1024;
+        //     if self.edges.edge_count % 1024 != 0 {
+        //         size += 1;
+        //     }
+        //     size as u32
+        // };
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count,
+                y_group_count,
+                z_group_count,
+            )
+        };
+
+        Ok(())
+    }
+
+    pub fn slot_render_cmd(&self, cmd_buf: vk::CommandBuffer) -> Result<()> {
+        let device = &self.slot_render_pipeline.device;
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.slot_render_pipeline.pipeline,
+            )
+        };
+
+        unsafe {
+            let desc_sets = [self.slot_render_desc_set];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.slot_render_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        let x_group_count: u32 = 128 / 16;
+        let y_group_count: u32 = 96 / 16;
+        let z_group_count: u32 = 1;
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count,
+                y_group_count,
+                z_group_count,
+            )
+        };
+
+        Ok(())
+    }
+
     pub fn bin_draw_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
