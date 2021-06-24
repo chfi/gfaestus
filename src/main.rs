@@ -786,7 +786,7 @@ fn main() {
                         //     cmd_buf,
                         //     [size.width as f32, size.height as f32]
                         // ).unwrap();
-
+                        /*
                         edge_pipeline.bin_draw_cmd(
                             cmd_buf,
                             current_view,
@@ -799,6 +799,27 @@ fn main() {
                             cmd_buf,
                             current_view,
                             [size.width as f32, size.height as f32]
+                        ).unwrap();
+
+                        edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
+                        */
+
+                        /*
+                        edge_pipeline.preprocess_cmd(
+                            cmd_buf,
+                            current_view,
+                            [size.width as f32, size.height as f32]
+                        ).unwrap();
+
+                        edge_pipeline.populate_slots_cmd(
+                            cmd_buf,
+                        ).unwrap();
+
+                        */
+                        // edge_pipeline.bin_render_memory_barrier(cmd_buf).unwrap();
+
+                        edge_pipeline.slot_render_cmd(
+                            cmd_buf,
                         ).unwrap();
 
                         edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
