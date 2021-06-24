@@ -29,6 +29,15 @@ pub struct EdgeRenderer {
     render_pipeline: ComputePipeline,
     render_desc_set: vk::DescriptorSet,
 
+    preprocess_pipeline: ComputePipeline,
+    preprocess_desc_set: vk::DescriptorSet,
+
+    populate_slot_pipeline: ComputePipeline,
+    populate_slot_desc_set: vk::DescriptorSet,
+
+    slot_render_pipeline: ComputePipeline,
+    slot_render_desc_set: vk::DescriptorSet,
+
     // edge_buffer: EdgeBuffer,
     pub tiles: ScreenTiles,
 
@@ -115,6 +124,52 @@ impl EdgeRenderer {
 
         let render_desc_set = render_descriptor_sets[0];
 
+        let preprocess_pipeline = Self::create_preprocess_pipeline(device)?;
+
+        let preprocess_descriptor_sets = {
+            let layouts = vec![preprocess_pipeline.descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(preprocess_pipeline.descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let preprocess_desc_set = preprocess_descriptor_sets[0];
+
+        let populate_slot_pipeline =
+            Self::create_populate_slot_pipeline(device)?;
+
+        let populate_slot_descriptor_sets = {
+            let layouts = vec![populate_slot_pipeline.descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(populate_slot_pipeline.descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let populate_slot_desc_set = populate_slot_descriptor_sets[0];
+
+        let slot_render_pipeline = Self::create_slot_render_pipeline(device)?;
+
+        let slot_render_descriptor_sets = {
+            let layouts = vec![slot_render_pipeline.descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(slot_render_pipeline.descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let slot_render_desc_set = slot_render_descriptor_sets[0];
+
         let edges = EdgeBuffers::new(app, edge_count)?;
 
         let pixels = {
@@ -136,6 +191,15 @@ impl EdgeRenderer {
 
             render_pipeline,
             render_desc_set,
+
+            preprocess_pipeline,
+            preprocess_desc_set,
+
+            populate_slot_pipeline,
+            populate_slot_desc_set,
+
+            slot_render_pipeline,
+            slot_render_desc_set,
 
             tiles,
             mask,
@@ -650,6 +714,256 @@ impl EdgeRenderer {
         )?;
 
         Ok(bin_pipeline)
+    }
+
+    fn create_preprocess_pipeline(device: &Device) -> Result<ComputePipeline> {
+        let bindings = {
+            use vk::ShaderStageFlags as Stages;
+
+            let nodes = vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let edges = vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let edge_beziers = vk::DescriptorSetLayoutBinding::builder()
+                .binding(2)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            [nodes, edges, edge_beziers]
+        };
+
+        let descriptor_set_layout = {
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&bindings)
+                .build();
+
+            let layout = unsafe {
+                device.create_descriptor_set_layout(&layout_info, None)
+            }?;
+            layout
+        };
+
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
+
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(BinPushConstants::PC_RANGE)
+                .build();
+
+            let pc_ranges = [pc_range];
+
+            let layouts = [descriptor_set_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
+        }?;
+
+        let nodes_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let edges_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let bezier_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [nodes_pool_size, edges_pool_size, bezier_pool_size];
+
+        let pipeline = ComputePipeline::new_with_pool_size(
+            device,
+            descriptor_set_layout,
+            &pool_sizes,
+            pipeline_layout,
+            crate::include_shader!("edges/edge_preprocess.comp.spv"),
+        )?;
+
+        Ok(pipeline)
+    }
+
+    fn create_populate_slot_pipeline(
+        device: &Device,
+    ) -> Result<ComputePipeline> {
+        let bindings = {
+            use vk::ShaderStageFlags as Stages;
+
+            let beziers = vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let slots = vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            [beziers, slots]
+        };
+
+        let descriptor_set_layout = {
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&bindings)
+                .build();
+
+            let layout = unsafe {
+                device.create_descriptor_set_layout(&layout_info, None)
+            }?;
+            layout
+        };
+
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
+
+            /*
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(BinPushConstants::PC_RANGE)
+                .build();
+
+            let pc_ranges = [pc_range];
+            */
+
+            let pc_ranges = [];
+
+            let layouts = [descriptor_set_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
+        }?;
+
+        let bezier_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let slots_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [bezier_pool_size, slots_pool_size];
+
+        let pipeline = ComputePipeline::new_with_pool_size(
+            device,
+            descriptor_set_layout,
+            &pool_sizes,
+            pipeline_layout,
+            crate::include_shader!("edges/edge_populate_slots.comp.spv"),
+        )?;
+
+        Ok(pipeline)
+    }
+
+    fn create_slot_render_pipeline(device: &Device) -> Result<ComputePipeline> {
+        let bindings = {
+            use vk::ShaderStageFlags as Stages;
+
+            let slots = vk::DescriptorSetLayoutBinding::builder()
+                .binding(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            let pixels = vk::DescriptorSetLayoutBinding::builder()
+                .binding(1)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            [slots, pixels]
+        };
+
+        let descriptor_set_layout = {
+            let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
+                .bindings(&bindings)
+                .build();
+
+            let layout = unsafe {
+                device.create_descriptor_set_layout(&layout_info, None)
+            }?;
+            layout
+        };
+
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
+
+            /*
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(BinPushConstants::PC_RANGE)
+                .build();
+
+            let pc_ranges = [pc_range];
+            */
+
+            let pc_ranges = [];
+
+            let layouts = [descriptor_set_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
+        }?;
+
+        let slots_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pixels_pool_size = vk::DescriptorPoolSize {
+            ty: vk::DescriptorType::STORAGE_BUFFER,
+            descriptor_count: 1,
+        };
+
+        let pool_sizes = [slots_pool_size, pixels_pool_size];
+
+        let pipeline = ComputePipeline::new_with_pool_size(
+            device,
+            descriptor_set_layout,
+            &pool_sizes,
+            pipeline_layout,
+            crate::include_shader!("edges/edge_slot_render.comp.spv"),
+        )?;
+
+        Ok(pipeline)
     }
 
     pub fn write_render_descriptor_set(
