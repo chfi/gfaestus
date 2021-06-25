@@ -514,8 +514,10 @@ impl EdgeRenderer {
             );
         };
 
-        let x_group_count: u32 = 4096u32 / 16;
-        let y_group_count: u32 = 4096u32 / 16;
+        let x_group_count: u32 = 4096u32 / 64;
+        let y_group_count: u32 = 4096u32 / 64;
+        // let x_group_count: u32 = 4096u32 / 16;
+        // let y_group_count: u32 = 4096u32 / 16;
         let z_group_count: u32 = 1;
 
         unsafe {
