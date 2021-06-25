@@ -350,20 +350,6 @@ fn main() {
     dbg!();
 
     edge_pipeline
-        .write_bin_descriptor_set(
-            gfaestus.vk_context().device(),
-            &main_view.node_draw_system.vertices,
-        )
-        .unwrap();
-
-    edge_pipeline
-        .write_render_descriptor_set(
-            gfaestus.vk_context().device(),
-            &main_view.node_draw_system.vertices,
-        )
-        .unwrap();
-
-    edge_pipeline
         .write_preprocess_descriptor_set(
             gfaestus.vk_context().device(),
             &main_view.node_draw_system.vertices,
