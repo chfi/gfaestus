@@ -804,7 +804,7 @@ fn main() {
                         edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
                         */
 
-                        /*
+
                         edge_pipeline.preprocess_cmd(
                             cmd_buf,
                             current_view,
@@ -815,8 +815,7 @@ fn main() {
                             cmd_buf,
                         ).unwrap();
 
-                        */
-                        // edge_pipeline.bin_render_memory_barrier(cmd_buf).unwrap();
+                        edge_pipeline.bin_render_memory_barrier(cmd_buf).unwrap();
 
                         edge_pipeline.slot_render_cmd(
                             cmd_buf,

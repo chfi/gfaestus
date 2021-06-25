@@ -260,20 +260,15 @@ impl EdgeRenderer {
         &self,
         cmd_buf: vk::CommandBuffer,
     ) -> Result<()> {
-        let device = &self.bin_pipeline.device;
+        let device = &self.populate_slot_pipeline.device;
 
-        let mask_barrier = vk::BufferMemoryBarrier::builder()
-            .buffer(self.mask.buffer)
-            .offset(0)
-            .size(self.mask.size)
+        let tile_slot_barrier = vk::MemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
             .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
             .build();
 
-        let memory_barriers = [];
-        let buffer_memory_barriers = [mask_barrier];
+        let memory_barriers = [tile_slot_barrier];
+        let buffer_memory_barriers = [];
         let image_memory_barriers = [];
 
         unsafe {
@@ -464,8 +459,8 @@ impl EdgeRenderer {
         };
         */
 
-        let x_group_count: u32 = 128 / 16;
-        let y_group_count: u32 = 96 / 16;
+        let x_group_count: u32 = 128;
+        let y_group_count: u32 = 96;
         let z_group_count: u32 = 1;
 
         // TODO use edge count from the preprocessing output buffer
