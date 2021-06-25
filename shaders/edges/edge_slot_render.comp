@@ -138,5 +138,7 @@ void main() {
   // image.pixel[pixel_ix] = clamp(uint(min_val * 255.0), 0, 255);
   image.pixel[pixel_ix] = clamp(count * 4, 0, 255);
 
+  barrier();
+
 
 }

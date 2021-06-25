@@ -57,11 +57,13 @@ void main() {
   //   tile_slots[local_x][local_y][0] = 255;
   // }
 
-  if (length(tile_center - vec2(256.0)) < 64.0) {
-    tile_slots[local_x][local_y][0] = 255;
-  }
+  // if (length(tile_center - vec2(256.0)) < 64.0) {
+  //   tile_slots[local_x][local_y][0] = 255;
+  // }
 
-  /*
+  // tile_slots[local_x][local_y][0] = local_x;
+
+
   int count = bezier_interval(test_p0, test_ctrl, test_p1);
   float t_del = 1.0 / float(count);
 
@@ -72,7 +74,6 @@ void main() {
       tile_slots[local_x][local_y][0] = 255;
     }
   }
-  */
 
   /*
   vec2 prev_intersect = vec2(0.0);
@@ -161,9 +162,8 @@ void main() {
 
   for (uint i = 0; i < 32; i++) {
   //   tiles.slots[tile_slot_offset + i] = 255;
-    tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
+    atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
+    // tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
   }
-
-  barrier();
 
 }
