@@ -68,6 +68,8 @@ impl<T: InputPayload + BindableInput> SubsystemInput<T> {
 pub struct InputManager {
     mouse_screen_pos: MousePos,
 
+    modifiers: AtomicCell<event::ModifiersState>,
+
     winit_rx: channel::Receiver<event::WindowEvent<'static>>,
 
     app: SubsystemInput<AppInput>,
@@ -148,8 +150,10 @@ impl InputManager {
                 }
             }
 
+            let modifiers = self.modifiers.load();
+
             if let Some(app_inputs) =
-                self.app.bindings.apply(&winit_ev, mouse_pos)
+                self.app.bindings.apply(&winit_ev, modifiers, mouse_pos)
             {
                 for input in app_inputs {
                     if !(input.is_keyboard() && gui_wants_keyboard) {
@@ -159,15 +163,17 @@ impl InputManager {
             }
 
             if let Some(gui_inputs) =
-                self.gui.bindings.apply(&winit_ev, mouse_pos)
+                self.gui.bindings.apply(&winit_ev, modifiers, mouse_pos)
             {
                 for input in gui_inputs {
                     self.gui.tx.send(input).unwrap();
                 }
             }
 
-            if let Some(main_view_inputs) =
-                self.main_view.bindings.apply(&winit_ev, mouse_pos)
+            if let Some(main_view_inputs) = self
+                .main_view
+                .bindings
+                .apply(&winit_ev, modifiers, mouse_pos)
             {
                 for input in main_view_inputs {
                     if (input.is_keyboard() && !gui_wants_keyboard)
@@ -196,6 +202,8 @@ impl InputManager {
         Self {
             mouse_screen_pos,
             winit_rx,
+
+            modifiers: AtomicCell::new(Default::default()),
 
             app,
             main_view,
@@ -333,161 +341,3 @@ fn winit_to_egui_text_event(
 
     egui_event
 }
-
-/*
-fn winit_to_egui_keyboard_input(
-    modifiers: winit::event::ModifiersState,
-    state: winit::event::ElementState,
-    key_code: winit::event::VirtualKeyCode,
-) -> Option<egui::Event> {
-
-    let modifiers = egui::Modifiers {
-        alt: modifiers.alt(),
-        ctrl: modifiers.ctrl(),
-        shift: modifiers.shift(),
-        // TODO this has to be fixed according to the egui docs
-        mac_cmd: modifiers.logo(),
-        command: modifiers.ctrl(),
-    };
-
-
-    let pressed = matches!(state, winit::event::ElementState::Pressed);
-
-    let key = match key_code {
-        VirtualKeyCode::Key1 => {}
-        VirtualKeyCode::Key2 => {}
-        VirtualKeyCode::Key3 => {}
-        VirtualKeyCode::Key4 => {}
-        VirtualKeyCode::Key5 => {}
-        VirtualKeyCode::Key6 => {}
-        VirtualKeyCode::Key7 => {}
-        VirtualKeyCode::Key8 => {}
-        VirtualKeyCode::Key9 => {}
-        VirtualKeyCode::Key0 => {}
-        VirtualKeyCode::A => {}
-        VirtualKeyCode::B => {}
-        VirtualKeyCode::C => {}
-        VirtualKeyCode::D => {}
-        VirtualKeyCode::E => {}
-        VirtualKeyCode::F => {}
-        VirtualKeyCode::G => {}
-        VirtualKeyCode::H => {}
-        VirtualKeyCode::I => {}
-        VirtualKeyCode::J => {}
-        VirtualKeyCode::K => {}
-        VirtualKeyCode::L => {}
-        VirtualKeyCode::M => {}
-        VirtualKeyCode::N => {}
-        VirtualKeyCode::O => {}
-        VirtualKeyCode::P => {}
-        VirtualKeyCode::Q => {}
-        VirtualKeyCode::R => {}
-        VirtualKeyCode::S => {}
-        VirtualKeyCode::T => {}
-        VirtualKeyCode::U => {}
-        VirtualKeyCode::V => {}
-        VirtualKeyCode::W => {}
-        VirtualKeyCode::X => {}
-        VirtualKeyCode::Y => {}
-        VirtualKeyCode::Z => {}
-        VirtualKeyCode::Escape => {}
-        VirtualKeyCode::Insert => {}
-        VirtualKeyCode::Home => {}
-        VirtualKeyCode::Delete => {}
-        VirtualKeyCode::End => {}
-        VirtualKeyCode::PageDown => {}
-        VirtualKeyCode::PageUp => {}
-        VirtualKeyCode::Left => {}
-        VirtualKeyCode::Up => {}
-        VirtualKeyCode::Right => {}
-        VirtualKeyCode::Down => {}
-        VirtualKeyCode::Back => {}
-        VirtualKeyCode::Return => {}
-        VirtualKeyCode::Space => {}
-        VirtualKeyCode::Numpad0 => {}
-        VirtualKeyCode::Numpad1 => {}
-        VirtualKeyCode::Numpad2 => {}
-        VirtualKeyCode::Numpad3 => {}
-        VirtualKeyCode::Numpad4 => {}
-        VirtualKeyCode::Numpad5 => {}
-        VirtualKeyCode::Numpad6 => {}
-        VirtualKeyCode::Numpad7 => {}
-        VirtualKeyCode::Numpad8 => {}
-        VirtualKeyCode::Numpad9 => {}
-        VirtualKeyCode::NumpadAdd => {}
-        VirtualKeyCode::NumpadDivide => {}
-        VirtualKeyCode::NumpadDecimal => {}
-        VirtualKeyCode::NumpadComma => {}
-        VirtualKeyCode::NumpadEnter => {}
-        VirtualKeyCode::NumpadEquals => {}
-        VirtualKeyCode::NumpadMultiply => {}
-        VirtualKeyCode::NumpadSubtract => {}
-        VirtualKeyCode::AbntC1 => {}
-        VirtualKeyCode::AbntC2 => {}
-        VirtualKeyCode::Apostrophe => {}
-        VirtualKeyCode::Apps => {}
-        VirtualKeyCode::Asterisk => {}
-        VirtualKeyCode::At => {}
-        VirtualKeyCode::Ax => {}
-        VirtualKeyCode::Backslash => {}
-        VirtualKeyCode::Calculator => {}
-        VirtualKeyCode::Capital => {}
-        VirtualKeyCode::Colon => {}
-        VirtualKeyCode::Comma => {}
-        VirtualKeyCode::Convert => {}
-        VirtualKeyCode::Equals => {}
-        VirtualKeyCode::Grave => {}
-        VirtualKeyCode::Kana => {}
-        VirtualKeyCode::Kanji => {}
-        VirtualKeyCode::LAlt => {}
-        VirtualKeyCode::LBracket => {}
-        VirtualKeyCode::LControl => {}
-        VirtualKeyCode::LShift => {}
-        VirtualKeyCode::LWin => {}
-        VirtualKeyCode::Mail => {}
-        VirtualKeyCode::MediaSelect => {}
-        VirtualKeyCode::MediaStop => {}
-        VirtualKeyCode::Minus => {}
-        VirtualKeyCode::Mute => {}
-        VirtualKeyCode::MyComputer => {}
-        VirtualKeyCode::NavigateForward => {}
-        VirtualKeyCode::NavigateBackward => {}
-        VirtualKeyCode::NextTrack => {}
-        VirtualKeyCode::NoConvert => {}
-        VirtualKeyCode::OEM102 => {}
-        VirtualKeyCode::Period => {}
-        VirtualKeyCode::PlayPause => {}
-        VirtualKeyCode::Plus => {}
-        VirtualKeyCode::Power => {}
-        VirtualKeyCode::PrevTrack => {}
-        VirtualKeyCode::RAlt => {}
-        VirtualKeyCode::RBracket => {}
-        VirtualKeyCode::RControl => {}
-        VirtualKeyCode::RShift => {}
-        VirtualKeyCode::RWin => {}
-        VirtualKeyCode::Semicolon => {}
-        VirtualKeyCode::Slash => {}
-        VirtualKeyCode::Sleep => {}
-        VirtualKeyCode::Stop => {}
-        VirtualKeyCode::Sysrq => {}
-        VirtualKeyCode::Tab => {}
-        VirtualKeyCode::Underline => {}
-        VirtualKeyCode::Unlabeled => {}
-        VirtualKeyCode::VolumeDown => {}
-        VirtualKeyCode::VolumeUp => {}
-        VirtualKeyCode::Wake => {}
-        VirtualKeyCode::WebBack => {}
-        VirtualKeyCode::WebFavorites => {}
-        VirtualKeyCode::WebForward => {}
-        VirtualKeyCode::WebHome => {}
-        VirtualKeyCode::WebRefresh => {}
-        VirtualKeyCode::WebSearch => {}
-        VirtualKeyCode::WebStop => {}
-        VirtualKeyCode::Yen => {}
-        VirtualKeyCode::Copy => {}
-        VirtualKeyCode::Paste => {}
-        VirtualKeyCode::Cut => {}
-    };
-
-}
-*/

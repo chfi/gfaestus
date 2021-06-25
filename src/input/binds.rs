@@ -8,9 +8,15 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::geometry::*;
 
-pub trait InputPayload: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash {}
+pub trait InputPayload:
+    Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash
+{
+}
 
-impl<T> InputPayload for T where T: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash {}
+impl<T> InputPayload for T where
+    T: Copy + PartialEq + Eq + PartialOrd + Ord + std::hash::Hash
+{
+}
 
 /// Trait for app subsystem inputs that can be bound to keys and other user input
 pub trait BindableInput: InputPayload {
@@ -69,13 +75,23 @@ pub struct Keyboard<T: Copy + PartialEq> {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MouseButtonBind<T: Copy + PartialEq> {
     // button: event::MouseButton,
-    // modifiers: event::ModifiersState,
+    modifiers: event::ModifiersState,
     payload: T,
 }
 
 impl<T: Copy + PartialEq> MouseButtonBind<T> {
     pub fn new(payload: T) -> Self {
-        Self { payload }
+        Self {
+            payload,
+            modifiers: Default::default(),
+        }
+    }
+
+    pub fn with_modifiers(
+        payload: T,
+        modifiers: event::ModifiersState,
+    ) -> Self {
+        Self { payload, modifiers }
     }
 }
 
@@ -83,7 +99,7 @@ impl<T: Copy + PartialEq> MouseButtonBind<T> {
 pub struct WheelBind<T: Copy + PartialEq> {
     invert: bool,
     mult: f32,
-    // modifiers: event::ModifiersState,
+    modifiers: event::ModifiersState,
     payload: T,
 }
 
@@ -92,6 +108,21 @@ impl<T: Copy + PartialEq> WheelBind<T> {
         Self {
             invert,
             mult,
+            modifiers: Default::default(),
+            payload,
+        }
+    }
+
+    pub fn with_modifiers(
+        invert: bool,
+        mult: f32,
+        payload: T,
+        modifiers: event::ModifiersState,
+    ) -> Self {
+        Self {
+            invert,
+            mult,
+            modifiers: Default::default(),
             payload,
         }
     }
@@ -100,13 +131,23 @@ impl<T: Copy + PartialEq> WheelBind<T> {
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct KeyBind<T: Copy + PartialEq> {
     // keycode: event::VirtualKeyCode,
-    // modifiers: event::ModifiersState,
+    modifiers: event::ModifiersState,
     payload: T,
 }
 
 impl<T: Copy + PartialEq> KeyBind<T> {
     pub fn new(payload: T) -> Self {
-        Self { payload }
+        Self {
+            payload,
+            modifiers: Default::default(),
+        }
+    }
+
+    pub fn with_modifiers(
+        payload: T,
+        modifiers: event::ModifiersState,
+    ) -> Self {
+        Self { payload, modifiers }
     }
 }
 
@@ -161,42 +202,6 @@ impl<T: InputPayload> SystemInput<T> {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq)]
-pub struct InputState<T: InputPayload> {
-    keys: FxHashSet<T>,
-    mouse_buttons: FxHashSet<T>,
-}
-
-impl<T: InputPayload> InputState<T> {
-    pub fn is_key_down(&self, key_input: T) -> bool {
-        self.keys.contains(&key_input)
-    }
-
-    pub fn is_mouse_down(&self, mouse_input: T) -> bool {
-        self.mouse_buttons.contains(&mouse_input)
-    }
-
-    pub fn update(&mut self, input: SystemInput<T>) {
-        match input {
-            SystemInput::Keyboard { state, payload } => {
-                if state.pressed() {
-                    self.keys.insert(payload);
-                } else {
-                    self.keys.remove(&payload);
-                }
-            }
-            SystemInput::MouseButton { state, payload, .. } => {
-                if state.pressed() {
-                    self.mouse_buttons.insert(payload);
-                } else {
-                    self.mouse_buttons.remove(&payload);
-                }
-            }
-            _ => (),
-        }
-    }
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct SystemInputBindings<Inputs>
 where
@@ -210,7 +215,10 @@ where
 impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
     pub fn new(
         key_binds: FxHashMap<event::VirtualKeyCode, Vec<KeyBind<Inputs>>>,
-        mouse_binds: FxHashMap<event::MouseButton, Vec<MouseButtonBind<Inputs>>>,
+        mouse_binds: FxHashMap<
+            event::MouseButton,
+            Vec<MouseButtonBind<Inputs>>,
+        >,
         wheel_bind: Option<WheelBind<Inputs>>,
     ) -> Self {
         Self {
@@ -224,6 +232,7 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
         &self,
         // input_state: &mut InputState<Inputs>,
         event: &event::WindowEvent,
+        modifiers: event::ModifiersState,
         mouse_pos: Point,
     ) -> Option<Vec<SystemInput<Inputs>>> {
         match event {
