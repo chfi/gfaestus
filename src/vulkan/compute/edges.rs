@@ -871,7 +871,7 @@ impl EdgeRenderer {
             .dst_binding(1)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&bezier_buf_infos)
+            .buffer_info(&slots_buf_infos)
             .build();
 
         let descriptor_writes = [beziers, slots];
