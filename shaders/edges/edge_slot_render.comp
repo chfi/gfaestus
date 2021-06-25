@@ -44,6 +44,7 @@ void main() {
   // float val = line_segment_sdf(local_pixel, vec2(0.0), vec2(15.0));
   // image.pixel[pixel_ix] = uint(val * 255.0);
 
+  /*
   ivec2 q0 = slot_pixel(gl_WorkGroupID.x % 32);
   ivec2 q1 = slot_pixel(gl_WorkGroupID.y % 32);
 
@@ -54,8 +55,9 @@ void main() {
   image.pixel[pixel_ix] = uint((1.0 - val) * 255.0);
   // image.pixel[pixel_ix] = clamp(uint(val * 255.0), 0, 255);
 
+  */
 
-  /*
+
   float max_val = 0.0;
 
   for (uint i = 0; i < 32; i++) {
@@ -78,6 +80,5 @@ void main() {
   }
 
   image.pixel[pixel_ix] = clamp(uint(max_val * 255.0), 0, 255);
-  */
 
 }
