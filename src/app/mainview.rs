@@ -640,6 +640,8 @@ impl BindableInput for MainViewInput {
         .map(|(k, i)| (k, vec![KeyBind::new(i)]))
         .collect::<FxHashMap<_, _>>();
 
+        let shift_mod = winit::event::ModifiersState::SHIFT;
+
         let mouse_binds: FxHashMap<
             event::MouseButton,
             Vec<MouseButtonBind<Input>>,
@@ -648,12 +650,15 @@ impl BindableInput for MainViewInput {
                 event::MouseButton::Left,
                 vec![
                     MouseButtonBind::new(Input::ButtonMousePan),
-                    MouseButtonBind::new(Input::ButtonSelect),
+                    MouseButtonBind::with_modifiers(
+                        Input::ButtonRectangleSelect,
+                        shift_mod,
+                    ),
                 ],
             ),
             (
                 event::MouseButton::Right,
-                vec![MouseButtonBind::new(Input::ButtonRectangleSelect)],
+                vec![MouseButtonBind::new(Input::ButtonSelect)],
             ),
         ]
         .iter()

@@ -246,6 +246,7 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
 
                 let inputs = binds
                     .iter()
+                    .filter(|&keybind| keybind.modifiers == modifiers)
                     .map(|&keybind| {
                         let payload = keybind.payload;
                         SystemInput::Keyboard { state, payload }
@@ -264,6 +265,7 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
 
                 let inputs = binds
                     .iter()
+                    .filter(|&mousebind| mousebind.modifiers == modifiers)
                     .map(|&mousebind| {
                         let payload = mousebind.payload;
                         SystemInput::MouseButton {
@@ -286,6 +288,10 @@ impl<Inputs: InputPayload> SystemInputBindings<Inputs> {
                 ..
             } => {
                 if let Some(bind) = self.wheel_bind {
+                    if bind.modifiers != modifiers {
+                        return None;
+                    }
+
                     let mut mult = bind.mult;
                     if bind.invert {
                         mult *= -1.0;

@@ -111,6 +111,10 @@ impl InputManager {
                 });
             }
 
+            if let event::WindowEvent::ModifiersChanged(mods) = winit_ev {
+                self.modifiers.store(mods);
+            }
+
             let mouse_pos = self.mouse_screen_pos.read();
 
             let gui_wants_keyboard =
