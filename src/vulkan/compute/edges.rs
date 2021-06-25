@@ -42,7 +42,7 @@ impl EdgeRenderer {
         dims: Dims,
         edge_count: usize,
     ) -> Result<Self> {
-        let tiles = ScreenTiles::new(app, 128, 128, Point::ZERO, dims)?;
+        let tiles = ScreenTiles::new(app, 256, 256, Point::ZERO, dims)?;
 
         let device = app.vk_context().device();
 
@@ -94,7 +94,7 @@ impl EdgeRenderer {
 
         let edges = EdgeBuffers::new(app, edge_count)?;
 
-        let tile_slots = TileSlots::new(app, 96, 128)?;
+        let tile_slots = TileSlots::new(app, 256, 256)?;
 
         let pixels = {
             let pixels = PixelBuffer::new(app, 4096, 4096)?;
@@ -370,8 +370,8 @@ impl EdgeRenderer {
         };
         */
 
-        let x_group_count: u32 = 128;
-        let y_group_count: u32 = 96;
+        let x_group_count: u32 = 256;
+        let y_group_count: u32 = 256;
         let z_group_count: u32 = 1;
 
         // TODO use edge count from the preprocessing output buffer
@@ -420,10 +420,10 @@ impl EdgeRenderer {
             );
         };
 
-        let x_group_count: u32 = 4096u32 / 64;
-        let y_group_count: u32 = 4096u32 / 64;
-        // let x_group_count: u32 = 4096u32 / 16;
-        // let y_group_count: u32 = 4096u32 / 16;
+        // let x_group_count: u32 = 4096u32 / 64;
+        // let y_group_count: u32 = 4096u32 / 64;
+        let x_group_count: u32 = 4096u32 / 16;
+        let y_group_count: u32 = 4096u32 / 16;
         let z_group_count: u32 = 1;
 
         unsafe {

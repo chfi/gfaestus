@@ -1,7 +1,7 @@
 #version 450
 
-#define TILES_WIDE 128
-#define TILES_HIGH 96
+#define TILES_WIDE 256
+#define TILES_HIGH 256
 
 #include "tile_line_segments.glsl"
 #include "geometry.glsl"
@@ -37,8 +37,8 @@ void main() {
   vec2 local_pixel = vec2(gl_LocalInvocationID.xy);
 
 
-  // uint slot_offset = tile.y * TILES_WIDE + tile.x;
-  uint slot_offset = tile.y * (4096 / 16) + tile.x;
+  uint slot_offset = tile.y * TILES_WIDE + tile.x;
+  // uint slot_offset = tile.y * (4096 / 16) + tile.x;
   // uint slot_offset = tile.y;
   // uint slot_offset = 0;
 
@@ -108,7 +108,7 @@ void main() {
 
 
   for (uint i = 0; i < 32; i++) {
-    uint slot_ix = (slot_offset + i) % (128 * 96 * 32);
+    uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
     // uint slot = tiles.slots[slot_offset + i];
 

@@ -1,8 +1,5 @@
 #version 450
 
-#define TILES_WIDE 128
-#define TILES_HIGH 96
-
 #include "sdf.glsl"
 #include "edge_orient.glsl"
 #include "geometry.glsl"

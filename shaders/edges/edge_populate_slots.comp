@@ -1,7 +1,7 @@
 #version 450
 
-#define TILES_WIDE 128
-#define TILES_HIGH 96
+#define TILES_WIDE 256
+#define TILES_HIGH 256
 
 #define EDGES_PER_GROUP 256
 
@@ -145,23 +145,10 @@ void main() {
   uint global_y = gl_GlobalInvocationID.y;
 
   // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
-  uint tile_slot_offset = (global_y * 256 + global_x) % (128 * 96 * 32);
+  uint tile_slot_offset = (global_y * TILES_WIDE + global_x) % (TILES_WIDE * TILES_HIGH * 32);
 
-
-  // uint tile_slot_offset = 1024;
-
-  // uint slot_offset = tile.y * (4096 / 16) + tile.x;
-  // uint tile_slot_offset = 32 * (4096 / 16) + 32;
-  // tiles.slots[tile_slot_offset] = 255;
-
-  // tiles.slots[tile_slot_offset] = 255;
-
-  // tiles.slots[0] = 255;
-
-  // tiles.slots[tile_slot_offset] = gl_WorkGroupID.x % 16;
 
   for (uint i = 0; i < 32; i++) {
-  //   tiles.slots[tile_slot_offset + i] = 255;
     atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
     // tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
   }
