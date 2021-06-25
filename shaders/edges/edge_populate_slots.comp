@@ -29,6 +29,7 @@ void main() {
   uint edge_offset = gl_GlobalInvocationID.z * EDGES_PER_GROUP;
   uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
 
+
   if (gl_GlobalInvocationID.z == 0) {
     for (uint i = 0; i < 32; i++) {
       tile_slots[gl_LocalInvocationID.x][gl_LocalInvocationID.y][i] = 0;
@@ -50,10 +51,32 @@ void main() {
   uint local_x = gl_LocalInvocationID.x;
   uint local_y = gl_LocalInvocationID.y;
 
+  // if (length(tile_center - test_p0) < 64.0
+  //     || length(tile_center - test_ctrl) < 64.0
+  //     || length(tile_center - test_p1) < 64.0) {
+  //   tile_slots[local_x][local_y][0] = 255;
+  // }
+
+  if (length(tile_center - vec2(256.0)) < 64.0) {
+    tile_slots[local_x][local_y][0] = 255;
+  }
+
+  /*
   int count = bezier_interval(test_p0, test_ctrl, test_p1);
   float t_del = 1.0 / float(count);
 
+  for (uint i = 0; i < count; i++) {
+    vec2 val = bezier_quad(test_p0, test_ctrl, test_p0, t_del * float(i));
+    if (val.x >= tile_offset.x && val.x <= tile_offset.x + 16.0
+        && val.y >= tile_offset.y && val.y <= tile_offset.y + 16.0) {
+      tile_slots[local_x][local_y][0] = 255;
+    }
+  }
+  */
+
+  /*
   vec2 prev_intersect = vec2(0.0);
+
 
   for (uint i = 1; i < count; i++) {
 
@@ -75,6 +98,7 @@ void main() {
 
     prev_intersect = intersect;
   }
+  */
 
   /*
 
@@ -119,12 +143,27 @@ void main() {
   uint global_x = gl_GlobalInvocationID.x;
   uint global_y = gl_GlobalInvocationID.y;
 
-  uint tile_slot_offset = global_x + global_y * TILES_WIDE;
+  // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
+  uint tile_slot_offset = (global_y * 256 + global_x) % (128 * 96 * 32);
 
-  // tiles.slots[tile_slot_offset] = 9;
+
+  // uint tile_slot_offset = 1024;
+
+  // uint slot_offset = tile.y * (4096 / 16) + tile.x;
+  // uint tile_slot_offset = 32 * (4096 / 16) + 32;
+  // tiles.slots[tile_slot_offset] = 255;
+
+  // tiles.slots[tile_slot_offset] = 255;
+
+  // tiles.slots[0] = 255;
+
+  // tiles.slots[tile_slot_offset] = gl_WorkGroupID.x % 16;
 
   for (uint i = 0; i < 32; i++) {
+  //   tiles.slots[tile_slot_offset + i] = 255;
     tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
   }
+
+  barrier();
 
 }

@@ -8,7 +8,8 @@
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout (set = 0, binding = 0) readonly buffer TileSlots {
+// layout (set = 0, binding = 0) readonly buffer TileSlots {
+layout (set = 0, binding = 0) buffer TileSlots {
   uint slots[];
 } tiles;
 
@@ -38,6 +39,8 @@ void main() {
 
   // uint slot_offset = tile.y * TILES_WIDE + tile.x;
   uint slot_offset = tile.y * (4096 / 16) + tile.x;
+  // uint slot_offset = tile.y;
+  // uint slot_offset = 0;
 
   // TODO heuristic to only render ~4-8 edges/tile max
 
@@ -59,8 +62,10 @@ void main() {
   */
 
 
-  float max_val = 0.0;
+  /*
+  float min_val;
 
+  bool first = true;
 
   for (uint i = 0; i < 32; i++) {
     uint slot_ix = (slot_offset + i) % (128 * 96 * 32);
@@ -80,12 +85,58 @@ void main() {
 
         float val = line_segment_sdf(local_pixel, p0, p1);
 
-        max_val = max(val, max_val);
+        if (first) {
+          first = false;
+          min_val = val;
+        } else {
+          min_val = min(val, min_val);
+        }
 
       }
     }
   }
+  image.pixel[pixel_ix] = clamp(uint(min_val * 255.0), 0, 255);
 
-  image.pixel[pixel_ix] = clamp(uint(max_val * 255.0), 0, 255);
+  */
+
+  // tiles.slots[(slot_offset) % (128 * 96 * 32)] = 255;
+
+  // tiles.slots[0] = 255;
+
+  uint count = 0;
+
+
+
+  for (uint i = 0; i < 32; i++) {
+    uint slot_ix = (slot_offset + i) % (128 * 96 * 32);
+    uint slot = tiles.slots[slot_ix];
+    // uint slot = tiles.slots[slot_offset + i];
+
+    // uint slot = 123;
+
+    for (uint j = 0; j < 32; j++) {
+    // for (uint j = 0; j < 1; j++) {
+      if (((slot >> j) & 1) == 1) {
+      // if (slot != 0) {
+        // ivec2 q0 = slot_pixel(i);
+        // ivec2 q1 = slot_pixel(j);
+
+        // vec2 p0 = vec2(q0);
+        // vec2 p1 = vec2(q1);
+
+        // float val = line_segment_sdf(local_pixel, p0, p1);
+
+        // if (val < 1000000.0) {
+          count += 1;
+        // }
+      }
+    }
+  }
+
+  // count = gl_WorkGroupID.x;
+
+  // image.pixel[pixel_ix] = clamp(uint(min_val * 255.0), 0, 255);
+  image.pixel[pixel_ix] = clamp(count * 4, 0, 255);
+
 
 }
