@@ -20,7 +20,7 @@ layout (set = 0, binding = 1) writeonly buffer TileSlots {
 
 shared uint tile_slots[16][16][32];
 
-vec2 test_p0 = vec2(120.0);
+vec2 test_p0 = vec2(220.0);
 vec2 test_ctrl = vec2(500.0, 300.0);
 vec2 test_p1 = vec2(600.0, 300.0);
 
@@ -51,6 +51,20 @@ void main() {
   uint local_x = gl_LocalInvocationID.x;
   uint local_y = gl_LocalInvocationID.y;
 
+  if (gl_GlobalInvocationID.x == 0 &&
+      gl_GlobalInvocationID.y == 0) {
+    tile_slots[10][15][0] = 255;
+    tile_slots[15][15][0] = 255;
+    tile_slots[15][10][0] = 255;
+    tile_slots[7][7][0] = 255;
+    // tile_slots[local_x][local_y][0] = 255;
+  }
+
+
+  // if (length(tile_center - test_p0) < 16.0) {
+  //   tile_slots[local_x][local_y][0] = 255;
+  // }
+
   // if (length(tile_center - test_p0) < 64.0
   //     || length(tile_center - test_ctrl) < 64.0
   //     || length(tile_center - test_p1) < 64.0) {
@@ -64,6 +78,7 @@ void main() {
   // tile_slots[local_x][local_y][0] = local_x;
 
 
+  /*
   int count = bezier_interval(test_p0, test_ctrl, test_p1);
   float t_del = 1.0 / float(count);
 
@@ -74,6 +89,7 @@ void main() {
       tile_slots[local_x][local_y][0] = 255;
     }
   }
+  */
 
   /*
   vec2 prev_intersect = vec2(0.0);
@@ -147,6 +163,7 @@ void main() {
   // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
   uint tile_slot_offset = (global_y * TILES_WIDE + global_x) % (TILES_WIDE * TILES_HIGH * 32);
 
+  // atomicMax(tiles.slots[tile_slot_offset], tile_slots[local_x][local_y][0]);
 
   for (uint i = 0; i < 32; i++) {
     atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
