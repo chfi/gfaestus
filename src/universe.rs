@@ -17,11 +17,13 @@ use crate::vulkan::draw_system::Vertex;
 use crate::{geometry::*, vulkan::draw_system::nodes::NodeVertices};
 
 pub mod config;
+pub mod graph_layout;
 pub mod grid;
 pub mod physics;
 pub mod selection;
 
 pub use config::*;
+pub use graph_layout::*;
 pub use selection::*;
 
 // Trait abstracting over Grid and FlatLayout -- this definition only
