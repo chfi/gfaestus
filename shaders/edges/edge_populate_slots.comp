@@ -14,7 +14,7 @@ layout (set = 0, binding = 0) readonly buffer EdgeBeziers {
   vec2 curve[];
 } beziers;
 
-layout (set = 0, binding = 1) writeonly buffer TileSlots {
+layout (set = 0, binding = 1) buffer TileSlots {
   uint slots[];
 } tiles;
 
@@ -162,13 +162,15 @@ void main() {
   uint global_y = gl_GlobalInvocationID.y;
 
   // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
-  uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32) % (TILES_WIDE * TILES_HIGH * 32);
+  // uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32) % (TILES_WIDE * TILES_HIGH * 32);
 
-  // atomicMax(tiles.slots[tile_slot_offset], tile_slots[local_x][local_y][0]);
 
-  for (uint i = 0; i < 32; i++) {
-    atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
-    // tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
+  uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32);
+
+  if (tile_slot_offset < (TILES_WIDE * TILES_HIGH * 32)) {
+    for (uint i = 0; i < 32; i++) {
+      atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
+    }
   }
 
   barrier();
