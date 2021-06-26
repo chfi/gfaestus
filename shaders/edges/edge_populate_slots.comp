@@ -20,9 +20,9 @@ layout (set = 0, binding = 1) buffer TileSlots {
 
 shared uint tile_slots[16][16][32];
 
-vec2 test_p0 = vec2(220.0);
-vec2 test_ctrl = vec2(500.0, 300.0);
-vec2 test_p1 = vec2(600.0, 300.0);
+vec2 test_p0 = vec2(100.0, 220.0);
+vec2 test_ctrl = vec2(600.0, 400.0);
+vec2 test_p1 = vec2(100.0, 700.0);
 
 void main() {
 
@@ -47,49 +47,19 @@ void main() {
   // for now we evaluate each group's edges sequentially;
   // later we can use the 16x16 threads we already have to parallelize it
 
-
   uint local_x = gl_LocalInvocationID.x;
   uint local_y = gl_LocalInvocationID.y;
 
-  if (gl_GlobalInvocationID.x == 0 &&
-      gl_GlobalInvocationID.y == 0) {
-    tile_slots[10][15][0] = 255;
-    tile_slots[15][15][0] = 255;
-    tile_slots[15][10][0] = 255;
-    tile_slots[7][7][0] = 255;
-    // tile_slots[local_x][local_y][0] = 255;
-  }
-
-
-  // if (length(tile_center - test_p0) < 16.0) {
-  //   tile_slots[local_x][local_y][0] = 255;
-  // }
-
-  // if (length(tile_center - test_p0) < 64.0
-  //     || length(tile_center - test_ctrl) < 64.0
-  //     || length(tile_center - test_p1) < 64.0) {
-  //   tile_slots[local_x][local_y][0] = 255;
-  // }
-
-  // if (length(tile_center - vec2(256.0)) < 64.0) {
-  //   tile_slots[local_x][local_y][0] = 255;
-  // }
-
-  // tile_slots[local_x][local_y][0] = local_x;
-
-
-  /*
   int count = bezier_interval(test_p0, test_ctrl, test_p1);
   float t_del = 1.0 / float(count);
 
   for (uint i = 0; i < count; i++) {
-    vec2 val = bezier_quad(test_p0, test_ctrl, test_p0, t_del * float(i));
+    vec2 val = bezier_quad(test_p0, test_ctrl, test_p1, t_del * float(i));
     if (val.x >= tile_offset.x && val.x <= tile_offset.x + 16.0
         && val.y >= tile_offset.y && val.y <= tile_offset.y + 16.0) {
       tile_slots[local_x][local_y][0] = 255;
     }
   }
-  */
 
   /*
   vec2 prev_intersect = vec2(0.0);
@@ -160,9 +130,6 @@ void main() {
 
   uint global_x = gl_GlobalInvocationID.x;
   uint global_y = gl_GlobalInvocationID.y;
-
-  // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
-  // uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32) % (TILES_WIDE * TILES_HIGH * 32);
 
 
   uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32);
