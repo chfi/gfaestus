@@ -2,6 +2,7 @@ pub mod app;
 pub mod geometry;
 pub mod vulkan;
 
+pub mod annotations;
 pub mod graph_query;
 pub mod gui;
 pub mod overlays;
