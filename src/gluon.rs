@@ -530,8 +530,8 @@ impl GluonVM {
 #[gluon_trace(skip)]
 #[gluon(vm_type = "GraphHandle")]
 pub struct GraphHandle {
-    graph: Arc<PackedGraph>,
-    path_pos: Arc<PathPositionMap>,
+    pub(crate) graph: Arc<PackedGraph>,
+    pub(crate) path_pos: Arc<PathPositionMap>,
 }
 
 impl GraphHandle {
@@ -666,7 +666,7 @@ fn path_range(
     Some(result)
 }
 
-fn path_base_range(
+pub(crate) fn path_base_range(
     graph: &GraphHandle,
     path_id: u64,
     start: usize,
@@ -691,6 +691,10 @@ fn path_base_range(
 
         if end_ptr.is_none() && base_offset > end {
             end_ptr = Some(step.0);
+        }
+
+        if start_ptr.is_some() && end_ptr.is_some() {
+            break;
         }
     }
 
