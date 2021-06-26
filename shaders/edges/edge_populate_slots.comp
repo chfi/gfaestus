@@ -155,13 +155,14 @@ void main() {
 
   */
 
+
   barrier();
 
   uint global_x = gl_GlobalInvocationID.x;
   uint global_y = gl_GlobalInvocationID.y;
 
   // uint tile_slot_offset = (global_x + global_y * 256) % (128 * 96 * 32);
-  uint tile_slot_offset = (global_y * TILES_WIDE + global_x) % (TILES_WIDE * TILES_HIGH * 32);
+  uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32) % (TILES_WIDE * TILES_HIGH * 32);
 
   // atomicMax(tiles.slots[tile_slot_offset], tile_slots[local_x][local_y][0]);
 
@@ -169,5 +170,7 @@ void main() {
     atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
     // tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
   }
+
+  barrier();
 
 }

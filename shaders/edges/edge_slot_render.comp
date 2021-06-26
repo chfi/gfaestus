@@ -37,7 +37,7 @@ void main() {
   vec2 local_pixel = vec2(gl_LocalInvocationID.xy);
 
 
-  uint slot_offset = tile.y * TILES_WIDE + tile.x;
+  uint slot_offset = tile.y * TILES_WIDE * 32 + tile.x * 32;
   // uint slot_offset = tile.y * (4096 / 16) + tile.x;
   // uint slot_offset = tile.y;
   // uint slot_offset = 0;
@@ -107,15 +107,15 @@ void main() {
 
 
 
-  for (uint i = 0; i < 1; i++) {
+  for (uint i = 0; i < 16; i++) {
     uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
     // uint slot = tiles.slots[slot_offset + i];
 
     // uint slot = 123;
-      if (slot != 0) {
-          count += 1;
-      }
+    if (slot != 0) {
+      count += 1;
+    }
 
     /*
     for (uint j = 0; j < 32; j++) {
