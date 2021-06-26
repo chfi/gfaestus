@@ -19,6 +19,7 @@ use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
 use crate::{
+    annotations::Annotations,
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -481,6 +482,8 @@ pub struct Gui {
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
+
+    annotations: Annotations,
 }
 
 impl Gui {
@@ -555,6 +558,8 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
+        // let annotations = Annotations::from_bed_file(graph, path)
+
         let gui = Self {
             ctx,
             frame_input,
@@ -582,9 +587,44 @@ impl Gui {
             dropped_file,
 
             thread_pool,
+
+            annotations: Annotations::default(),
         };
 
         Ok(gui)
+    }
+
+    fn hover_annotation(&self) {
+        if let Some(node_id) = self.hover_node_id {
+            if self.ctx.is_pointer_over_area() {
+                return;
+            }
+
+            let annots = self.annotations.annotations_for(node_id);
+
+            if annots.is_empty() {
+                egui::containers::popup::show_tooltip_text(
+                    &self.ctx,
+                    egui::Id::new("hover_node_id_tooltip"),
+                    node_id.0.to_string(),
+                )
+            } else {
+                let mut string = String::new();
+
+                for (name, val) in annots {
+                    string.push_str(name);
+                    string.push_str(": ");
+                    string.push_str(val);
+                    string.push_str("\n");
+                }
+
+                egui::containers::popup::show_tooltip_text(
+                    &self.ctx,
+                    egui::Id::new("hover_node_id_tooltip"),
+                    string,
+                )
+            }
+        }
     }
 
     pub fn clone_gui_msg_tx(&self) -> crossbeam::channel::Sender<GuiMsg> {
@@ -654,15 +694,7 @@ impl Gui {
         self.menu_bar
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
 
-        if let Some(node_id) = self.hover_node_id {
-            if !self.ctx.is_pointer_over_area() {
-                egui::containers::popup::show_tooltip_text(
-                    &self.ctx,
-                    egui::Id::new("hover_node_id_tooltip"),
-                    node_id.0.to_string(),
-                )
-            }
-        }
+        self.hover_annotation();
 
         self.view_state.apply_received();
 
