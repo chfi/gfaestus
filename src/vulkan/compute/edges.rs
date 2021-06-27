@@ -299,10 +299,10 @@ impl EdgeRenderer {
         let y_group_count: u32 = 1;
         let z_group_count: u32 = 1;
 
-        println!("edge preprocessing");
-        println!("  x_group_count: {}", x_group_count);
-        println!("  y_group_count: {}", y_group_count);
-        println!("  z_group_count: {}", z_group_count);
+        // println!("edge preprocessing");
+        // println!("  x_group_count: {}", x_group_count);
+        // println!("  y_group_count: {}", y_group_count);
+        // println!("  z_group_count: {}", z_group_count);
 
         unsafe {
             device.cmd_dispatch(
@@ -316,7 +316,11 @@ impl EdgeRenderer {
         Ok(())
     }
 
-    pub fn populate_slots_cmd(&self, cmd_buf: vk::CommandBuffer) -> Result<()> {
+    pub fn populate_slots_cmd(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        viewport_dims: [f32; 2],
+    ) -> Result<()> {
         let device = &self.populate_slot_pipeline.device;
 
         unsafe {
@@ -341,37 +345,24 @@ impl EdgeRenderer {
             );
         };
 
-        // let screen_size = Point {
-        //     x: viewport_dims[0],
-        //     y: viewport_dims[1],
-        // };
-
-        /*
-        let offset = [view.center.x, view.center.y];
-
-        let push_constants = BinPushConstants::new(
-            // offset,
-            [0.0, 0.0],
-            viewport_dims,
-            view,
-            self.edges.edge_count as u32,
-        );
-        let pc_bytes = push_constants.bytes();
-
-        unsafe {
-            use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                self.preprocess_pipeline.pipeline_layout,
-                Flags::COMPUTE,
-                0,
-                &pc_bytes,
-            )
+        let x_group_count = {
+            let w = viewport_dims[0] as u32;
+            let mut x = w / 16;
+            if w % 16 != 0 {
+                x += 1;
+            }
+            x.min(256)
         };
-        */
 
-        let x_group_count: u32 = 256;
-        let y_group_count: u32 = 256;
+        let y_group_count = {
+            let h = viewport_dims[1] as u32;
+            let mut y = h / 16;
+            if h % 16 != 0 {
+                y += 1;
+            }
+            y.min(256)
+        };
+
         let z_group_count: u32 = 1;
 
         // TODO use edge count from the preprocessing output buffer
@@ -420,8 +411,6 @@ impl EdgeRenderer {
             );
         };
 
-        // let x_group_count: u32 = 4096u32 / 64;
-        // let y_group_count: u32 = 4096u32 / 64;
         let x_group_count: u32 = 4096u32 / 16;
         let y_group_count: u32 = 4096u32 / 16;
         let z_group_count: u32 = 1;
