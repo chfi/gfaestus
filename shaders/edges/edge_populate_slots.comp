@@ -29,11 +29,8 @@ void main() {
   uint edge_offset = gl_GlobalInvocationID.z * EDGES_PER_GROUP;
   uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
 
-
-  if (gl_GlobalInvocationID.z == 0) {
-    for (uint i = 0; i < 32; i++) {
-      tile_slots[gl_LocalInvocationID.x][gl_LocalInvocationID.y][i] = 0;
-    }
+  for (uint i = 0; i < 32; i++) {
+    tile_slots[gl_LocalInvocationID.x][gl_LocalInvocationID.y][i] = 0;
   }
 
   barrier();
@@ -53,7 +50,8 @@ void main() {
   int count = bezier_interval(test_p0, test_ctrl, test_p1);
   float t_del = 1.0 / float(count);
 
-  for (uint i = 0; i < count; i++) {
+
+  for (uint i = 0; i < 32; i++) {
     vec2 val = bezier_quad(test_p0, test_ctrl, test_p1, t_del * float(i));
     if (val.x >= tile_offset.x && val.x <= tile_offset.x + 16.0
         && val.y >= tile_offset.y && val.y <= tile_offset.y + 16.0) {
@@ -135,11 +133,10 @@ void main() {
   uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32);
 
   if (tile_slot_offset < (TILES_WIDE * TILES_HIGH * 32)) {
-    for (uint i = 0; i < 32; i++) {
-      atomicMax(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
+    for (uint i = 0; i < 1; i++) {
+
+      atomicOr(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
     }
   }
-
-  barrier();
 
 }

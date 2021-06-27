@@ -8,7 +8,6 @@
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-// layout (set = 0, binding = 0) buffer TileSlots {
 layout (set = 0, binding = 0) readonly buffer TileSlots {
   uint slots[];
 } tiles;
@@ -21,13 +20,6 @@ void main() {
 
   uint pixel_ix = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * 4096;
 
-  image.pixel[pixel_ix] = 0;
-
-  // image.pixel[gl_LocalInvocationIndex] = 255;
-
-
-  barrier();
-
   vec2 pixel = vec2(gl_GlobalInvocationID.xy);
   ivec2 tile = tile_coords(pixel);
 
@@ -38,12 +30,8 @@ void main() {
 
 
   uint slot_offset = tile.y * TILES_WIDE * 32 + tile.x * 32;
-  // uint slot_offset = tile.y * (4096 / 16) + tile.x;
-  // uint slot_offset = tile.y;
-  // uint slot_offset = 0;
 
   // TODO heuristic to only render ~4-8 edges/tile max
-
 
   // float val = line_segment_sdf(local_pixel, vec2(0.0), vec2(15.0));
   // image.pixel[pixel_ix] = uint(val * 255.0);
@@ -99,15 +87,9 @@ void main() {
 
   */
 
-  // tiles.slots[(slot_offset) % (128 * 96 * 32)] = 255;
-
-  // tiles.slots[0] = 255;
-
   uint count = 0;
 
-
-
-  for (uint i = 0; i < 32; i++) {
+  for (uint i = 0; i < 1; i++) {
     uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
     // uint slot = tiles.slots[slot_offset + i];
@@ -137,12 +119,6 @@ void main() {
     */
   }
 
-  // count = gl_WorkGroupID.x;
-
   // image.pixel[pixel_ix] = clamp(uint(min_val * 255.0), 0, 255);
   image.pixel[pixel_ix] = clamp(count * 64, 0, 255);
-
-  barrier();
-
-
 }
