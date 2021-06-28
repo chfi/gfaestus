@@ -141,6 +141,86 @@ vec2 bezier_grid_intersect(in vec2 pixel,
   return vec2(0.0);
 }
 
+vec2 tile_line_intersect(in vec2 pixel,
+                         in vec3 line) {
+
+  mat4x3 grid_lines = tile_lines(pixel);
+
+  for (int i = 0; i < 4; i++) {
+    vec2 grid_intersect = line_line_intersect(line, grid_lines[i]);
+
+    if (grid_intersect != vec2(0.0)) {
+      return grid_intersect;
+    }
+  }
+
+  return vec2(0.0);
+}
+
+vec4 tile_line_intersect2(in vec2 pixel,
+                          in vec3 line) {
+  mat4x3 grid_lines = tile_lines(pixel);
+
+  vec2 intersect0;
+  vec2 intersect1;
+
+  float left = float(uint(pixel.x) % 16);
+  float right = left + 16;
+
+  float top = float(uint(pixel.y) % 16);
+  float bottom = top + 16;
+
+  uint count = 0;
+
+  for (int i = 0; i < 4; i++) {
+    vec2 grid_intersect = line_line_intersect(line, grid_lines[i]);
+
+    if (count > 1) {
+      break;
+    }
+
+    if (grid_intersect != vec2(0.0))
+      if (grid_intersect.x >= left && grid_intersect.x <= right
+          && grid_intersect.y >= top && grid_intersect.y <= bottom) {
+        count += 1;
+
+        if (count == 0) {
+          intersect0 = grid_intersect;
+        } else {
+          intersect1 = grid_intersect;
+        }
+      }
+  }
+
+  return vec4(intersect0.xy, intersect1.xy);
+
+}
+
+/*
+vec4 tile_line_intersect2(in vec2 pixel,
+                          in vec3 line) {
+
+  mat4x3 grid_lines = tile_lines(pixel);
+
+
+  vec2 intersect0;
+  vec2 intersect1;
+
+  uint count = 0;
+
+  for (int i = 0; i < 4; i++) {
+    vec2 grid_intersect = line_line_intersect(line, grid_lines[i]);
+
+    if (grid_intersect != vec2(0.0) &&
+        grid_intersect.x >=
+      // return grid_intersect;
+    }
+  }
+
+  return vec2(0.0);
+}
+*/
+
 /*
 void eval_lines_test(out vec4 color, in vec2 pixel_coord) {
     vec3 l0 = vec3(0.0, 1.0, 100.0);

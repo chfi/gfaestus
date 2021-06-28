@@ -80,6 +80,7 @@ void main() {
   ivec2 prev_tile = tile_coords(prev_point);
 
 
+  /*
   for (uint i = 1; i < count; i++) {
 
     // t_cur = t_del * float(i);
@@ -101,6 +102,27 @@ void main() {
       tile_slots[local_x][local_y][ix0] |= (1 << ix1);
     }
 
+  }
+  */
+
+  float t0 = 0.0;
+  float t1 = 0.05;
+  float t2 = 0.10;
+
+  vec4 intersect = tile_line_intersect2(tile_center, vec3(1.0, 0.0, 0.0));
+
+  // vec2 intersect0 = tile_line_intersect(tile_center, vec3(1.0, 0.0, 0.0));
+  // vec2 intersect1 = tile_line_intersect(tile_center + vec2(16.0), vec3(1.0, 0.0, 0.0));
+  // vec2 intersect1 = bezier_grid_intersect(tile_center, test_p0, test_ctrl, test_p1, t1, t2);
+
+  // vec2 intersect0 = bezier_grid_intersect(tile_center, test_p0, test_ctrl, test_p1, t0, t1);
+  // vec2 intersect1 = bezier_grid_intersect(tile_center, test_p0, test_ctrl, test_p1, t1, t2);
+
+  uint ix0 = tile_border_index(intersect.xy);
+  uint ix1 = tile_border_index(intersect.zw);
+
+  if (intersect.xy != vec2(0.0) && intersect.zw != vec2(0.0)) {
+    tile_slots[local_x][local_y][ix0] |= (1 << ix1);
   }
 
   /*
