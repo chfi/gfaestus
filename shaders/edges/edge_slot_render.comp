@@ -23,6 +23,8 @@ void main() {
   vec2 pixel = vec2(gl_GlobalInvocationID.xy);
   ivec2 tile = tile_coords(pixel);
 
+  image.pixel[pixel_ix] = 0;
+
   vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
                           16.0 * gl_GlobalInvocationID.y);
 
