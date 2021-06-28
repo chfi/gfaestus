@@ -52,6 +52,7 @@ void main() {
 
 
 
+  /*
   for (uint i = 0; i < count; i++) {
     vec2 val = bezier_quad(test_p0, test_ctrl, test_p1, t_del * float(i));
     if (val.x >= tile_offset.x && val.x <= tile_offset.x + 16.0
@@ -70,9 +71,10 @@ void main() {
       // tile_slots[local_x][local_y][8] = 16777216;
     }
   }
+  */
 
 
-  /*
+
   vec2 prev_intersect = vec2(0.0);
 
 
@@ -96,7 +98,6 @@ void main() {
 
     prev_intersect = intersect;
   }
-  */
 
   /*
 

@@ -31,17 +31,34 @@ int bezier_interval(in vec2 p0, in vec2 ctrl, in vec2 p1) {
 }
 
 
+/*
+uint tile_border_index(in vec2 p) {
+  uint x = p.x <= 7.5 ? 0 : 15;
+  uint y = p.y <= 7.5 ? 0 : 15;
+
+  if (x == 0) {
+    return y / 2;
+  } else if (x == 15) {
+  } else {
+  }
+}
+*/
+
 
 uint tile_border_index(in vec2 p) {
   uint x = uint(clamp(p.x, 0.0, 15.0));
   uint y = uint(clamp(p.y, 0.0, 15.0));
 
-  if (x == 0) {
-    return y / 2;
+  if (y == 0) {
+    return x / 2;
+  } else if (y == 15) {
+    return (x / 2) + 16;
   } else if (x == 15) {
-    return (y / 2) + 15;
+    return (y / 2) + 8;
+  } else if (x == 0) {
+    return (y / 2) + 24;
   } else {
-    return (y / 2) + 15;
+    return 0;
   }
 }
 
