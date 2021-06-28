@@ -57,10 +57,16 @@ void main() {
 
   uint count = 0;
 
-  for (uint i = 0; i < 2; i++) {
+  for (uint i = 0; i < 32; i++) {
   // for (uint i = 0; i < 1; i++) {
     uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
+
+    bool done = false;
+
+    if (slot == 0) {
+      continue;
+    }
 
     for (uint j = 0; j < 32; j++) {
     // for (uint j = 0; j < 4; j++) {
@@ -81,7 +87,15 @@ void main() {
           min_val = min(val, min_val);
         }
 
+        if (min_val < 0.0) {
+          done = true;
+          break;
+        }
+
       }
+    }
+    if (done) {
+      break;
     }
   }
 

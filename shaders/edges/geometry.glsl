@@ -27,7 +27,7 @@ int bezier_interval(in vec2 p0, in vec2 ctrl, in vec2 p1) {
   float p0_ctrl = length(ctrl - p0);
   float ctrl_p1 = length(p1 - ctrl);
 
-  return int((p0_ctrl / 8.0) + (ctrl_p1 / 8.0));
+  return int((p0_ctrl / 4.0) + (ctrl_p1 / 4.0));
 }
 
 
