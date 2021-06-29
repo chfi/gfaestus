@@ -62,6 +62,23 @@ uint tile_border_index(in vec2 p) {
   }
 }
 
+uint tile_border_index_i(in ivec2 p) {
+  uint x = clamp(p.x, 0, 15);
+  uint y = clamp(p.y, 0, 15);
+
+  if (y == 0) {
+    return x / 2;
+  } else if (y == 15) {
+    return (x / 2) + 16;
+  } else if (x == 15) {
+    return (y / 2) + 8;
+  } else if (x == 0) {
+    return (y / 2) + 24;
+  } else {
+    return 0;
+  }
+}
+
 ivec2 slot_pixel(in uint slot_ix) {
   if (slot_ix < 8) {
     return ivec2(slot_ix * 2, 0);

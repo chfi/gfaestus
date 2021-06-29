@@ -93,7 +93,8 @@ vec2 line_line_intersect(in vec3 l0, in vec3 l1) {
    if (intersect.z == 0.0) {
        return vec2(0.0);
    } else {
-       return vec2(-intersect.x / intersect.z, -intersect.y / intersect.z);
+       return vec2(intersect.x / intersect.z, intersect.y / intersect.z);
+       // return vec2(-intersect.x / intersect.z, -intersect.y / intersect.z);
    }
 
 }
@@ -101,9 +102,7 @@ vec2 line_line_intersect(in vec3 l0, in vec3 l1) {
 vec2 intersect2(in vec3 l0, in vec3 l1) {
    vec3 intersect = cross(l0, l1);
 
-   float den = intersect.z == 0.0 ? 1.0 : intersect.z;
-
-   return vec2(intersect.xy / den);
+   return intersect.z == 0.0 ? vec2(0.0) : vec2(intersect.xy / intersect.z);
 }
 
 vec2 bezier_grid_intersect(in vec2 pixel,
@@ -156,6 +155,57 @@ vec2 tile_line_intersect(in vec2 pixel,
 
   return vec2(0.0);
 }
+
+ivec2 tile_line_intersection(in vec2 pixel,
+                             in vec3 line) {
+
+  mat4x3 grid_lines = tile_lines(pixel);
+
+  float top = grid_lines[0].z;
+  float bottom = grid_lines[1].z;
+
+  float left = grid_lines[2].z;
+  float right = grid_lines[3].z;
+
+  int slot = -1;
+  int index = -1;
+
+  for (int i = 0; i < 4; i++) {
+    vec2 grid_intersect = line_line_intersect(line, grid_lines[i]);
+
+    // if (grid_intersect != vec2(0.0)) {
+    // if (length(grid_intersect) >= 1.0) {
+    // if (grid_intersect.x >= left && grid_intersect.x <= right
+    //     && grid_intersect.y >= top && grid_intersect.y <= bottom) {
+
+    vec2 local = grid_intersect.xy - vec2(top, left);
+
+    // if (local.x >= 0.0 && local.x <= 16.0) {
+    if (local.y >= 0.0 && local.y <= 16.0) {
+    //     && local.y >= 0.0 && local.y <= 16.0) {
+      // ivec2 local_pixel = ivec2(grid_intersect.xy) % 16;
+      ivec2 local_pixel = ivec2(local);
+
+      if (slot == -1) {
+        // slot = int(tile_border_index_i(ivec2(0, 0)));
+        slot = int(tile_border_index_i(local_pixel));
+
+      } else {
+        // index = int(tile_border_index_i(ivec2(15, 7)));
+        index = int(tile_border_index_i(local_pixel));
+
+        break;
+      }
+    }
+  }
+
+  if (slot != -1 && index != -1) {
+    return ivec2(slot, index);
+  } else {
+    return ivec2(-1);
+  }
+}
+
 
 vec4 tile_line_intersect2(in vec2 pixel,
                           in vec3 line) {
