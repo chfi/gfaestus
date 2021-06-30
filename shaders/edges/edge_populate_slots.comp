@@ -20,19 +20,17 @@ layout (set = 0, binding = 1) buffer TileSlots {
 
 shared uint tile_slots[16][16][32];
 
-vec2 test_p0 = vec2(100.0, 220.0);
-vec2 test_ctrl = vec2(600.0, 400.0);
-vec2 test_p1 = vec2(100.0, 700.0);
-
 void main() {
 
   uint edge_offset = gl_GlobalInvocationID.z * EDGES_PER_GROUP;
   uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
 
+  if (edge_offset >= beziers.edge_count) {
+    return;
+  }
 
   uint global_x = gl_GlobalInvocationID.x;
   uint global_y = gl_GlobalInvocationID.y;
-
 
   uint tile_slot_offset = (global_y * TILES_WIDE * 32 + global_x * 32);
 
@@ -62,57 +60,9 @@ void main() {
   uint local_x = gl_LocalInvocationID.x;
   uint local_y = gl_LocalInvocationID.y;
 
-  int count = bezier_interval(test_p0, test_ctrl, test_p1);
-  float t_del = 1.0 / float(count);
-
   ivec2 this_tile = tile_coords(tile_center);
 
   vec2 prev_intersect = vec2(0.0);
-
-  /*
-  for (uint i = 1; i < count; i++) {
-    float t0 = t_del * float(i - 1);
-    float t1 = t_del * float(i);
-
-    vec2 cur_point = bezier_quad(test_p0, test_ctrl, test_p1, t1);
-    ivec2 cur_tile = tile_coords(cur_point);
-
-
-    if (cur_point.x < tile_offset.x
-        || cur_point.x > tile_offset.x + 16.0
-        || cur_point.y < tile_offset.y
-        || cur_point.y > tile_offset.y + 16.0) {
-      continue;
-    }
-
-    if (cur_point.x == prev_point.x) {
-      // todo
-    } else {
-      float x0 = prev_point.x;
-      float y0 = prev_point.y;
-      float x1 = cur_point.x;
-      float y1 = cur_point.y;
-
-      float slope = (y1 - y0) / (x1 - x0);
-      float intercept = (x1 * y0 - x0 * y1) / (x1 - x0);
-
-      vec2 line = vec2(slope, intercept);
-
-      ivec2 intersection = tile_line_intersect2(tile_center, line);
-
-      if (intersection.x != -1 && intersection.y != -1) {
-        uint ix0 = intersection.x;
-        uint ix1 = intersection.y;
-
-        // tile_slots[local_x][local_y][ix0] = 1 << ix1;
-        atomicOr(tile_slots[local_x][local_y][ix0], 1 << ix1);
-      }
-
-    }
-
-    prev_point = cur_point;
-  }
-  */
 
 
   for (uint edge_ix = edge_offset; edge_ix < edge_end; edge_ix++) {
