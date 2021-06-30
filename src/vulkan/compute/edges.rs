@@ -123,34 +123,6 @@ impl EdgeRenderer {
         })
     }
 
-    pub fn upload_example_data(&self, app: &GfaestusVk) -> Result<()> {
-        let edge_data: Vec<[u32; 2]> = vec![[1, 2], [3, 4], [3, 6]];
-
-        app.copy_data_to_buffer::<[u32; 2], [u32; 2]>(
-            &edge_data,
-            self.edges.edges_by_id_buf,
-        )?;
-
-        let p1 = Point::new(170.0, 100.0);
-        let p2 = Point::new(230.0, 200.0);
-        let p3 = Point::new(270.0, 180.0);
-        let p4 = Point::new(500.0, 500.0);
-        let p6 = Point::new(300.0, 500.0);
-
-        let pos_data: Vec<[f32; 4]> = vec![
-            [p1.x, p1.y, p2.x, p2.y],
-            [p3.x, p3.y, p4.x, p4.y],
-            [p3.x, p3.y, p6.x, p6.y],
-        ];
-
-        app.copy_data_to_buffer::<[f32; 4], [f32; 4]>(
-            &pos_data,
-            self.edges.edges_pos_buf,
-        )?;
-
-        Ok(())
-    }
-
     pub fn upload_edges<E>(&self, app: &GfaestusVk, edges: E) -> Result<()>
     where
         E: Iterator<Item = (Handle, Handle)>,

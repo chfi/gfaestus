@@ -64,8 +64,10 @@ void main() {
 
   vec2 prev_intersect = vec2(0.0);
 
+  // uint edge_offset
+  uint edge_ix = edge_offset + gl_LocalInvocationIndex % EDGES_PER_GROUP;
 
-  for (uint edge_ix = edge_offset; edge_ix < edge_end; edge_ix++) {
+  if (edge_ix < edge_end) {
     uint offset = edge_ix * 3;
 
     vec2 p0   = beziers.curve[offset];
@@ -106,7 +108,7 @@ void main() {
 
         vec2 line = vec2(slope, intercept);
 
-        ivec2 intersection = tile_line_intersect2(tile_center, line);
+        ivec2 intersection = tile_line_intersect(tile_center, line);
 
         if (intersection.x != -1 && intersection.y != -1) {
           uint ix0 = intersection.x;
@@ -120,8 +122,6 @@ void main() {
       prev_point = cur_point;
     }
   }
-
-
 
   barrier();
 

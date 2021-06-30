@@ -38,21 +38,6 @@ void main() {
   // float val = line_segment_sdf(local_pixel, vec2(0.0), vec2(15.0));
   // image.pixel[pixel_ix] = uint(val * 255.0);
 
-  /*
-  ivec2 q0 = slot_pixel(gl_WorkGroupID.x % 32);
-  ivec2 q1 = slot_pixel(gl_WorkGroupID.y % 32);
-
-  vec2 p0 = vec2(q0);
-  vec2 p1 = vec2(q1);
-
-  float val = line_segment_sdf(local_pixel, p0, p1);
-  image.pixel[pixel_ix] = uint((1.0 - val) * 255.0);
-  // image.pixel[pixel_ix] = clamp(uint(val * 255.0), 0, 255);
-
-  */
-
-
-
   float min_val;
 
   bool first = true;
@@ -60,7 +45,6 @@ void main() {
   uint count = 0;
 
   for (uint i = 0; i < 32; i++) {
-  // for (uint i = 0; i < 1; i++) {
     uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
 
@@ -71,18 +55,12 @@ void main() {
     }
 
     for (uint j = 0; j < 32; j++) {
-    // for (uint j = 0; j < 4; j++) {
-      // if (((slot >> j) & 1) == 1) {
       if (((1 << j) & slot) != 0) {
         ivec2 q0 = slot_pixel(i);
-        // ivec2 q0 = slot_pixel(0);
         ivec2 q1 = slot_pixel(j);
 
         vec2 p0 = vec2(q0);
         vec2 p1 = vec2(q1);
-
-        // vec2 p0 = vec2(q0) + vec2(0.5);
-        // vec2 p1 = vec2(q1) + vec2(0.5);
 
         float val = line_segment_sdf(local_pixel, p0, p1);
 
