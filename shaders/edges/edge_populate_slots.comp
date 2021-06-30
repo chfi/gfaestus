@@ -89,6 +89,14 @@ void main() {
     vec2 cur_point = bezier_quad(test_p0, test_ctrl, test_p1, t1);
     ivec2 cur_tile = tile_coords(cur_point);
 
+
+    if (cur_point.x < tile_offset.x
+        || cur_point.x > tile_offset.x + 16.0
+        || cur_point.y < tile_offset.y
+        || cur_point.y > tile_offset.y + 16.0) {
+      continue;
+    }
+
     if (cur_point.x == prev_point.x) {
       // todo
     } else {
@@ -104,10 +112,11 @@ void main() {
 
       ivec2 intersection = tile_line_intersect2(tile_center, line);
 
-      if (intersection != ivec2(-1)) {
+      if (intersection.x != -1 && intersection.y != -1) {
         uint ix0 = intersection.x;
         uint ix1 = intersection.y;
 
+        // tile_slots[local_x][local_y][ix0] = 1 << ix1;
         atomicOr(tile_slots[local_x][local_y][ix0], 1 << ix1);
       }
 

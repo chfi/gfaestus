@@ -249,30 +249,35 @@ ivec2 tile_line_intersect2(in vec2 pixel,
   // solve for x = right
   float right_y = eval_line(line, right);
   if (right_y >= top && right_y <= bottom) {
+
+    uint border = tile_border_index_i(ivec2(15, int(right_y) % 16));
+
     if (slot == -1) {
-      slot = int(tile_border_index_i(ivec2(15, int(right_y) % 16)));
+      slot = int(border);
     } else {
-      index = int(tile_border_index_i(ivec2(15, int(right_y) % 16)));
+      index = int(border);
     }
   }
 
   // solve for y = top
   float top_x = eval_line_inverse(line, top);
   if (top_x >= left && top_x <= right) {
+    uint border = tile_border_index_i(ivec2(int(top_x) % 16, 0));
     if (slot == -1) {
-      slot = int(tile_border_index_i(ivec2(int(top_x) % 16, 0)));
+      slot = int(border);
     } else {
-      index = int(tile_border_index_i(ivec2(int(top_x) % 16, 0)));
+      index = int(border);
     }
   }
 
   // solve for y = bottom
   float bottom_x = eval_line_inverse(line, bottom);
   if (bottom_x >= left && bottom_x <= right) {
+    uint border = tile_border_index_i(ivec2(int(bottom_x) % 16, 15));
     if (slot == -1) {
-      slot = int(tile_border_index_i(ivec2(int(bottom_x) % 16, 15)));
+      slot = int(border);
     } else {
-      index = int(tile_border_index_i(ivec2(int(bottom_x) % 16, 15)));
+      index = int(border);
     }
   }
 
