@@ -20,6 +20,18 @@ vec3 tile_ver_line_left(in vec2 pixel_c) {
     return vec3(1.0, 0.0, float(tile.x) * TILE_F);
 }
 
+vec4 tile_bounds(in vec2 pixel) {
+  ivec2 tile = tile_coords(pixel);
+
+  float top = float(tile.y) * TILE_F;
+  float bottom = top + TILE_F;
+
+  float left = float(tile.x) * TILE_F;
+  float right = left + TILE_F;
+
+  return vec4(top, bottom, left, right);
+}
+
 
 mat4x3 tile_lines(in vec2 pixel_c) {
     vec3 hor_above = tile_hor_line_above(pixel_c);
@@ -206,7 +218,68 @@ ivec2 tile_line_intersection(in vec2 pixel,
   }
 }
 
+float eval_line(in vec2 line, in float x) {
+  return line.x * x + line.y;
+}
 
+float eval_line_inverse(in vec2 line, in float y) {
+  return (y - line.y) / line.x;
+}
+
+ivec2 tile_line_intersect2(in vec2 pixel,
+                           in vec2 line) {
+  vec4 bounds = tile_bounds(pixel);
+
+  float top = bounds.x;
+  float bottom = bounds.y;
+
+  float left = bounds.z;
+  float right = bounds.w;
+
+  int slot = -1;
+  int index = -1;
+
+  // solve for x = left
+  float left_y = eval_line(line, left);
+
+  if (left_y >= top && left_y <= bottom) {
+    slot = int(tile_border_index_i(ivec2(0, int(left_y) % 16)));
+  }
+
+  // solve for x = right
+  float right_y = eval_line(line, right);
+  if (right_y >= top && right_y <= bottom) {
+    if (slot == -1) {
+      slot = int(tile_border_index_i(ivec2(15, int(right_y) % 16)));
+    } else {
+      index = int(tile_border_index_i(ivec2(15, int(right_y) % 16)));
+    }
+  }
+
+  // solve for y = top
+  float top_x = eval_line_inverse(line, top);
+  if (top_x >= left && top_x <= right) {
+    if (slot == -1) {
+      slot = int(tile_border_index_i(ivec2(int(top_x) % 16, 0)));
+    } else {
+      index = int(tile_border_index_i(ivec2(int(top_x) % 16, 0)));
+    }
+  }
+
+  // solve for y = bottom
+  float bottom_x = eval_line_inverse(line, bottom);
+  if (bottom_x >= left && bottom_x <= right) {
+    if (slot == -1) {
+      slot = int(tile_border_index_i(ivec2(int(bottom_x) % 16, 15)));
+    } else {
+      index = int(tile_border_index_i(ivec2(int(bottom_x) % 16, 15)));
+    }
+  }
+
+  return ivec2(slot, index);
+}
+
+/*
 vec4 tile_line_intersect2(in vec2 pixel,
                           in vec3 line) {
   mat4x3 grid_lines = tile_lines(pixel);
@@ -245,6 +318,7 @@ vec4 tile_line_intersect2(in vec2 pixel,
   return vec4(intersect0.xy, intersect1.xy);
 
 }
+*/
 
 /*
 vec4 tile_line_intersect2(in vec2 pixel,
