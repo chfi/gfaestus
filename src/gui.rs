@@ -433,6 +433,9 @@ pub enum GuiMsg {
     SetDarkMode,
     EguiEvent(egui::Event),
     FileDropped { path: std::path::PathBuf },
+    Cut,
+    Copy,
+    Paste,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -967,6 +970,15 @@ impl Gui {
                         );
                         *guard = Some(path);
                     }
+                }
+                GuiMsg::Cut => {
+                    self.frame_input.events.push(egui::Event::Cut);
+                }
+                GuiMsg::Copy => {
+                    self.frame_input.events.push(egui::Event::Copy);
+                }
+                GuiMsg::Paste => {
+                    println!("received Paste event");
                 }
             }
         }

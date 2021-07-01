@@ -131,12 +131,26 @@ impl InputManager {
                     .unwrap();
             }
 
+            let modifiers = self.modifiers.load();
+
             if gui_wants_keyboard {
                 if let event::WindowEvent::KeyboardInput { input, .. } =
                     winit_ev
                 {
+                    if let Some(gui_msg) =
+                        input.virtual_keycode.and_then(|key| {
+                            winit_to_clipboard_event(
+                                modifiers,
+                                input.state,
+                                key,
+                            )
+                        })
+                    {
+                        gui_msg_tx.send(gui_msg).unwrap();
+                    }
+
                     if let Some(event) = input.virtual_keycode.and_then(|key| {
-                        winit_to_egui_text_event(input.state, key)
+                        winit_to_egui_text_event(modifiers, input.state, key)
                     }) {
                         gui_msg_tx
                             .send(crate::gui::GuiMsg::EguiEvent(event))
@@ -153,8 +167,6 @@ impl InputManager {
                     }
                 }
             }
-
-            let modifiers = self.modifiers.load();
 
             if let Some(app_inputs) =
                 self.app.bindings.apply(&winit_ev, modifiers, mouse_pos)
@@ -222,17 +234,45 @@ fn received_char_to_egui_text(c: char) -> egui::Event {
     egui::Event::Text(c.into())
 }
 
+
+fn winit_to_clipboard_event(
+    modifiers: event::ModifiersState,
+    state: winit::event::ElementState,
+    key_code: winit::event::VirtualKeyCode,
+) -> Option<GuiMsg> {
+    let modifiers = egui::Modifiers {
+        alt: modifiers.alt(),
+        ctrl: modifiers.ctrl(),
+        shift: modifiers.shift(),
+        mac_cmd: modifiers.logo(),
+        command: modifiers.logo(),
+    };
+
+    let pressed = matches!(state, winit::event::ElementState::Pressed);
+
+    if modifiers.ctrl && pressed {
+        match key_code {
+            VirtualKeyCode::X => Some(GuiMsg::Cut),
+            VirtualKeyCode::C => Some(GuiMsg::Copy),
+            VirtualKeyCode::V => Some(GuiMsg::Paste),
+            _ => None,
+        }
+    } else {
+        None
+    }
+}
+
 fn winit_to_egui_text_event(
+    modifiers: event::ModifiersState,
     state: winit::event::ElementState,
     key_code: winit::event::VirtualKeyCode,
 ) -> Option<egui::Event> {
-    // TODO track modifiers with winit's ModifiersChanged event
     let modifiers = egui::Modifiers {
-        alt: false,
-        ctrl: false,
-        shift: false,
-        mac_cmd: false,
-        command: false,
+        alt: modifiers.alt(),
+        ctrl: modifiers.ctrl(),
+        shift: modifiers.shift(),
+        mac_cmd: modifiers.logo(),
+        command: modifiers.logo(),
     };
 
     let pressed = matches!(state, winit::event::ElementState::Pressed);
@@ -253,6 +293,43 @@ fn winit_to_egui_text_event(
 
     let egui_event = match key_code {
         /*
+        VirtualKeyCode::C => {
+            if modifiers.ctrl {
+                Some(egui::Event::Copy)
+            } else {
+                None
+            }
+        }
+        VirtualKeyCode::V => {
+            if modifiers.ctrl {
+                Some(egui::Event::Text(contents))
+            } else {
+                None
+            }
+        }
+        VirtualKeyCode::X => {
+            if modifiers.ctrl {
+                Some(egui::Event::Cut)
+            } else {
+                None
+            }
+        }
+        */
+        VirtualKeyCode::Escape => key_event(Key::Escape),
+        VirtualKeyCode::Insert => key_event(Key::Insert),
+        VirtualKeyCode::Home => key_event(Key::Home),
+        VirtualKeyCode::Delete => key_event(Key::Delete),
+        VirtualKeyCode::End => key_event(Key::End),
+        VirtualKeyCode::PageDown => key_event(Key::PageDown),
+        VirtualKeyCode::PageUp => key_event(Key::PageUp),
+        VirtualKeyCode::Left => key_event(Key::ArrowLeft),
+        VirtualKeyCode::Up => key_event(Key::ArrowUp),
+        VirtualKeyCode::Right => key_event(Key::ArrowRight),
+        VirtualKeyCode::Down => key_event(Key::ArrowDown),
+        VirtualKeyCode::Back => key_event(Key::Backspace),
+        VirtualKeyCode::Return => key_event(Key::Enter),
+        VirtualKeyCode::Tab => key_event(Key::Tab),
+        /*
         VirtualKeyCode::Key1 => key_event(Key::Num1),
         VirtualKeyCode::Key2 => key_event(Key::Num2),
         VirtualKeyCode::Key3 => key_event(Key::Num3),
@@ -265,7 +342,6 @@ fn winit_to_egui_text_event(
         VirtualKeyCode::Key0 => key_event(Key::Num0),
         VirtualKeyCode::A => key_event(Key::A),
         VirtualKeyCode::B => key_event(Key::B),
-        VirtualKeyCode::C => key_event(Key::C),
         VirtualKeyCode::D => key_event(Key::D),
         VirtualKeyCode::E => key_event(Key::E),
         VirtualKeyCode::F => key_event(Key::F),
@@ -284,27 +360,10 @@ fn winit_to_egui_text_event(
         VirtualKeyCode::S => key_event(Key::S),
         VirtualKeyCode::T => key_event(Key::T),
         VirtualKeyCode::U => key_event(Key::U),
-        VirtualKeyCode::V => key_event(Key::V),
         VirtualKeyCode::W => key_event(Key::W),
         VirtualKeyCode::X => key_event(Key::X),
         VirtualKeyCode::Y => key_event(Key::Y),
         VirtualKeyCode::Z => key_event(Key::Z),
-        */
-        VirtualKeyCode::Escape => key_event(Key::Escape),
-        VirtualKeyCode::Insert => key_event(Key::Insert),
-        VirtualKeyCode::Home => key_event(Key::Home),
-        VirtualKeyCode::Delete => key_event(Key::Delete),
-        VirtualKeyCode::End => key_event(Key::End),
-        VirtualKeyCode::PageDown => key_event(Key::PageDown),
-        VirtualKeyCode::PageUp => key_event(Key::PageUp),
-        VirtualKeyCode::Left => key_event(Key::ArrowLeft),
-        VirtualKeyCode::Up => key_event(Key::ArrowUp),
-        VirtualKeyCode::Right => key_event(Key::ArrowRight),
-        VirtualKeyCode::Down => key_event(Key::ArrowDown),
-        VirtualKeyCode::Back => key_event(Key::Backspace),
-        VirtualKeyCode::Return => key_event(Key::Enter),
-        VirtualKeyCode::Tab => key_event(Key::Tab),
-        /*
         VirtualKeyCode::Space => key_event(Key::Space),
         VirtualKeyCode::Numpad0 => key_event(Key::Num0),
         VirtualKeyCode::Numpad1 => key_event(Key::Num1),
