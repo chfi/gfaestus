@@ -234,7 +234,6 @@ fn received_char_to_egui_text(c: char) -> egui::Event {
     egui::Event::Text(c.into())
 }
 
-
 fn winit_to_clipboard_event(
     modifiers: event::ModifiersState,
     state: winit::event::ElementState,
@@ -250,7 +249,7 @@ fn winit_to_clipboard_event(
 
     let pressed = matches!(state, winit::event::ElementState::Pressed);
 
-    if modifiers.ctrl && pressed {
+    if (modifiers.ctrl || modifiers.mac_cmd) && pressed {
         match key_code {
             VirtualKeyCode::X => Some(GuiMsg::Cut),
             VirtualKeyCode::C => Some(GuiMsg::Copy),

@@ -978,7 +978,11 @@ impl Gui {
                     self.frame_input.events.push(egui::Event::Copy);
                 }
                 GuiMsg::Paste => {
-                    println!("received Paste event");
+                    if let Ok(text) = &self.clipboard_ctx.get_contents() {
+                        self.frame_input
+                            .events
+                            .push(egui::Event::Text(text.clone()));
+                    }
                 }
             }
         }
