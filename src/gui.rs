@@ -1,5 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use futures::executor::ThreadPool;
 use gluon::vm::frunk_core::hlist::Sculptor;
 #[allow(unused_imports)]
@@ -484,6 +485,8 @@ pub struct Gui {
     thread_pool: Arc<ThreadPool>,
 
     annotations: Annotations,
+
+    clipboard_ctx: ClipboardContext,
 }
 
 impl Gui {
@@ -560,6 +563,8 @@ impl Gui {
 
         // let annotations = Annotations::from_bed_file(graph, path)
 
+        let clipboard_ctx = ClipboardProvider::new().unwrap();
+
         let gui = Self {
             ctx,
             frame_input,
@@ -589,6 +594,8 @@ impl Gui {
             thread_pool,
 
             annotations: Annotations::default(),
+
+            clipboard_ctx,
         };
 
         Ok(gui)
