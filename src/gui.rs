@@ -859,8 +859,13 @@ impl Gui {
         }
     }
 
-    pub fn end_frame(&self) -> Vec<egui::ClippedMesh> {
-        let (_output, shapes) = self.ctx.end_frame();
+    pub fn end_frame(&mut self) -> Vec<egui::ClippedMesh> {
+        let (output, shapes) = self.ctx.end_frame();
+
+        if !output.copied_text.is_empty() {
+            self.clipboard_ctx.set_contents(output.copied_text).unwrap();
+        }
+
         self.ctx.tessellate(shapes)
     }
 
