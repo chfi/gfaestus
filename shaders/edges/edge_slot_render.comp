@@ -3,6 +3,8 @@
 #define TILES_WIDE 256
 #define TILES_HIGH 256
 
+#define LINE_MAX 128
+
 #include "tile_line_segments.glsl"
 #include "geometry.glsl"
 
@@ -21,7 +23,7 @@ layout (set = 0, binding = 1) buffer Image {
 // at most 128, i.e. 4 lines per slot
 
 // shared vec4 lines[1024];
-shared vec4 lines[128];
+shared vec4 lines[LINE_MAX];
 
 shared uint line_count;
 
@@ -47,17 +49,22 @@ void main() {
 
   uint slot_offset = tile.y * TILES_WIDE * 32 + tile.x * 32;
 
-  barrier();
-
   // prep line segments
 
-  uint slot_id = gl_LocalInvocationIndex;
+  uint slot_id = gl_LocalInvocationIndex / 8;
+
+  uint index_chunk = gl_LocalInvocationIndex % 8;
+  uint start = index_chunk * 4;
+  uint end = start + 4;
+
+
+  // TODO heuristic to only render ~4-8 edges/tile max
 
   if (slot_id < 32) {
     uint slot_ix = (slot_offset + slot_id) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
 
-    for (uint j = 0; j < 32; j++) {
+    for (uint j = start; j < end; j++) {
       if (((1 << j) & slot) != 0) {
         ivec2 q0 = slot_pixel(slot_id);
         ivec2 q1 = slot_pixel(j);
@@ -67,22 +74,16 @@ void main() {
 
         uint index = atomicAdd(line_count, 1);
 
-        if (index < 128) {
+        if (index < LINE_MAX) {
           lines[index] = vec4(p0, p1);
+        } else {
+          break;
         }
-
       }
     }
   }
 
-
-
   barrier();
-
-  // TODO heuristic to only render ~4-8 edges/tile max
-
-  // float val = line_segment_sdf(local_pixel, vec2(0.0), vec2(15.0));
-  // image.pixel[pixel_ix] = uint(val * 255.0);
 
   float min_val;
 
