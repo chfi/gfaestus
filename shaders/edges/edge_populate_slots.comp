@@ -26,9 +26,9 @@ void main() {
   uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
 
 
-  if (edge_offset >= beziers.edge_count) {
-    return;
-  }
+  // if (edge_offset >= beziers.edge_count) {
+  //   return;
+  // }
 
   uint global_x = gl_GlobalInvocationID.x;
   uint global_y = gl_GlobalInvocationID.y;
@@ -65,7 +65,7 @@ void main() {
 
   vec2 prev_intersect = vec2(0.0);
 
-  uint edge_ix = edge_offset + gl_LocalInvocationIndex % EDGES_PER_GROUP;
+  uint edge_ix = edge_offset;
 
   if (edge_ix < edge_end) {
     uint offset = edge_ix * 3;
