@@ -322,8 +322,8 @@ impl EdgeRenderer {
 
         let x_group_count = {
             let w = viewport_dims[0] as u32;
-            let mut x = w / 16;
-            if w % 16 != 0 {
+            let mut x = w / (16 * 16);
+            if w % (16 * 16) != 0 {
                 x += 1;
             }
             x.min(256)
@@ -331,8 +331,8 @@ impl EdgeRenderer {
 
         let y_group_count = {
             let h = viewport_dims[1] as u32;
-            let mut y = h / 16;
-            if h % 16 != 0 {
+            let mut y = h / (16 * 16);
+            if h % (16 * 16) != 0 {
                 y += 1;
             }
             y.min(256)
