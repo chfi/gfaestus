@@ -26,18 +26,16 @@ layout (push_constant) uniform BinPushConstants {
 } bin_pc;
 
 
-shared uint edge_count;
-
 void main() {
-  if (gl_LocalInvocationIndex == 0) {
-    edge_count = 0;
+  if (gl_GlobalInvocationID.xyz == uvec3(0)) {
+    beziers.edge_count = 0;
   }
 
   barrier();
 
-  if (gl_LocalInvocationIndex >= bin_pc.edge_count) {
-    return;
-  }
+  // if (gl_LocalInvocationIndex >= bin_pc.edge_count) {
+  //   return;
+  // }
 
   uint edge_ix = gl_LocalInvocationIndex;
 
@@ -59,13 +57,19 @@ void main() {
   // TODO compare Bezier points to viewport & filter;
   // need to either calculate or pass the visible area
 
-  uint offset = atomicAdd(edge_count, 3);
+  uint offset = atomicAdd(beziers.edge_count, 3);
 
   beziers.curve[offset] = q0;
   beziers.curve[offset + 1] = ctrl;
   beziers.curve[offset + 2] = q1;
 
+  /*
   barrier();
 
-  beziers.edge_count = edge_count;
+  // beziers.edge_count = edge_count;
+
+  if (gl_GlobalInvocationID.xyz == uvec3(0)) {
+    beziers.edge_count = edge_count;
+  }
+  */
 }

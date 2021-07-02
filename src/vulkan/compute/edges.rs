@@ -262,8 +262,11 @@ impl EdgeRenderer {
         };
 
         let x_group_count: u32 = {
-            let mut size = self.edges.edge_count / 1024;
-            if self.edges.edge_count % 1024 != 0 {
+            // let block_size = 256;
+            let block_size = 1024;
+
+            let mut size = self.edges.edge_count / block_size;
+            if self.edges.edge_count % block_size != 0 {
                 size += 1;
             }
             size as u32
