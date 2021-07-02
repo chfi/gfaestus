@@ -16,6 +16,15 @@ layout (set = 0, binding = 1) buffer Image {
   uint pixel[];
 } image;
 
+
+// technically there are 1024 possible line segments, but we'll only
+// at most 128, i.e. 4 lines per slot
+
+// shared vec4 lines[1024];
+shared vec4 lines[128];
+
+shared uint line_count;
+
 void main() {
 
   uint pixel_ix = gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * 4096;
@@ -25,7 +34,10 @@ void main() {
 
   image.pixel[pixel_ix] = 0;
 
-  barrier();
+  if (gl_LocalInvocationIndex == 0) {
+    line_count = 0;
+  }
+
 
   vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
                           16.0 * gl_GlobalInvocationID.y);
@@ -35,6 +47,38 @@ void main() {
 
   uint slot_offset = tile.y * TILES_WIDE * 32 + tile.x * 32;
 
+  barrier();
+
+  // prep line segments
+
+  uint slot_id = gl_LocalInvocationIndex;
+
+  if (slot_id < 32) {
+    uint slot_ix = (slot_offset + slot_id) % (TILES_WIDE * TILES_HIGH * 32);
+    uint slot = tiles.slots[slot_ix];
+
+    for (uint j = 0; j < 32; j++) {
+      if (((1 << j) & slot) != 0) {
+        ivec2 q0 = slot_pixel(slot_id);
+        ivec2 q1 = slot_pixel(j);
+
+        vec2 p0 = vec2(q0);
+        vec2 p1 = vec2(q1);
+
+        uint index = atomicAdd(line_count, 1);
+
+        if (index < 128) {
+          lines[index] = vec4(p0, p1);
+        }
+
+      }
+    }
+  }
+
+
+
+  barrier();
+
   // TODO heuristic to only render ~4-8 edges/tile max
 
   // float val = line_segment_sdf(local_pixel, vec2(0.0), vec2(15.0));
@@ -43,43 +87,27 @@ void main() {
   float min_val;
 
   bool first = true;
+  bool done = false;
 
   uint count = 0;
 
-  for (uint i = 0; i < 32; i++) {
-    uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
-    uint slot = tiles.slots[slot_ix];
+  for (uint i = 0; i < line_count; i++) {
 
-    bool done = false;
+    vec4 line = lines[i];
 
-    if (slot == 0) {
-      continue;
+    float val = line_segment_sdf(local_pixel, line.xy, line.zw);
+
+    if (first) {
+      first = false;
+      min_val = val;
+    } else {
+      min_val = min(val, min_val);
     }
 
-    for (uint j = 0; j < 32; j++) {
-      if (((1 << j) & slot) != 0) {
-        ivec2 q0 = slot_pixel(i);
-        ivec2 q1 = slot_pixel(j);
-
-        vec2 p0 = vec2(q0);
-        vec2 p1 = vec2(q1);
-
-        float val = line_segment_sdf(local_pixel, p0, p1);
-
-        if (first) {
-          first = false;
-          min_val = val;
-        } else {
-          min_val = min(val, min_val);
-        }
-
-        if (min_val < 0.0) {
-          done = true;
-          break;
-        }
-
-      }
+    if (min_val < 0.0) {
+      done = true;
     }
+
     if (done) {
       break;
     }
