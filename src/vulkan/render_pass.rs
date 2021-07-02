@@ -56,7 +56,13 @@ impl OffscreenAttachment {
     ) -> Result<Self> {
         let format = vk::Format::R8G8B8A8_UNORM;
 
-        let color = Self::color(vk_context, command_pool, queue, swapchain_props, format)?;
+        let color = Self::color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            format,
+        )?;
 
         Ok(Self { color })
     }
@@ -73,7 +79,13 @@ impl OffscreenAttachment {
 
         let format = vk::Format::R8G8B8A8_UNORM;
 
-        self.color = Self::color(vk_context, command_pool, queue, swapchain_props, format)?;
+        self.color = Self::color(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            format,
+        )?;
 
         Ok(())
     }
@@ -117,7 +129,8 @@ impl OffscreenAttachment {
             vk_context,
             command_pool,
             queue,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::SAMPLED,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             format,
@@ -145,7 +158,8 @@ impl NodeAttachments {
             msaa_samples,
         )?;
 
-        let resolve = Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
+        let resolve =
+            Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         let id_color = Self::id_color(
             vk_context,
@@ -155,7 +169,8 @@ impl NodeAttachments {
             msaa_samples,
         )?;
 
-        let id_resolve = Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        let id_resolve =
+            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         let mask = Self::mask(
             vk_context,
@@ -165,7 +180,12 @@ impl NodeAttachments {
             msaa_samples,
         )?;
 
-        let mask_resolve = Self::mask_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        let mask_resolve = Self::mask_resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+        )?;
 
         Ok(Self {
             color,
@@ -194,7 +214,8 @@ impl NodeAttachments {
             swapchain_props,
             msaa_samples,
         )?;
-        self.resolve = Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
+        self.resolve =
+            Self::resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         self.id_color = Self::id_color(
             vk_context,
@@ -203,7 +224,8 @@ impl NodeAttachments {
             swapchain_props,
             msaa_samples,
         )?;
-        self.id_resolve = Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        self.id_resolve =
+            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
 
         self.mask = Self::mask(
             vk_context,
@@ -212,7 +234,12 @@ impl NodeAttachments {
             swapchain_props,
             msaa_samples,
         )?;
-        self.mask_resolve = Self::mask_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        self.mask_resolve = Self::mask_resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+        )?;
 
         Ok(())
     }
@@ -324,7 +351,8 @@ impl NodeAttachments {
             vk_context,
             command_pool,
             queue,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::TRANSFER_SRC,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::TRANSFER_SRC,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             extent,
             vk::Format::R32_UINT,
@@ -343,8 +371,13 @@ impl NodeAttachments {
     ) -> Result<Texture> {
         let mut props = swapchain_props;
         props.format.format = vk::Format::R8G8B8A8_UNORM;
-        let color =
-            Texture::create_transient_color(vk_context, command_pool, queue, props, msaa_samples)?;
+        let color = Texture::create_transient_color(
+            vk_context,
+            command_pool,
+            queue,
+            props,
+            msaa_samples,
+        )?;
 
         Ok(color)
     }
@@ -385,7 +418,8 @@ impl NodeAttachments {
             vk_context,
             command_pool,
             queue,
-            vk::ImageUsageFlags::COLOR_ATTACHMENT | vk::ImageUsageFlags::SAMPLED,
+            vk::ImageUsageFlags::COLOR_ATTACHMENT
+                | vk::ImageUsageFlags::SAMPLED,
             vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
             extent,
             vk::Format::R8G8B8A8_UNORM,
@@ -408,7 +442,8 @@ impl RenderPasses {
             swapchain_props,
             vk::Format::R8G8B8A8_UNORM,
         )?;
-        let selection_blur = Self::create_selection_blur(device, swapchain_props)?;
+        let selection_blur =
+            Self::create_selection_blur(device, swapchain_props)?;
         let gui = Self::create_gui(device, swapchain_props, msaa_samples)?;
 
         Ok(Self {
@@ -519,7 +554,8 @@ impl RenderPasses {
             swapchain_props,
             vk::Format::R8G8B8A8_UNORM,
         )?;
-        let selection_blur = Self::create_selection_blur(device, swapchain_props)?;
+        let selection_blur =
+            Self::create_selection_blur(device, swapchain_props)?;
         let gui = Self::create_gui(device, swapchain_props, msaa_samples)?;
 
         self.nodes = nodes;
@@ -551,7 +587,7 @@ impl RenderPasses {
             .format(swapchain_props.format.format)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
@@ -569,7 +605,7 @@ impl RenderPasses {
             .format(vk::Format::R32_UINT)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
@@ -587,7 +623,7 @@ impl RenderPasses {
             .format(vk::Format::R8G8B8A8_UNORM)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
-            .store_op(vk::AttachmentStoreOp::STORE)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
@@ -640,7 +676,8 @@ impl RenderPasses {
             .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
-        let color_attchs = [color_attch_ref, id_color_attch_ref, mask_color_attch_ref];
+        let color_attchs =
+            [color_attch_ref, id_color_attch_ref, mask_color_attch_ref];
         let resolve_attchs = [
             resolve_attch_ref,
             id_resolve_attch_ref,
@@ -662,7 +699,8 @@ impl RenderPasses {
             .src_access_mask(vk::AccessFlags::empty())
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
             )
             .build();
 
@@ -674,7 +712,8 @@ impl RenderPasses {
             .dependencies(&subpass_deps)
             .build();
 
-        let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
+        let render_pass =
+            unsafe { device.create_render_pass(&render_pass_info, None) }?;
 
         Ok(render_pass)
     }
@@ -716,7 +755,8 @@ impl RenderPasses {
             .src_access_mask(vk::AccessFlags::empty())
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
             )
             .build();
 
@@ -728,7 +768,8 @@ impl RenderPasses {
             .dependencies(&subpass_deps)
             .build();
 
-        let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
+        let render_pass =
+            unsafe { device.create_render_pass(&render_pass_info, None) }?;
 
         Ok(render_pass)
     }
@@ -769,7 +810,8 @@ impl RenderPasses {
             .src_access_mask(vk::AccessFlags::empty())
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
             )
             .build();
 
@@ -781,7 +823,8 @@ impl RenderPasses {
             .dependencies(&subpass_deps)
             .build();
 
-        let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
+        let render_pass =
+            unsafe { device.create_render_pass(&render_pass_info, None) }?;
 
         Ok(render_pass)
     }
@@ -823,7 +866,8 @@ impl RenderPasses {
             .src_access_mask(vk::AccessFlags::empty())
             .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
             .dst_access_mask(
-                vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
             )
             .build();
 
@@ -835,150 +879,11 @@ impl RenderPasses {
             .dependencies(&subpass_deps)
             .build();
 
-        let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
+        let render_pass =
+            unsafe { device.create_render_pass(&render_pass_info, None) }?;
 
         Ok(render_pass)
     }
-}
-
-pub fn create_swapchain_render_pass_dont_clear(
-    device: &Device,
-    swapchain_props: SwapchainProperties,
-    msaa_samples: vk::SampleCountFlags,
-) -> Result<vk::RenderPass> {
-    let color_attch_desc = vk::AttachmentDescription::builder()
-        .format(swapchain_props.format.format)
-        .samples(msaa_samples)
-        .load_op(vk::AttachmentLoadOp::LOAD)
-        .store_op(vk::AttachmentStoreOp::STORE)
-        .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let resolve_attch_desc = vk::AttachmentDescription::builder()
-        .format(swapchain_props.format.format)
-        .samples(vk::SampleCountFlags::TYPE_1)
-        .load_op(vk::AttachmentLoadOp::DONT_CARE)
-        .store_op(vk::AttachmentStoreOp::STORE)
-        .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-        .build();
-
-    let attch_descs = [color_attch_desc, resolve_attch_desc];
-
-    let color_attch_ref = vk::AttachmentReference::builder()
-        .attachment(0)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let resolve_attch_ref = vk::AttachmentReference::builder()
-        .attachment(1)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let color_attchs = [color_attch_ref];
-    let resolve_attchs = [resolve_attch_ref];
-
-    let subpass_desc = vk::SubpassDescription::builder()
-        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(&color_attchs)
-        .resolve_attachments(&resolve_attchs)
-        .build();
-
-    let subpass_descs = [subpass_desc];
-
-    let subpass_dep = vk::SubpassDependency::builder()
-        .src_subpass(vk::SUBPASS_EXTERNAL)
-        .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(
-            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-        )
-        .build();
-
-    let subpass_deps = [subpass_dep];
-
-    let render_pass_info = vk::RenderPassCreateInfo::builder()
-        .attachments(&attch_descs)
-        .subpasses(&subpass_descs)
-        .dependencies(&subpass_deps)
-        .build();
-
-    let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
-
-    Ok(render_pass)
-}
-
-pub fn create_swapchain_render_pass(
-    device: &Device,
-    swapchain_props: SwapchainProperties,
-    msaa_samples: vk::SampleCountFlags,
-) -> Result<vk::RenderPass> {
-    let color_attch_desc = vk::AttachmentDescription::builder()
-        .format(swapchain_props.format.format)
-        .samples(msaa_samples)
-        .load_op(vk::AttachmentLoadOp::CLEAR)
-        .store_op(vk::AttachmentStoreOp::STORE)
-        .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let resolve_attch_desc = vk::AttachmentDescription::builder()
-        .format(swapchain_props.format.format)
-        .samples(vk::SampleCountFlags::TYPE_1)
-        .load_op(vk::AttachmentLoadOp::DONT_CARE)
-        .store_op(vk::AttachmentStoreOp::STORE)
-        .initial_layout(vk::ImageLayout::UNDEFINED)
-        .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
-        .build();
-
-    let attch_descs = [color_attch_desc, resolve_attch_desc];
-
-    let color_attch_ref = vk::AttachmentReference::builder()
-        .attachment(0)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let resolve_attch_ref = vk::AttachmentReference::builder()
-        .attachment(1)
-        .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-        .build();
-
-    let color_attchs = [color_attch_ref];
-    let resolve_attchs = [resolve_attch_ref];
-
-    let subpass_desc = vk::SubpassDescription::builder()
-        .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
-        .color_attachments(&color_attchs)
-        .resolve_attachments(&resolve_attchs)
-        .build();
-
-    let subpass_descs = [subpass_desc];
-
-    let subpass_dep = vk::SubpassDependency::builder()
-        .src_subpass(vk::SUBPASS_EXTERNAL)
-        .dst_subpass(0)
-        .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .src_access_mask(vk::AccessFlags::empty())
-        .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
-        .dst_access_mask(
-            vk::AccessFlags::COLOR_ATTACHMENT_READ | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
-        )
-        .build();
-
-    let subpass_deps = [subpass_dep];
-
-    let render_pass_info = vk::RenderPassCreateInfo::builder()
-        .attachments(&attch_descs)
-        .subpasses(&subpass_descs)
-        .dependencies(&subpass_deps)
-        .build();
-
-    let render_pass = unsafe { device.create_render_pass(&render_pass_info, None) }?;
-
-    Ok(render_pass)
 }
 
 pub fn create_swapchain_framebuffers(
@@ -1001,7 +906,9 @@ pub fn create_swapchain_framebuffers(
                 .layers(1)
                 .build();
 
-            unsafe { device.create_framebuffer(&framebuffer_info, None).unwrap() }
+            unsafe {
+                device.create_framebuffer(&framebuffer_info, None).unwrap()
+            }
         })
         .collect()
 }
