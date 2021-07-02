@@ -80,7 +80,7 @@ void main() {
     vec2 prev_point = bezier_quad(p0, ctrl, p1, 0.0);
     ivec2 prev_tile = tile_coords(prev_point);
 
-    for (uint i = 1; i < 1; i++) {
+    for (uint i = 1; i < count; i++) {
 
       float t0 = t_del * float(i - 1);
       float t1 = t_del * float(i);
@@ -114,8 +114,8 @@ void main() {
           uint ix0 = intersection.x;
           uint ix1 = intersection.y;
 
-          tile_slots[local_x][local_y][ix0] = 1 << ix1;
-          // atomicOr(tile_slots[local_x][local_y][ix0], 1 << ix1);
+          // tile_slots[local_x][local_y][ix0] = 1 << ix1;
+          atomicOr(tile_slots[local_x][local_y][ix0], 1 << ix1);
         }
 
       }
@@ -127,10 +127,10 @@ void main() {
   barrier();
 
   if (tile_slot_offset < (TILES_WIDE * TILES_HIGH * 32)) {
-    for (uint i = 0; i < 1; i++) {
+    for (uint i = 0; i < 32; i++) {
 
-      // atomicOr(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
-      tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
+      atomicOr(tiles.slots[tile_slot_offset + i], tile_slots[local_x][local_y][i]);
+      // tiles.slots[tile_slot_offset + i] = tile_slots[local_x][local_y][i];
     }
   }
 

@@ -25,6 +25,8 @@ void main() {
 
   image.pixel[pixel_ix] = 0;
 
+  barrier();
+
   vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
                           16.0 * gl_GlobalInvocationID.y);
 
@@ -44,7 +46,7 @@ void main() {
 
   uint count = 0;
 
-  for (uint i = 0; i < 1; i++) {
+  for (uint i = 0; i < 32; i++) {
     uint slot_ix = (slot_offset + i) % (TILES_WIDE * TILES_HIGH * 32);
     uint slot = tiles.slots[slot_ix];
 
@@ -54,7 +56,7 @@ void main() {
       continue;
     }
 
-    for (uint j = 0; j < 1; j++) {
+    for (uint j = 0; j < 32; j++) {
       if (((1 << j) & slot) != 0) {
         ivec2 q0 = slot_pixel(i);
         ivec2 q1 = slot_pixel(j);
@@ -86,7 +88,9 @@ void main() {
 
   if (min_val < 0.0) {
     // image.pixel[pixel_ix] = clamp(uint(min_val), 0, 255);
-    image.pixel[pixel_ix] = 255;
+    atomicMax(image.pixel[pixel_ix], 255);
+    // image.pixel
+    // image.pixel[pixel_ix] = 255;
     // image.pixel[pixel_ix] = clamp(uint(min_val * 255.0), 0, 255);
   }
 
