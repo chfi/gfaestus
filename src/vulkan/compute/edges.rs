@@ -338,16 +338,20 @@ impl EdgeRenderer {
             y.min(256)
         };
 
-        // let z_group_count: u32 = 1;
-
         // TODO use edge count from the preprocessing output buffer
         let z_group_count: u32 = {
-            let mut size = self.edges.edge_count / 256;
-            if self.edges.edge_count % 256 != 0 {
+            let edges = 256;
+
+            let mut size = self.edges.edge_count / edges;
+            if self.edges.edge_count % edges != 0 {
                 size += 1;
             }
             size as u32
         };
+
+        // let x_group_count: u32 = 1;
+        // let y_group_count: u32 = 1;
+        // let z_group_count: u32 = 1;
 
         unsafe {
             device.cmd_dispatch(

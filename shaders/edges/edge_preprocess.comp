@@ -59,9 +59,23 @@ void main() {
 
   uint offset = atomicAdd(beziers.edge_count, 1);
 
-  beziers.curve[offset] = q0;
+  // vec2 start = vec2(min(q0.x, q1.x), min(
+
+  vec2 start;
+  vec2 end;
+
+  if (q0.x < q1.x) {
+    start = q0;
+    end = q1;
+  } else {
+    start = q1;
+    end = q0;
+  }
+
+
+  beziers.curve[offset] = start;
   beziers.curve[offset + 1] = ctrl;
-  beziers.curve[offset + 2] = q1;
+  beziers.curve[offset + 2] = end;
 
   /*
   barrier();
