@@ -57,7 +57,7 @@ void main() {
   // TODO compare Bezier points to viewport & filter;
   // need to either calculate or pass the visible area
 
-  uint offset = atomicAdd(beziers.edge_count, 3);
+  uint offset = atomicAdd(beziers.edge_count, 1);
 
   beziers.curve[offset] = q0;
   beziers.curve[offset + 1] = ctrl;
