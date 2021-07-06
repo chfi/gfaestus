@@ -57,7 +57,6 @@ impl EdgeRenderer2 {
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
-
         layouts: &[vk::DescriptorSetLayout],
         descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
@@ -258,12 +257,8 @@ impl EdgeRenderer2 {
 
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
-            desc_set_layout,
-        );
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(device, msaa_samples, desc_set_layout);
 
         unimplemented!();
     }

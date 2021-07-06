@@ -769,6 +769,7 @@ fn main() {
                         };
 
 
+                        /*
                         edge_pipeline.preprocess_cmd(
                             cmd_buf,
                             current_view,
@@ -807,6 +808,7 @@ fn main() {
                                 &[barrier],
                             );
                         };
+                        */
 
                         if let Some(overlay) = overlay {
 
@@ -952,6 +954,7 @@ fn main() {
                         // let tile_size = [128.0 * 16.0,
                         //                  128.0 * 16.0];
 
+                        /*
                         edge_pixels_pipeline.draw(
                             &device,
                             cmd_buf,
@@ -961,6 +964,7 @@ fn main() {
                             tile_texture_size,
                             // [size.width as f32, size.height as f32]
                         ).unwrap();
+                        */
 
                         gui.draw(
                             cmd_buf,
