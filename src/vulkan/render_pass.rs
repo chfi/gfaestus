@@ -612,7 +612,7 @@ impl RenderPasses {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)
             .samples(msaa_samples)
-            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::DONT_CARE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)

@@ -19,14 +19,16 @@ use super::Vertex;
 
 use crate::app::node_flags::SelectionBuffer;
 
+use super::nodes::NodePushConstants;
 use crate::vulkan::render_pass::Framebuffers;
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 pub struct EdgeRenderer2 {
+    /*
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub(crate) descriptor_set_layout: vk::DescriptorSetLayout,
     pub(crate) descriptor_set: vk::DescriptorSet,
-
+    */
     pub(crate) pipeline_layout: vk::PipelineLayout,
     pub(crate) pipeline: vk::Pipeline,
 
@@ -57,8 +59,8 @@ impl EdgeRenderer2 {
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
-        layouts: &[vk::DescriptorSetLayout],
-        descriptor_set_layout: vk::DescriptorSetLayout,
+        // layouts: &[vk::DescriptorSetLayout],
+        // descriptor_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
@@ -202,6 +204,8 @@ impl EdgeRenderer2 {
 
             let pc_ranges = [pc_range];
 
+            let layouts = [];
+
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
                 .push_constant_ranges(&pc_ranges)
@@ -255,16 +259,35 @@ impl EdgeRenderer2 {
     ) -> Result<Self> {
         let device = app.vk_context().device();
 
+        /*
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+        */
 
         let (pipeline, pipeline_layout) =
-            Self::create_pipeline(device, msaa_samples, desc_set_layout);
+            Self::create_pipeline(device, msaa_samples, render_pass);
 
-        unimplemented!();
+        Ok(Self {
+            pipeline_layout,
+            pipeline,
+
+            device: device.clone(),
+        })
     }
 
     pub fn destroy(&mut self) {
-        unimplemented!();
+        unsafe {
+            // self.device.destroy_descriptor_set_layout(
+            //     self.descriptor_set_layout,
+            //     None,
+            // );
+
+            self.device
+                .destroy_pipeline_layout(self.pipeline_layout, None);
+            self.device.destroy_pipeline(self.pipeline, None);
+
+            // self.device
+            //     .destroy_descriptor_pool(self.descriptor_pool, None);
+        }
     }
 
     pub fn draw(
@@ -278,6 +301,87 @@ impl EdgeRenderer2 {
         view: View,
         offset: Point,
     ) -> Result<()> {
-        unimplemented!();
+        let device = &self.device;
+
+        let extent = vk::Extent2D {
+            width: viewport_dims[0] as u32,
+            height: viewport_dims[1] as u32,
+        };
+
+        let clear_values = [];
+
+        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
+            .render_pass(render_pass)
+            .framebuffer(framebuffers.edges)
+            .render_area(vk::Rect2D {
+                offset: vk::Offset2D { x: 0, y: 0 },
+                extent,
+            })
+            .clear_values(&clear_values)
+            .build();
+
+        unsafe {
+            device.cmd_begin_render_pass(
+                cmd_buf,
+                &render_pass_begin_info,
+                vk::SubpassContents::INLINE,
+            )
+        };
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline,
+            )
+        };
+
+        let vx_bufs = [vertices.vertex_buffer];
+        let desc_sets = [];
+
+        let offsets = [0];
+        unsafe {
+            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=1],
+                &null,
+            );
+        };
+
+        let push_constants = NodePushConstants::new(
+            [offset.x, offset.y],
+            viewport_dims,
+            view,
+            node_width,
+            7,
+        );
+
+        let pc_bytes = push_constants.bytes();
+
+        unsafe {
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline_layout,
+                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                0,
+                &pc_bytes,
+            )
+        };
+
+        unsafe {
+            device.cmd_draw(cmd_buf, vertices.vertex_count as u32, 1, 0, 0)
+        };
+
+        // End render pass
+        unsafe { device.cmd_end_render_pass(cmd_buf) };
+
+        Ok(())
     }
 }

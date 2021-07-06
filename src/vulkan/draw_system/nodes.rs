@@ -758,8 +758,8 @@ impl NodeIdBuffer {
 }
 
 pub struct NodeVertices {
-    vertex_count: usize,
-    vertex_buffer: vk::Buffer,
+    pub(crate) vertex_count: usize,
+    pub(crate) vertex_buffer: vk::Buffer,
     vertex_memory: vk::DeviceMemory,
 
     device: Device,
