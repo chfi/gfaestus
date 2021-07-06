@@ -1,4 +1,5 @@
 use compute::EdgeRenderer;
+use gfaestus::vulkan::draw_system::edges::EdgeRenderer2;
 use texture::{GradientTexture, Gradients};
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -213,6 +214,14 @@ fn main() {
         .vertices
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
+
+    let mut edge_renderer = EdgeRenderer2::new(
+        &gfaestus,
+        &graph_query.graph_arc(),
+        gfaestus.msaa_samples,
+        gfaestus.render_passes.edges,
+    )
+    .unwrap();
 
     app.themes
         .upload_to_gpu(
