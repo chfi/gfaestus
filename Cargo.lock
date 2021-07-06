@@ -106,15 +106,6 @@ dependencies = [
 
 [[package]]
 name = "ash"
-version = "0.31.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c69a8137596e84c22d57f3da1b5de1d4230b1742a710091c85f4d7ce50f00f38"
-dependencies = [
- "libloading 0.6.7",
-]
-
-[[package]]
-name = "ash"
 version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ea56be8250318e64923c7e65b82a35b5c29dfb6dc1c7d1c0b288c4b1bbb084"
@@ -124,11 +115,11 @@ dependencies = [
 
 [[package]]
 name = "ash-window"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "905c4ca25f752e7ab3c3e8f2882625f876e4c3ea5feffbc83f81d697e043afd6"
+checksum = "2d058436a3a8410c6e9b625c4e763ea6eaba97d771c303fc2c8e3595b666ffa3"
 dependencies = [
- "ash 0.31.0",
+ "ash",
  "raw-window-handle",
  "raw-window-metal",
 ]
@@ -915,7 +906,7 @@ name = "gfaestus"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "ash 0.31.0",
+ "ash",
  "ash-window",
  "bstr",
  "clipboard",
@@ -2443,7 +2434,7 @@ version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7c89db58563ea4fb34bd0394eb977c9c7ff7d16bf605f4eb945db7cab8c0c16f"
 dependencies = [
- "ash 0.32.0",
+ "ash",
  "bitflags",
  "cc",
 ]

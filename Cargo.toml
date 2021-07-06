@@ -10,8 +10,8 @@ readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ash = "0.31"
-ash-window = "0.5"
+ash = "0.32"
+ash-window = "0.6"
 vk-mem = "0.2.2"
 
 winit = "0.24"

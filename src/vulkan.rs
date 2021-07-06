@@ -138,7 +138,7 @@ pub struct GfaestusVk {
 
 impl GfaestusVk {
     pub fn new(window: &Window) -> Result<Self> {
-        let entry = Entry::new()?;
+        let entry = unsafe { Entry::new() }?;
         let instance = create_instance(&entry, window)?;
 
         let surface = Surface::new(&entry, &instance);
