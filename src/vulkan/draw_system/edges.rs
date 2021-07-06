@@ -45,7 +45,7 @@ pub struct EdgeRenderer2 {
     pub(crate) pipeline: vk::Pipeline,
 
     pub(crate) device: Device,
-    // pub(crate) edge_index_buffer: EdgeIndices,
+    pub(crate) edge_index_buffer: EdgeIndices,
 }
 
 impl EdgeRenderer2 {
@@ -73,50 +73,42 @@ impl EdgeRenderer2 {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        dbg!();
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
         let tese_src = crate::load_shader!("edges/edges.tese.spv");
         let frag_src = crate::load_shader!("edges/edges.frag.spv");
 
-        dbg!();
         let vert_module = create_shader_module(device, &vert_src);
         let tesc_module = create_shader_module(device, &tesc_src);
         let tese_module = create_shader_module(device, &tese_src);
         let frag_module = create_shader_module(device, &frag_src);
 
-        dbg!();
         let entry_point = CString::new("main").unwrap();
 
-        dbg!();
         let vert_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(vert_module)
             .name(&entry_point)
             .build();
 
-        dbg!();
         let tesc_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::TESSELLATION_CONTROL)
             .module(tesc_module)
             .name(&entry_point)
             .build();
 
-        dbg!();
         let tese_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION)
             .module(tese_module)
             .name(&entry_point)
             .build();
 
-        dbg!();
         let frag_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(frag_module)
             .name(&entry_point)
             .build();
 
-        dbg!();
         let shader_state_infos = [
             vert_state_info,
             tesc_state_info,
@@ -124,7 +116,6 @@ impl EdgeRenderer2 {
             frag_state_info,
         ];
 
-        dbg!();
         let vert_binding_descs = [Vertex::get_binding_desc()];
         let vert_attr_descs = Vertex::get_attribute_descs();
         let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
@@ -132,36 +123,30 @@ impl EdgeRenderer2 {
             .vertex_attribute_descriptions(&vert_attr_descs)
             .build();
 
-        dbg!();
         let input_assembly_info =
             vk::PipelineInputAssemblyStateCreateInfo::builder()
                 .topology(vk::PrimitiveTopology::PATCH_LIST)
                 .primitive_restart_enable(false)
                 .build();
-        dbg!();
 
         let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
             .viewport_count(1)
             .scissor_count(1)
             .build();
 
-        dbg!();
         let dynamic_states = {
             use vk::DynamicState as DS;
             [DS::VIEWPORT, DS::SCISSOR]
         };
-        dbg!();
 
         let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
             .dynamic_states(&dynamic_states)
             .build();
-        dbg!();
 
         let tessellation_state_info =
             vk::PipelineTessellationStateCreateInfo::builder()
-                .patch_control_points(3)
+                .patch_control_points(2)
                 .build();
-        dbg!();
 
         let rasterizer_info =
             vk::PipelineRasterizationStateCreateInfo::builder()
@@ -176,7 +161,6 @@ impl EdgeRenderer2 {
                 .depth_bias_clamp(0.0)
                 .depth_bias_slope_factor(0.0)
                 .build();
-        dbg!();
 
         let multisampling_info =
             vk::PipelineMultisampleStateCreateInfo::builder()
@@ -186,7 +170,6 @@ impl EdgeRenderer2 {
                 .alpha_to_coverage_enable(true)
                 .alpha_to_one_enable(false)
                 .build();
-        dbg!();
 
         let color_blend_attachment =
             vk::PipelineColorBlendAttachmentState::builder()
@@ -199,7 +182,6 @@ impl EdgeRenderer2 {
                 .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
                 .alpha_blend_op(vk::BlendOp::ADD)
                 .build();
-        dbg!();
 
         let color_blend_attachments = [color_blend_attachment];
 
@@ -210,7 +192,6 @@ impl EdgeRenderer2 {
                 .attachments(&color_blend_attachments)
                 .blend_constants([0.0, 0.0, 0.0, 0.0])
                 .build();
-        dbg!();
 
         let layout = {
             use vk::ShaderStageFlags as Flags;
@@ -239,7 +220,6 @@ impl EdgeRenderer2 {
                 device.create_pipeline_layout(&layout_info, None).unwrap()
             }
         };
-        dbg!();
 
         let pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
             .stages(&shader_state_infos)
@@ -256,10 +236,8 @@ impl EdgeRenderer2 {
             .subpass(0)
             .build();
 
-        dbg!();
         let pipeline_infos = [pipeline_info];
 
-        dbg!();
         let pipeline = unsafe {
             device
                 .create_graphics_pipelines(
@@ -269,7 +247,6 @@ impl EdgeRenderer2 {
                 )
                 .unwrap()[0]
         };
-        dbg!();
 
         unsafe {
             device.destroy_shader_module(vert_module, None);
@@ -299,13 +276,13 @@ impl EdgeRenderer2 {
             Self::create_pipeline(device, msaa_samples, render_pass);
 
         dbg!();
-        // let edge_index_buffer = EdgeIndices::new(app, graph)?;
+        let edge_index_buffer = EdgeIndices::new(app, graph)?;
 
         Ok(Self {
             pipeline_layout,
             pipeline,
 
-            // edge_index_buffer,
+            edge_index_buffer,
             device: device.clone(),
         })
     }
@@ -373,29 +350,16 @@ impl EdgeRenderer2 {
         };
 
         let vx_bufs = [vertices.vertex_buffer];
-        let desc_sets = [];
 
         let offsets = [0];
         unsafe {
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
 
-            /*
             device.cmd_bind_index_buffer(
                 cmd_buf,
                 self.edge_index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
-            );
-            */
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.pipeline_layout,
-                0,
-                &desc_sets[0..=1],
-                &null,
             );
         };
 
@@ -423,7 +387,6 @@ impl EdgeRenderer2 {
             )
         };
 
-        /*
         unsafe {
             device.cmd_draw_indexed(
                 cmd_buf,
@@ -434,7 +397,6 @@ impl EdgeRenderer2 {
                 0,
             )
         };
-        */
 
         // End render pass
         unsafe { device.cmd_end_render_pass(cmd_buf) };
@@ -469,6 +431,8 @@ impl EdgeIndices {
             edges.push(left_ix as u32);
             edges.push(right_ix as u32);
         }
+
+        println!("added {} edges", edges.len());
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::INDEX_BUFFER;

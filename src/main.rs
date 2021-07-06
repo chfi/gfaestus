@@ -688,6 +688,7 @@ fn main() {
                 // let device = gfaestus.vk_context().device().clone();
 
                 let node_pass = gfaestus.render_passes.nodes;
+                let edges_pass = gfaestus.render_passes.edges;
                 let edge_pass = gfaestus.render_passes.selection_edge_detect;
                 let blur_pass = gfaestus.render_passes.selection_blur;
                 let gui_pass = gfaestus.render_passes.gui;
@@ -758,6 +759,7 @@ fn main() {
                             );
                         }
 
+                        /*
                         unsafe {
                             let (barrier, src_stage, dst_stage) =
                                 GfaestusVk::image_transition_barrier(
@@ -777,8 +779,6 @@ fn main() {
                             );
                         };
 
-
-                        /*
                         edge_pipeline.preprocess_cmd(
                             cmd_buf,
                             current_view,
@@ -836,17 +836,28 @@ fn main() {
                                 use_overlay,
                             ).unwrap();
                         } else {
-                        main_view
-                            .draw_nodes(
-                                cmd_buf,
-                                node_pass,
-                                framebuffers,
-                                [size.width as f32, size.height as f32],
-                                Point::ZERO,
-                                false,
-                            )
-                            .unwrap();
+                            main_view
+                                .draw_nodes(
+                                    cmd_buf,
+                                    node_pass,
+                                    framebuffers,
+                                    [size.width as f32, size.height as f32],
+                                    Point::ZERO,
+                                    false,
+                                )
+                                .unwrap();
                         }
+
+                        edge_renderer.draw(
+                            cmd_buf,
+                            &main_view.node_draw_system.vertices,
+                            edges_pass,
+                            framebuffers,
+                            [size.width as f32, size.height as f32],
+                            2.0,
+                            current_view,
+                            Point::ZERO,
+                        ).unwrap();
 
                         /*
                         main_view
