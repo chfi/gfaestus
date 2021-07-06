@@ -3,6 +3,7 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+pub mod edges;
 pub mod gui;
 pub mod nodes;
 pub mod post;
