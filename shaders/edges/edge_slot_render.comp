@@ -34,7 +34,9 @@ void main() {
   vec2 pixel = vec2(gl_GlobalInvocationID.xy);
   ivec2 tile = tile_coords(pixel);
 
-  image.pixel[pixel_ix] = 0;
+  // image.pixel[pixel_ix] = 0;
+
+  // barrier();
 
   if (gl_LocalInvocationIndex == 0) {
     line_count = 0;
@@ -61,7 +63,8 @@ void main() {
   // TODO heuristic to only render ~4-8 edges/tile max
 
   if (slot_id < 32) {
-    uint slot_ix = (slot_offset + slot_id) % (TILES_WIDE * TILES_HIGH * 32);
+    // uint slot_ix = (slot_offset + slot_id) % (TILES_WIDE * TILES_HIGH * 32);
+    uint slot_ix = (slot_offset + slot_id);
     uint slot = tiles.slots[slot_ix];
 
     for (uint j = start; j < end; j++) {

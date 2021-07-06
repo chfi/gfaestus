@@ -9,7 +9,7 @@
 
 layout (local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
 
-layout (set = 0, binding = 0) readonly buffer EdgeBeziers {
+layout (set = 0, binding = 0) buffer EdgeBeziers {
   uint edge_count;
   vec2 curve[];
 } beziers;
@@ -23,7 +23,8 @@ shared uint tile_slots[16][16][32];
 void main() {
 
   uint edge_offset = gl_GlobalInvocationID.z * EDGES_PER_GROUP;
-  uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
+  // uint edge_end = min(beziers.edge_count, edge_offset + EDGES_PER_GROUP);
+  uint edge_end = beziers.edge_count;
 
 
   // if (edge_offset >= beziers.edge_count) {
@@ -49,6 +50,11 @@ void main() {
 
   barrier();
 
+  if (gl_GlobalInvocationID.xyz == uvec3(0)) {
+    beziers.edge_count = 0;
+  }
+
+  barrier();
 
   vec2 tile_offset = vec2(16.0 * gl_GlobalInvocationID.x,
                           16.0 * gl_GlobalInvocationID.y);
@@ -202,6 +208,8 @@ void main() {
 
       prev_point = cur_point;
     }
+
+    atomicAdd(beziers.edge_count, 1);
   }
 
   /*
