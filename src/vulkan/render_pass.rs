@@ -9,6 +9,7 @@ use anyhow::Result;
 
 pub struct RenderPasses {
     pub nodes: vk::RenderPass,
+    pub edges: vk::RenderPass,
     pub selection_edge_detect: vk::RenderPass,
     pub selection_blur: vk::RenderPass,
     pub gui: vk::RenderPass,
@@ -16,6 +17,7 @@ pub struct RenderPasses {
 
 pub struct Framebuffers {
     pub nodes: vk::Framebuffer,
+    pub edges: vk::Framebuffer,
     pub selection_edge_detect: vk::Framebuffer,
     pub selection_blur: vk::Framebuffer,
     pub gui: vk::Framebuffer,
@@ -25,6 +27,7 @@ impl Framebuffers {
     pub fn destroy(&self, device: &Device) {
         unsafe {
             device.destroy_framebuffer(self.nodes, None);
+            device.destroy_framebuffer(self.edges, None);
             device.destroy_framebuffer(self.selection_edge_detect, None);
             device.destroy_framebuffer(self.selection_blur, None);
             device.destroy_framebuffer(self.gui, None);
@@ -437,6 +440,7 @@ impl RenderPasses {
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
         let nodes = Self::create_nodes(device, swapchain_props, msaa_samples)?;
+        let edges = Self::create_edges(device, swapchain_props, msaa_samples)?;
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
             swapchain_props,
@@ -448,6 +452,7 @@ impl RenderPasses {
 
         Ok(Self {
             nodes,
+            edges,
             selection_edge_detect,
             selection_blur,
             gui,
@@ -480,6 +485,26 @@ impl RenderPasses {
 
             let framebuffer_info = vk::FramebufferCreateInfo::builder()
                 .render_pass(self.nodes)
+                .attachments(&attachments)
+                .width(extent.width)
+                .height(extent.height)
+                .layers(1)
+                .build();
+
+            unsafe { device.create_framebuffer(&framebuffer_info, None) }
+        }?;
+
+        let edges = {
+            let attachments = [
+                // color attachments
+                node_attachments.color.view,
+                // resolve attachments
+                // node_attachments.resolve.view,
+                swapchain_image_view,
+            ];
+
+            let framebuffer_info = vk::FramebufferCreateInfo::builder()
+                .render_pass(self.edges)
                 .attachments(&attachments)
                 .width(extent.width)
                 .height(extent.height)
@@ -533,6 +558,7 @@ impl RenderPasses {
 
         Ok(Framebuffers {
             nodes,
+            edges,
             selection_edge_detect,
             selection_blur,
             gui,
@@ -548,6 +574,7 @@ impl RenderPasses {
         self.destroy(device);
 
         let nodes = Self::create_nodes(device, swapchain_props, msaa_samples)?;
+        let edges = Self::create_edges(device, swapchain_props, msaa_samples)?;
 
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
@@ -559,6 +586,7 @@ impl RenderPasses {
         let gui = Self::create_gui(device, swapchain_props, msaa_samples)?;
 
         self.nodes = nodes;
+        self.edges = edges;
         self.selection_edge_detect = selection_edge_detect;
         self.selection_blur = selection_blur;
         self.gui = gui;
@@ -569,10 +597,84 @@ impl RenderPasses {
     pub fn destroy(&self, device: &Device) {
         unsafe {
             device.destroy_render_pass(self.nodes, None);
+            device.destroy_render_pass(self.edges, None);
             device.destroy_render_pass(self.selection_edge_detect, None);
             device.destroy_render_pass(self.selection_blur, None);
             device.destroy_render_pass(self.gui, None);
         }
+    }
+
+    fn create_edges(
+        device: &Device,
+        swapchain_props: SwapchainProperties,
+        msaa_samples: vk::SampleCountFlags,
+    ) -> Result<vk::RenderPass> {
+        let color_attch_desc = vk::AttachmentDescription::builder()
+            .format(swapchain_props.format.format)
+            .samples(msaa_samples)
+            .load_op(vk::AttachmentLoadOp::CLEAR)
+            .store_op(vk::AttachmentStoreOp::DONT_CARE)
+            .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let resolve_attch_desc = vk::AttachmentDescription::builder()
+            .format(swapchain_props.format.format)
+            .samples(vk::SampleCountFlags::TYPE_1)
+            .load_op(vk::AttachmentLoadOp::DONT_CARE)
+            .store_op(vk::AttachmentStoreOp::STORE)
+            .initial_layout(vk::ImageLayout::UNDEFINED)
+            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let attch_descs = [color_attch_desc, resolve_attch_desc];
+
+        let color_attch_ref = vk::AttachmentReference::builder()
+            .attachment(0)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let resolve_attch_ref = vk::AttachmentReference::builder()
+            .attachment(1)
+            .layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .build();
+
+        let color_attchs = [color_attch_ref];
+
+        let resolve_attchs = [resolve_attch_ref];
+
+        let subpass_desc = vk::SubpassDescription::builder()
+            .pipeline_bind_point(vk::PipelineBindPoint::GRAPHICS)
+            .color_attachments(&color_attchs)
+            .resolve_attachments(&resolve_attchs)
+            .build();
+
+        let subpass_descs = [subpass_desc];
+
+        let subpass_dep = vk::SubpassDependency::builder()
+            .src_subpass(vk::SUBPASS_EXTERNAL)
+            .dst_subpass(0)
+            .src_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .src_access_mask(vk::AccessFlags::empty())
+            .dst_stage_mask(vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT)
+            .dst_access_mask(
+                vk::AccessFlags::COLOR_ATTACHMENT_READ
+                    | vk::AccessFlags::COLOR_ATTACHMENT_WRITE,
+            )
+            .build();
+
+        let subpass_deps = [subpass_dep];
+
+        let render_pass_info = vk::RenderPassCreateInfo::builder()
+            .attachments(&attch_descs)
+            .subpasses(&subpass_descs)
+            .dependencies(&subpass_deps)
+            .build();
+
+        let render_pass =
+            unsafe { device.create_render_pass(&render_pass_info, None) }?;
+
+        Ok(render_pass)
     }
 
     fn create_nodes(
