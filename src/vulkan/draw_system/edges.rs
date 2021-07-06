@@ -4,11 +4,23 @@ use crate::{
     vulkan::tiles::ScreenTiles,
 };
 
+use handlegraph::{
+    handle::{Direction, Edge, Handle, NodeId},
+    handlegraph::*,
+    mutablehandlegraph::*,
+    packed::*,
+    pathhandlegraph::*,
+};
+
+use handlegraph::{
+    packedgraph::{paths::StepPtr, PackedGraph},
+    path_position::PathPositionMap,
+};
+
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
 use anyhow::Result;
-use handlegraph::handle::Handle;
 
 use nalgebra_glm as glm;
 
@@ -33,6 +45,8 @@ pub struct EdgeRenderer2 {
     pub(crate) pipeline: vk::Pipeline,
 
     pub(crate) device: Device,
+
+    pub(crate) edge_index_buffer: EdgeIndices,
 }
 
 impl EdgeRenderer2 {
@@ -254,6 +268,7 @@ impl EdgeRenderer2 {
 
     pub fn new(
         app: &GfaestusVk,
+        graph: &PackedGraph,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
@@ -266,9 +281,13 @@ impl EdgeRenderer2 {
         let (pipeline, pipeline_layout) =
             Self::create_pipeline(device, msaa_samples, render_pass);
 
+        let edge_index_buffer = EdgeIndices::new(app, graph)?;
+
         Ok(Self {
             pipeline_layout,
             pipeline,
+
+            edge_index_buffer,
 
             device: device.clone(),
         })
@@ -383,5 +402,46 @@ impl EdgeRenderer2 {
         unsafe { device.cmd_end_render_pass(cmd_buf) };
 
         Ok(())
+    }
+}
+
+pub struct EdgeIndices {
+    buffer: vk::Buffer,
+    memory: vk::DeviceMemory,
+    // size: vk::DeviceSize,
+    edge_count: usize,
+}
+
+impl EdgeIndices {
+    fn new(app: &GfaestusVk, graph: &PackedGraph) -> Result<Self> {
+        let edge_count = graph.edge_count();
+
+        let mut edges: Vec<u32> = Vec::with_capacity(edge_count * 2);
+
+        for Edge(left, right) in graph.edges() {
+            // TODO actually do this correctly
+            let (left_ix, right_ix) =
+                match (left.is_reverse(), right.is_reverse()) {
+                    (false, false) => (left.id().0, right.id().0),
+                    (false, true) => (left.id().0, right.id().0),
+                    (true, false) => (left.id().0, right.id().0),
+                    (true, true) => (left.id().0, right.id().0),
+                };
+
+            edges.push(left_ix as u32);
+            edges.push(right_ix as u32);
+        }
+
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::INDEX_BUFFER;
+
+        let (buffer, memory) =
+            app.create_device_local_buffer_with_data::<u32, _>(usage, &edges)?;
+
+        Ok(Self {
+            buffer,
+            memory,
+            edge_count,
+        })
     }
 }
