@@ -419,13 +419,18 @@ impl EdgeIndices {
         let mut edges: Vec<u32> = Vec::with_capacity(edge_count * 2);
 
         for Edge(left, right) in graph.edges() {
-            // TODO actually do this correctly
+            let left_l = left.forward().flip().0 - 1;
+            let left_r = left.forward().0 - 1;
+
+            let right_l = right.forward().flip().0 - 1;
+            let right_r = right.forward().0 - 1;
+
             let (left_ix, right_ix) =
                 match (left.is_reverse(), right.is_reverse()) {
-                    (false, false) => (left.id().0, right.id().0),
-                    (false, true) => (left.id().0, right.id().0),
-                    (true, false) => (left.id().0, right.id().0),
-                    (true, true) => (left.id().0, right.id().0),
+                    (false, false) => (left_r, right_l),
+                    (true, false) => (left_l, right_l),
+                    (false, true) => (left_r, right_r),
+                    (true, true) => (left_l, right_r),
                 };
 
             edges.push(left_ix as u32);
