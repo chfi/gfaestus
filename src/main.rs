@@ -720,6 +720,7 @@ fn main() {
                 let current_view = app.shared_state().view();
 
 
+                let edges_enabled = app.shared_state().edges_enabled();
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
@@ -759,66 +760,6 @@ fn main() {
                             );
                         }
 
-                        /*
-                        unsafe {
-                            let (barrier, src_stage, dst_stage) =
-                                GfaestusVk::image_transition_barrier(
-                                    edge_pipeline.tiles.tile_texture.image,
-                                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                    vk::ImageLayout::GENERAL);
-
-
-                            device.cmd_pipeline_barrier(
-                                cmd_buf,
-                                src_stage,
-                                dst_stage,
-                                vk::DependencyFlags::empty(),
-                                &[],
-                                &[],
-                                &[barrier],
-                            );
-                        };
-
-                        edge_pipeline.preprocess_cmd(
-                            cmd_buf,
-                            current_view,
-                            [size.width as f32, size.height as f32]
-                        ).unwrap();
-
-                        edge_pipeline.populate_slots_cmd(
-                            cmd_buf,
-                            [size.width as f32, size.height as f32]
-                        ).unwrap();
-
-                        edge_pipeline.bin_render_memory_barrier(cmd_buf).unwrap();
-
-                        edge_pipeline.slot_render_cmd(
-                            cmd_buf,
-                        ).unwrap();
-
-                        edge_pipeline.pixels_memory_barrier(cmd_buf).unwrap();
-
-                        unsafe {
-                            let (barrier, src_stage, dst_stage) =
-                                GfaestusVk::image_transition_barrier(
-                                    edge_pipeline.tiles.tile_texture.image,
-                                    vk::ImageLayout::GENERAL,
-                                    vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                                );
-
-
-                            device.cmd_pipeline_barrier(
-                                cmd_buf,
-                                src_stage,
-                                dst_stage,
-                                vk::DependencyFlags::empty(),
-                                &[],
-                                &[],
-                                &[barrier],
-                            );
-                        };
-                        */
-
                         if let Some(overlay) = overlay {
 
                             let gradient_name = app.shared_state().overlay_state().gradient();
@@ -848,16 +789,18 @@ fn main() {
                                 .unwrap();
                         }
 
-                        edge_renderer.draw(
-                            cmd_buf,
-                            &main_view.node_draw_system.vertices,
-                            edges_pass,
-                            framebuffers,
-                            [size.width as f32, size.height as f32],
-                            2.0,
-                            current_view,
-                            Point::ZERO,
-                        ).unwrap();
+                        if edges_enabled {
+                            edge_renderer.draw(
+                                cmd_buf,
+                                &main_view.node_draw_system.vertices,
+                                edges_pass,
+                                framebuffers,
+                                [size.width as f32, size.height as f32],
+                                2.0,
+                                current_view,
+                                Point::ZERO,
+                            ).unwrap();
+                        }
 
                         /*
                         main_view

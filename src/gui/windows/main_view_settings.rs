@@ -5,13 +5,20 @@ use crate::app::NodeWidth;
 
 pub struct MainViewSettings {
     node_width: Arc<NodeWidth>,
+    edges_enabled: Arc<AtomicCell<bool>>,
 }
 
 impl MainViewSettings {
     const ID: &'static str = "main_view_settings_window";
 
-    pub fn new(node_width: Arc<NodeWidth>) -> Self {
-        Self { node_width }
+    pub fn new(
+        node_width: Arc<NodeWidth>,
+        edges_enabled: Arc<AtomicCell<bool>>,
+    ) -> Self {
+        Self {
+            node_width,
+            edges_enabled,
+        }
     }
 
     pub fn ui(&mut self, ctx: &egui::CtxRef) -> Option<egui::Response> {
@@ -25,6 +32,8 @@ impl MainViewSettings {
 
                 let mut min_scale = self.node_width.min_scale();
                 let mut max_scale = self.node_width.max_scale();
+
+                let edges_enabled = self.edges_enabled.load();
 
                 // let mut base_node_width = self.node_width.base_node_width();
                 // let mut upscale_limit = self.node_width.upscale_limit();
@@ -46,6 +55,12 @@ impl MainViewSettings {
                 let max_scale_slider = ui.add(
                     egui::Slider::new::<f32>(&mut max_scale, min_scale..=1000.0).text("Max node width scale"),
                 ).on_hover_text("The scale above which the maximum node width will be used. Default: 200.0");
+
+                let edges_button = ui.selectable_label(edges_enabled, "Show Edges");
+
+                if edges_button.clicked() {
+                    self.edges_enabled.store(!edges_enabled);
+                }
 
 
                 if min_node_width_slider.changed() {

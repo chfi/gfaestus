@@ -21,6 +21,8 @@ pub struct SharedState {
     pub(super) overlay_state: OverlayState,
 
     pub gui_focus_state: GuiFocusState,
+
+    pub edges_enabled: Arc<AtomicCell<bool>>,
 }
 
 impl SharedState {
@@ -38,6 +40,8 @@ impl SharedState {
             overlay_state: OverlayState::default(),
 
             gui_focus_state: GuiFocusState::default(),
+
+            edges_enabled: Arc::new(AtomicCell::new(true)),
         }
     }
 
@@ -61,6 +65,14 @@ impl SharedState {
         &self.overlay_state
     }
 
+    pub fn edges_enabled(&self) -> bool {
+        self.edges_enabled.load()
+    }
+
+    pub fn clone_edges_enabled(&self) -> Arc<AtomicCell<bool>> {
+        self.edges_enabled.clone()
+    }
+
     pub fn clone_mouse_pos(&self) -> MousePos {
         self.mouse_pos.clone()
     }
@@ -71,6 +83,10 @@ impl SharedState {
 
     pub fn set_view(&self, view: View) {
         self.view.store(view)
+    }
+
+    pub fn set_edges_enabled(&self, to: bool) {
+        self.edges_enabled.store(to);
     }
 
     // pub fn clone_mouse_rect(&self) -> MouseRect {

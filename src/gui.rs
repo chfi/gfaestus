@@ -155,6 +155,7 @@ pub struct AppViewState {
 impl AppViewState {
     pub fn new(
         graph_query: &GraphQuery,
+        shared_state: &SharedState,
         node_width: Arc<NodeWidth>,
         overlay_state: OverlayState,
         dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
@@ -172,7 +173,10 @@ impl AppViewState {
             total_len: graph.total_length(),
         };
 
-        let settings = MainViewSettings::new(node_width);
+        let settings = MainViewSettings::new(
+            node_width,
+            shared_state.clone_edges_enabled(),
+        );
 
         let node_details_state = NodeDetails::default();
         let node_id_cell = node_details_state.node_id_cell().clone();
@@ -555,6 +559,7 @@ impl Gui {
 
         let view_state = AppViewState::new(
             graph_query,
+            &shared_state,
             settings.node_width().clone(),
             shared_state.overlay_state().clone(),
             dropped_file.clone(),
