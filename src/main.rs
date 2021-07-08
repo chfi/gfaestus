@@ -365,14 +365,6 @@ fn main() {
         )
         .unwrap();
 
-    edge_pipeline
-        .write_populate_slots_descriptor_set(gfaestus.vk_context().device())
-        .unwrap();
-
-    edge_pipeline
-        .write_slot_render_descriptor_set(gfaestus.vk_context().device())
-        .unwrap();
-
     /*
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
@@ -802,28 +794,8 @@ fn main() {
                             ).unwrap();
                         }
 
-                        /*
-                        main_view
-                            .draw_nodes(
-                                cmd_buf,
-                                node_pass,
-                                framebuffers,
-                                [size.width as f32, size.height as f32],
-                                Point::ZERO,
-                                use_overlay,
-                            )
-                            .unwrap();
-                        */
-
 
                         unsafe {
-                            // let (image_memory_barrier, _src_stage, _dst_stage) =
-                            //     GfaestusVk::image_transition_barrier(
-                            //         node_id_image,
-                            //         vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
-                            //         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
-                            //     );
-
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
                                 .dst_access_mask(vk::AccessFlags::SHADER_READ)
@@ -913,21 +885,6 @@ fn main() {
 
                         let tile_texture_size = Point::new(2.0 * 128.0 * 16.0,
                                                            2.0 * 128.0 * 16.0);
-
-                        // let tile_size = [128.0 * 16.0,
-                        //                  128.0 * 16.0];
-
-                        /*
-                        edge_pixels_pipeline.draw(
-                            &device,
-                            cmd_buf,
-                            blur_pass,
-                            framebuffers,
-                            screen_size,
-                            tile_texture_size,
-                            // [size.width as f32, size.height as f32]
-                        ).unwrap();
-                        */
 
                         gui.draw(
                             cmd_buf,

@@ -22,12 +22,6 @@ pub struct EdgeRenderer {
     preprocess_pipeline: ComputePipeline,
     preprocess_desc_set: vk::DescriptorSet,
 
-    populate_slot_pipeline: ComputePipeline,
-    populate_slot_desc_set: vk::DescriptorSet,
-
-    slot_render_pipeline: ComputePipeline,
-    slot_render_desc_set: vk::DescriptorSet,
-
     // edge_buffer: EdgeBuffer,
     pub tiles: ScreenTiles,
 
@@ -61,37 +55,6 @@ impl EdgeRenderer {
 
         let preprocess_desc_set = preprocess_descriptor_sets[0];
 
-        let populate_slot_pipeline =
-            Self::create_populate_slot_pipeline(device)?;
-
-        let populate_slot_descriptor_sets = {
-            let layouts = vec![populate_slot_pipeline.descriptor_set_layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(populate_slot_pipeline.descriptor_pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
-        let populate_slot_desc_set = populate_slot_descriptor_sets[0];
-
-        let slot_render_pipeline = Self::create_slot_render_pipeline(device)?;
-
-        let slot_render_descriptor_sets = {
-            let layouts = vec![slot_render_pipeline.descriptor_set_layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(slot_render_pipeline.descriptor_pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
-        let slot_render_desc_set = slot_render_descriptor_sets[0];
-
         let edges = EdgeBuffers::new(app, edge_count)?;
 
         let tile_slots = TileSlots::new(app, 256, 256)?;
@@ -109,12 +72,6 @@ impl EdgeRenderer {
         Ok(Self {
             preprocess_pipeline,
             preprocess_desc_set,
-
-            populate_slot_pipeline,
-            populate_slot_desc_set,
-
-            slot_render_pipeline,
-            slot_render_desc_set,
 
             tiles,
             tile_slots,
@@ -143,7 +100,7 @@ impl EdgeRenderer {
         &self,
         cmd_buf: vk::CommandBuffer,
     ) -> Result<()> {
-        let device = &self.populate_slot_pipeline.device;
+        let device = &self.preprocess_pipeline.device;
 
         let tile_slot_barrier = vk::MemoryBarrier::builder()
             .src_access_mask(vk::AccessFlags::SHADER_WRITE)
@@ -159,41 +116,6 @@ impl EdgeRenderer {
                 cmd_buf,
                 vk::PipelineStageFlags::COMPUTE_SHADER,
                 vk::PipelineStageFlags::COMPUTE_SHADER,
-                vk::DependencyFlags::BY_REGION,
-                &memory_barriers,
-                &buffer_memory_barriers,
-                &image_memory_barriers,
-            );
-        }
-
-        Ok(())
-    }
-
-    pub fn pixels_memory_barrier(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-    ) -> Result<()> {
-        let device = &self.slot_render_pipeline.device;
-
-        let pixels_barrier = vk::BufferMemoryBarrier::builder()
-            .buffer(self.pixels.buffer)
-            .offset(0)
-            .size(self.pixels.size)
-            .src_access_mask(vk::AccessFlags::SHADER_WRITE)
-            .dst_access_mask(vk::AccessFlags::SHADER_READ)
-            .src_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .dst_queue_family_index(vk::QUEUE_FAMILY_IGNORED)
-            .build();
-
-        let memory_barriers = [];
-        let buffer_memory_barriers = [pixels_barrier];
-        let image_memory_barriers = [];
-
-        unsafe {
-            device.cmd_pipeline_barrier(
-                cmd_buf,
-                vk::PipelineStageFlags::COMPUTE_SHADER,
-                vk::PipelineStageFlags::FRAGMENT_SHADER,
                 vk::DependencyFlags::BY_REGION,
                 &memory_barriers,
                 &buffer_memory_barriers,
@@ -291,121 +213,6 @@ impl EdgeRenderer {
         Ok(())
     }
 
-    pub fn populate_slots_cmd(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        viewport_dims: [f32; 2],
-    ) -> Result<()> {
-        let device = &self.populate_slot_pipeline.device;
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::COMPUTE,
-                self.populate_slot_pipeline.pipeline,
-            )
-        };
-
-        unsafe {
-            let desc_sets = [self.populate_slot_desc_set];
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::COMPUTE,
-                self.populate_slot_pipeline.pipeline_layout,
-                0,
-                &desc_sets[0..=0],
-                &null,
-            );
-        };
-
-        let x_group_count = {
-            let w = viewport_dims[0] as u32;
-            let mut x = w / (16 * 16);
-            if w % (16 * 16) != 0 {
-                x += 1;
-            }
-            x.min(256)
-        };
-
-        let y_group_count = {
-            let h = viewport_dims[1] as u32;
-            let mut y = h / (16 * 16);
-            if h % (16 * 16) != 0 {
-                y += 1;
-            }
-            y.min(256)
-        };
-
-        // TODO use edge count from the preprocessing output buffer
-        let z_group_count: u32 = {
-            let edges = 256;
-
-            let mut size = self.edges.edge_count / edges;
-            if self.edges.edge_count % edges != 0 {
-                size += 1;
-            }
-            size as u32
-        };
-
-        // let x_group_count: u32 = 1;
-        // let y_group_count: u32 = 1;
-        // let z_group_count: u32 = 1;
-
-        unsafe {
-            device.cmd_dispatch(
-                cmd_buf,
-                x_group_count,
-                y_group_count,
-                z_group_count,
-            )
-        };
-
-        Ok(())
-    }
-
-    pub fn slot_render_cmd(&self, cmd_buf: vk::CommandBuffer) -> Result<()> {
-        let device = &self.slot_render_pipeline.device;
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::COMPUTE,
-                self.slot_render_pipeline.pipeline,
-            )
-        };
-
-        unsafe {
-            let desc_sets = [self.slot_render_desc_set];
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::COMPUTE,
-                self.slot_render_pipeline.pipeline_layout,
-                0,
-                &desc_sets[0..=0],
-                &null,
-            );
-        };
-
-        let x_group_count: u32 = 4096u32 / 16;
-        let y_group_count: u32 = 4096u32 / 16;
-        let z_group_count: u32 = 1;
-
-        unsafe {
-            device.cmd_dispatch(
-                cmd_buf,
-                x_group_count,
-                y_group_count,
-                z_group_count,
-            )
-        };
-
-        Ok(())
-    }
-
     pub fn write_preprocess_descriptor_set(
         &self,
         device: &Device,
@@ -460,92 +267,6 @@ impl EdgeRenderer {
             .build();
 
         let descriptor_writes = [nodes, edges, beziers];
-
-        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
-
-        Ok(())
-    }
-
-    pub fn write_populate_slots_descriptor_set(
-        &self,
-        device: &Device,
-    ) -> Result<()> {
-        let bezier_buf_info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.edges.edges_pos_buf)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .build();
-
-        let bezier_buf_infos = [bezier_buf_info];
-
-        let beziers = vk::WriteDescriptorSet::builder()
-            .dst_set(self.populate_slot_desc_set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&bezier_buf_infos)
-            .build();
-
-        let slots_buf_info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.tile_slots.buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .build();
-
-        let slots_buf_infos = [slots_buf_info];
-
-        let slots = vk::WriteDescriptorSet::builder()
-            .dst_set(self.populate_slot_desc_set)
-            .dst_binding(1)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&slots_buf_infos)
-            .build();
-
-        let descriptor_writes = [beziers, slots];
-
-        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
-
-        Ok(())
-    }
-
-    pub fn write_slot_render_descriptor_set(
-        &self,
-        device: &Device,
-    ) -> Result<()> {
-        let slots_buf_info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.tile_slots.buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .build();
-
-        let slots_buf_infos = [slots_buf_info];
-
-        let slots = vk::WriteDescriptorSet::builder()
-            .dst_set(self.slot_render_desc_set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&slots_buf_infos)
-            .build();
-
-        let pixels_buf_info = vk::DescriptorBufferInfo::builder()
-            .buffer(self.pixels.buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .build();
-
-        let pixels_buf_infos = [pixels_buf_info];
-
-        let pixels = vk::WriteDescriptorSet::builder()
-            .dst_set(self.slot_render_desc_set)
-            .dst_binding(1)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-            .buffer_info(&pixels_buf_infos)
-            .build();
-
-        let descriptor_writes = [slots, pixels];
 
         unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
 
