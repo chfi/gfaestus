@@ -408,7 +408,7 @@ impl EdgeRenderer2 {
 pub struct EdgeIndices {
     buffer: vk::Buffer,
     memory: vk::DeviceMemory,
-    // size: vk::DeviceSize,
+
     edge_count: usize,
 }
 
@@ -419,11 +419,11 @@ impl EdgeIndices {
         let mut edges: Vec<u32> = Vec::with_capacity(edge_count * 2);
 
         for Edge(left, right) in graph.edges() {
-            let left_l = left.forward().flip().0 - 1;
-            let left_r = left.forward().0 - 1;
+            let left_l = (left.id().0 - 1) * 2;
+            let left_r = left_l + 1;
 
-            let right_l = right.forward().flip().0 - 1;
-            let right_r = right.forward().0 - 1;
+            let right_l = (right.id().0 - 1) * 2;
+            let right_r = right_l + 1;
 
             let (left_ix, right_ix) =
                 match (left.is_reverse(), right.is_reverse()) {
