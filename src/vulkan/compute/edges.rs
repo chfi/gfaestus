@@ -22,22 +22,11 @@ pub struct EdgeRenderer {
     preprocess_pipeline: ComputePipeline,
     preprocess_desc_set: vk::DescriptorSet,
 
-    // edge_buffer: EdgeBuffer,
-    pub tiles: ScreenTiles,
-
     pub edges: EdgeBuffers,
-    pub tile_slots: TileSlots,
-    pub pixels: PixelBuffer,
 }
 
 impl EdgeRenderer {
-    pub fn new<Dims: Into<ScreenDims>>(
-        app: &GfaestusVk,
-        dims: Dims,
-        edge_count: usize,
-    ) -> Result<Self> {
-        let tiles = ScreenTiles::new(app, 256, 256, Point::ZERO, dims)?;
-
+    pub fn new(app: &GfaestusVk, edge_count: usize) -> Result<Self> {
         let device = app.vk_context().device();
 
         let preprocess_pipeline = Self::create_preprocess_pipeline(device)?;
@@ -57,26 +46,11 @@ impl EdgeRenderer {
 
         let edges = EdgeBuffers::new(app, edge_count)?;
 
-        let tile_slots = TileSlots::new(app, 256, 256)?;
-
-        let pixels = {
-            let pixels = PixelBuffer::new(app, 4096, 4096)?;
-
-            let data: Vec<u32> = vec![4096 * 4096];
-
-            app.copy_data_to_buffer::<u32, u32>(&data, pixels.buffer)?;
-
-            pixels
-        };
-
         Ok(Self {
             preprocess_pipeline,
             preprocess_desc_set,
 
-            tiles,
-            tile_slots,
             edges,
-            pixels,
         })
     }
 

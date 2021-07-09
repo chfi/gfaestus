@@ -14,28 +14,24 @@ layout (set = 0, binding = 1) readonly buffer Edges {
   uvec2 edge[];
 } edges;
 
-layout (set = 0, binding = 2) writeonly buffer EdgeBeziers {
+layout (set = 0, binding = 2) writeonly buffer EdgeCurves {
   uint edge_count;
   vec2 curve[];
-} beziers;
+} curves;
 
-layout (push_constant) uniform BinPushConstants {
-  mat4 view_transform;
-  vec2 viewport_dims;
+layout (push_constant) uniform PushConstants {
   uint edge_count;
-} bin_pc;
+  vec4 visible_area;
+  vec2 viewport_size;
+} pc;
 
 
 void main() {
   if (gl_GlobalInvocationID.xyz == uvec3(0)) {
-    beziers.edge_count = 0;
+    curves.edge_count = 0;
   }
 
   barrier();
-
-  // if (gl_LocalInvocationIndex >= bin_pc.edge_count) {
-  //   return;
-  // }
 
   uint edge_ix = gl_LocalInvocationIndex;
 
@@ -45,45 +41,11 @@ void main() {
   vec2 p0 = nodes.pos[oriented_ixs.x];
   vec2 p1 = nodes.pos[oriented_ixs.y];
 
-  vec4 a = bin_pc.view_transform * vec4(p0, 0.0, 1.0);
-  vec4 b = bin_pc.view_transform * vec4(p1, 0.0, 1.0);
-
-
-  vec2 q0 = a.xy;
-  vec2 q1 = b.xy;
-
-  vec2 ctrl = edge_control_point(q0, q1);
-
-  // TODO compare Bezier points to viewport & filter;
+  // TODO compare points to viewport & filter;
   // need to either calculate or pass the visible area
 
-  uint offset = atomicAdd(beziers.edge_count, 1);
+  uint offset = atomicAdd(curves.edge_count, 1);
 
-  // vec2 start = vec2(min(q0.x, q1.x), min(
-
-  vec2 start;
-  vec2 end;
-
-  if (q0.x < q1.x) {
-    start = q0;
-    end = q1;
-  } else {
-    start = q1;
-    end = q0;
-  }
-
-
-  beziers.curve[offset] = start;
-  beziers.curve[offset + 1] = ctrl;
-  beziers.curve[offset + 2] = end;
-
-  /*
-  barrier();
-
-  // beziers.edge_count = edge_count;
-
-  if (gl_GlobalInvocationID.xyz == uvec3(0)) {
-    beziers.edge_count = edge_count;
-  }
-  */
+  curves.curve[offset] = p0;
+  curves.curve[offset + 1] = p1;
 }

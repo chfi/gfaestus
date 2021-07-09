@@ -333,21 +333,10 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
-    let mut edge_pixels_pipeline = PostProcessPipeline::new_buffer_read(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_blur,
-        gfaestus::include_shader!("post/pixels_buffer_copy.frag.spv"),
-    )
-    .unwrap();
-
     let mut edge_pipeline =
-        // EdgeRenderer::new(&gfaestus, app.dims(), 3)
-        EdgeRenderer::new(&gfaestus, app.dims(), graph_query.edge_count())
-            .unwrap();
+        EdgeRenderer::new(&gfaestus, graph_query.edge_count()).unwrap();
 
     dbg!();
-    // edge_pipeline.upload_example_data(&gfaestus).unwrap();
 
     edge_pipeline
         .upload_edges(
@@ -702,12 +691,6 @@ fn main() {
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
                 let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
-
-                edge_pixels_pipeline
-                    .write_buffer_descriptor_set(
-                        gfaestus.vk_context().device(),
-                        edge_pipeline.pixels.buffer
-                    );
 
                 let current_view = app.shared_state().view();
 

@@ -35,6 +35,8 @@ use super::nodes::NodePushConstants;
 use crate::vulkan::render_pass::Framebuffers;
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
+use crate::vulkan::compute::ComputePipeline;
+
 pub struct EdgeRenderer2 {
     /*
     pub(crate) descriptor_pool: vk::DescriptorPool,
@@ -450,5 +452,78 @@ impl EdgeIndices {
             memory,
             edge_count,
         })
+    }
+}
+
+pub struct PreprocessPushConstants {
+    edge_count: usize,
+    visible_area: Rect,
+    viewport_size: ScreenDims,
+}
+
+impl PreprocessPushConstants {
+    pub const PC_RANGE: u32 = (std::mem::size_of::<u32>() * 7) as u32;
+
+    #[inline]
+    pub fn new<Dims: Into<ScreenDims>>(
+        edge_count: usize,
+        viewport_dims: Dims,
+        view: crate::view::View,
+    ) -> Self {
+        let viewport_size = viewport_dims.into();
+
+        let visible_area = {
+            let map = view.screen_to_world_map(viewport_size);
+
+            let top_left = glm::vec4(0.0, 0.0, 0.0, 1.0);
+            let bottom_right =
+                glm::vec4(viewport_size.width, viewport_size.height, 0.0, 1.0);
+
+            let tl = map * top_left;
+            let br = map * bottom_right;
+
+            let min = Point::new(tl[0], tl[1]);
+            let max = Point::new(br[0], br[1]);
+            Rect::new(min, max)
+        };
+
+        Self {
+            edge_count,
+            viewport_size,
+            visible_area,
+        }
+    }
+
+    #[inline]
+    pub fn bytes(&self) -> [u8; Self::PC_RANGE as usize] {
+        let mut bytes = [0u8; 7 * 4];
+
+        let mut offset = 0;
+
+        let ec_bytes = self.edge_count.to_ne_bytes();
+        for i in 0..4 {
+            bytes[offset] = ec_bytes[i];
+            offset += 1;
+        }
+
+        {
+            let mut add_float = |f: f32| {
+                let f_bytes = f.to_ne_bytes();
+                for i in 0..4 {
+                    bytes[offset] = f_bytes[i];
+                    offset += 1;
+                }
+            };
+
+            add_float(self.visible_area.min().x);
+            add_float(self.visible_area.min().y);
+            add_float(self.visible_area.max().x);
+            add_float(self.visible_area.max().y);
+
+            add_float(self.viewport_size.width);
+            add_float(self.viewport_size.height);
+        }
+
+        bytes
     }
 }

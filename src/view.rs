@@ -66,30 +66,6 @@ impl From<[u32; 2]> for ScreenDims {
     }
 }
 
-// impl std::convert::TryFrom<vulkano::image::Dimensions> for ScreenDims {
-//     type Error = ();
-
-//     #[inline]
-//     fn try_from(dims: vulkano::image::Dimensions) -> Result<Self, ()> {
-//         use vulkano::image::Dimensions as Dims;
-//         match dims {
-//             Dims::Dim2d { width, height } => Ok(Self {
-//                 width: width as f32,
-//                 height: height as f32,
-//             }),
-//             Dims::Dim2dArray { width, height, .. } => Ok(Self {
-//                 width: width as f32,
-//                 height: height as f32,
-//             }),
-//             Dims::Dim3d { width, height, .. } => Ok(Self {
-//                 width: width as f32,
-//                 height: height as f32,
-//             }),
-//             _ => Err(()),
-//         }
-//     }
-// }
-
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {
     pub center: Point,
