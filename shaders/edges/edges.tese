@@ -1,6 +1,7 @@
 #version 450
 
-layout (isolines, equal_spacing, ccw) in;
+// layout (isolines, equal_spacing, ccw) in;
+layout (isolines, fractional_odd_spacing, ccw) in;
 
 float curve_modulation(float x) {
   return -0.8 * (x * x - x);

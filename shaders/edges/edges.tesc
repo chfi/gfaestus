@@ -20,8 +20,10 @@ float tess_level(float len) {
     return 3.0;
   } else if (len < 0.1) {
     return 5.0;
+  } else if (len < 0.4) {
+    return 8.0;
   } else {
-    return 10.0;
+    return 16.0;
   }
 }
 
