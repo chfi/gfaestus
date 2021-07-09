@@ -20,6 +20,8 @@ use ash::{
 };
 use ash::{vk, Device, Entry};
 
+use vk_mem::Allocator;
+
 use winit::window::Window;
 
 use std::{mem::size_of, sync::Arc};
@@ -106,6 +108,8 @@ impl Queues {
 }
 
 pub struct GfaestusVk {
+    allocator: Allocator,
+
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
 
@@ -160,6 +164,18 @@ impl GfaestusVk {
                 present_ix,
                 compute_ix,
             )?;
+
+        let allocator_create_info = vk_mem::AllocatorCreateInfo {
+            physical_device,
+            device: device.clone(),
+            instance: instance.clone(),
+            flags: vk_mem::AllocatorCreateFlags::NONE,
+            preferred_large_heap_block_size: 0,
+            frame_in_use_count: 0,
+            heap_size_limits: None,
+        };
+
+        let allocator = vk_mem::Allocator::new(&allocator_create_info)?;
 
         println!("graphics_ix: {}", graphics_ix);
         println!("present_ix: {}", present_ix);
@@ -251,6 +267,8 @@ impl GfaestusVk {
 
         Ok(Self {
             vk_context,
+
+            allocator,
 
             graphics_queue,
             present_queue,

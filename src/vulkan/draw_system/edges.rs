@@ -1,7 +1,7 @@
 use crate::{
     geometry::{Point, Rect},
     view::{ScreenDims, View},
-    vulkan::tiles::ScreenTiles,
+    vulkan::{compute::EdgeBuffers, tiles::ScreenTiles},
 };
 
 use handlegraph::{
@@ -309,6 +309,7 @@ impl EdgeRenderer2 {
         &self,
         cmd_buf: vk::CommandBuffer,
         vertices: &NodeVertices,
+        // edges: &EdgeBuffers,
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
@@ -352,6 +353,7 @@ impl EdgeRenderer2 {
         };
 
         let vx_bufs = [vertices.vertex_buffer];
+        // let vx_bufs = [edges.edges_pos_buf];
 
         let offsets = [0];
         unsafe {
@@ -390,6 +392,7 @@ impl EdgeRenderer2 {
         };
 
         unsafe {
+            // device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
             device.cmd_draw_indexed(
                 cmd_buf,
                 (self.edge_index_buffer.edge_count * 2) as u32,

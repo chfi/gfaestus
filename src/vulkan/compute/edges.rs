@@ -333,9 +333,9 @@ pub struct EdgeBuffers {
     edges_by_id_mem: vk::DeviceMemory,
     edges_by_id_size: vk::DeviceSize,
 
-    edges_pos_buf: vk::Buffer,
-    edges_pos_mem: vk::DeviceMemory,
-    edges_pos_size: vk::DeviceSize,
+    pub(crate) edges_pos_buf: vk::Buffer,
+    pub(crate) edges_pos_mem: vk::DeviceMemory,
+    pub(crate) edges_pos_size: vk::DeviceSize,
 
     edge_count: usize,
 }
@@ -358,9 +358,9 @@ impl EdgeBuffers {
         }?;
 
         let (edges_pos_buf, edges_pos_mem, edges_pos_size) = {
-            // three pairs of points to encode quadratic beziers
-            let size = ((edge_count * 2 * 2 * std::mem::size_of::<f32>())
-                as u32) as vk::DeviceSize;
+            let size = ((edge_count * 2 * 2 * std::mem::size_of::<f32>()
+                + std::mem::size_of::<u32>()) as u32)
+                as vk::DeviceSize;
 
             let usage = vk::BufferUsageFlags::TRANSFER_DST
                 | vk::BufferUsageFlags::TRANSFER_SRC
