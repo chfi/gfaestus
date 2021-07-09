@@ -765,6 +765,15 @@ fn main() {
                         }
 
                         if edges_enabled {
+
+                            edge_pipeline.preprocess_cmd(
+                                cmd_buf,
+                                current_view,
+                                [size.width as f32, size.height as f32]
+                            ).unwrap();
+
+                            edge_pipeline.preprocess_memory_barrier(cmd_buf).unwrap();
+
                             edge_renderer.draw(
                                 cmd_buf,
                                 &main_view.node_draw_system.vertices,
