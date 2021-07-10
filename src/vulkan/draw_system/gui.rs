@@ -246,7 +246,7 @@ impl GuiPipeline {
         Ok(())
     }
 
-    pub fn destroy(&mut self) {
+    pub fn destroy(&mut self, allocator: &vk_mem::Allocator) {
         let device = &self.device;
 
         unsafe {
@@ -263,7 +263,7 @@ impl GuiPipeline {
             device.destroy_pipeline(self.tex_1d_pipeline, None);
             device.destroy_pipeline_layout(self.tex_1d_pipeline_layout, None);
 
-            self.vertices.destroy();
+            self.vertices.destroy(allocator);
 
             if !self.texture.is_null() {
                 self.texture.destroy(device);
@@ -543,10 +543,12 @@ pub struct GuiVertices {
     capacity: usize,
 
     vertex_buffer: vk::Buffer,
-    vertex_memory: vk::DeviceMemory,
+    vertex_alloc: vk_mem::Allocation,
+    vertex_alloc_info: Option<vk_mem::AllocationInfo>,
 
     index_buffer: vk::Buffer,
-    index_memory: vk::DeviceMemory,
+    index_alloc: vk_mem::Allocation,
+    index_alloc_info: Option<vk_mem::AllocationInfo>,
 
     ranges: Vec<(u32, u32)>,
     vertex_offsets: Vec<u32>,
@@ -560,10 +562,12 @@ pub struct GuiVertices {
 impl GuiVertices {
     pub fn new(device: &Device) -> Self {
         let vertex_buffer = vk::Buffer::null();
-        let vertex_memory = vk::DeviceMemory::null();
+        let vertex_alloc = vk_mem::Allocation::null();
+        let vertex_alloc_info = None;
 
         let index_buffer = vk::Buffer::null();
-        let index_memory = vk::DeviceMemory::null();
+        let index_alloc = vk_mem::Allocation::null();
+        let index_alloc_info = None;
 
         let ranges = Vec::new();
         let vertex_offsets = Vec::new();
@@ -577,10 +581,12 @@ impl GuiVertices {
             capacity: 0,
 
             vertex_buffer,
-            vertex_memory,
+            vertex_alloc,
+            vertex_alloc_info,
 
             index_buffer,
-            index_memory,
+            index_alloc,
+            index_alloc_info,
 
             ranges,
             vertex_offsets,
@@ -601,7 +607,7 @@ impl GuiVertices {
         app: &super::super::GfaestusVk,
         meshes: &[egui::ClippedMesh],
     ) -> Result<()> {
-        self.destroy();
+        self.destroy(&app.allocator);
 
         let mut vertices: Vec<GuiVertex> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
@@ -644,23 +650,35 @@ impl GuiVertices {
             vertex_offset += vx_len;
         }
 
-        let (vx_buf, vx_mem) = app
-            .create_device_local_buffer_with_data::<u32, _>(
+        let (vx_buf, vx_alloc, vx_alloc_info) = app
+            .create_buffer_with_data::<f32, _>(
                 vk::BufferUsageFlags::VERTEX_BUFFER,
+                vk_mem::MemoryUsage::GpuOnly,
                 &vertices,
             )?;
 
-        let (ix_buf, ix_mem) = app
-            .create_device_local_buffer_with_data::<u32, _>(
+        let (vx_buf, vx_alloc, vx_alloc_info) = app
+            .create_buffer_with_data::<u32, _>(
                 vk::BufferUsageFlags::INDEX_BUFFER,
+                vk_mem::MemoryUsage::GpuOnly,
                 &indices,
             )?;
+
+        /*
+        self.vertex_buffer = vk::Buffer::null();
+        self.vertex_alloc = vk_mem::Allocation::null();
+        self.vertex_alloc_info = None;
+
+        self.index_buffer = vk::Buffer::null();
+        self.index_alloc = vk_mem::Allocation::null();
+        self.index_alloc_info = None;
 
         self.vertex_buffer = vx_buf;
         self.vertex_memory = vx_mem;
 
         self.index_buffer = ix_buf;
         self.index_memory = ix_mem;
+        */
 
         self.ranges.clone_from(&ranges);
         self.vertex_offsets.clone_from(&vertex_offsets);
@@ -671,20 +689,19 @@ impl GuiVertices {
         Ok(())
     }
 
-    pub fn destroy(&mut self) {
+    pub fn destroy(&mut self, allocator: &vk_mem::Allocator) {
         unsafe {
             self.device.destroy_buffer(self.vertex_buffer, None);
-            self.device.free_memory(self.vertex_memory, None);
+            // self.device.free_memory(self.vertex_memory, None);
 
             self.device.destroy_buffer(self.index_buffer, None);
-            self.device.free_memory(self.index_memory, None);
         }
+        allocator.free_memory(&self.vertex_alloc).unwrap();
+        allocator.free_memory(&self.index_alloc).unwrap();
 
         self.vertex_buffer = vk::Buffer::null();
-        self.vertex_memory = vk::DeviceMemory::null();
 
         self.index_buffer = vk::Buffer::null();
-        self.index_memory = vk::DeviceMemory::null();
 
         self.ranges.clear();
         self.vertex_offsets.clear();

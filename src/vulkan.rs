@@ -108,7 +108,7 @@ impl Queues {
 }
 
 pub struct GfaestusVk {
-    allocator: Allocator,
+    pub allocator: Allocator,
 
     pub graphics_queue: vk::Queue,
     pub present_queue: vk::Queue,
@@ -1067,6 +1067,15 @@ impl GfaestusVk {
         }
 
         Ok(())
+    }
+
+    pub fn create_buffer_with_data<A, T>(
+        &self,
+        usage: vk::BufferUsageFlags,
+        memory_usage: vk_mem::MemoryUsage,
+        data: &[T],
+    ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)> {
+        unimplemented!();
     }
 
     pub fn create_device_local_buffer_with_data<A, T>(

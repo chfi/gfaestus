@@ -950,7 +950,7 @@ fn main() {
                 main_view.node_id_buffer.destroy(device);
                 main_view.node_draw_system.destroy();
 
-                gui.draw_system.destroy();
+                gui.draw_system.destroy(&gfaestus.allocator);
 
                 selection_edge.destroy(device);
                 selection_blur.destroy(device);
