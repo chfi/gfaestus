@@ -1074,8 +1074,77 @@ impl GfaestusVk {
         usage: vk::BufferUsageFlags,
         memory_usage: vk_mem::MemoryUsage,
         data: &[T],
-    ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)> {
-        unimplemented!();
+    ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
+    where
+        T: Copy,
+    {
+        use vk::BufferUsageFlags as Usage;
+        use vk::MemoryPropertyFlags as MemPropFlags;
+
+        let vk_context = &self.vk_context;
+        let device = vk_context.device();
+        let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
+
+        let staging_buffer_info = vk::BufferCreateInfo::builder()
+            .size(size)
+            .usage(Usage::TRANSFER_SRC)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let staging_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::CpuToGpu,
+            ..Default::default()
+        };
+
+        let (staging_buf, staging_alloc, staging_alloc_info) =
+            self.allocator
+                .create_buffer(&staging_buffer_info, &staging_create_info)?;
+
+        let data_ptr = self.allocator.map_memory(&staging_alloc)?;
+        let data_ptr = data_ptr as *mut std::ffi::c_void;
+
+        unsafe {
+            let mut align = ash::util::Align::new(
+                data_ptr,
+                std::mem::align_of::<A>() as u64,
+                staging_alloc_info.get_size() as u64,
+            );
+
+            align.copy_from_slice(data);
+        }
+
+        self.allocator.unmap_memory(&staging_alloc)?;
+
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(size)
+            .usage(Usage::TRANSFER_DST | usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuOnly,
+            ..Default::default()
+        };
+
+        let (buffer, alloc, alloc_info) =
+            self.allocator.create_buffer(&buffer_info, &create_info)?;
+
+        Self::copy_buffer(
+            device,
+            self.transient_command_pool,
+            self.graphics_queue,
+            staging_buf,
+            buffer,
+            size,
+        );
+
+        unsafe {
+            device.destroy_buffer(staging_buf, None);
+        }
+
+        self.allocator.free_memory(&staging_alloc)?;
+
+        Ok((buffer, alloc, alloc_info))
     }
 
     pub fn create_device_local_buffer_with_data<A, T>(

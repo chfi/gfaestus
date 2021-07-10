@@ -651,34 +651,26 @@ impl GuiVertices {
         }
 
         let (vx_buf, vx_alloc, vx_alloc_info) = app
-            .create_buffer_with_data::<f32, _>(
+            .create_buffer_with_data::<u32, _>(
                 vk::BufferUsageFlags::VERTEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
                 &vertices,
             )?;
 
-        let (vx_buf, vx_alloc, vx_alloc_info) = app
+        let (ix_buf, ix_alloc, ix_alloc_info) = app
             .create_buffer_with_data::<u32, _>(
                 vk::BufferUsageFlags::INDEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
                 &indices,
             )?;
 
-        /*
-        self.vertex_buffer = vk::Buffer::null();
-        self.vertex_alloc = vk_mem::Allocation::null();
-        self.vertex_alloc_info = None;
-
-        self.index_buffer = vk::Buffer::null();
-        self.index_alloc = vk_mem::Allocation::null();
-        self.index_alloc_info = None;
-
         self.vertex_buffer = vx_buf;
-        self.vertex_memory = vx_mem;
+        self.vertex_alloc = vx_alloc;
+        self.vertex_alloc_info = Some(vx_alloc_info);
 
         self.index_buffer = ix_buf;
-        self.index_memory = ix_mem;
-        */
+        self.index_alloc = ix_alloc;
+        self.index_alloc_info = Some(ix_alloc_info);
 
         self.ranges.clone_from(&ranges);
         self.vertex_offsets.clone_from(&vertex_offsets);
@@ -692,16 +684,18 @@ impl GuiVertices {
     pub fn destroy(&mut self, allocator: &vk_mem::Allocator) {
         unsafe {
             self.device.destroy_buffer(self.vertex_buffer, None);
-            // self.device.free_memory(self.vertex_memory, None);
-
             self.device.destroy_buffer(self.index_buffer, None);
         }
         allocator.free_memory(&self.vertex_alloc).unwrap();
         allocator.free_memory(&self.index_alloc).unwrap();
 
         self.vertex_buffer = vk::Buffer::null();
+        self.vertex_alloc = vk_mem::Allocation::null();
+        self.vertex_alloc_info = None;
 
         self.index_buffer = vk::Buffer::null();
+        self.index_alloc = vk_mem::Allocation::null();
+        self.index_alloc_info = None;
 
         self.ranges.clear();
         self.vertex_offsets.clear();
