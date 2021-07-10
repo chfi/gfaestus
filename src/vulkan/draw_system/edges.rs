@@ -530,3 +530,57 @@ impl PreprocessPushConstants {
         bytes
     }
 }
+
+#[derive(Clone, Copy)]
+pub struct EdgesUBO {
+    edge_color: rgb::RGB<f32>,
+    edge_width: f32,
+
+    tess_levels: [f32; 5],
+
+    curve_offset: f32,
+}
+
+impl std::default::Default for EdgesUBO {
+    fn default() -> Self {
+        Self {
+            edge_color: rgb::RGB::new(0.0, 0.0, 0.0),
+            edge_width: 3.0,
+
+            tess_levels: [2.0, 3.0, 5.0, 8.0, 16.0],
+
+            curve_offset: 0.2,
+        }
+    }
+}
+
+impl EdgesUBO {
+    pub fn bytes(&self) -> [u8; 4 * 9] {
+        let mut bytes = [0u8; 4 * 9];
+
+        let mut offset = 0;
+
+        let mut add_float = |f: f32| {
+            let f_bytes = f.to_ne_bytes();
+            for i in 0..4 {
+                bytes[offset] = f_bytes[i];
+                offset += 1;
+            }
+        };
+
+        add_float(self.edge_color.r);
+        add_float(self.edge_color.g);
+        add_float(self.edge_color.b);
+        add_float(1.0); // vec3s are kinda nasty wrt alignments
+
+        add_float(self.edge_width);
+
+        for &tl in &self.tess_levels {
+            add_float(tl);
+        }
+
+        add_float(self.curve_offset);
+
+        bytes
+    }
+}
