@@ -1085,35 +1085,29 @@ impl GfaestusVk {
         let device = vk_context.device();
         let size = (data.len() * size_of::<T>()) as vk::DeviceSize;
 
-        let staging_buffer_info = vk::BufferCreateInfo::builder()
-            .size(size)
-            .usage(Usage::TRANSFER_SRC)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let staging_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::CpuToGpu,
-            ..Default::default()
-        };
-
-        let (staging_buf, staging_alloc, staging_alloc_info) =
-            self.allocator
-                .create_buffer(&staging_buffer_info, &staging_create_info)?;
-
-        let data_ptr = self.allocator.map_memory(&staging_alloc)?;
-        let data_ptr = data_ptr as *mut std::ffi::c_void;
+        let (staging_buf, staging_mem, staging_mem_size) = self.create_buffer(
+            size,
+            Usage::TRANSFER_SRC,
+            MemPropFlags::HOST_VISIBLE | MemPropFlags::HOST_COHERENT,
+        )?;
 
         unsafe {
+            let data_ptr = device.map_memory(
+                staging_mem,
+                0,
+                size,
+                vk::MemoryMapFlags::empty(),
+            )?;
+
             let mut align = ash::util::Align::new(
                 data_ptr,
                 std::mem::align_of::<A>() as u64,
-                staging_alloc_info.get_size() as u64,
+                staging_mem_size,
             );
 
             align.copy_from_slice(data);
+            device.unmap_memory(staging_mem);
         }
-
-        self.allocator.unmap_memory(&staging_alloc)?;
 
         let buffer_info = vk::BufferCreateInfo::builder()
             .size(size)
@@ -1122,7 +1116,7 @@ impl GfaestusVk {
             .build();
 
         let create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuOnly,
+            usage: memory_usage,
             ..Default::default()
         };
 
@@ -1140,9 +1134,8 @@ impl GfaestusVk {
 
         unsafe {
             device.destroy_buffer(staging_buf, None);
+            device.free_memory(staging_mem, None);
         }
-
-        self.allocator.free_memory(&staging_alloc)?;
 
         Ok((buffer, alloc, alloc_info))
     }
@@ -1189,7 +1182,6 @@ impl GfaestusVk {
         let (buffer, memory, _) = self.create_buffer(
             size,
             Usage::TRANSFER_DST | usage,
-            // MemPropFlags::DEVICE_LOCAL,
             MemPropFlags::HOST_VISIBLE | MemPropFlags::HOST_COHERENT,
         )?;
 
