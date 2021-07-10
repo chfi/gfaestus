@@ -1,6 +1,13 @@
 #version 450
 
+#include "ubo.glsl"
+
 layout (vertices = 2) out;
+
+layout (set = 0, binding = 0) uniform UBOStruct
+{
+  UBO ubo;
+} ubo;
 
 
 layout (push_constant) uniform NodePC {
@@ -27,10 +34,26 @@ float tess_level(float len) {
   }
 }
 
+uint tess_level_ix(float len) {
+  if (len < 0.01) {
+    return 0;
+  } else if (len < 0.05) {
+    return 1;
+  } else if (len < 0.1) {
+    return 2;
+  } else if (len < 0.4) {
+    return 3;
+  } else {
+    return 4;
+  }
+}
+
 void main() {
 
   float len = length(gl_in[0].gl_Position - gl_in[1].gl_Position);
-  float tess = tess_level(len);
+
+  float tess = ubo.ubo.tess_levels[tess_level_ix(len)];
+  // float tess = tess_level(len);
 
   if (gl_InvocationID == 0) {
     gl_TessLevelInner[0] = 1.0;

@@ -1,7 +1,14 @@
 #version 450
 
+#include "ubo.glsl"
+
 // layout (isolines, equal_spacing, ccw) in;
 layout (isolines, fractional_odd_spacing, ccw) in;
+
+layout (set = 0, binding = 0) uniform UBOStruct
+{
+  UBO ubo;
+} ubo;
 
 float curve_modulation(float x) {
   return -0.8 * (x * x - x);
