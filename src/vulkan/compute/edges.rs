@@ -264,7 +264,14 @@ impl EdgeRenderer {
                 .stage_flags(Stages::COMPUTE)
                 .build();
 
-            [nodes, edges, edge_curves]
+            let edge_count = vk::DescriptorSetLayoutBinding::builder()
+                .binding(3)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .descriptor_count(1)
+                .stage_flags(Stages::COMPUTE)
+                .build();
+
+            [nodes, edges, edge_curves, edge_count]
         };
 
         let descriptor_set_layout = {
@@ -337,6 +344,10 @@ pub struct EdgeBuffers {
     pub(crate) edges_pos_mem: vk::DeviceMemory,
     pub(crate) edges_pos_size: vk::DeviceSize,
 
+    edge_count_buf: vk::Buffer,
+    edge_count_alloc: vk_mem::Allocation,
+    edge_count_alloc_info: vk_mem::AllocationInfo,
+
     edge_count: usize,
 }
 
@@ -373,6 +384,19 @@ impl EdgeBuffers {
             app.create_buffer(size, usage, mem_props)
         }?;
 
+        let edge_count_data: [u8; 4] = [0u8; 4];
+
+        let edge_count_usage = vk::BufferUsageFlags::STORAGE_BUFFER;
+
+        let edge_count_mem_usage = vk_mem::MemoryUsage::CpuOnly;
+
+        let (edge_count_buf, edge_count_alloc, edge_count_alloc_info) = app
+            .create_buffer_with_data::<u32, _>(
+            edge_count_usage,
+            edge_count_mem_usage,
+            &edge_count_data,
+        )?;
+
         Ok(Self {
             edges_by_id_buf,
             edges_by_id_mem,
@@ -382,41 +406,11 @@ impl EdgeBuffers {
             edges_pos_mem,
             edges_pos_size,
 
+            edge_count_buf,
+            edge_count_alloc,
+            edge_count_alloc_info,
+
             edge_count,
-        })
-    }
-}
-
-pub struct PixelBuffer {
-    pub buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
-    size: vk::DeviceSize,
-
-    pub width: usize,
-    pub height: usize,
-}
-
-impl PixelBuffer {
-    pub fn new(app: &GfaestusVk, width: usize, height: usize) -> Result<Self> {
-        let size = ((width * height * std::mem::size_of::<u32>()) as u32)
-            as vk::DeviceSize;
-
-        let usage = vk::BufferUsageFlags::TRANSFER_DST
-            | vk::BufferUsageFlags::TRANSFER_SRC
-            | vk::BufferUsageFlags::STORAGE_BUFFER;
-
-        let mem_props = vk::MemoryPropertyFlags::DEVICE_LOCAL;
-
-        let (buffer, memory, size) =
-            app.create_buffer(size, usage, mem_props)?;
-
-        Ok(Self {
-            buffer,
-            memory,
-            size,
-
-            width,
-            height,
         })
     }
 }

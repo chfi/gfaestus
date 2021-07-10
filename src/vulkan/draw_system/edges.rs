@@ -38,11 +38,10 @@ use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 use crate::vulkan::compute::ComputePipeline;
 
 pub struct EdgeRenderer2 {
-    /*
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub(crate) descriptor_set_layout: vk::DescriptorSetLayout,
     pub(crate) descriptor_set: vk::DescriptorSet,
-    */
+
     pub(crate) pipeline_layout: vk::PipelineLayout,
     pub(crate) pipeline: vk::Pipeline,
 
@@ -52,13 +51,26 @@ pub struct EdgeRenderer2 {
 
 impl EdgeRenderer2 {
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
-        unimplemented!();
+        use vk::ShaderStageFlags as Stages;
+
+        vk::DescriptorSetLayoutBinding::builder()
+            .binding(0)
+            .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+            .descriptor_count(1)
+            .stage_flags(
+                Stages::VERTEX
+                    | Stages::TESSELLATION_CONTROL
+                    | Stages::TESSELLATION_EVALUATION
+                    | Stages::FRAGMENT,
+            )
+            .build()
     }
 
     fn create_descriptor_set_layout(
         device: &Device,
     ) -> Result<vk::DescriptorSetLayout> {
-        let bindings = [];
+        let binding = Self::layout_binding();
+        let bindings = [binding];
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(&bindings)
@@ -269,9 +281,36 @@ impl EdgeRenderer2 {
         let device = app.vk_context().device();
         dbg!();
 
-        /*
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
-        */
+
+        let image_count = 1;
+
+        let descriptor_pool = {
+            let pool_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::UNIFORM_BUFFER,
+                descriptor_count: image_count,
+            };
+
+            let pool_sizes = [pool_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
 
         dbg!();
         let (pipeline, pipeline_layout) =
@@ -281,6 +320,10 @@ impl EdgeRenderer2 {
         let edge_index_buffer = EdgeIndices::new(app, graph)?;
 
         Ok(Self {
+            descriptor_pool,
+            descriptor_set_layout: desc_set_layout,
+            descriptor_set: descriptor_sets[0],
+
             pipeline_layout,
             pipeline,
 
@@ -291,17 +334,17 @@ impl EdgeRenderer2 {
 
     pub fn destroy(&mut self) {
         unsafe {
-            // self.device.destroy_descriptor_set_layout(
-            //     self.descriptor_set_layout,
-            //     None,
-            // );
+            self.device.destroy_descriptor_set_layout(
+                self.descriptor_set_layout,
+                None,
+            );
 
             self.device
                 .destroy_pipeline_layout(self.pipeline_layout, None);
             self.device.destroy_pipeline(self.pipeline, None);
 
-            // self.device
-            //     .destroy_descriptor_pool(self.descriptor_pool, None);
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
         }
     }
 
