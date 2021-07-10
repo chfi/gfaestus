@@ -1073,6 +1073,7 @@ impl GfaestusVk {
         &self,
         usage: vk::BufferUsageFlags,
         memory_usage: vk_mem::MemoryUsage,
+
         data: &[T],
     ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
     where

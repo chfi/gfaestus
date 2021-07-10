@@ -531,6 +531,53 @@ impl PreprocessPushConstants {
     }
 }
 
+pub struct EdgesUBOBuffer {
+    ubo: EdgesUBO,
+
+    buffer: vk::Buffer,
+    allocation: vk_mem::Allocation,
+    allocation_info: vk_mem::AllocationInfo,
+
+    mapped_ptr: *mut u8,
+}
+
+impl EdgesUBOBuffer {
+    pub fn new(app: &GfaestusVk) -> Result<Self> {
+        let ubo = EdgesUBO::default();
+
+        let data = ubo.bytes();
+
+        let usage = vk::BufferUsageFlags::UNIFORM_BUFFER;
+
+        // let memory_usage = vk_mem::MemoryUsage::CpuToGpu;
+        let memory_usage = vk_mem::MemoryUsage::CpuOnly;
+
+        let (buffer, allocation, allocation_info) =
+            app.create_buffer_with_data::<f32, _>(usage, memory_usage, &data)?;
+
+        // TODO unmap this when destroying!
+        let mapped_ptr = allocation_info.get_mapped_data();
+
+        Ok(Self {
+            ubo,
+
+            buffer,
+            allocation,
+            allocation_info,
+
+            mapped_ptr,
+        })
+    }
+
+    pub fn write_ubo(&self) {
+        let bytes = self.ubo.bytes();
+
+        unsafe {
+            self.mapped_ptr.copy_from((&bytes) as *const u8, 4 * 9);
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct EdgesUBO {
     edge_color: rgb::RGB<f32>,
