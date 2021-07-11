@@ -18,11 +18,11 @@ layout (std140, set = 0, binding = 0) uniform UBO
 {
   // UBO ubo;
   vec4 edge_color;
-  // float edge_width;
+  float edge_width;
 
-  // float tess_levels[5];
+  float tess_levels[5];
 
-  // float curve_offset;
+  float curve_offset;
 } ubo;
 
 

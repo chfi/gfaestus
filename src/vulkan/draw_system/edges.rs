@@ -670,34 +670,47 @@ impl EdgesUBOBuffer {
     }
 
     pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
-        // pub fn write_ubo(&self) {
-        println!("write_ubo");
-        dbg!();
-        // let bytes = self.ubo.bytes();
-
-        let data = [1.0f32, 2.0, 3.0, 4.0];
-        dbg!();
+        let data = [
+            self.ubo.edge_color.r,
+            self.ubo.edge_color.g,
+            self.ubo.edge_color.b,
+            1.0,
+            self.ubo.edge_width,
+            self.ubo.tess_levels[0],
+            self.ubo.tess_levels[0],
+            self.ubo.tess_levels[0],
+            self.ubo.tess_levels[0],
+            self.ubo.tess_levels[1],
+            self.ubo.tess_levels[1],
+            self.ubo.tess_levels[1],
+            self.ubo.tess_levels[1],
+            self.ubo.tess_levels[2],
+            self.ubo.tess_levels[2],
+            self.ubo.tess_levels[2],
+            self.ubo.tess_levels[2],
+            self.ubo.tess_levels[3],
+            self.ubo.tess_levels[3],
+            self.ubo.tess_levels[3],
+            self.ubo.tess_levels[3],
+            self.ubo.tess_levels[4],
+            self.ubo.tess_levels[4],
+            self.ubo.tess_levels[4],
+            self.ubo.tess_levels[4],
+            self.ubo.curve_offset,
+        ];
 
         let mapped_ptr = app.allocator.map_memory(&self.allocation)?;
-        println!("mapped_ptr: {:?}", mapped_ptr);
-        println!("mapped_ptr is null: {}", mapped_ptr.is_null());
 
-        dbg!();
         unsafe {
-            // println!("mapped_ptr: {:x}", *mapped_ptr);
-            dbg!();
             let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
-            dbg!();
             let mut align = ash::util::Align::new(
                 mapped_ptr,
                 std::mem::align_of::<f32>() as _,
-                4,
-                // std::mem::size_of_val(&data) as u64,
+                // 4,
+                std::mem::size_of_val(&data) as u64,
             );
-            dbg!();
             align.copy_from_slice(&data);
         }
-        dbg!();
 
         app.allocator.unmap_memory(&self.allocation)?;
 
@@ -729,30 +742,23 @@ impl std::default::Default for EdgesUBO {
 }
 
 impl EdgesUBO {
-    pub fn bytes(&self) -> [u8; 16] {
-        let mut bytes = [0u8; 16];
+    pub fn bytes(&self) -> [u8; 116] {
+        let mut bytes = [0u8; 116];
 
         let mut offset = 0;
 
         let mut add_float = |f: f32| {
-            // let f_bytes = f.to_le_bytes();
-            let f_bytes = f.to_be_bytes();
+            let f_bytes = f.to_ne_bytes();
             for i in 0..4 {
                 bytes[offset] = f_bytes[i];
                 offset += 1;
             }
         };
+        add_float(self.edge_color.r);
+        add_float(self.edge_color.g);
+        add_float(self.edge_color.b);
+        add_float(1.0); // vec3s are kinda nasty wrt alignments
 
-        add_float(7.0);
-        add_float(11.0);
-        add_float(13.0);
-        add_float(17.0);
-        // add_float(self.edge_color.r);
-        // add_float(self.edge_color.g);
-        // add_float(self.edge_color.b);
-        // add_float(1.0); // vec3s are kinda nasty wrt alignments
-
-        /*
         add_float(self.edge_width);
 
         for &tl in &self.tess_levels {
@@ -763,7 +769,6 @@ impl EdgesUBO {
         }
 
         add_float(self.curve_offset);
-        */
 
         bytes
     }
