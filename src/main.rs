@@ -548,6 +548,8 @@ fn main() {
                 let mouse_pos = app.mouse_pos();
                 main_view.update_view_animation(screen_dims, mouse_pos);
 
+                edge_renderer.write_ubo(&gfaestus).unwrap();
+
             }
             Event::RedrawEventsCleared => {
 

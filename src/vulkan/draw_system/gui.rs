@@ -654,6 +654,7 @@ impl GuiVertices {
             .create_buffer_with_data::<u32, _>(
                 vk::BufferUsageFlags::VERTEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
+                false,
                 &vertices,
             )?;
 
@@ -661,6 +662,7 @@ impl GuiVertices {
             .create_buffer_with_data::<u32, _>(
                 vk::BufferUsageFlags::INDEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
+                false,
                 &indices,
             )?;
 

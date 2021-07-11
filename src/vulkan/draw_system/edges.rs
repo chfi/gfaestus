@@ -379,6 +379,10 @@ impl EdgeRenderer2 {
         }
     }
 
+    pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
+        self.ubo.write_ubo(app)
+    }
+
     pub fn draw(
         &self,
         cmd_buf: vk::CommandBuffer,
@@ -631,7 +635,6 @@ pub struct EdgesUBOBuffer {
     buffer: vk::Buffer,
     allocation: vk_mem::Allocation,
     allocation_info: vk_mem::AllocationInfo,
-    // mapped_ptr: *mut u8,
 }
 
 impl EdgesUBOBuffer {
@@ -645,15 +648,15 @@ impl EdgesUBOBuffer {
         // let memory_usage = vk_mem::MemoryUsage::CpuToGpu;
         let memory_usage = vk_mem::MemoryUsage::CpuOnly;
 
-        let (buffer, allocation, allocation_info) =
-            app.create_buffer_with_data::<f32, _>(usage, memory_usage, &data)?;
-
-        // TODO unmap this when destroying!
-        // let mapped_ptr = allocation_info.get_mapped_data();
+        let (buffer, allocation, allocation_info) = app
+            .create_buffer_with_data::<f32, _>(
+                usage,
+                memory_usage,
+                true,
+                &data,
+            )?;
 
         // let mapped_ptr = app.allocator.map_memory(&allocation)?;
-        // println!("mapped_ptr: {:?}", mapped_ptr);
-        // println!("mapped_ptr is null: {}", mapped_ptr.is_null());
 
         let result = Self {
             ubo,
@@ -661,7 +664,6 @@ impl EdgesUBOBuffer {
             buffer,
             allocation,
             allocation_info,
-            // mapped_ptr,
         };
 
         result.write_ubo(app)?;
@@ -699,7 +701,7 @@ impl EdgesUBOBuffer {
             self.ubo.curve_offset,
         ];
 
-        let mapped_ptr = app.allocator.map_memory(&self.allocation)?;
+        let mapped_ptr = self.allocation_info.get_mapped_data();
 
         unsafe {
             let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
@@ -711,8 +713,6 @@ impl EdgesUBOBuffer {
             );
             align.copy_from_slice(&data);
         }
-
-        app.allocator.unmap_memory(&self.allocation)?;
 
         Ok(())
     }

@@ -1073,7 +1073,7 @@ impl GfaestusVk {
         &self,
         usage: vk::BufferUsageFlags,
         memory_usage: vk_mem::MemoryUsage,
-
+        mapped: bool,
         data: &[T],
     ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
     where
@@ -1116,10 +1116,23 @@ impl GfaestusVk {
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .build();
 
-        let create_info = vk_mem::AllocationCreateInfo {
-            usage: memory_usage,
-            ..Default::default()
+        let create_info = if mapped {
+            vk_mem::AllocationCreateInfo {
+                usage: vk_mem::MemoryUsage::CpuOnly,
+                flags: vk_mem::AllocationCreateFlags::MAPPED,
+                ..Default::default()
+            }
+        } else {
+            vk_mem::AllocationCreateInfo {
+                usage: memory_usage,
+                ..Default::default()
+            }
         };
+
+        // let create_info = vk_mem::AllocationCreateInfo {
+        //     usage: memory_usage,
+        //     ..Default::default()
+        // };
 
         let (buffer, alloc, alloc_info) =
             self.allocator.create_buffer(&buffer_info, &create_info)?;

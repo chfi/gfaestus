@@ -394,6 +394,7 @@ impl EdgeBuffers {
             .create_buffer_with_data::<u32, _>(
             edge_count_usage,
             edge_count_mem_usage,
+            false,
             &edge_count_data,
         )?;
 
