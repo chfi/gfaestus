@@ -42,6 +42,8 @@ pub struct EdgeRenderer2 {
     pub(crate) descriptor_set_layout: vk::DescriptorSetLayout,
     pub(crate) descriptor_set: vk::DescriptorSet,
 
+    ubo: EdgesUBOBuffer,
+
     pub(crate) pipeline_layout: vk::PipelineLayout,
     pub(crate) pipeline: vk::Pipeline,
 
@@ -86,6 +88,7 @@ impl EdgeRenderer2 {
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
+        layouts: &[vk::DescriptorSetLayout],
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
@@ -223,7 +226,7 @@ impl EdgeRenderer2 {
 
             let pc_ranges = [pc_range];
 
-            let layouts = [];
+            // let layouts = [];
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
@@ -281,6 +284,8 @@ impl EdgeRenderer2 {
         let device = app.vk_context().device();
         dbg!();
 
+        let ubo = EdgesUBOBuffer::new(app)?;
+
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let image_count = 1;
@@ -312,9 +317,33 @@ impl EdgeRenderer2 {
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
 
+        for set in descriptor_sets.iter() {
+            let buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(ubo.buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let buf_infos = [buf_info];
+
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_BUFFER)
+                .buffer_info(&buf_infos)
+                .build();
+
+            let descriptor_writes = [descriptor_write];
+
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) }
+        }
+
+        let layouts = [desc_set_layout];
+
         dbg!();
         let (pipeline, pipeline_layout) =
-            Self::create_pipeline(device, msaa_samples, render_pass);
+            Self::create_pipeline(device, msaa_samples, render_pass, &layouts);
 
         dbg!();
         let edge_index_buffer = EdgeIndices::new(app, graph)?;
@@ -323,6 +352,8 @@ impl EdgeRenderer2 {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
             descriptor_set: descriptor_sets[0],
+
+            ubo,
 
             pipeline_layout,
             pipeline,
@@ -362,6 +393,10 @@ impl EdgeRenderer2 {
     ) -> Result<()> {
         let device = &self.device;
 
+        // dbg!();
+        // self.ubo.write_ubo();
+        // dbg!();
+
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
             height: viewport_dims[1] as u32,
@@ -398,6 +433,12 @@ impl EdgeRenderer2 {
         let vx_bufs = [vertices.vertex_buffer];
         // let vx_bufs = [edges.edges_pos_buf];
 
+        let desc_sets = [
+            self.descriptor_set
+            // self.theme_pipeline.theme_set,
+            // self.selection_descriptors.descriptor_set,
+        ];
+
         let offsets = [0];
         unsafe {
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
@@ -407,6 +448,16 @@ impl EdgeRenderer2 {
                 self.edge_index_buffer.buffer,
                 0,
                 vk::IndexType::UINT32,
+            );
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::GRAPHICS,
+                self.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
             );
         };
 
@@ -580,8 +631,7 @@ pub struct EdgesUBOBuffer {
     buffer: vk::Buffer,
     allocation: vk_mem::Allocation,
     allocation_info: vk_mem::AllocationInfo,
-
-    mapped_ptr: *mut u8,
+    // mapped_ptr: *mut u8,
 }
 
 impl EdgesUBOBuffer {
@@ -599,25 +649,59 @@ impl EdgesUBOBuffer {
             app.create_buffer_with_data::<f32, _>(usage, memory_usage, &data)?;
 
         // TODO unmap this when destroying!
-        let mapped_ptr = allocation_info.get_mapped_data();
+        // let mapped_ptr = allocation_info.get_mapped_data();
 
-        Ok(Self {
+        // let mapped_ptr = app.allocator.map_memory(&allocation)?;
+        // println!("mapped_ptr: {:?}", mapped_ptr);
+        // println!("mapped_ptr is null: {}", mapped_ptr.is_null());
+
+        let result = Self {
             ubo,
 
             buffer,
             allocation,
             allocation_info,
+            // mapped_ptr,
+        };
 
-            mapped_ptr,
-        })
+        result.write_ubo(app)?;
+
+        Ok(result)
     }
 
-    pub fn write_ubo(&self) {
-        let bytes = self.ubo.bytes();
+    pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
+        // pub fn write_ubo(&self) {
+        println!("write_ubo");
+        dbg!();
+        // let bytes = self.ubo.bytes();
 
+        let data = [1.0f32, 2.0, 3.0, 4.0];
+        dbg!();
+
+        let mapped_ptr = app.allocator.map_memory(&self.allocation)?;
+        println!("mapped_ptr: {:?}", mapped_ptr);
+        println!("mapped_ptr is null: {}", mapped_ptr.is_null());
+
+        dbg!();
         unsafe {
-            self.mapped_ptr.copy_from((&bytes) as *const u8, 4 * 9);
+            // println!("mapped_ptr: {:x}", *mapped_ptr);
+            dbg!();
+            let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
+            dbg!();
+            let mut align = ash::util::Align::new(
+                mapped_ptr,
+                std::mem::align_of::<f32>() as _,
+                4,
+                // std::mem::size_of_val(&data) as u64,
+            );
+            dbg!();
+            align.copy_from_slice(&data);
         }
+        dbg!();
+
+        app.allocator.unmap_memory(&self.allocation)?;
+
+        Ok(())
     }
 }
 
@@ -634,7 +718,7 @@ pub struct EdgesUBO {
 impl std::default::Default for EdgesUBO {
     fn default() -> Self {
         Self {
-            edge_color: rgb::RGB::new(0.0, 0.0, 0.0),
+            edge_color: rgb::RGB::new(100.0, 200.0, 300.0),
             edge_width: 3.0,
 
             tess_levels: [2.0, 3.0, 5.0, 8.0, 16.0],
@@ -645,31 +729,41 @@ impl std::default::Default for EdgesUBO {
 }
 
 impl EdgesUBO {
-    pub fn bytes(&self) -> [u8; 4 * 9] {
-        let mut bytes = [0u8; 4 * 9];
+    pub fn bytes(&self) -> [u8; 16] {
+        let mut bytes = [0u8; 16];
 
         let mut offset = 0;
 
         let mut add_float = |f: f32| {
-            let f_bytes = f.to_ne_bytes();
+            // let f_bytes = f.to_le_bytes();
+            let f_bytes = f.to_be_bytes();
             for i in 0..4 {
                 bytes[offset] = f_bytes[i];
                 offset += 1;
             }
         };
 
-        add_float(self.edge_color.r);
-        add_float(self.edge_color.g);
-        add_float(self.edge_color.b);
-        add_float(1.0); // vec3s are kinda nasty wrt alignments
+        add_float(7.0);
+        add_float(11.0);
+        add_float(13.0);
+        add_float(17.0);
+        // add_float(self.edge_color.r);
+        // add_float(self.edge_color.g);
+        // add_float(self.edge_color.b);
+        // add_float(1.0); // vec3s are kinda nasty wrt alignments
 
+        /*
         add_float(self.edge_width);
 
         for &tl in &self.tess_levels {
             add_float(tl);
+            add_float(tl);
+            add_float(tl);
+            add_float(tl);
         }
 
         add_float(self.curve_offset);
+        */
 
         bytes
     }

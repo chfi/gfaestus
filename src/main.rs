@@ -333,26 +333,26 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
-    let mut edge_pipeline =
-        EdgeRenderer::new(&gfaestus, graph_query.edge_count()).unwrap();
+    // let mut edge_pipeline =
+    //     EdgeRenderer::new(&gfaestus, graph_query.edge_count()).unwrap();
 
     dbg!();
 
-    edge_pipeline
-        .upload_edges(
-            &gfaestus,
-            graph_query.graph().edges().map(|x| (x.0, x.1)),
-        )
-        .unwrap();
+    // edge_pipeline
+    //     .upload_edges(
+    //         &gfaestus,
+    //         graph_query.graph().edges().map(|x| (x.0, x.1)),
+    //     )
+    //     .unwrap();
 
     dbg!();
 
-    edge_pipeline
-        .write_preprocess_descriptor_set(
-            gfaestus.vk_context().device(),
-            &main_view.node_draw_system.vertices,
-        )
-        .unwrap();
+    // edge_pipeline
+    //     .write_preprocess_descriptor_set(
+    //         gfaestus.vk_context().device(),
+    //         &main_view.node_draw_system.vertices,
+    //     )
+    //     .unwrap();
 
     /*
     let mut fence_id: Option<usize> = None;
@@ -766,6 +766,7 @@ fn main() {
 
                         if edges_enabled {
 
+                            /*
                             edge_pipeline.preprocess_cmd(
                                 cmd_buf,
                                 current_view,
@@ -773,6 +774,7 @@ fn main() {
                             ).unwrap();
 
                             edge_pipeline.preprocess_memory_barrier(cmd_buf).unwrap();
+                            */
 
                             edge_renderer.draw(
                                 cmd_buf,
