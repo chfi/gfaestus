@@ -672,50 +672,57 @@ impl EdgesUBOBuffer {
     }
 
     pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
-        let data = [
-            self.ubo.edge_color.r,
-            self.ubo.edge_color.g,
-            self.ubo.edge_color.b,
-            1.0,
-            self.ubo.edge_width,
-            self.ubo.tess_levels[0],
-            self.ubo.tess_levels[0],
-            self.ubo.tess_levels[0],
-            self.ubo.tess_levels[0],
-            self.ubo.tess_levels[1],
-            self.ubo.tess_levels[1],
-            self.ubo.tess_levels[1],
-            self.ubo.tess_levels[1],
-            self.ubo.tess_levels[2],
-            self.ubo.tess_levels[2],
-            self.ubo.tess_levels[2],
-            self.ubo.tess_levels[2],
-            self.ubo.tess_levels[3],
-            self.ubo.tess_levels[3],
-            self.ubo.tess_levels[3],
-            self.ubo.tess_levels[3],
-            self.ubo.tess_levels[4],
-            self.ubo.tess_levels[4],
-            self.ubo.tess_levels[4],
-            self.ubo.tess_levels[4],
-            self.ubo.curve_offset,
-        ];
+        let tls = &self.ubo.tess_levels;
+
+        #[rustfmt::skip]
+        let data = EdgesUBOData {
+            edge_color: [
+                self.ubo.edge_color.r,
+                self.ubo.edge_color.g,
+                self.ubo.edge_color.b,
+                1.0,
+            ],
+
+            edge_width: self.ubo.edge_width,
+
+            tess_levels: [0.0, 0.0, 0.0, tls[0],
+                          0.0, 0.0, 0.0, tls[1],
+                          0.0, 0.0, 0.0, tls[2],
+                          0.0, 0.0, 0.0, tls[3],
+                          0.0, 0.0, 0.0, tls[4]],
+
+            curve_offset: self.ubo.curve_offset,
+        };
+
+        let ubos = [data];
 
         let mapped_ptr = self.allocation_info.get_mapped_data();
 
         unsafe {
             let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
+
             let mut align = ash::util::Align::new(
                 mapped_ptr,
                 std::mem::align_of::<f32>() as _,
-                // 4,
-                std::mem::size_of_val(&data) as u64,
+                std::mem::size_of_val(&ubos) as u64,
             );
-            align.copy_from_slice(&data);
+
+            align.copy_from_slice(&ubos);
         }
 
         Ok(())
     }
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+struct EdgesUBOData {
+    edge_color: [f32; 4],
+    edge_width: f32,
+
+    tess_levels: [f32; 20],
+
+    curve_offset: f32,
 }
 
 #[derive(Clone, Copy)]
