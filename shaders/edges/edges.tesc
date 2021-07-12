@@ -35,23 +35,10 @@ layout (push_constant) uniform NodePC {
 } node_uniform;
 
 
-// TODO make this configurable via a UBO
-float tess_level(float len) {
-  if (len < 0.01) {
-    return 2.0;
-  } else if (len < 0.05) {
-    return 3.0;
-  } else if (len < 0.1) {
-    return 5.0;
-  } else if (len < 0.4) {
-    return 8.0;
-  } else {
-    return 16.0;
-  }
-}
-
-uint tess_level_ix(float len) {
-  if (len < 0.01) {
+int tess_level_ix(float len) {
+  if (len < 0.001) {
+    return -1;
+  } else if (len < 0.01) {
     return 0;
   } else if (len < 0.05) {
     return 1;
@@ -68,12 +55,17 @@ void main() {
 
   float len = length(gl_in[0].gl_Position - gl_in[1].gl_Position);
 
-  float tess = ubo.tess_levels[tess_level_ix(len)];
+  int index = tess_level_ix(len);
 
-  if (gl_InvocationID == 0) {
-    gl_TessLevelInner[0] = 1.0;
-    gl_TessLevelOuter[0] = 2.0;
-    gl_TessLevelOuter[1] = tess;
+  if (index == -1) {
+    gl_TessLevelOuter[0] = 0.0;
+  } else {
+    float tess = ubo.tess_levels[tess_level_ix(len)];
+    if (gl_InvocationID == 0) {
+      gl_TessLevelInner[0] = 1.0;
+      gl_TessLevelOuter[0] = 2.0;
+      gl_TessLevelOuter[1] = tess;
+    }
   }
 
   gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;

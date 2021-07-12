@@ -1,7 +1,7 @@
 use crate::{
     geometry::{Point, Rect},
     view::{ScreenDims, View},
-    vulkan::tiles::ScreenTiles,
+    vulkan::{draw_system::edges::EdgeIndices, tiles::ScreenTiles},
 };
 
 use ash::version::DeviceV1_0;
@@ -25,6 +25,8 @@ pub struct EdgeRenderer {
     preprocess_desc_set: vk::DescriptorSet,
 
     pub edges: EdgeBuffers,
+
+    pub edges2: EdgeBuffers2,
 }
 
 impl EdgeRenderer {
@@ -48,11 +50,14 @@ impl EdgeRenderer {
 
         let edges = EdgeBuffers::new(app, edge_count)?;
 
+        let edges2 = EdgeBuffers2::new(app, edge_count)?;
+
         Ok(Self {
             preprocess_pipeline,
             preprocess_desc_set,
 
             edges,
+            edges2,
         })
     }
 
@@ -105,6 +110,7 @@ impl EdgeRenderer {
     pub fn preprocess_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
+        edges: &EdgeIndices,
         view: View,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
@@ -412,6 +418,58 @@ impl EdgeBuffers {
             edge_count_alloc_info,
 
             edge_count,
+        })
+    }
+}
+
+pub struct EdgeBuffers2 {
+    edges_output_buf: vk::Buffer,
+    edges_output_alloc: vk_mem::Allocation,
+    edges_output_alloc_info: vk_mem::AllocationInfo,
+
+    edge_count_buf: vk::Buffer,
+    edge_count_alloc: vk_mem::Allocation,
+    edge_count_alloc_info: vk_mem::AllocationInfo,
+}
+
+impl EdgeBuffers2 {
+    fn new(app: &GfaestusVk, edge_count: usize) -> Result<Self> {
+        let edges_data = vec![0u32; edge_count * 2];
+
+        let usage = vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::INDEX_BUFFER;
+
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (edges_output_buf, edges_output_alloc, edges_output_alloc_info) =
+            app.create_buffer_with_data::<u32, _>(
+                usage,
+                memory_usage,
+                false,
+                &edges_data,
+            )?;
+
+        let usage = vk::BufferUsageFlags::UNIFORM_BUFFER;
+
+        let memory_usage = vk_mem::MemoryUsage::CpuOnly;
+
+        let edge_count_data = [0];
+
+        let (edge_count_buf, edge_count_alloc, edge_count_alloc_info) = app
+            .create_buffer_with_data::<u32, _>(
+            usage,
+            memory_usage,
+            true,
+            &edge_count_data,
+        )?;
+
+        Ok(Self {
+            edges_output_buf,
+            edges_output_alloc,
+            edges_output_alloc_info,
+            edge_count_buf,
+            edge_count_alloc,
+            edge_count_alloc_info,
         })
     }
 }

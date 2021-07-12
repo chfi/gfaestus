@@ -519,8 +519,8 @@ impl EdgeRenderer2 {
 }
 
 pub struct EdgeIndices {
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
+    pub buffer: vk::Buffer,
+    pub memory: vk::DeviceMemory,
 
     edge_count: usize,
 }
