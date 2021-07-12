@@ -379,7 +379,12 @@ impl EdgeRenderer2 {
         }
     }
 
-    pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
+    pub fn write_ubo(
+        &mut self,
+        app: &GfaestusVk,
+        ubo: &EdgesUBO,
+    ) -> Result<()> {
+        self.ubo.ubo = *ubo;
         self.ubo.write_ubo(app)
     }
 
@@ -726,6 +731,16 @@ struct EdgesUBOData {
 }
 
 #[derive(Clone, Copy)]
+pub struct EdgeRendererConfig {
+    edge_color: rgb::RGB<f32>,
+    edge_width: f32,
+
+    tess_levels: [f32; 5],
+
+    curve_offset: f32,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct EdgesUBO {
     edge_color: rgb::RGB<f32>,
     edge_width: f32,

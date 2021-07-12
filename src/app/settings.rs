@@ -5,16 +5,28 @@ use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
+use crate::vulkan::draw_system::edges::{EdgeRendererConfig, EdgesUBO};
+
 use super::theme::ThemeDef;
 
 #[derive(Debug, Default, Clone)]
 pub struct AppSettings {
     node_width: Arc<NodeWidth>,
+
+    edge_renderer: Arc<AtomicCell<EdgesUBO>>,
 }
 
 impl AppSettings {
     pub fn node_width(&self) -> &Arc<NodeWidth> {
         &self.node_width
+    }
+
+    pub fn edge_renderer(&self) -> &Arc<AtomicCell<EdgesUBO>> {
+        &self.edge_renderer
+    }
+
+    pub fn update_edge_renderer(&self, conf: EdgesUBO) {
+        self.edge_renderer.store(conf);
     }
 }
 
