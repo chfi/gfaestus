@@ -742,18 +742,18 @@ pub struct EdgeRendererConfig {
 
 #[derive(Debug, Clone, Copy)]
 pub struct EdgesUBO {
-    edge_color: rgb::RGB<f32>,
-    edge_width: f32,
+    pub edge_color: rgb::RGB<f32>,
+    pub edge_width: f32,
 
-    tess_levels: [f32; 5],
+    pub tess_levels: [f32; 5],
 
-    curve_offset: f32,
+    pub curve_offset: f32,
 }
 
 impl std::default::Default for EdgesUBO {
     fn default() -> Self {
         Self {
-            edge_color: rgb::RGB::new(100.0, 200.0, 300.0),
+            edge_color: rgb::RGB::new(1.0, 0.0, 0.0),
             edge_width: 3.0,
 
             tess_levels: [2.0, 3.0, 5.0, 8.0, 16.0],

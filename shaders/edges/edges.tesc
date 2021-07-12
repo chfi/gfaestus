@@ -68,10 +68,7 @@ void main() {
 
   float len = length(gl_in[0].gl_Position - gl_in[1].gl_Position);
 
-  // float tess = ubo.tess_levels[tess_level_ix(len)];
-  // float tess = tess_level(len);
-
-  float tess = ubo.edge_color.r;
+  float tess = ubo.tess_levels[tess_level_ix(len)];
 
   if (gl_InvocationID == 0) {
     gl_TessLevelInner[0] = 1.0;

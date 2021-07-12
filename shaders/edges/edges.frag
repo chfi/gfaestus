@@ -6,7 +6,7 @@
 
 // flat layout (location = 0) in int node_id;
 
-/*
+
 layout (std140, set = 0, binding = 0) uniform UBO
 {
   // UBO ubo;
@@ -17,7 +17,6 @@ layout (std140, set = 0, binding = 0) uniform UBO
 
   float curve_offset;
 } ubo;
-*/
 
 // layout (set = 0, binding = 0) uniform UBOStruct
 // {
@@ -35,5 +34,6 @@ layout (push_constant) uniform NodePC {
 } node_uniform;
 
 void main() {
-  f_color = vec4(0.0, 0.0, 0.0, 1.0);
+  f_color = ubo.edge_color;
+  // f_color = vec4(0.0, 0.0, 0.0, 1.0);
 }
