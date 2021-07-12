@@ -1,8 +1,6 @@
 #version 450
 
-#include "sdf.glsl"
 #include "edge_orient.glsl"
-#include "geometry.glsl"
 
 layout (local_size_x = 1024) in;
 
