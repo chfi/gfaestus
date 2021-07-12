@@ -735,16 +735,6 @@ struct EdgesUBOData {
     curve_offset: f32,
 }
 
-#[derive(Clone, Copy)]
-pub struct EdgeRendererConfig {
-    edge_color: rgb::RGB<f32>,
-    edge_width: f32,
-
-    tess_levels: [f32; 5],
-
-    curve_offset: f32,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct EdgesUBO {
     pub edge_color: rgb::RGB<f32>,

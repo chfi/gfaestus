@@ -5,7 +5,7 @@ use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
-use crate::vulkan::draw_system::edges::{EdgeRendererConfig, EdgesUBO};
+use crate::vulkan::draw_system::edges::EdgesUBO;
 
 use super::theme::ThemeDef;
 
