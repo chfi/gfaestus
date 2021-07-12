@@ -736,8 +736,8 @@ pub struct EdgesUBO {
 impl std::default::Default for EdgesUBO {
     fn default() -> Self {
         Self {
-            edge_color: rgb::RGB::new(1.0, 0.0, 0.0),
-            edge_width: 1.5,
+            edge_color: rgb::RGB::new(0.1, 0.1, 0.1),
+            edge_width: 1.7,
 
             tess_levels: [2.0, 3.0, 5.0, 8.0, 16.0],
 
