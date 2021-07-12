@@ -506,9 +506,12 @@ impl EdgeRenderer {
     }
 }
 
+#[allow(dead_code)]
 pub struct EdgeIndices {
     pub buffer: vk::Buffer,
-    pub memory: vk::DeviceMemory,
+
+    allocation: vk_mem::Allocation,
+    allocation_info: vk_mem::AllocationInfo,
 
     edge_count: usize,
 }
@@ -543,12 +546,21 @@ impl EdgeIndices {
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::INDEX_BUFFER;
 
-        let (buffer, memory) =
-            app.create_device_local_buffer_with_data::<u32, _>(usage, &edges)?;
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (buffer, allocation, allocation_info) = app
+            .create_buffer_with_data::<u32, _>(
+                usage,
+                memory_usage,
+                false,
+                &edges,
+            )?;
 
         Ok(Self {
             buffer,
-            memory,
+            allocation,
+            allocation_info,
+
             edge_count,
         })
     }

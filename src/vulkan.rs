@@ -934,19 +934,6 @@ impl GfaestusVk {
         Ok((buffer, mem, mem_reqs.size))
     }
 
-    pub fn create_vertex_buffer(
-        &self,
-        vertices: &[draw_system::Vertex],
-    ) -> Result<(vk::Buffer, vk::DeviceMemory)> {
-        use vk::BufferUsageFlags as Usage;
-        let usage = Usage::VERTEX_BUFFER | Usage::STORAGE_BUFFER;
-
-        let (buf, mem) = self
-            .create_device_local_buffer_with_data::<u32, _>(usage, vertices)?;
-
-        Ok((buf, mem))
-    }
-
     pub fn download_buffer<A, T>(
         &self,
         src: vk::Buffer,

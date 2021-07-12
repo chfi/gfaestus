@@ -454,7 +454,7 @@ impl NodePipelines {
                 .destroy_descriptor_pool(self.selection_descriptors.pool, None);
         }
 
-        self.vertices.destroy(app);
+        self.vertices.destroy(app).unwrap();
         self.theme_pipeline.destroy();
         self.overlay_pipeline.destroy();
     }
@@ -844,7 +844,6 @@ impl NodeVertices {
     pub fn download_vertices(
         &self,
         app: &super::super::GfaestusVk,
-        device: &Device,
         node_count: usize,
         target: &mut Vec<crate::universe::Node>,
     ) -> Result<()> {
