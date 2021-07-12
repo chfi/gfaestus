@@ -40,6 +40,7 @@ impl MainViewSettings {
                 let mut min_width = self.node_width.min_node_width();
                 let mut max_width = self.node_width.max_node_width();
 
+
                 let mut min_scale = self.node_width.min_scale();
                 let mut max_scale = self.node_width.max_scale();
 
@@ -68,9 +69,24 @@ impl MainViewSettings {
 
                 let mut edges_ubo = self.edges_ubo.load();
 
+                let mut edge_width = edges_ubo.edge_width;
+
                 let mut edge_color = [edges_ubo.edge_color.r,
                                       edges_ubo.edge_color.g,
                                       edges_ubo.edge_color.b];
+
+
+                let edge_width_slider = ui.add(
+                    egui::Slider::new::<f32>(&mut edge_width, 0.5..=5.0).text("Edge width"),
+                );
+
+                if edge_width_slider.changed() {
+
+                    edges_ubo.edge_width = edge_width;
+
+                    self.edges_ubo.store(edges_ubo);
+                }
+
 
                 let edge_color_picker = ui.color_edit_button_rgb(&mut edge_color);
 

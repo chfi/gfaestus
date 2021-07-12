@@ -153,7 +153,7 @@ impl EdgeRenderer2 {
 
         let dynamic_states = {
             use vk::DynamicState as DS;
-            [DS::VIEWPORT, DS::SCISSOR]
+            [DS::VIEWPORT, DS::SCISSOR, DS::LINE_WIDTH]
         };
 
         let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
@@ -170,7 +170,7 @@ impl EdgeRenderer2 {
                 .depth_clamp_enable(false)
                 .rasterizer_discard_enable(false)
                 .polygon_mode(vk::PolygonMode::FILL)
-                .line_width(1.0)
+                // .line_width(1.0)
                 .cull_mode(vk::CullModeFlags::NONE)
                 .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
                 .depth_bias_enable(false)
@@ -391,6 +391,7 @@ impl EdgeRenderer2 {
     pub fn draw(
         &self,
         cmd_buf: vk::CommandBuffer,
+        edge_width: f32,
         vertices: &NodeVertices,
         // edges: &EdgeBuffers,
         render_pass: vk::RenderPass,
@@ -412,6 +413,10 @@ impl EdgeRenderer2 {
         };
 
         let clear_values = [];
+
+        unsafe {
+            device.cmd_set_line_width(cmd_buf, edge_width);
+        }
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
             .render_pass(render_pass)
@@ -754,7 +759,7 @@ impl std::default::Default for EdgesUBO {
     fn default() -> Self {
         Self {
             edge_color: rgb::RGB::new(1.0, 0.0, 0.0),
-            edge_width: 3.0,
+            edge_width: 1.5,
 
             tess_levels: [2.0, 3.0, 5.0, 8.0, 16.0],
 

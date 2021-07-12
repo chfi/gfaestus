@@ -352,6 +352,7 @@ pub(super) fn create_logical_device(
         .geometry_shader(true)
         .tessellation_shader(true)
         .independent_blend(true)
+        .wide_lines(true)
         .build();
 
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();

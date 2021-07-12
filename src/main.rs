@@ -556,6 +556,9 @@ fn main() {
             Event::RedrawEventsCleared => {
 
 
+                let edge_ubo = app.settings.edge_renderer().load();
+                let edge_width = edge_ubo.edge_width;
+
                 if let Some(fid) = translate_fence_id {
                     if compute_manager.is_fence_ready(fid).unwrap() {
                         compute_manager.block_on_fence(fid).unwrap();
@@ -782,6 +785,7 @@ fn main() {
 
                             edge_renderer.draw(
                                 cmd_buf,
+                                edge_width,
                                 &main_view.node_draw_system.vertices,
                                 edges_pass,
                                 framebuffers,
