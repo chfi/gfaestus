@@ -7,28 +7,13 @@ use anyhow::Result;
 
 use super::GfaestusVk;
 
-pub mod binning;
 pub mod edges;
 pub mod node_motion;
 pub mod selection;
 
-pub use binning::*;
 pub use edges::*;
 pub use node_motion::*;
 pub use selection::*;
-
-pub struct ComputeManager_ {
-    pub(super) compute_cmd_pool: vk::CommandPool,
-
-    compute_queue: vk::Queue,
-    compute_queue_ix: u32,
-
-    selection_fence: vk::Fence,
-    node_motion_fence: vk::Fence,
-
-    // command_buffers: HashMap<usize, vk::CommandBuffer>,
-    pub(super) device: Device,
-}
 
 pub struct ComputeManager {
     pub(super) compute_cmd_pool: vk::CommandPool,

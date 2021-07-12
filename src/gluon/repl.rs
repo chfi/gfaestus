@@ -1,7 +1,5 @@
-use std::{path::Path, str::FromStr, sync::Arc};
+use std::str::FromStr;
 
-use bstr::ByteVec;
-use crossbeam::channel::Sender;
 use futures::{Future, FutureExt};
 use gluon_codegen::*;
 
@@ -19,33 +17,27 @@ use gluon::{
         DebugLevel,
     },
     compiler_pipeline::{Executable, ExecuteValue},
-    import::add_extern_module,
     new_vm,
     query::CompilerDatabase,
     vm::{
-        api::{FunctionRef, Hole, OpaqueValue, Pushable, VmType, WithVM, IO},
+        api::{Hole, OpaqueValue, Pushable, VmType, WithVM, IO},
         vm::RootedValue,
-        ExternModule, {self, Error as VMError, Result as VMResult},
+        ExternModule, {self, Error as VMError},
     },
-    Error as GluonError, Result as GluonResult, RootedThread, Thread,
-    ThreadExt, *,
+    Result as GluonResult, RootedThread, Thread, ThreadExt, *,
 };
 
 use gluon::parser::{parse_partial_repl_line, ReplLine};
 
 use gluon_completion as completion;
 
-use vm::{api::Function, internal::ValuePrinter};
+use vm::internal::ValuePrinter;
 
 use anyhow::Result;
 
 use crossbeam::channel;
 
-use crate::{
-    app::{mainview::MainViewMsg, AppMsg},
-    geometry::Point,
-    view::View,
-};
+use crate::app::{mainview::MainViewMsg, AppMsg};
 
 use super::GluonVM;
 
@@ -89,6 +81,7 @@ fn repl_ctx_module(thread: &Thread) -> vm::Result<ExternModule> {
 pub struct GluonRepl {
     pub gluon_vm: GluonVM,
 
+    #[allow(dead_code)]
     ctx: ReplCtx,
 
     output_tx: channel::Sender<String>,
@@ -172,6 +165,7 @@ impl GluonRepl {
 
 // taken and modified from gluon_repl
 
+/*
 fn type_of_expr(
     args: WithVM<&str>,
 ) -> impl Future<Output = IO<std::result::Result<String, String>>> {
@@ -257,6 +251,7 @@ fn switch_debug_level(args: WithVM<&str>) -> IO<Result<String, String>> {
     }
     IO::Value(Ok(vm.global_env().get_debug_level().to_string()))
 }
+*/
 
 pub(super) fn complete(
     thread: &Thread,

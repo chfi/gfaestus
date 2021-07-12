@@ -3,7 +3,6 @@ use std::{path::PathBuf, sync::Arc};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{Receiver, Sender};
 
-use bstr::{BStr, ByteSlice};
 use rustc_hash::FxHashMap;
 
 use anyhow::Result;
@@ -17,7 +16,7 @@ use crate::{
 };
 
 use crate::overlays::{OverlayData, OverlayKind};
-use crate::{app::OverlayState, gluon::GraphHandle, graph_query::GraphQuery};
+use crate::{app::OverlayState, gluon::GraphHandle};
 
 use crate::gluon::GluonVM;
 
@@ -92,9 +91,7 @@ impl OverlayList {
                     }
                 });
 
-                let mut selected = self.overlay_state.gradient();
-
-                let mut open_gradient_picker = self.gradient_picker_open.load();
+                let open_gradient_picker = self.gradient_picker_open.load();
                 if ui
                     .selectable_label(open_gradient_picker, "Gradients")
                     .clicked()
@@ -221,7 +218,7 @@ impl OverlayCreator {
             .show(ctx, |ui| {
                 let name = &mut self.name;
 
-                let name_box = ui.horizontal(|ui| {
+                let _name_box = ui.horizontal(|ui| {
                     ui.label("Overlay name");
                     ui.separator();
                     ui.text_edit_singleline(name)

@@ -1,21 +1,11 @@
 use crate::{
     geometry::{Point, Rect},
     view::{ScreenDims, View},
-    vulkan::{compute::EdgeBuffers, tiles::ScreenTiles},
 };
 
-use handlegraph::{
-    handle::{Direction, Edge, Handle, NodeId},
-    handlegraph::*,
-    mutablehandlegraph::*,
-    packed::*,
-    pathhandlegraph::*,
-};
+use handlegraph::{handle::Edge, handlegraph::*};
 
-use handlegraph::{
-    packedgraph::{paths::StepPtr, PackedGraph},
-    path_position::PathPositionMap,
-};
+use handlegraph::packedgraph::PackedGraph;
 
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
@@ -24,20 +14,18 @@ use anyhow::Result;
 
 use nalgebra_glm as glm;
 
-use std::{ffi::CString, ops::RangeInclusive};
+use std::ffi::CString;
 
 use super::create_shader_module;
 use super::Vertex;
-
-use crate::app::node_flags::SelectionBuffer;
 
 use super::nodes::NodePushConstants;
 use crate::vulkan::render_pass::Framebuffers;
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
-use crate::vulkan::compute::ComputePipeline;
+// use crate::vulkan::compute::ComputePipeline;
 
-pub struct EdgeRenderer2 {
+pub struct EdgeRenderer {
     pub(crate) descriptor_pool: vk::DescriptorPool,
     pub(crate) descriptor_set_layout: vk::DescriptorSetLayout,
     pub(crate) descriptor_set: vk::DescriptorSet,
@@ -51,7 +39,7 @@ pub struct EdgeRenderer2 {
     pub(crate) edge_index_buffer: EdgeIndices,
 }
 
-impl EdgeRenderer2 {
+impl EdgeRenderer {
     fn layout_binding() -> vk::DescriptorSetLayoutBinding {
         use vk::ShaderStageFlags as Stages;
 

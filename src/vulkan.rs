@@ -5,7 +5,6 @@ pub mod descriptor;
 pub mod draw_system;
 pub mod render_pass;
 pub mod texture;
-pub mod tiles;
 
 mod init;
 

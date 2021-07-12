@@ -1,3 +1,6 @@
+#![allow(dead_code)]
+#![allow(unused_variables)]
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -12,6 +15,7 @@ use handlegraph::packedgraph::PackedGraph;
 
 use crate::geometry::*;
 
+#[allow(unused_imports)]
 use anyhow::Result;
 
 pub struct LayoutQuadtree {

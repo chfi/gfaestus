@@ -1,8 +1,4 @@
-use crate::{
-    geometry::{Point, Rect},
-    view::{ScreenDims, View},
-    vulkan::{draw_system::edges::EdgeIndices, tiles::ScreenTiles},
-};
+use crate::{view::View, vulkan::draw_system::edges::EdgeIndices};
 
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
@@ -10,17 +6,15 @@ use ash::{vk, Device};
 use anyhow::Result;
 use handlegraph::handle::Handle;
 
-use nalgebra_glm as glm;
-
-use crate::app::node_flags::SelectionBuffer;
+// use nalgebra_glm as glm;
 
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 use crate::vulkan::draw_system::edges::PreprocessPushConstants;
 
-use super::{ComputeManager, ComputePipeline};
+use super::ComputePipeline;
 
-pub struct EdgeRenderer {
+pub struct EdgePreprocess {
     preprocess_pipeline: ComputePipeline,
     preprocess_desc_set: vk::DescriptorSet,
 
@@ -29,7 +23,7 @@ pub struct EdgeRenderer {
     pub edges2: EdgeBuffers2,
 }
 
-impl EdgeRenderer {
+impl EdgePreprocess {
     pub fn new(app: &GfaestusVk, edge_count: usize) -> Result<Self> {
         let device = app.vk_context().device();
 
@@ -341,6 +335,7 @@ impl EdgeRenderer {
     }
 }
 
+#[allow(dead_code)]
 pub struct EdgeBuffers {
     edges_by_id_buf: vk::Buffer,
     edges_by_id_mem: vk::DeviceMemory,
@@ -422,6 +417,7 @@ impl EdgeBuffers {
     }
 }
 
+#[allow(dead_code)]
 pub struct EdgeBuffers2 {
     edges_output_buf: vk::Buffer,
     edges_output_alloc: vk_mem::Allocation,

@@ -1,9 +1,11 @@
-use compute::EdgeRenderer;
-use gfaestus::vulkan::draw_system::edges::EdgeRenderer2;
-use texture::{GradientTexture, Gradients};
+#[allow(unused_imports)]
+use compute::EdgePreprocess;
+use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
+use texture::Gradients;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::unix::*;
+#[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
 use gfaestus::app::mainview::*;
@@ -18,6 +20,7 @@ use gfaestus::vulkan::render_pass::Framebuffers;
 
 use gfaestus::gui::{widgets::*, windows::*, *};
 
+#[allow(unused_imports)]
 use gfaestus::vulkan::draw_system::{
     nodes::{NodeOverlay, NodeOverlayValue, Overlay},
     post::PostProcessPipeline,
@@ -31,13 +34,12 @@ use gfaestus::vulkan::compute::{
     ComputeManager, GpuSelection, NodeTranslation,
 };
 
-use gfaestus::gluon::GluonVM;
-
 use anyhow::Result;
 
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
+#[allow(unused_imports)]
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
 use std::sync::Arc;
@@ -215,7 +217,7 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
-    let mut edge_renderer = EdgeRenderer2::new(
+    let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,
         &graph_query.graph_arc(),
         gfaestus.msaa_samples,
@@ -256,8 +258,6 @@ fn main() {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
-    let mut next_overlay_id = 0;
-
     let gradients = Gradients::initialize(
         &gfaestus,
         gfaestus.transient_command_pool,
@@ -266,54 +266,12 @@ fn main() {
     )
     .unwrap();
 
-    let gradient_0 = GradientTexture::new(
-        &gfaestus,
-        gfaestus.transient_command_pool,
-        gfaestus.graphics_queue,
-        colorous::MAGMA,
-        1024,
-    )
-    .unwrap();
-
-    let gradient_1 = GradientTexture::new(
-        &gfaestus,
-        gfaestus.transient_command_pool,
-        gfaestus.graphics_queue,
-        colorous::PLASMA,
-        1024,
-    )
-    .unwrap();
-
-    let node_count = graph_query.node_count();
-
-    let val_overlay_0 = NodeOverlayValue::new_static(
-        "node ID",
-        &gfaestus,
-        &graph_query,
-        |_graph, node_id| {
-            let id = node_id.0 - 1;
-            let v = (id as f32) / (node_count as f32);
-            v
-        },
-    )
-    .unwrap();
-
-    let overlay_id = main_view
-        .node_draw_system
-        .overlay_pipelines
-        .create_overlay(Overlay::Value(val_overlay_0));
-
-    let overlay = (overlay_id, OverlayKind::Value);
-
-    // main_view.node_draw_system.
-
     gui.populate_overlay_list(
         main_view
             .node_draw_system
             .overlay_pipelines
             .overlay_names()
             .into_iter(),
-        // .map(|(id, kind, name)| (id, kind, name)),
     );
 
     dbg!();
@@ -336,16 +294,12 @@ fn main() {
     // let mut edge_pipeline =
     //     EdgeRenderer::new(&gfaestus, graph_query.edge_count()).unwrap();
 
-    dbg!();
-
     // edge_pipeline
     //     .upload_edges(
     //         &gfaestus,
     //         graph_query.graph().edges().map(|x| (x.0, x.1)),
     //     )
     //     .unwrap();
-
-    dbg!();
 
     // edge_pipeline
     //     .write_preprocess_descriptor_set(
@@ -492,20 +446,11 @@ fn main() {
                                         )
                                         .unwrap();
 
-                                    let overlay_id = main_view
+                                    let _overlay_id = main_view
                                         .node_draw_system
                                         .overlay_pipelines
                                         .create_overlay(Overlay::RGB(overlay));
 
-                                    // let overlay = (overlay_id, OverlayKind::RGB);
-
-                                    // main_view
-                                    //     .node_draw_system
-                                    //     .overlay_pipelines
-                                    //     .update_rgb_overlay(next_overlay_id, overlay_id);
-
-
-                                    //
                                 }
                                 OverlayData::Value(values) => {
 
@@ -693,7 +638,7 @@ fn main() {
                     .set_active_theme(app.themes.active_theme())
                     .unwrap();
 
-                let mut use_overlay = app.shared_state().overlay_state().use_overlay();
+                let use_overlay = app.shared_state().overlay_state().use_overlay();
 
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
@@ -882,12 +827,6 @@ fn main() {
                             )
                             .unwrap();
 
-                        let screen_size = Point::new(size.width as f32,
-                                                     size.height as f32);
-
-                        let tile_texture_size = Point::new(2.0 * 128.0 * 16.0,
-                                                           2.0 * 128.0 * 16.0);
-
                         gui.draw(
                             cmd_buf,
                             gui_pass,
@@ -939,15 +878,6 @@ fn main() {
                 }
                 WindowEvent::Resized { .. } => {
                     dirty_swapchain = true;
-                }
-                WindowEvent::MouseInput { button, state, .. } => {
-                    // TODO
-                }
-                WindowEvent::CursorMoved { position, .. } => {
-                    // TODO
-                }
-                WindowEvent::MouseWheel { delta, .. } => {
-                    // TODO
                 }
                 _ => (),
             },

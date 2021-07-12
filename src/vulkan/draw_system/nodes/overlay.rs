@@ -4,14 +4,7 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
-use crate::{
-    geometry::Point,
-    view::View,
-    vulkan::{
-        render_pass::Framebuffers,
-        texture::{GradientName, GradientTexture, Texture1D},
-    },
-};
+use crate::vulkan::texture::GradientTexture;
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
 pub struct OverlayPipelines {
@@ -22,6 +15,7 @@ pub struct OverlayPipelines {
 
     next_overlay_id: usize,
 
+    #[allow(dead_code)]
     pub(super) device: Device,
 }
 
@@ -724,8 +718,6 @@ impl NodeOverlayValue {
         let (buffer, memory, size) =
             app.create_buffer(size, usage, mem_props)?;
 
-        let device = app.vk_context().device();
-
         Ok(Self {
             name: name.into(),
 
@@ -787,8 +779,6 @@ impl NodeOverlayValue {
         ) -> f32,
     {
         use handlegraph::handlegraph::IntoHandles;
-
-        let device = app.vk_context().device();
 
         let buffer_size =
             (graph.node_count() * std::mem::size_of::<f32>()) as vk::DeviceSize;

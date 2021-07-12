@@ -276,10 +276,6 @@ fn winit_to_egui_text_event(
 
     let pressed = matches!(state, winit::event::ElementState::Pressed);
 
-    fn text_event(c: char) -> Option<egui::Event> {
-        Some(egui::Event::Text(c.into()))
-    }
-
     let key_event = |key: egui::Key| -> Option<egui::Event> {
         Some(egui::Event::Key {
             key,
@@ -291,29 +287,6 @@ fn winit_to_egui_text_event(
     use egui::Key;
 
     let egui_event = match key_code {
-        /*
-        VirtualKeyCode::C => {
-            if modifiers.ctrl {
-                Some(egui::Event::Copy)
-            } else {
-                None
-            }
-        }
-        VirtualKeyCode::V => {
-            if modifiers.ctrl {
-                Some(egui::Event::Text(contents))
-            } else {
-                None
-            }
-        }
-        VirtualKeyCode::X => {
-            if modifiers.ctrl {
-                Some(egui::Event::Cut)
-            } else {
-                None
-            }
-        }
-        */
         VirtualKeyCode::Escape => key_event(Key::Escape),
         VirtualKeyCode::Insert => key_event(Key::Insert),
         VirtualKeyCode::Home => key_event(Key::Home),
