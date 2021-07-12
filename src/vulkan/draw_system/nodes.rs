@@ -442,7 +442,7 @@ impl NodePipelines {
         Ok(())
     }
 
-    pub fn destroy(&mut self) {
+    pub fn destroy(&mut self, app: &super::super::GfaestusVk) {
         let device = &self.theme_pipeline.device;
 
         unsafe {
@@ -454,7 +454,7 @@ impl NodePipelines {
                 .destroy_descriptor_pool(self.selection_descriptors.pool, None);
         }
 
-        self.vertices.destroy();
+        self.vertices.destroy(app);
         self.theme_pipeline.destroy();
         self.overlay_pipeline.destroy();
     }
@@ -759,8 +759,11 @@ impl NodeIdBuffer {
 
 pub struct NodeVertices {
     pub(crate) vertex_count: usize,
+
     pub(crate) vertex_buffer: vk::Buffer,
-    vertex_memory: vk::DeviceMemory,
+
+    allocation: vk_mem::Allocation,
+    allocation_info: Option<vk_mem::AllocationInfo>,
 
     device: Device,
 }
@@ -769,14 +772,17 @@ impl NodeVertices {
     pub fn new(device: &Device) -> Self {
         let vertex_count = 0;
         let vertex_buffer = vk::Buffer::null();
-        let vertex_memory = vk::DeviceMemory::null();
+
+        let allocation = vk_mem::Allocation::null();
+        let allocation_info = None;
 
         let device = device.clone();
 
         Self {
             vertex_count,
             vertex_buffer,
-            vertex_memory,
+            allocation,
+            allocation_info,
             device,
         }
     }
@@ -786,21 +792,22 @@ impl NodeVertices {
     }
 
     pub fn has_vertices(&self) -> bool {
-        self.vertex_count != 0
+        self.allocation_info.is_some()
     }
 
-    pub fn destroy(&mut self) {
+    pub fn destroy(&mut self, app: &GfaestusVk) -> Result<()> {
         if self.has_vertices() {
-            unsafe {
-                self.device.destroy_buffer(self.vertex_buffer, None);
-                self.device.free_memory(self.vertex_memory, None);
-            }
+            app.allocator
+                .destroy_buffer(self.vertex_buffer, &self.allocation)?;
 
             self.vertex_buffer = vk::Buffer::null();
-            self.vertex_memory = vk::DeviceMemory::null();
+            self.allocation = vk_mem::Allocation::null();
+            self.allocation_info = None;
 
             self.vertex_count = 0;
         }
+
+        Ok(())
     }
 
     pub fn upload_vertices(
@@ -809,21 +816,34 @@ impl NodeVertices {
         vertices: &[Vertex],
     ) -> Result<()> {
         if self.has_vertices() {
-            self.destroy();
+            self.destroy(app)?;
         }
 
-        let (buf, mem) = app.create_vertex_buffer(vertices)?;
+        let usage = vk::BufferUsageFlags::VERTEX_BUFFER
+            | vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_SRC;
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (buffer, allocation, allocation_info) = app
+            .create_buffer_with_data::<f32, _>(
+                usage,
+                memory_usage,
+                false,
+                &vertices,
+            )?;
 
         self.vertex_count = vertices.len();
 
-        self.vertex_buffer = buf;
-        self.vertex_memory = mem;
+        self.vertex_buffer = buffer;
+        self.allocation = allocation;
+        self.allocation_info = Some(allocation_info);
 
         Ok(())
     }
 
     pub fn download_vertices(
         &self,
+        app: &super::super::GfaestusVk,
         device: &Device,
         node_count: usize,
         target: &mut Vec<crate::universe::Node>,
@@ -834,22 +854,52 @@ impl NodeVertices {
             target.reserve(node_count - cap);
         }
 
-        unsafe {
-            let data_ptr = device.map_memory(
-                self.vertex_memory,
-                0,
-                vk::WHOLE_SIZE,
-                vk::MemoryMapFlags::empty(),
-            )?;
+        let alloc_info = self.allocation_info.as_ref().unwrap();
 
-            let val_ptr = data_ptr as *const crate::universe::Node;
+        let staging_buffer_info = vk::BufferCreateInfo::builder()
+            .size(alloc_info.get_size() as u64)
+            .usage(vk::BufferUsageFlags::TRANSFER_DST)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let staging_create_info = vk_mem::AllocationCreateInfo {
+            usage: vk_mem::MemoryUsage::GpuToCpu,
+            flags: vk_mem::AllocationCreateFlags::MAPPED,
+            ..Default::default()
+        };
+
+        let (staging_buf, staging_alloc, staging_alloc_info) = app
+            .allocator
+            .create_buffer(&staging_buffer_info, &staging_create_info)?;
+
+        GfaestusVk::copy_buffer(
+            app.vk_context().device(),
+            app.transient_command_pool,
+            app.graphics_queue,
+            self.buffer(),
+            staging_buf,
+            staging_alloc_info.get_size() as u64,
+        );
+
+        unsafe {
+            let mapped_ptr = staging_alloc_info.get_mapped_data();
+
+            // let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
+            // let data_ptr = device.map_memory(
+            //     self.vertex_memory,
+            //     0,
+            //     vk::WHOLE_SIZE,
+            //     vk::MemoryMapFlags::empty(),
+            // )?;
+
+            let val_ptr = mapped_ptr as *const crate::universe::Node;
 
             let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
 
             target.extend_from_slice(sel_slice);
-
-            device.unmap_memory(self.vertex_memory);
         }
+
+        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
 
         target.shrink_to_fit();
 

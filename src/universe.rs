@@ -13,7 +13,7 @@ use handlegraph::packedgraph::PackedGraph;
 
 use anyhow::Result;
 
-use crate::vulkan::draw_system::Vertex;
+use crate::vulkan::{draw_system::Vertex, GfaestusVk};
 use crate::{geometry::*, vulkan::draw_system::nodes::NodeVertices};
 
 pub mod config;
@@ -103,12 +103,15 @@ impl Universe<FlatLayout> {
 
     pub fn update_positions_from_gpu(
         &mut self,
-        device: &Device,
+        app: &GfaestusVk,
         vertices: &NodeVertices,
     ) -> Result<()> {
         let node_count = self.graph_layout.nodes.len();
 
+        let device = app.vk_context().device();
+
         vertices.download_vertices(
+            app,
             device,
             node_count,
             &mut self.graph_layout.nodes,

@@ -509,7 +509,7 @@ fn main() {
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
 
-                        universe.update_positions_from_gpu(gfaestus.vk_context().device(),
+                        universe.update_positions_from_gpu(&gfaestus,
                                                            &main_view.node_draw_system.vertices).unwrap();
 
                         translate_fence_id = None;
@@ -888,7 +888,7 @@ fn main() {
 
                 main_view.selection_buffer.destroy(device);
                 main_view.node_id_buffer.destroy(device);
-                main_view.node_draw_system.destroy();
+                main_view.node_draw_system.destroy(&gfaestus);
 
                 gui.draw_system.destroy(&gfaestus.allocator);
 
