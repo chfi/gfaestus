@@ -22,6 +22,32 @@ use std::collections::hash_map::HashMap;
 
 use crate::{geometry::*, gluon::GraphHandle, view::*};
 
+pub mod gff;
+
+pub use gff::*;
+
+pub enum Strand {
+    Pos,
+    Neg,
+    None,
+}
+
+impl std::str::FromStr for Strand {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, ()> {
+        if s == "+" {
+            Ok(Strand::Pos)
+        } else if s == "-" {
+            Ok(Strand::Neg)
+        } else if s == "." {
+            Ok(Strand::None)
+        } else {
+            Err(())
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct AnnotationSource {
     name: String,
