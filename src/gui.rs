@@ -20,7 +20,7 @@ use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
 use crate::{
-    annotations::Annotations,
+    annotations::{Annotations, Gff3Record},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -492,6 +492,8 @@ pub struct Gui {
     annotations: Annotations,
 
     clipboard_ctx: ClipboardContext,
+
+    gff3_list: Gff3RecordList,
 }
 
 impl Gui {
@@ -502,6 +504,7 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
+        gff3: Vec<Gff3Record>,
     ) -> Result<Self> {
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
@@ -571,6 +574,8 @@ impl Gui {
 
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
+        let gff3_list = Gff3RecordList::new(gff3);
+
         let gui = Self {
             ctx,
             frame_input,
@@ -602,6 +607,8 @@ impl Gui {
             annotations: Annotations::default(),
 
             clipboard_ctx,
+
+            gff3_list,
         };
 
         Ok(gui)
@@ -751,6 +758,8 @@ impl Gui {
                 egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
+
+        self.gff3_list.ui(&self.ctx);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);

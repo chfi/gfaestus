@@ -58,12 +58,12 @@ impl Gff3RecordList {
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
-        open_gff3_window: &mut bool,
+        // open_gff3_window: &mut bool,
     ) -> Option<egui::Response> {
         egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
-            .open(open_gff3_window)
+            // .open(open_gff3_window)
             .show(ctx, |mut ui| {
                 egui::Grid::new("gff3_record_list_grid").striped(true).show(
                     &mut ui,

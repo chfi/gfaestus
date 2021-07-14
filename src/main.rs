@@ -183,6 +183,15 @@ fn main() {
     )
     .unwrap();
 
+    eprintln!("loading gff3");
+
+    let gff_records = gfaestus::annotations::gff::Gff3Record::parse_gff3_file(
+        "/home/christian/data/Homo_sapiens.GRCh38.103.chr.gff3",
+    )
+    .unwrap();
+
+    eprintln!("loaded and parsed {} gff3 rows", gff_records.len());
+
     let mut gui = Gui::new(
         &gfaestus,
         app.shared_state().clone(),
@@ -190,6 +199,7 @@ fn main() {
         app.settings.clone(),
         &graph_query,
         thread_pool.clone(),
+        gff_records,
     )
     .unwrap();
 
