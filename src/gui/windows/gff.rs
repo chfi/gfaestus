@@ -28,20 +28,39 @@ use crate::annotations::Gff3Record;
 pub struct Gff3RecordList {
     records: Vec<Gff3Record>,
 
+    filtered_records: Vec<Gff3Record>,
+
     offset: usize,
 
     slot_count: usize,
+
+    filter: Gff3Filter,
 }
 
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
     pub fn new(records: Vec<Gff3Record>) -> Self {
+        let filtered_records = Vec::with_capacity(records.len());
+
         Self {
             records,
+            filtered_records,
             offset: 0,
-            slot_count: 20,
+            slot_count: 30,
+
+            filter: Gff3Filter::default(),
         }
+    }
+
+    fn ui_row(record: &Gff3Record, ui: &mut egui::Ui) {
+        ui.label(format!("{}", record.seq_id().as_bstr()));
+        ui.label(format!("{}", record.source().as_bstr()));
+        ui.label(format!("{}", record.type_().as_bstr()));
+        ui.label(format!("{}", record.start()));
+        ui.label(format!("{}", record.end()));
+
+        ui.end_row();
     }
 
     pub fn ui(
@@ -54,6 +73,12 @@ impl Gff3RecordList {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             // .open(open_gff3_window)
             .show(ctx, |mut ui| {
+                let records = if self.filtered_records.is_empty() {
+                    &self.records
+                } else {
+                    &self.filtered_records
+                };
+
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
@@ -65,29 +90,8 @@ impl Gff3RecordList {
                         ui.end_row();
 
                         for i in 0..self.slot_count {
-                            if let Some(record) =
-                                self.records.get(self.offset + i)
-                            {
-                                // let seq_id = record.seq_id().to_str().unwrap();
-                                // let source = record.source().to_str().unwrap();
-                                // let type_ = record.type_().to_str().unwrap();
-
-                                ui.label(format!(
-                                    "{}",
-                                    record.seq_id().as_bstr()
-                                ));
-                                ui.label(format!(
-                                    "{}",
-                                    record.source().as_bstr()
-                                ));
-                                ui.label(format!(
-                                    "{}",
-                                    record.type_().as_bstr()
-                                ));
-                                ui.label(format!("{}", record.start()));
-                                ui.label(format!("{}", record.end()));
-
-                                ui.end_row();
+                            if let Some(record) = records.get(self.offset + i) {
+                                Self::ui_row(record, ui);
                             }
                         }
                     });
@@ -108,5 +112,80 @@ impl Gff3RecordList {
                     }
                 }
             })
+    }
+}
+
+pub enum FilterString {
+    None,
+    Equal(Vec<u8>),
+    Contains(Vec<u8>),
+    // Prefix(Vec<u8>),
+}
+
+pub enum FilterOrd<T: PartialOrd + Copy> {
+    None,
+    Equal(T),
+    LessThan(T),
+    MoreThan(T),
+    // Range(T, T),
+}
+
+impl std::default::Default for FilterString {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl<T: PartialOrd + Copy> std::default::Default for FilterOrd<T> {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl FilterString {
+    fn filter(&self, string: &[u8]) -> bool {
+        match self {
+            Self::None => true,
+            Self::Equal(arg) => string == arg,
+            Self::Contains(arg) => string.contains_str(arg.as_slice()),
+        }
+    }
+}
+
+impl<T: PartialOrd + Copy> FilterOrd<T> {
+    fn filter(&self, value: T) -> bool {
+        match self {
+            Self::None => true,
+            Self::Equal(arg) => value == *arg,
+            Self::LessThan(arg) => value < *arg,
+            Self::MoreThan(arg) => value > *arg,
+        }
+    }
+}
+
+pub struct Gff3Filter {
+    seq_id: FilterString,
+    source: FilterString,
+    type_: FilterString,
+
+    start: FilterOrd<usize>,
+    end: FilterOrd<usize>,
+
+    score: FilterOrd<Option<f64>>,
+    // attributes: ??
+}
+
+impl std::default::Default for Gff3Filter {
+    fn default() -> Self {
+        Self {
+            seq_id: FilterString::default(),
+            source: FilterString::default(),
+            type_: FilterString::default(),
+
+            start: FilterOrd::default(),
+            end: FilterOrd::default(),
+
+            score: FilterOrd::default(),
+        }
     }
 }
