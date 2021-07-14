@@ -23,12 +23,6 @@ use anyhow::Result;
 
 use crate::asynchronous::AsyncResult;
 
-// use crate::graph_query::{GraphQuery, GraphQueryWorker};
-use crate::{
-    app::{AppMsg, Select},
-    geometry::*,
-};
-
 use crate::annotations::Gff3Record;
 
 pub struct Gff3RecordList {
@@ -36,22 +30,17 @@ pub struct Gff3RecordList {
 
     offset: usize,
 
-    // fetched_for_offset: Option<usize>,
     slot_count: usize,
-    // update_slots: bool,
 }
 
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    // pub fn new(records: Vec<Gff3Record>) -> Result<Self> {
     pub fn new(records: Vec<Gff3Record>) -> Self {
         Self {
             records,
             offset: 0,
-            // fetched_for_offset: None,
             slot_count: 20,
-            // update_slots: true,
         }
     }
 
@@ -65,9 +54,9 @@ impl Gff3RecordList {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             // .open(open_gff3_window)
             .show(ctx, |mut ui| {
-                egui::Grid::new("gff3_record_list_grid").striped(true).show(
-                    &mut ui,
-                    |ui| {
+                let grid = egui::Grid::new("gff3_record_list_grid")
+                    .striped(true)
+                    .show(&mut ui, |ui| {
                         ui.label("seq_id");
                         ui.label("source");
                         ui.label("type");
@@ -101,8 +90,23 @@ impl Gff3RecordList {
                                 ui.end_row();
                             }
                         }
-                    },
-                );
+                    });
+
+                if grid.response.hover_pos().is_some() {
+                    let scroll = ctx.input().scroll_delta;
+                    if scroll.y.abs() >= 4.0 {
+                        let sig = (scroll.y.signum() as isize) * -1;
+                        let delta = sig * ((scroll.y.abs() as isize) / 4);
+
+                        let mut offset = self.offset as isize;
+
+                        offset += delta;
+
+                        offset =
+                            offset.clamp(0, (self.records.len() - 1) as isize);
+                        self.offset = offset as usize;
+                    }
+                }
             })
     }
 }
