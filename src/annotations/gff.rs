@@ -14,7 +14,7 @@ pub struct Gff3Record {
     start: usize,
     end: usize,
 
-    score: f64,
+    score: Option<f64>,
 
     strand: Strand,
 
@@ -75,20 +75,28 @@ impl Gff3Record {
         let start: usize = parse_next(&mut fields)?;
         let end: usize = parse_next(&mut fields)?;
 
-        let score: f64 = parse_next(&mut fields)?;
+        let score_field = fields.next()?;
+
+        let score = if score_field == b"." {
+            None
+        } else {
+            let score = score_field.as_bstr().to_str().ok()?;
+            let score: f64 = score.parse().ok()?;
+            Some(score)
+        };
 
         let strand: Strand = parse_next(&mut fields)?;
 
         let frame = fields.next()?;
 
+        let mut attributes: HashMap<Vec<u8>, Vec<Vec<u8>>> = HashMap::default();
+
         let attributes_raw = fields.next()?;
 
         let attributes_split = attributes_raw.split_str(";");
 
-        let mut attributes: HashMap<Vec<u8>, Vec<Vec<u8>>> = HashMap::default();
-
         for attribute in attributes_split {
-            let attr_fields = attribute.split_str("=");
+            let mut attr_fields = attribute.split_str("=");
             let tag = attr_fields.next()?;
             let val = attr_fields.next()?;
 
@@ -136,10 +144,19 @@ impl Gff3Record {
 
             let line = &buf[0..read];
 
+            if line[0] == b'#' {
+                continue;
+            }
+
             let fields = line.fields();
 
             if let Some(record) = Self::parse_row(fields) {
                 result.push(record);
+            } else {
+                eprintln!("failed to parse row:");
+                eprintln!("\"{}\"", line.as_bstr());
+
+                std::process::exit(1);
             }
         }
 
