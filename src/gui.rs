@@ -494,6 +494,8 @@ pub struct Gui {
     clipboard_ctx: ClipboardContext,
 
     gff3_list: Gff3RecordList,
+
+    gff3_filter: Gff3Filter,
 }
 
 impl Gui {
@@ -609,6 +611,8 @@ impl Gui {
             clipboard_ctx,
 
             gff3_list,
+
+            gff3_filter: Default::default(),
         };
 
         Ok(gui)
@@ -760,6 +764,8 @@ impl Gui {
         }
 
         self.gff3_list.ui(&self.ctx);
+
+        self.gff3_filter.ui(&self.ctx);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);

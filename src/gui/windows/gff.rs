@@ -115,6 +115,7 @@ impl Gff3RecordList {
     }
 }
 
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum FilterString {
     None,
     Equal(Vec<u8>),
@@ -122,6 +123,7 @@ pub enum FilterString {
     // Prefix(Vec<u8>),
 }
 
+#[derive(Debug, PartialEq, PartialOrd)]
 pub enum FilterOrd<T: PartialOrd + Copy> {
     None,
     Equal(T),
@@ -150,6 +152,26 @@ impl FilterString {
             Self::Contains(arg) => string.contains_str(arg.as_slice()),
         }
     }
+
+    fn variant_string(&self) -> &'static str {
+        match self {
+            Self::None => "None",
+            Self::Equal(arg) => "Equal",
+            Self::Contains(arg) => "Contains",
+        }
+    }
+
+    fn variant_ix(&self) -> u8 {
+        match self {
+            Self::None => 0,
+            Self::Equal(arg) => 1,
+            Self::Contains(arg) => 2,
+        }
+    }
+
+    fn variants() -> [&'static str; 3] {
+        ["None", "Equal", "Contains"]
+    }
 }
 
 impl<T: PartialOrd + Copy> FilterOrd<T> {
@@ -163,6 +185,7 @@ impl<T: PartialOrd + Copy> FilterOrd<T> {
     }
 }
 
+#[derive(Debug)]
 pub struct Gff3Filter {
     seq_id: FilterString,
     source: FilterString,
@@ -187,5 +210,40 @@ impl std::default::Default for Gff3Filter {
 
             score: FilterOrd::default(),
         }
+    }
+}
+
+impl Gff3Filter {
+    pub const ID: &'static str = "gff_filter_window";
+
+    pub fn ui(&mut self, ctx: &egui::CtxRef) -> Option<egui::Response> {
+        egui::Window::new("GFF3 Filter")
+            .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(600.0, 200.0))
+            // .open(open_gff3_window)
+            .show(ctx, |mut ui| {
+                let seq_id = &mut self.seq_id;
+
+                let seq_id_none =
+                    ui.radio_value(seq_id, FilterString::None, "None");
+                let seq_id_eq = ui.radio_value(
+                    seq_id,
+                    FilterString::Equal(vec![]),
+                    "Equal",
+                );
+                let seq_id_contains = ui.radio_value(
+                    seq_id,
+                    FilterString::Contains(vec![]),
+                    "Contains",
+                );
+
+                if seq_id_none.clicked()
+                    || seq_id_eq.clicked()
+                    || seq_id_contains.clicked()
+                {
+                    let vars = FilterString::variants();
+                    println!("switched to {}", seq_id.variant_string());
+                }
+            })
     }
 }
