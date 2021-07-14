@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use bstr::{ByteSlice, ByteVec};
 
+use anyhow::Result;
+
 use super::Strand;
 
 pub struct Gff3Record {
@@ -107,5 +109,40 @@ impl Gff3Record {
             frame: frame.to_owned(),
             attributes,
         })
+    }
+
+    pub fn parse_gff3_file<P: AsRef<std::path::Path>>(
+        path: P,
+    ) -> Result<Vec<Self>> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
+        let file = File::open(path)?;
+
+        let mut reader = BufReader::new(file);
+
+        let mut buf: Vec<u8> = Vec::new();
+
+        let mut result = Vec::new();
+
+        loop {
+            buf.clear();
+
+            let read = reader.read_until(b'\n', &mut buf)?;
+
+            if read == 0 {
+                break;
+            }
+
+            let line = &buf[0..read];
+
+            let fields = line.fields();
+
+            if let Some(record) = Self::parse_row(fields) {
+                result.push(record);
+            }
+        }
+
+        Ok(result)
     }
 }
