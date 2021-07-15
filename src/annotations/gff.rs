@@ -44,6 +44,10 @@ impl Gff3Record {
         self.end
     }
 
+    pub fn score(&self) -> Option<f64> {
+        self.score
+    }
+
     pub fn attributes(&self) -> &HashMap<Vec<u8>, Vec<Vec<u8>>> {
         &self.attributes
     }

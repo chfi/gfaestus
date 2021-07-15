@@ -115,12 +115,53 @@ impl Gff3RecordList {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
-pub enum FilterString {
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+pub enum FilterStringOp {
     None,
-    Equal(Vec<u8>),
-    Contains(Vec<u8>),
-    // Prefix(Vec<u8>),
+    Equal,
+    Contains,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub struct FilterString {
+    op: FilterStringOp,
+    arg: String,
+}
+
+impl std::default::Default for FilterString {
+    fn default() -> Self {
+        Self {
+            op: FilterStringOp::None,
+            arg: String::new(),
+        }
+    }
+}
+
+impl FilterString {
+    fn filter(&self, string: &str) -> bool {
+        match self.op {
+            FilterStringOp::None => true,
+            FilterStringOp::Equal => string == self.arg,
+            FilterStringOp::Contains => string.contains(&self.arg),
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        let op = &mut self.op;
+        let arg = &mut self.arg;
+
+        let _op_none = ui.radio_value(op, FilterStringOp::None, "None");
+        let _op_equal = ui.radio_value(op, FilterStringOp::Equal, "Equal");
+        let _op_contains =
+            ui.radio_value(op, FilterStringOp::Contains, "Contains");
+
+        // let op_radios = op_none.union(op_equal).union(op_contains);
+
+        let _arg_edit = ui.text_edit_singleline(arg);
+
+        // if op_radios.clicked() {
+        // }
+    }
 }
 
 #[derive(Debug, PartialEq, PartialOrd)]
@@ -132,45 +173,9 @@ pub enum FilterOrd<T: PartialOrd + Copy> {
     // Range(T, T),
 }
 
-impl std::default::Default for FilterString {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
 impl<T: PartialOrd + Copy> std::default::Default for FilterOrd<T> {
     fn default() -> Self {
         Self::None
-    }
-}
-
-impl FilterString {
-    fn filter(&self, string: &[u8]) -> bool {
-        match self {
-            Self::None => true,
-            Self::Equal(arg) => string == arg,
-            Self::Contains(arg) => string.contains_str(arg.as_slice()),
-        }
-    }
-
-    fn variant_string(&self) -> &'static str {
-        match self {
-            Self::None => "None",
-            Self::Equal(arg) => "Equal",
-            Self::Contains(arg) => "Contains",
-        }
-    }
-
-    fn variant_ix(&self) -> u8 {
-        match self {
-            Self::None => 0,
-            Self::Equal(arg) => 1,
-            Self::Contains(arg) => 2,
-        }
-    }
-
-    fn variants() -> [&'static str; 3] {
-        ["None", "Equal", "Contains"]
     }
 }
 
@@ -221,28 +226,23 @@ impl Gff3Filter {
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
             // .open(open_gff3_window)
-            .show(ctx, |mut ui| {
-                let seq_id = &mut self.seq_id;
+            .show(ctx, |ui| {
+                ui.label("seq_id");
+                self.seq_id.ui(ui);
+                ui.separator();
 
-                let seq_id_none =
-                    ui.radio_value(seq_id, FilterString::None, "None");
-                let seq_id_eq = ui.radio_value(
-                    seq_id,
-                    FilterString::Equal(vec![]),
-                    "Equal",
-                );
-                let seq_id_contains = ui.radio_value(
-                    seq_id,
-                    FilterString::Contains(vec![]),
-                    "Contains",
-                );
+                ui.label("source");
+                self.source.ui(ui);
+                ui.separator();
 
-                if seq_id_none.clicked()
-                    || seq_id_eq.clicked()
-                    || seq_id_contains.clicked()
-                {
-                    let vars = FilterString::variants();
-                    println!("switched to {}", seq_id.variant_string());
+                ui.label("type");
+                self.type_.ui(ui);
+                ui.separator();
+
+                if ui.button("debug print").clicked() {
+                    eprintln!("seq_id: {:?}", self.seq_id);
+                    eprintln!("source: {:?}", self.source);
+                    eprintln!("type:   {:?}", self.type_);
                 }
             })
     }
