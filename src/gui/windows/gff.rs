@@ -20,6 +20,7 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use anyhow::Result;
+use egui::emath::Numeric;
 
 use crate::asynchronous::AsyncResult;
 
@@ -199,7 +200,71 @@ impl FilterString {
         let _op_contains =
             ui.radio_value(op, FilterStringOp::Contains, "Contains");
 
-        let _arg_edit = ui.text_edit_singleline(arg);
+        if *op != FilterStringOp::None {
+            let _arg_edit = ui.text_edit_singleline(arg);
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+pub enum FilterNumOp {
+    None,
+    Equal,
+    LessThan,
+    MoreThan,
+    InRange,
+}
+
+#[derive(Debug, PartialEq, PartialOrd)]
+pub struct FilterNum<T: Numeric> {
+    op: FilterNumOp,
+    arg1: T,
+    arg2: T,
+}
+
+impl<T: Numeric> std::default::Default for FilterNum<T> {
+    fn default() -> Self {
+        Self {
+            op: FilterNumOp::None,
+            arg1: T::from_f64(0.0),
+            arg2: T::from_f64(0.0),
+        }
+    }
+}
+
+impl<T: Numeric> FilterNum<T> {
+    fn filter(&self, val: T) -> bool {
+        match self.op {
+            FilterNumOp::None => true,
+            FilterNumOp::Equal => val == self.arg1,
+            FilterNumOp::LessThan => val < self.arg1,
+            FilterNumOp::MoreThan => val > self.arg1,
+            FilterNumOp::InRange => self.arg1 <= val && val < self.arg2,
+        }
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui) {
+        let op = &mut self.op;
+        let arg1 = &mut self.arg1;
+        let arg2 = &mut self.arg2;
+
+        let _op_none = ui.radio_value(op, FilterNumOp::None, "None");
+        let _op_equal = ui.radio_value(op, FilterNumOp::Equal, "Equal");
+        let _op_less = ui.radio_value(op, FilterNumOp::LessThan, "Less than");
+        let _op_more = ui.radio_value(op, FilterNumOp::MoreThan, "More than");
+        let _op_in_range = ui.radio_value(op, FilterNumOp::InRange, "In range");
+
+        let arg1_drag = egui::DragValue::new::<T>(arg1);
+        // egui::DragValue::new::<T>(from_pos).clamp_range(from_range);
+
+        let arg2_drag = egui::DragValue::new::<T>(arg2);
+
+        if *op != FilterNumOp::None {
+            let _arg1_edit = ui.add(arg1_drag);
+            if *op == FilterNumOp::InRange {
+                let _arg2_edit = ui.add(arg2_drag);
+            }
+        }
     }
 }
 
