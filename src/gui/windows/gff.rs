@@ -268,42 +268,16 @@ impl<T: Numeric> FilterNum<T> {
     }
 }
 
-#[derive(Debug, PartialEq, PartialOrd)]
-pub enum FilterOrd<T: PartialOrd + Copy> {
-    None,
-    Equal(T),
-    LessThan(T),
-    MoreThan(T),
-    // Range(T, T),
-}
-
-impl<T: PartialOrd + Copy> std::default::Default for FilterOrd<T> {
-    fn default() -> Self {
-        Self::None
-    }
-}
-
-impl<T: PartialOrd + Copy> FilterOrd<T> {
-    fn filter(&self, value: T) -> bool {
-        match self {
-            Self::None => true,
-            Self::Equal(arg) => value == *arg,
-            Self::LessThan(arg) => value < *arg,
-            Self::MoreThan(arg) => value > *arg,
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Gff3Filter {
     seq_id: FilterString,
     source: FilterString,
     type_: FilterString,
 
-    start: FilterOrd<usize>,
-    end: FilterOrd<usize>,
+    start: FilterNum<usize>,
+    end: FilterNum<usize>,
 
-    score: FilterOrd<Option<f64>>,
+    score: FilterNum<f64>,
     // attributes: ??
 }
 
@@ -314,10 +288,10 @@ impl std::default::Default for Gff3Filter {
             source: FilterString::default(),
             type_: FilterString::default(),
 
-            start: FilterOrd::default(),
-            end: FilterOrd::default(),
+            start: FilterNum::default(),
+            end: FilterNum::default(),
 
-            score: FilterOrd::default(),
+            score: FilterNum::default(),
         }
     }
 }
@@ -347,10 +321,21 @@ impl Gff3Filter {
                 self.type_.ui(ui);
                 ui.separator();
 
+                ui.label("start");
+                self.start.ui(ui);
+                ui.separator();
+
+                ui.label("end");
+                self.end.ui(ui);
+                ui.separator();
+
                 if ui.button("debug print").clicked() {
                     eprintln!("seq_id: {:?}", self.seq_id);
                     eprintln!("source: {:?}", self.source);
                     eprintln!("type:   {:?}", self.type_);
+
+                    eprintln!("start: {:?}", self.start);
+                    eprintln!("end: {:?}", self.end);
                 }
             })
     }
@@ -361,6 +346,6 @@ impl Gff3Filter {
             && self.type_.filter(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
-            && self.score.filter(record.score())
+        // && self.score.filter(record.score())
     }
 }
