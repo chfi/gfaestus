@@ -86,6 +86,8 @@ impl Gff3RecordList {
             "filter complete, showing {} out of {} records",
             filtered, total
         );
+
+        self.offset = 0;
     }
 
     fn clear_filter(&mut self) {
@@ -145,8 +147,10 @@ impl Gff3RecordList {
 
                         offset += delta;
 
-                        offset =
-                            offset.clamp(0, (self.records.len() - 1) as isize);
+                        offset = offset.clamp(
+                            0,
+                            (self.records.len() - self.slot_count) as isize,
+                        );
                         self.offset = offset as usize;
                     }
                 }
@@ -195,10 +199,12 @@ impl FilterString {
         let op = &mut self.op;
         let arg = &mut self.arg;
 
-        let _op_none = ui.radio_value(op, FilterStringOp::None, "None");
-        let _op_equal = ui.radio_value(op, FilterStringOp::Equal, "Equal");
-        let _op_contains =
-            ui.radio_value(op, FilterStringOp::Contains, "Contains");
+        ui.horizontal(|ui| {
+            let _op_none = ui.radio_value(op, FilterStringOp::None, "None");
+            let _op_equal = ui.radio_value(op, FilterStringOp::Equal, "Equal");
+            let _op_contains =
+                ui.radio_value(op, FilterStringOp::Contains, "Contains");
+        });
 
         if *op != FilterStringOp::None {
             let _arg_edit = ui.text_edit_singleline(arg);
@@ -248,11 +254,16 @@ impl<T: Numeric> FilterNum<T> {
         let arg1 = &mut self.arg1;
         let arg2 = &mut self.arg2;
 
-        let _op_none = ui.radio_value(op, FilterNumOp::None, "None");
-        let _op_equal = ui.radio_value(op, FilterNumOp::Equal, "Equal");
-        let _op_less = ui.radio_value(op, FilterNumOp::LessThan, "Less than");
-        let _op_more = ui.radio_value(op, FilterNumOp::MoreThan, "More than");
-        let _op_in_range = ui.radio_value(op, FilterNumOp::InRange, "In range");
+        ui.horizontal(|ui| {
+            let _op_none = ui.radio_value(op, FilterNumOp::None, "None");
+            let _op_equal = ui.radio_value(op, FilterNumOp::Equal, "Equal");
+            let _op_less =
+                ui.radio_value(op, FilterNumOp::LessThan, "Less than");
+            let _op_more =
+                ui.radio_value(op, FilterNumOp::MoreThan, "More than");
+            let _op_in_range =
+                ui.radio_value(op, FilterNumOp::InRange, "In range");
+        });
 
         let arg1_drag = egui::DragValue::new::<T>(arg1);
         // egui::DragValue::new::<T>(from_pos).clamp_range(from_range);
@@ -260,10 +271,12 @@ impl<T: Numeric> FilterNum<T> {
         let arg2_drag = egui::DragValue::new::<T>(arg2);
 
         if *op != FilterNumOp::None {
-            let _arg1_edit = ui.add(arg1_drag);
-            if *op == FilterNumOp::InRange {
-                let _arg2_edit = ui.add(arg2_drag);
-            }
+            ui.horizontal(|ui| {
+                let _arg1_edit = ui.add(arg1_drag);
+                if *op == FilterNumOp::InRange {
+                    let _arg2_edit = ui.add(arg2_drag);
+                }
+            });
         }
     }
 }
@@ -309,6 +322,8 @@ impl Gff3Filter {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .open(open)
             .show(ctx, |ui| {
+                ui.set_max_width(400.0);
+
                 ui.label("seq_id");
                 self.seq_id.ui(ui);
                 ui.separator();
