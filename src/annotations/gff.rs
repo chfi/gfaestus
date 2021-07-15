@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use super::Strand;
 
+#[derive(Clone)]
 pub struct Gff3Record {
     seq_id: Vec<u8>,
     source: Vec<u8>,

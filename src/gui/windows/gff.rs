@@ -34,6 +34,7 @@ pub struct Gff3RecordList {
 
     slot_count: usize,
 
+    filter_open: bool,
     filter: Gff3Filter,
 }
 
@@ -49,6 +50,7 @@ impl Gff3RecordList {
             offset: 0,
             slot_count: 30,
 
+            filter_open: true,
             filter: Gff3Filter::default(),
         }
     }
@@ -63,16 +65,52 @@ impl Gff3RecordList {
         ui.end_row();
     }
 
+    fn apply_filter(&mut self) {
+        self.filtered_records.clear();
+        eprintln!("applying filter");
+        let total = self.records.len();
+
+        let records = &self.records;
+        let filter = &self.filter;
+        let filtered_records = &mut self.filtered_records;
+
+        filtered_records.extend(
+            records
+                .iter()
+                .filter(|rec| filter.filter_record(rec))
+                .cloned(),
+        );
+        let filtered = self.filtered_records.len();
+        eprintln!(
+            "filter complete, showing {} out of {} records",
+            filtered, total
+        );
+    }
+
+    fn clear_filter(&mut self) {
+        self.filtered_records.clear();
+    }
+
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
         // open_gff3_window: &mut bool,
     ) -> Option<egui::Response> {
+        self.filter.ui(ctx, &mut self.filter_open);
+
         egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
             // .open(open_gff3_window)
             .show(ctx, |mut ui| {
+                if ui.button("Apply filter").clicked() {
+                    self.apply_filter();
+                }
+
+                if ui.button("Clear filter").clicked() {
+                    self.clear_filter();
+                }
+
                 let records = if self.filtered_records.is_empty() {
                     &self.records
                 } else {
@@ -138,11 +176,17 @@ impl std::default::Default for FilterString {
 }
 
 impl FilterString {
-    fn filter(&self, string: &str) -> bool {
+    fn filter(&self, string: &[u8]) -> bool {
         match self.op {
             FilterStringOp::None => true,
-            FilterStringOp::Equal => string == self.arg,
-            FilterStringOp::Contains => string.contains(&self.arg),
+            FilterStringOp::Equal => {
+                let bytes = self.arg.as_bytes();
+                string == bytes
+            }
+            FilterStringOp::Contains => {
+                let bytes = self.arg.as_bytes();
+                string.contains_str(bytes)
+            }
         }
     }
 
@@ -155,12 +199,7 @@ impl FilterString {
         let _op_contains =
             ui.radio_value(op, FilterStringOp::Contains, "Contains");
 
-        // let op_radios = op_none.union(op_equal).union(op_contains);
-
         let _arg_edit = ui.text_edit_singleline(arg);
-
-        // if op_radios.clicked() {
-        // }
     }
 }
 
@@ -221,11 +260,15 @@ impl std::default::Default for Gff3Filter {
 impl Gff3Filter {
     pub const ID: &'static str = "gff_filter_window";
 
-    pub fn ui(&mut self, ctx: &egui::CtxRef) -> Option<egui::Response> {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+    ) -> Option<egui::Response> {
         egui::Window::new("GFF3 Filter")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
-            // .open(open_gff3_window)
+            .open(open)
             .show(ctx, |ui| {
                 ui.label("seq_id");
                 self.seq_id.ui(ui);
@@ -245,5 +288,14 @@ impl Gff3Filter {
                     eprintln!("type:   {:?}", self.type_);
                 }
             })
+    }
+
+    fn filter_record(&self, record: &Gff3Record) -> bool {
+        self.seq_id.filter(record.seq_id())
+            && self.source.filter(record.source())
+            && self.type_.filter(record.type_())
+            && self.start.filter(record.start())
+            && self.end.filter(record.end())
+            && self.score.filter(record.score())
     }
 }

@@ -765,8 +765,6 @@ impl Gui {
 
         self.gff3_list.ui(&self.ctx);
 
-        self.gff3_filter.ui(&self.ctx);
-
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
         }
