@@ -1,10 +1,71 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use bstr::{ByteSlice, ByteVec};
 
 use anyhow::Result;
 
 use super::Strand;
+
+pub struct Gff3Records {
+    records: Vec<Gff3Record>,
+
+    attribute_keys: HashSet<Vec<u8>>,
+}
+
+impl Gff3Records {
+    pub fn parse_gff3_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        use std::fs::File;
+        use std::io::{BufRead, BufReader};
+
+        let file = File::open(path)?;
+
+        let mut reader = BufReader::new(file);
+
+        let mut buf: Vec<u8> = Vec::new();
+
+        let mut records = Vec::new();
+
+        let mut attribute_keys: HashSet<Vec<u8>> = HashSet::default();
+
+        loop {
+            buf.clear();
+
+            let read = reader.read_until(b'\n', &mut buf)?;
+
+            if read == 0 {
+                break;
+            }
+
+            let line = &buf[0..read];
+
+            if line[0] == b'#' {
+                continue;
+            }
+
+            let fields = line.fields();
+
+            if let Some(record) = Gff3Record::parse_row(fields) {
+                for key in record.attributes.keys() {
+                    if !attribute_keys.contains(key) {
+                        attribute_keys.insert(key.to_owned());
+                    }
+                }
+
+                records.push(record);
+            } else {
+                eprintln!("failed to parse row:");
+                eprintln!("\"{}\"", line.as_bstr());
+
+                std::process::exit(1);
+            }
+        }
+
+        Ok(Self {
+            records,
+            attribute_keys,
+        })
+    }
+}
 
 #[derive(Clone)]
 pub struct Gff3Record {
