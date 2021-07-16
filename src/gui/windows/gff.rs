@@ -24,15 +24,13 @@ use egui::emath::Numeric;
 
 use crate::asynchronous::AsyncResult;
 
-use crate::annotations::Gff3Record;
+use crate::annotations::{Gff3Record, Gff3Records};
 
 pub struct Gff3RecordList {
-    records: Vec<Gff3Record>,
-
-    filtered_records: Vec<Gff3Record>,
+    records: Gff3Records,
+    filtered_records: Vec<usize>,
 
     offset: usize,
-
     slot_count: usize,
 
     filter_open: bool,
@@ -42,14 +40,14 @@ pub struct Gff3RecordList {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    pub fn new(records: Vec<Gff3Record>) -> Self {
-        let filtered_records = Vec::with_capacity(records.len());
+    pub fn new(records: Gff3Records) -> Self {
+        let filtered_records = Vec::with_capacity(records.records.len());
 
         Self {
             records,
             filtered_records,
             offset: 0,
-            slot_count: 30,
+            slot_count: 20,
 
             filter_open: true,
             filter: Gff3Filter::default(),
@@ -69,19 +67,23 @@ impl Gff3RecordList {
 
     fn apply_filter(&mut self) {
         self.filtered_records.clear();
-        eprintln!("applying filter");
-        let total = self.records.len();
 
-        let records = &self.records;
+        eprintln!("applying filter");
+        let total = self.records.records.len();
+
+        let records = &self.records.records;
         let filter = &self.filter;
         let filtered_records = &mut self.filtered_records;
 
-        filtered_records.extend(
-            records
-                .iter()
-                .filter(|rec| filter.filter_record(rec))
-                .cloned(),
-        );
+        filtered_records.extend(records.iter().enumerate().filter_map(
+            |(ix, rec)| {
+                if filter.filter_record(rec) {
+                    Some(ix)
+                } else {
+                    None
+                }
+            },
+        ));
         let filtered = self.filtered_records.len();
         eprintln!(
             "filter complete, showing {} out of {} records",
@@ -115,12 +117,6 @@ impl Gff3RecordList {
                     self.clear_filter();
                 }
 
-                let records = if self.filtered_records.is_empty() {
-                    &self.records
-                } else {
-                    &self.filtered_records
-                };
-
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
@@ -132,9 +128,25 @@ impl Gff3RecordList {
                         ui.label("frame");
                         ui.end_row();
 
-                        for i in 0..self.slot_count {
-                            if let Some(record) = records.get(self.offset + i) {
-                                Self::ui_row(record, ui);
+                        if self.filtered_records.is_empty() {
+                            for i in 0..self.slot_count {
+                                if let Some(record) =
+                                    self.records.records.get(self.offset + i)
+                                {
+                                    Self::ui_row(record, ui);
+                                }
+                            }
+                        } else {
+                            for i in 0..self.slot_count {
+                                if let Some(record) = self
+                                    .filtered_records
+                                    .get(self.offset + i)
+                                    .and_then(|&ix| {
+                                        self.records.records.get(ix)
+                                    })
+                                {
+                                    Self::ui_row(record, ui);
+                                }
                             }
                         }
                     });
@@ -151,7 +163,8 @@ impl Gff3RecordList {
 
                         offset = offset.clamp(
                             0,
-                            (self.records.len() - self.slot_count) as isize,
+                            (self.records.records.len() - self.slot_count)
+                                as isize,
                         );
                         self.offset = offset as usize;
                     }

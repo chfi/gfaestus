@@ -7,9 +7,9 @@ use anyhow::Result;
 use super::Strand;
 
 pub struct Gff3Records {
-    records: Vec<Gff3Record>,
+    pub records: Vec<Gff3Record>,
 
-    attribute_keys: HashSet<Vec<u8>>,
+    pub attribute_keys: HashSet<Vec<u8>>,
 }
 
 impl Gff3Records {

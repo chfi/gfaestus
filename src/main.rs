@@ -185,12 +185,12 @@ fn main() {
 
     eprintln!("loading gff3");
 
-    let gff_records = gfaestus::annotations::gff::Gff3Record::parse_gff3_file(
+    let gff_records = gfaestus::annotations::gff::Gff3Records::parse_gff3_file(
         "/home/christian/data/Homo_sapiens.GRCh38.103.chr.gff3",
     )
     .unwrap();
 
-    eprintln!("loaded and parsed {} gff3 rows", gff_records.len());
+    eprintln!("loaded and parsed {} gff3 rows", gff_records.records.len());
 
     let mut gui = Gui::new(
         &gfaestus,

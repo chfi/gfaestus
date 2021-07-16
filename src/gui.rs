@@ -20,7 +20,7 @@ use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
 use crate::{
-    annotations::{Annotations, Gff3Record},
+    annotations::{Annotations, Gff3Record, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -506,7 +506,7 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
-        gff3: Vec<Gff3Record>,
+        gff3: Gff3Records,
     ) -> Result<Self> {
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
