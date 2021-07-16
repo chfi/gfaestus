@@ -62,6 +62,7 @@ impl Gff3RecordList {
         ui.label(format!("{}", record.type_().as_bstr()));
         ui.label(format!("{}", record.start()));
         ui.label(format!("{}", record.end()));
+        ui.label(format!("{}", record.frame().as_bstr()));
 
         ui.end_row();
     }
@@ -128,6 +129,7 @@ impl Gff3RecordList {
                         ui.label("type");
                         ui.label("start");
                         ui.label("end");
+                        ui.label("frame");
                         ui.end_row();
 
                         for i in 0..self.slot_count {
@@ -291,6 +293,8 @@ pub struct Gff3Filter {
     end: FilterNum<usize>,
 
     score: FilterNum<f64>,
+
+    frame: FilterString,
     // attributes: ??
 }
 
@@ -305,6 +309,7 @@ impl std::default::Default for Gff3Filter {
             end: FilterNum::default(),
 
             score: FilterNum::default(),
+            frame: FilterString::default(),
         }
     }
 }
@@ -344,6 +349,10 @@ impl Gff3Filter {
                 self.end.ui(ui);
                 ui.separator();
 
+                ui.label("frame");
+                self.frame.ui(ui);
+                ui.separator();
+
                 if ui.button("debug print").clicked() {
                     eprintln!("seq_id: {:?}", self.seq_id);
                     eprintln!("source: {:?}", self.source);
@@ -361,6 +370,7 @@ impl Gff3Filter {
             && self.type_.filter(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
+            && self.frame.filter(record.frame())
         // && self.score.filter(record.score())
     }
 }

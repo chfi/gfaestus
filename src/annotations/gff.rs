@@ -110,6 +110,10 @@ impl Gff3Record {
         self.score
     }
 
+    pub fn frame(&self) -> &[u8] {
+        &self.frame
+    }
+
     pub fn attributes(&self) -> &HashMap<Vec<u8>, Vec<Vec<u8>>> {
         &self.attributes
     }
