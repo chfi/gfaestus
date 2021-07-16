@@ -13,7 +13,7 @@ use handlegraph::{
 };
 
 use crossbeam::{atomic::AtomicCell, channel::Sender};
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use bstr::ByteSlice;
 
@@ -35,6 +35,19 @@ pub struct Gff3RecordList {
 
     filter_open: bool,
     filter: Gff3Filter,
+
+    column_picker_open: bool,
+    enabled_columns: EnabledColumns,
+}
+
+struct EnabledColumns {
+    source: bool,
+    type_: bool,
+
+    score: bool,
+    frame: bool,
+
+    attributes: HashMap<Vec<u8>, bool>,
 }
 
 impl Gff3RecordList {
@@ -42,6 +55,8 @@ impl Gff3RecordList {
 
     pub fn new(records: Gff3Records) -> Self {
         let filtered_records = Vec::with_capacity(records.records.len());
+
+        let enabled_columns = EnabledColumns::new(&records);
 
         Self {
             records,
@@ -51,16 +66,28 @@ impl Gff3RecordList {
 
             filter_open: true,
             filter: Gff3Filter::default(),
+
+            column_picker_open: true,
+            enabled_columns,
         }
     }
 
-    fn ui_row(record: &Gff3Record, ui: &mut egui::Ui) {
+    fn ui_row(&self, record: &Gff3Record, ui: &mut egui::Ui) {
         ui.label(format!("{}", record.seq_id().as_bstr()));
-        ui.label(format!("{}", record.source().as_bstr()));
-        ui.label(format!("{}", record.type_().as_bstr()));
+
+        if self.enabled_columns.source {
+            ui.label(format!("{}", record.source().as_bstr()));
+        }
+
+        if self.enabled_columns.type_ {
+            ui.label(format!("{}", record.type_().as_bstr()));
+        }
         ui.label(format!("{}", record.start()));
         ui.label(format!("{}", record.end()));
-        ui.label(format!("{}", record.frame().as_bstr()));
+
+        if self.enabled_columns.frame {
+            ui.label(format!("{}", record.frame().as_bstr()));
+        }
 
         ui.end_row();
     }
@@ -104,6 +131,8 @@ impl Gff3RecordList {
     ) -> Option<egui::Response> {
         self.filter.ui(ctx, &mut self.filter_open);
 
+        self.enabled_columns.ui(ctx, &mut self.column_picker_open);
+
         egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
@@ -121,11 +150,17 @@ impl Gff3RecordList {
                     .striped(true)
                     .show(&mut ui, |ui| {
                         ui.label("seq_id");
-                        ui.label("source");
-                        ui.label("type");
+                        if self.enabled_columns.source {
+                            ui.label("source");
+                        }
+                        if self.enabled_columns.type_ {
+                            ui.label("type");
+                        }
                         ui.label("start");
                         ui.label("end");
-                        ui.label("frame");
+                        if self.enabled_columns.frame {
+                            ui.label("frame");
+                        }
                         ui.end_row();
 
                         if self.filtered_records.is_empty() {
@@ -133,7 +168,7 @@ impl Gff3RecordList {
                                 if let Some(record) =
                                     self.records.records.get(self.offset + i)
                                 {
-                                    Self::ui_row(record, ui);
+                                    self.ui_row(record, ui);
                                 }
                             }
                         } else {
@@ -145,7 +180,7 @@ impl Gff3RecordList {
                                         self.records.records.get(ix)
                                     })
                                 {
-                                    Self::ui_row(record, ui);
+                                    self.ui_row(record, ui);
                                 }
                             }
                         }
@@ -169,6 +204,54 @@ impl Gff3RecordList {
                         self.offset = offset as usize;
                     }
                 }
+            })
+    }
+}
+
+impl EnabledColumns {
+    pub const ID: &'static str = "gff_column_picker_window";
+
+    fn new(records: &Gff3Records) -> Self {
+        let attributes = records
+            .attribute_keys
+            .iter()
+            .map(|k| (k.to_owned(), false))
+            .collect::<HashMap<_, _>>();
+
+        Self {
+            source: true,
+            type_: true,
+            score: true,
+            frame: true,
+            attributes,
+        }
+    }
+
+    fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+    ) -> Option<egui::Response> {
+        macro_rules! bool_label {
+            ($ui:ident, $field:ident, $label:expr) => {
+                if $ui.selectable_label(self.$field, $label).clicked() {
+                    self.$field = !self.$field;
+                }
+            };
+        }
+
+        egui::Window::new("GFF3 Columns")
+            .id(egui::Id::new(Self::ID))
+            .default_pos(egui::Pos2::new(300.0, 200.0))
+            .open(open)
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    bool_label!(ui, source, "Source");
+                    bool_label!(ui, type_, "Type");
+
+                    // bool_label!(ui, score, "Score");
+                    bool_label!(ui, frame, "Frame");
+                });
             })
     }
 }
