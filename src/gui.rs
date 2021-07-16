@@ -494,8 +494,6 @@ pub struct Gui {
     clipboard_ctx: ClipboardContext,
 
     gff3_list: Gff3RecordList,
-
-    gff3_filter: Gff3Filter,
 }
 
 impl Gui {
@@ -611,8 +609,6 @@ impl Gui {
             clipboard_ctx,
 
             gff3_list,
-
-            gff3_filter: Default::default(),
         };
 
         Ok(gui)

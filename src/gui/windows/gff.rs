@@ -56,6 +56,7 @@ impl Gff3RecordList {
     pub fn new(records: Gff3Records) -> Self {
         let filtered_records = Vec::with_capacity(records.records.len());
 
+        let filter = Gff3Filter::new(&records);
         let enabled_columns = EnabledColumns::new(&records);
 
         Self {
@@ -65,7 +66,7 @@ impl Gff3RecordList {
             slot_count: 20,
 
             filter_open: true,
-            filter: Gff3Filter::default(),
+            filter,
 
             column_picker_open: true,
             enabled_columns,
@@ -391,6 +392,8 @@ pub struct Gff3Filter {
     score: FilterNum<f64>,
 
     frame: FilterString,
+
+    attributes: HashMap<Vec<u8>, FilterString>,
     // attributes: ??
 }
 
@@ -406,12 +409,27 @@ impl std::default::Default for Gff3Filter {
 
             score: FilterNum::default(),
             frame: FilterString::default(),
+
+            attributes: Default::default(),
         }
     }
 }
 
 impl Gff3Filter {
     pub const ID: &'static str = "gff_filter_window";
+
+    fn new(records: &Gff3Records) -> Self {
+        let attributes = records
+            .attribute_keys
+            .iter()
+            .map(|k| (k.to_owned(), FilterString::default()))
+            .collect::<HashMap<_, _>>();
+
+        Self {
+            attributes,
+            ..Gff3Filter::default()
+        }
+    }
 
     pub fn ui(
         &mut self,
@@ -425,29 +443,56 @@ impl Gff3Filter {
             .show(ctx, |ui| {
                 ui.set_max_width(400.0);
 
-                ui.label("seq_id");
-                self.seq_id.ui(ui);
-                ui.separator();
+                ui.collapsing("Mandatory fields", |ui| {
+                    ui.label("seq_id");
+                    self.seq_id.ui(ui);
+                    ui.separator();
 
-                ui.label("source");
-                self.source.ui(ui);
-                ui.separator();
+                    ui.label("source");
+                    self.source.ui(ui);
+                    ui.separator();
 
-                ui.label("type");
-                self.type_.ui(ui);
-                ui.separator();
+                    ui.label("type");
+                    self.type_.ui(ui);
+                    ui.separator();
 
-                ui.label("start");
-                self.start.ui(ui);
-                ui.separator();
+                    ui.label("start");
+                    self.start.ui(ui);
+                    ui.separator();
 
-                ui.label("end");
-                self.end.ui(ui);
-                ui.separator();
+                    ui.label("end");
+                    self.end.ui(ui);
+                    ui.separator();
 
-                ui.label("frame");
-                self.frame.ui(ui);
-                ui.separator();
+                    ui.label("frame");
+                    self.frame.ui(ui);
+                    ui.separator();
+                });
+
+                ui.collapsing("Attributes", |mut ui| {
+                    egui::ScrollArea::from_max_height(
+                        ui.input().screen_rect.height() - 250.0,
+                    )
+                    // egui::ScrollArea::auto_sized()
+                    .show(&mut ui, |ui| {
+                        // ui.set_max_height(800.0);
+                        let mut attr_filters =
+                            self.attributes.iter_mut().collect::<Vec<_>>();
+
+                        attr_filters.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+                        for (_count, (key, filter)) in
+                            attr_filters.into_iter().enumerate()
+                        {
+                            ui.label(key.to_str().unwrap());
+                            filter.ui(ui);
+                            ui.separator();
+                            // if count % 5 == 0 {
+                            //     ui.end_row()
+                            // }
+                        }
+                    });
+                });
 
                 if ui.button("debug print").clicked() {
                     eprintln!("seq_id: {:?}", self.seq_id);

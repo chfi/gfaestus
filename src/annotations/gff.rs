@@ -60,6 +60,8 @@ impl Gff3Records {
             }
         }
 
+        eprintln!("parsed {} attribute keys", attribute_keys.len());
+
         Ok(Self {
             records,
             attribute_keys,
