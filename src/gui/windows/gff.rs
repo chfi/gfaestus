@@ -90,6 +90,20 @@ impl Gff3RecordList {
             ui.label(format!("{}", record.frame().as_bstr()));
         }
 
+        let attrs = record.attributes();
+
+        let mut attrs = attrs.iter().collect::<Vec<_>>();
+
+        attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+        for (key, values) in attrs {
+            if self.enabled_columns.attributes.get(key) == Some(&true) {
+                for val in values {
+                    ui.label(format!("{}", val.as_bstr()));
+                }
+            }
+        }
+
         ui.end_row();
     }
 
@@ -162,6 +176,22 @@ impl Gff3RecordList {
                         if self.enabled_columns.frame {
                             ui.label("frame");
                         }
+
+                        let mut keys = self
+                            .records
+                            .attribute_keys
+                            .iter()
+                            .collect::<Vec<_>>();
+                        keys.sort_by(|k1, k2| k1.cmp(k2));
+
+                        for key in keys {
+                            if self.enabled_columns.attributes.get(key)
+                                == Some(&true)
+                            {
+                                ui.label(format!("{}", key.as_bstr()));
+                            }
+                        }
+
                         ui.end_row();
 
                         if self.filtered_records.is_empty() {
@@ -246,12 +276,39 @@ impl EnabledColumns {
             .default_pos(egui::Pos2::new(300.0, 200.0))
             .open(open)
             .show(ctx, |ui| {
+                ui.label("Mandatory fields");
                 ui.horizontal(|ui| {
                     bool_label!(ui, source, "Source");
                     bool_label!(ui, type_, "Type");
 
                     // bool_label!(ui, score, "Score");
                     bool_label!(ui, frame, "Frame");
+                });
+
+                ui.collapsing("Attributes", |mut ui| {
+                    egui::ScrollArea::from_max_height(
+                        ui.input().screen_rect.height() - 250.0,
+                    )
+                    .show(&mut ui, |ui| {
+                        let mut enabled_attrs =
+                            self.attributes.iter_mut().collect::<Vec<_>>();
+
+                        enabled_attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+                        for (_count, (key, enabled)) in
+                            enabled_attrs.into_iter().enumerate()
+                        {
+                            if ui
+                                .selectable_label(
+                                    *enabled,
+                                    key.to_str().unwrap(),
+                                )
+                                .clicked()
+                            {
+                                *enabled = !*enabled;
+                            }
+                        }
+                    });
                 });
             })
     }
