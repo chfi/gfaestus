@@ -571,13 +571,28 @@ impl Gff3Filter {
             })
     }
 
+    fn attr_filter(&self, record: &Gff3Record) -> bool {
+        self.attributes.iter().all(|(key, filter)| {
+            if matches!(filter.op, FilterStringOp::None) {
+                return true;
+            }
+
+            if let Some(values) = record.attributes().get(key) {
+                values.iter().any(|v| filter.filter(v))
+            } else {
+                false
+            }
+        })
+    }
+
     fn filter_record(&self, record: &Gff3Record) -> bool {
         self.seq_id.filter(record.seq_id())
             && self.source.filter(record.source())
             && self.type_.filter(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
+            // && self.score.filter(record.score())
             && self.frame.filter(record.frame())
-        // && self.score.filter(record.score())
+            && self.attr_filter(record)
     }
 }
