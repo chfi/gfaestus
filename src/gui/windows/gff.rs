@@ -90,17 +90,26 @@ impl Gff3RecordList {
             ui.label(format!("{}", record.frame().as_bstr()));
         }
 
+        let mut keys = self.records.attribute_keys.iter().collect::<Vec<_>>();
+        keys.sort_by(|k1, k2| k1.cmp(k2));
+
         let attrs = record.attributes();
 
-        let mut attrs = attrs.iter().collect::<Vec<_>>();
-
-        attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-
-        for (key, values) in attrs {
+        for key in keys {
             if self.enabled_columns.attributes.get(key) == Some(&true) {
-                for val in values {
-                    ui.label(format!("{}", val.as_bstr()));
-                }
+                let label = if let Some(values) = attrs.get(key) {
+                    let mut contents = String::new();
+                    for (ix, val) in values.into_iter().enumerate() {
+                        if ix != 0 {
+                            contents.push_str("; ");
+                        }
+                        contents.push_str(&format!("{}", val.as_bstr()));
+                    }
+                    contents
+                } else {
+                    "".to_string()
+                };
+                ui.label(label);
             }
         }
 
