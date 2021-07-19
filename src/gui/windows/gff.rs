@@ -283,6 +283,11 @@ impl Gff3RecordList {
                                         record,
                                     );
                                 }
+                                if row_interact.double_clicked() {
+                                    app_msg_tx
+                                        .send(AppMsg::GotoSelection)
+                                        .unwrap();
+                                }
                             }
                         }
                     });
