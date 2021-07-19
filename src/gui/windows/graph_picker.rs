@@ -26,6 +26,8 @@ use crate::{asynchronous::AsyncResult, graph_query::GraphQuery};
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
+use super::filters::FilterString;
+
 pub struct PathPickerSource {
     paths: Arc<Vec<(PathId, String)>>,
 
@@ -35,6 +37,8 @@ pub struct PathPickerSource {
 pub struct PathPicker {
     paths: Arc<Vec<(PathId, String)>>,
     filtered_paths: Vec<usize>,
+
+    name_filter: FilterString,
 
     id: usize,
     active_path_index: Option<usize>,
@@ -77,6 +81,7 @@ impl PathPickerSource {
         PathPicker {
             paths,
             filtered_paths,
+            name_filter: Default::default(),
             id,
             active_path_index: None,
             offset,
@@ -95,6 +100,18 @@ impl PathPicker {
             .id(egui::Id::new(("Path picker", self.id)))
             .open(open)
             .show(ctx, |mut ui| {
+                self.name_filter.ui(ui);
+
+                ui.horizontal(|ui| {
+                    if ui.button("Apply filter").clicked() {
+                        self.apply_filter();
+                    }
+
+                    if ui.button("Clear filter").clicked() {
+                        self.clear_filter();
+                    }
+                });
+
                 let grid = egui::Grid::new("path_picker_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
@@ -169,5 +186,29 @@ impl PathPicker {
         let (id, name) = self.paths.get(ix)?;
 
         Some((*id, name))
+    }
+
+    fn apply_filter(&mut self) {
+        self.filtered_paths.clear();
+
+        let paths = &self.paths;
+        let filter = &self.name_filter;
+        let filtered_paths = &mut self.filtered_paths;
+
+        filtered_paths.extend(paths.iter().enumerate().filter_map(
+            |(ix, (_, path_name))| {
+                if filter.filter_str(path_name) {
+                    Some(ix)
+                } else {
+                    None
+                }
+            },
+        ));
+
+        self.offset = 0;
+    }
+
+    fn clear_filter(&mut self) {
+        self.filtered_paths.clear();
     }
 }

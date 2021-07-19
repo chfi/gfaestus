@@ -29,6 +29,7 @@ use crate::{
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
+use super::filters::*;
 use super::graph_picker::PathPicker;
 
 pub struct Gff3RecordList {
@@ -83,7 +84,7 @@ impl Gff3RecordList {
 
             active_path: None,
 
-            path_picker_open: true,
+            path_picker_open: false,
             path_picker,
         }
     }
@@ -204,6 +205,11 @@ impl Gff3RecordList {
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         // open_gff3_window: &mut bool,
     ) -> Option<egui::Response> {
+        let active_path_name = self
+            .path_picker
+            .active_path()
+            .map(|(_id, name)| name.to_owned());
+
         self.filter.ui(ctx, &mut self.filter_open);
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
@@ -249,6 +255,20 @@ impl Gff3RecordList {
                         self.clear_filter();
                     }
                 });
+
+                let path_picker_btn = {
+                    let label = if let Some(name) = &active_path_name {
+                        format!("Path: {}", name)
+                    } else {
+                        "Select a path".to_string()
+                    };
+
+                    ui.button(label)
+                };
+
+                if path_picker_btn.clicked() {
+                    self.path_picker_open = !self.path_picker_open;
+                }
 
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
@@ -431,129 +451,6 @@ impl EnabledColumns {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
-pub enum FilterStringOp {
-    None,
-    Equal,
-    Contains,
-}
-
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
-pub struct FilterString {
-    op: FilterStringOp,
-    arg: String,
-}
-
-impl std::default::Default for FilterString {
-    fn default() -> Self {
-        Self {
-            op: FilterStringOp::None,
-            arg: String::new(),
-        }
-    }
-}
-
-impl FilterString {
-    fn filter(&self, string: &[u8]) -> bool {
-        match self.op {
-            FilterStringOp::None => true,
-            FilterStringOp::Equal => {
-                let bytes = self.arg.as_bytes();
-                string == bytes
-            }
-            FilterStringOp::Contains => {
-                let bytes = self.arg.as_bytes();
-                string.contains_str(bytes)
-            }
-        }
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui) {
-        let op = &mut self.op;
-        let arg = &mut self.arg;
-
-        ui.horizontal(|ui| {
-            let _op_none = ui.radio_value(op, FilterStringOp::None, "None");
-            let _op_equal = ui.radio_value(op, FilterStringOp::Equal, "Equal");
-            let _op_contains =
-                ui.radio_value(op, FilterStringOp::Contains, "Contains");
-        });
-
-        if *op != FilterStringOp::None {
-            let _arg_edit = ui.text_edit_singleline(arg);
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, PartialOrd)]
-pub enum FilterNumOp {
-    None,
-    Equal,
-    LessThan,
-    MoreThan,
-    InRange,
-}
-
-#[derive(Debug, PartialEq, PartialOrd)]
-pub struct FilterNum<T: Numeric> {
-    op: FilterNumOp,
-    arg1: T,
-    arg2: T,
-}
-
-impl<T: Numeric> std::default::Default for FilterNum<T> {
-    fn default() -> Self {
-        Self {
-            op: FilterNumOp::None,
-            arg1: T::from_f64(0.0),
-            arg2: T::from_f64(0.0),
-        }
-    }
-}
-
-impl<T: Numeric> FilterNum<T> {
-    fn filter(&self, val: T) -> bool {
-        match self.op {
-            FilterNumOp::None => true,
-            FilterNumOp::Equal => val == self.arg1,
-            FilterNumOp::LessThan => val < self.arg1,
-            FilterNumOp::MoreThan => val > self.arg1,
-            FilterNumOp::InRange => self.arg1 <= val && val < self.arg2,
-        }
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui) {
-        let op = &mut self.op;
-        let arg1 = &mut self.arg1;
-        let arg2 = &mut self.arg2;
-
-        ui.horizontal(|ui| {
-            let _op_none = ui.radio_value(op, FilterNumOp::None, "None");
-            let _op_equal = ui.radio_value(op, FilterNumOp::Equal, "Equal");
-            let _op_less =
-                ui.radio_value(op, FilterNumOp::LessThan, "Less than");
-            let _op_more =
-                ui.radio_value(op, FilterNumOp::MoreThan, "More than");
-            let _op_in_range =
-                ui.radio_value(op, FilterNumOp::InRange, "In range");
-        });
-
-        let arg1_drag = egui::DragValue::new::<T>(arg1);
-        // egui::DragValue::new::<T>(from_pos).clamp_range(from_range);
-
-        let arg2_drag = egui::DragValue::new::<T>(arg2);
-
-        if *op != FilterNumOp::None {
-            ui.horizontal(|ui| {
-                let _arg1_edit = ui.add(arg1_drag);
-                if *op == FilterNumOp::InRange {
-                    let _arg2_edit = ui.add(arg2_drag);
-                }
-            });
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Gff3Filter {
     seq_id: FilterString,
@@ -687,7 +584,7 @@ impl Gff3Filter {
             }
 
             if let Some(values) = record.attributes().get(key) {
-                values.iter().any(|v| filter.filter(v))
+                values.iter().any(|v| filter.filter_bytes(v))
             } else {
                 false
             }
@@ -695,13 +592,13 @@ impl Gff3Filter {
     }
 
     fn filter_record(&self, record: &Gff3Record) -> bool {
-        self.seq_id.filter(record.seq_id())
-            && self.source.filter(record.source())
-            && self.type_.filter(record.type_())
+        self.seq_id.filter_bytes(record.seq_id())
+            && self.source.filter_bytes(record.source())
+            && self.type_.filter_bytes(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
             // && self.score.filter(record.score())
-            && self.frame.filter(record.frame())
+            && self.frame.filter_bytes(record.frame())
             && self.attr_filter(record)
     }
 }
