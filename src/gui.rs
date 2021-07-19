@@ -2,6 +2,7 @@ use std::{path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use futures::executor::ThreadPool;
+use gfa::gfa::Path;
 use gluon::vm::frunk_core::hlist::Sculptor;
 #[allow(unused_imports)]
 use handlegraph::{
@@ -57,6 +58,43 @@ pub mod windows;
 
 use widgets::*;
 use windows::*;
+
+pub struct Gui {
+    ctx: egui::CtxRef,
+    frame_input: FrameInput,
+
+    shared_state: SharedState,
+    settings: AppSettings,
+
+    pub draw_system: GuiPipeline,
+
+    hover_node_id: Option<NodeId>,
+
+    windows_active_view: FxHashMap<Windows, Views>,
+
+    open_windows: OpenWindows,
+
+    view_state: AppViewState,
+
+    gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
+    gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
+
+    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
+
+    menu_bar: MenuBar,
+
+    dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+
+    thread_pool: Arc<ThreadPool>,
+
+    annotations: Annotations,
+
+    clipboard_ctx: ClipboardContext,
+
+    gff3_list: Gff3RecordList,
+
+    path_picker_source: PathPickerSource,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Windows {
@@ -461,41 +499,6 @@ impl GuiFocusState {
     }
 }
 
-pub struct Gui {
-    ctx: egui::CtxRef,
-    frame_input: FrameInput,
-
-    shared_state: SharedState,
-    settings: AppSettings,
-
-    pub draw_system: GuiPipeline,
-
-    hover_node_id: Option<NodeId>,
-
-    windows_active_view: FxHashMap<Windows, Views>,
-
-    open_windows: OpenWindows,
-
-    view_state: AppViewState,
-
-    gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
-    gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
-
-    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
-
-    menu_bar: MenuBar,
-
-    dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-
-    thread_pool: Arc<ThreadPool>,
-
-    annotations: Annotations,
-
-    clipboard_ctx: ClipboardContext,
-
-    gff3_list: Gff3RecordList,
-}
-
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
@@ -574,7 +577,10 @@ impl Gui {
 
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
-        let gff3_list = Gff3RecordList::new(gff3);
+        let mut path_picker_source = PathPickerSource::new(graph_query)?;
+
+        let gff3_list =
+            Gff3RecordList::new(gff3, path_picker_source.create_picker());
 
         let gui = Self {
             ctx,
@@ -609,6 +615,8 @@ impl Gui {
             clipboard_ctx,
 
             gff3_list,
+
+            path_picker_source,
         };
 
         Ok(gui)

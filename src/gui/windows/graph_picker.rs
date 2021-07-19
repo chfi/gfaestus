@@ -95,9 +95,9 @@ impl PathPicker {
             .id(egui::Id::new(("Path picker", self.id)))
             .open(open)
             .show(ctx, |mut ui| {
-                egui::Grid::new("path_picker_list_grid").striped(true).show(
-                    &mut ui,
-                    |ui| {
+                let grid = egui::Grid::new("path_picker_list_grid")
+                    .striped(true)
+                    .show(&mut ui, |ui| {
                         let active_path_index = self.active_path_index;
 
                         if self.filtered_paths.is_empty() {
@@ -116,6 +116,7 @@ impl PathPicker {
                                     {
                                         self.active_path_index = Some(index);
                                     }
+                                    ui.end_row();
                                 }
                             }
                         } else {
@@ -137,11 +138,29 @@ impl PathPicker {
                                     {
                                         self.active_path_index = Some(index);
                                     }
+                                    ui.end_row();
                                 }
                             }
                         }
-                    },
-                );
+                    });
+
+                if grid.response.hover_pos().is_some() {
+                    let scroll = ctx.input().scroll_delta;
+                    if scroll.y.abs() >= 4.0 {
+                        let sig = (scroll.y.signum() as isize) * -1;
+                        let delta = sig * ((scroll.y.abs() as isize) / 4);
+
+                        let mut offset = self.offset as isize;
+
+                        offset += delta;
+
+                        offset = offset.clamp(
+                            0,
+                            (self.paths.len() - self.slot_count) as isize,
+                        );
+                        self.offset = offset as usize;
+                    }
+                }
             })
     }
 

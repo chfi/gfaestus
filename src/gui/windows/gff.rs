@@ -26,6 +26,8 @@ use crate::asynchronous::AsyncResult;
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
+use super::graph_picker::PathPicker;
+
 pub struct Gff3RecordList {
     records: Gff3Records,
     filtered_records: Vec<usize>,
@@ -38,6 +40,10 @@ pub struct Gff3RecordList {
 
     column_picker_open: bool,
     enabled_columns: EnabledColumns,
+
+    path_picker_open: bool,
+    path_picker: PathPicker,
+    active_path: Option<(PathId, String)>,
 }
 
 struct EnabledColumns {
@@ -53,7 +59,7 @@ struct EnabledColumns {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    pub fn new(records: Gff3Records) -> Self {
+    pub fn new(records: Gff3Records, path_picker: PathPicker) -> Self {
         let filtered_records = Vec::with_capacity(records.records.len());
 
         let filter = Gff3Filter::new(&records);
@@ -70,6 +76,11 @@ impl Gff3RecordList {
 
             column_picker_open: true,
             enabled_columns,
+
+            active_path: None,
+
+            path_picker_open: true,
+            path_picker,
         }
     }
 
@@ -157,6 +168,13 @@ impl Gff3RecordList {
 
         self.enabled_columns.ui(ctx, &mut self.column_picker_open);
 
+        self.path_picker.ui(ctx, &mut self.path_picker_open);
+
+        let active_path_name = self
+            .path_picker
+            .active_path()
+            .map(|(_, name)| name.to_owned());
+
         egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
@@ -168,6 +186,10 @@ impl Gff3RecordList {
 
                 if ui.button("Clear filter").clicked() {
                     self.clear_filter();
+                }
+
+                if let Some(path_name) = active_path_name {
+                    ui.label(&format!("path: {}", path_name));
                 }
 
                 let grid = egui::Grid::new("gff3_record_list_grid")
@@ -572,6 +594,7 @@ impl Gff3Filter {
     }
 
     fn attr_filter(&self, record: &Gff3Record) -> bool {
+        // let active_filters = self.attributes.iter().filter(|(_, filter)| !matches!(filter, FilterStringOp::None))
         self.attributes.iter().all(|(key, filter)| {
             if matches!(filter.op, FilterStringOp::None) {
                 return true;
