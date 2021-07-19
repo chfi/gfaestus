@@ -409,6 +409,7 @@ impl EnabledColumns {
         egui::Window::new("GFF3 Columns")
             .id(egui::Id::new(Self::ID))
             .fixed_pos(pos)
+            .collapsible(false)
             .open(open)
             .show(ctx, |ui| {
                 ui.set_max_height(ui.input().screen_rect.height() - 250.0);
