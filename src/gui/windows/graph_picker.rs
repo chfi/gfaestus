@@ -37,7 +37,7 @@ pub struct PathPicker {
     filtered_paths: Vec<usize>,
 
     id: usize,
-    active_path: Option<PathId>,
+    active_path_index: Option<usize>,
 
     offset: usize,
     slot_count: usize,
@@ -78,7 +78,7 @@ impl PathPickerSource {
             paths,
             filtered_paths,
             id,
-            active_path: None,
+            active_path_index: None,
             offset,
             slot_count,
         }
@@ -95,7 +95,60 @@ impl PathPicker {
             .id(egui::Id::new(("Path picker", self.id)))
             .open(open)
             .show(ctx, |mut ui| {
-                unimplemented!();
+                egui::Grid::new("path_picker_list_grid").striped(true).show(
+                    &mut ui,
+                    |ui| {
+                        let active_path_index = self.active_path_index;
+
+                        if self.filtered_paths.is_empty() {
+                            for i in 0..self.slot_count {
+                                let index = self.offset + i;
+
+                                if let Some((_path_id, name)) =
+                                    self.paths.get(index)
+                                {
+                                    if ui
+                                        .selectable_label(
+                                            active_path_index == Some(index),
+                                            name,
+                                        )
+                                        .clicked()
+                                    {
+                                        self.active_path_index = Some(index);
+                                    }
+                                }
+                            }
+                        } else {
+                            for i in 0..self.slot_count {
+                                if let Some((index, name)) = self
+                                    .filtered_paths
+                                    .get(self.offset + i)
+                                    .and_then(|&ix| {
+                                        let (_, name) = self.paths.get(ix)?;
+                                        Some((ix, name))
+                                    })
+                                {
+                                    if ui
+                                        .selectable_label(
+                                            active_path_index == Some(index),
+                                            name,
+                                        )
+                                        .clicked()
+                                    {
+                                        self.active_path_index = Some(index);
+                                    }
+                                }
+                            }
+                        }
+                    },
+                );
             })
+    }
+
+    pub fn active_path(&self) -> Option<(PathId, &str)> {
+        let ix = self.active_path_index?;
+        let (id, name) = self.paths.get(ix)?;
+
+        Some((*id, name))
     }
 }
