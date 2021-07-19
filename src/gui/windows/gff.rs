@@ -22,7 +22,10 @@ use rustc_hash::FxHashSet;
 use anyhow::Result;
 use egui::emath::Numeric;
 
-use crate::{app::AppMsg, asynchronous::AsyncResult, graph_query::GraphQuery};
+use crate::{
+    app::AppMsg, asynchronous::AsyncResult, geometry::Point,
+    graph_query::GraphQuery,
+};
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
@@ -68,13 +71,14 @@ impl Gff3RecordList {
         Self {
             records,
             filtered_records,
+
             offset: 0,
             slot_count: 20,
 
-            filter_open: true,
+            filter_open: false,
             filter,
 
-            column_picker_open: true,
+            column_picker_open: false,
             enabled_columns,
 
             active_path: None,
@@ -202,22 +206,49 @@ impl Gff3RecordList {
     ) -> Option<egui::Response> {
         self.filter.ui(ctx, &mut self.filter_open);
 
-        self.enabled_columns.ui(ctx, &mut self.column_picker_open);
-
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
-        egui::Window::new("GFF3")
+        let resp = egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
+            // .collapsible(true)
             // .open(open_gff3_window)
+            // .resizable(true)
             .show(ctx, |mut ui| {
-                if ui.button("Apply filter").clicked() {
-                    self.apply_filter();
-                }
+                ui.set_min_height(200.0);
+                ui.set_max_height(ui.input().screen_rect.height() - 100.0);
 
-                if ui.button("Clear filter").clicked() {
-                    self.clear_filter();
-                }
+                ui.horizontal(|ui| {
+                    let filter_config_open = self.filter_open;
+                    if ui
+                        .selectable_label(
+                            filter_config_open,
+                            "Configure filter",
+                        )
+                        .clicked()
+                    {
+                        self.filter_open = !self.filter_open;
+                    }
+
+                    let column_picker_open = self.column_picker_open;
+
+                    if ui
+                        .selectable_label(column_picker_open, "Enabled columns")
+                        .clicked()
+                    {
+                        self.column_picker_open = !self.column_picker_open;
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Apply filter").clicked() {
+                        self.apply_filter();
+                    }
+
+                    if ui.button("Clear filter").clicked() {
+                        self.clear_filter();
+                    }
+                });
 
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
@@ -310,7 +341,15 @@ impl Gff3RecordList {
                         self.offset = offset as usize;
                     }
                 }
-            })
+            });
+
+        if let Some(resp) = &resp {
+            let pos = resp.rect.right_top();
+            self.enabled_columns
+                .ui(ctx, pos, &mut self.column_picker_open);
+        }
+
+        resp
     }
 }
 
@@ -336,6 +375,7 @@ impl EnabledColumns {
     fn ui(
         &mut self,
         ctx: &egui::CtxRef,
+        pos: impl Into<egui::Pos2>,
         open: &mut bool,
     ) -> Option<egui::Response> {
         macro_rules! bool_label {
@@ -348,9 +388,11 @@ impl EnabledColumns {
 
         egui::Window::new("GFF3 Columns")
             .id(egui::Id::new(Self::ID))
-            .default_pos(egui::Pos2::new(300.0, 200.0))
+            .fixed_pos(pos)
             .open(open)
             .show(ctx, |ui| {
+                ui.set_max_height(ui.input().screen_rect.height() - 250.0);
+
                 ui.label("Mandatory fields");
                 ui.horizontal(|ui| {
                     bool_label!(ui, source, "Source");
