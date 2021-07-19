@@ -767,7 +767,7 @@ impl Gui {
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
-        self.gff3_list.ui(&self.ctx);
+        self.gff3_list.ui(&self.ctx, graph_query, &self.app_msg_tx);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
