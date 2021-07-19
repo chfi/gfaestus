@@ -9,7 +9,7 @@ use handlegraph::{
 };
 
 use handlegraph::{
-    packedgraph::{paths::StepPtr, PackedGraph},
+    packedgraph::{index::OneBasedIndex, paths::StepPtr, PackedGraph},
     path_position::PathPositionMap,
 };
 
@@ -132,6 +132,67 @@ impl GraphQuery {
         handle: Handle,
     ) -> Option<Vec<(PathId, StepPtr, usize)>> {
         self.path_positions.handle_positions(&self.graph, handle)
+    }
+
+    pub fn path_range(
+        &self,
+        path_id: PathId,
+        start: StepPtr,
+        end: StepPtr,
+    ) -> Option<Vec<(Handle, StepPtr, usize)>> {
+        let path_steps = self.graph.path_steps_range(path_id, start, end)?;
+
+        let mut result = Vec::new();
+
+        for step in path_steps {
+            let step_ptr = step.0;
+            let handle = step.handle();
+
+            let base_pos =
+                self.path_positions.path_step_position(path_id, step_ptr)?;
+
+            result.push((handle, step_ptr, base_pos));
+        }
+
+        Some(result)
+    }
+
+    pub fn path_basepair_range(
+        &self,
+        path_id: PathId,
+        start: usize,
+        end: usize,
+    ) -> Option<Vec<(Handle, StepPtr, usize)>> {
+        let mut start_ptr: Option<StepPtr> = None;
+        let mut end_ptr: Option<StepPtr> = None;
+
+        let mut base_offset = 0usize;
+
+        let path_steps = self.graph.path_steps(path_id)?;
+
+        for step in path_steps {
+            let handle = step.handle();
+            let len = self.graph.node_len(handle);
+
+            base_offset += len;
+
+            if start_ptr.is_none() && base_offset > start {
+                start_ptr = Some(step.0);
+            }
+
+            if end_ptr.is_none() && base_offset > end {
+                end_ptr = Some(step.0);
+            }
+
+            if start_ptr.is_some() && end_ptr.is_some() {
+                break;
+            }
+        }
+
+        let start = start_ptr?;
+        let end = end_ptr?;
+
+        self.path_range(path_id, start, end)
     }
 }
 
