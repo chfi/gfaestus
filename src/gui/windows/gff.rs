@@ -132,6 +132,35 @@ impl Gff3RecordList {
         resp
     }
 
+    fn select_record(
+        &self,
+        app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        graph_query: &GraphQuery,
+        record: &Gff3Record,
+    ) {
+        let active_path_id =
+            self.path_picker.active_path().map(|(id, _name)| id);
+
+        if let Some(path_id) = active_path_id {
+            if let Some(range) = graph_query.path_basepair_range(
+                path_id,
+                record.start(),
+                record.end(),
+            ) {
+                let nodes = range
+                    .into_iter()
+                    .map(|(handle, _, _)| handle.id())
+                    .collect::<FxHashSet<_>>();
+
+                use crate::app::Select;
+
+                let select = Select::Many { nodes, clear: true };
+                let msg = AppMsg::Selection(select);
+                app_msg_tx.send(msg).unwrap();
+            }
+        }
+    }
+
     fn apply_filter(&mut self) {
         self.filtered_records.clear();
 
@@ -176,9 +205,6 @@ impl Gff3RecordList {
         self.enabled_columns.ui(ctx, &mut self.column_picker_open);
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
-
-        let active_path_id =
-            self.path_picker.active_path().map(|(id, name)| id);
 
         egui::Window::new("GFF3")
             .id(egui::Id::new(Self::ID))
@@ -226,107 +252,36 @@ impl Gff3RecordList {
 
                         ui.end_row();
 
-                        if self.filtered_records.is_empty() {
-                            for i in 0..self.slot_count {
-                                if let Some(record) =
-                                    self.records.records.get(self.offset + i)
-                                {
-                                    let row = self.ui_row(record, ui);
-
-                                    let row_interact =
-                                        ui.interact(
-                                            row.rect,
-                                            egui::Id::new(ui.id().with(
-                                                format!("no_filter_{}", i),
-                                            )),
-                                            egui::Sense::click(),
-                                        );
-
-                                    if let Some(path_id) = active_path_id {
-                                        if row_interact.clicked() {
-                                            if let Some(range) = graph_query
-                                                .path_basepair_range(
-                                                    path_id,
-                                                    record.start(),
-                                                    record.end(),
-                                                )
-                                            {
-                                                let nodes = range
-                                                    .into_iter()
-                                                    .map(|(handle, _, _)| {
-                                                        handle.id()
-                                                    })
-                                                    .collect::<FxHashSet<_>>();
-
-                                                use crate::app::Select;
-
-                                                let select = Select::Many {
-                                                    nodes,
-                                                    clear: true,
-                                                };
-                                                let msg =
-                                                    AppMsg::Selection(select);
-                                                app_msg_tx.send(msg).unwrap();
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        } else {
-                            for i in 0..self.slot_count {
-                                if let Some(record) = self
-                                    .filtered_records
+                        for i in 0..self.slot_count {
+                            let row_record = if self.filtered_records.is_empty()
+                            {
+                                self.records.records.get(self.offset + i).map(
+                                    |record| (self.ui_row(record, ui), record),
+                                )
+                            } else {
+                                self.filtered_records
                                     .get(self.offset + i)
                                     .and_then(|&ix| {
-                                        self.records.records.get(ix)
+                                        let record =
+                                            self.records.records.get(ix)?;
+                                        let row = self.ui_row(record, ui);
+                                        Some((row, record))
                                     })
-                                {
-                                    let row = self.ui_row(record, ui);
+                            };
 
-                                    let row_interact = ui.interact(
-                                        row.rect,
-                                        egui::Id::new(ui.id().with(format!(
-                                            "with_filter_{}",
-                                            i
-                                        ))),
-                                        egui::Sense::click(),
+                            if let Some((row, record)) = row_record {
+                                let row_interact = ui.interact(
+                                    row.rect,
+                                    egui::Id::new(ui.id().with(i)),
+                                    egui::Sense::click(),
+                                );
+
+                                if row_interact.clicked() {
+                                    self.select_record(
+                                        app_msg_tx,
+                                        graph_query,
+                                        record,
                                     );
-
-                                    if row_interact.clicked() {
-                                        println!("clicked row");
-                                        if let Some(path_id) = active_path_id {
-                                            println!("had active path");
-                                            if let Some(range) = graph_query
-                                                .path_basepair_range(
-                                                    path_id,
-                                                    record.start(),
-                                                    record.end(),
-                                                )
-                                            {
-                                                let nodes = range
-                                                    .into_iter()
-                                                    .map(|(handle, _, _)| {
-                                                        handle.id()
-                                                    })
-                                                    .collect::<FxHashSet<_>>();
-
-                                                println!(
-                                                    "found {} nodes",
-                                                    nodes.len()
-                                                );
-
-                                                use crate::app::Select;
-
-                                                let select = Select::Many {
-                                                    nodes,
-                                                    clear: true,
-                                                };
-                                                let msg =
-                                                    AppMsg::Selection(select);
-                                                app_msg_tx.send(msg).unwrap();
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
