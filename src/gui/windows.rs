@@ -16,6 +16,7 @@ use crate::view::View;
 
 pub mod gff;
 pub mod graph_details;
+pub mod graph_picker;
 pub mod main_view_settings;
 pub mod overlays;
 pub mod paths;
@@ -24,6 +25,7 @@ pub mod theme;
 
 pub use gff::*;
 pub use graph_details::*;
+pub use graph_picker::*;
 pub use main_view_settings::*;
 pub use overlays::*;
 pub use paths::*;
