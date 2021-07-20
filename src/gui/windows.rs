@@ -14,6 +14,7 @@ use crate::geometry::*;
 use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
 use crate::view::View;
 
+pub mod file;
 pub mod filters;
 pub mod gff;
 pub mod graph_details;
@@ -24,6 +25,7 @@ pub mod paths;
 pub mod repl;
 pub mod theme;
 
+pub use file::*;
 pub use filters::*;
 pub use gff::*;
 pub use graph_details::*;
