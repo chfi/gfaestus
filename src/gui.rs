@@ -20,6 +20,8 @@ use rustc_hash::FxHashMap;
 use crossbeam::{atomic::AtomicCell, channel};
 use parking_lot::Mutex;
 
+use crate::asynchronous::AsyncResult;
+
 use crate::{
     annotations::{Annotations, Gff3Record, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
@@ -91,6 +93,7 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
+    gff3_records: Option<Gff3Records>,
     gff3_list: Gff3RecordList,
 
     path_picker_source: PathPickerSource,
@@ -581,8 +584,9 @@ impl Gui {
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
 
-        let gff3_list =
-            Gff3RecordList::new(gff3, path_picker_source.create_picker());
+        // let gff3_records = None;
+        let gff3_records = Some(gff3);
+        let gff3_list = Gff3RecordList::new(path_picker_source.create_picker());
 
         let pwd = std::fs::canonicalize("./")?;
         let mut file_picker =
@@ -622,6 +626,7 @@ impl Gui {
 
             clipboard_ctx,
 
+            gff3_records,
             gff3_list,
 
             path_picker_source,
@@ -777,7 +782,14 @@ impl Gui {
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
-        self.gff3_list.ui(&self.ctx, graph_query, &self.app_msg_tx);
+        if let Some(records) = &self.gff3_records {
+            self.gff3_list.ui(
+                &self.ctx,
+                graph_query,
+                &self.app_msg_tx,
+                records,
+            );
+        }
 
         let mut file_picker_open = true;
         self.file_picker.ui(&self.ctx, &mut file_picker_open);

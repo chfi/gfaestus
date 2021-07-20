@@ -29,11 +29,11 @@ use crate::{
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
-use super::filters::*;
 use super::graph_picker::PathPicker;
+use super::{file::FilePicker, filters::*};
 
 pub struct Gff3RecordList {
-    records: Gff3Records,
+    // records: Gff3Records,
     filtered_records: Vec<usize>,
 
     offset: usize,
@@ -63,14 +63,17 @@ struct EnabledColumns {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    pub fn new(records: Gff3Records, path_picker: PathPicker) -> Self {
-        let filtered_records = Vec::with_capacity(records.records.len());
+    pub fn new(path_picker: PathPicker) -> Self {
+        // let filtered_records = Vec::with_capacity(records.records.len());
+        let filtered_records = Vec::new();
 
-        let filter = Gff3Filter::new(&records);
-        let enabled_columns = EnabledColumns::new(&records);
+        // let filter = Gff3Filter::new(&records);
+        let filter = Gff3Filter::default();
+        // let enabled_columns = EnabledColumns::new(&records);
+        let enabled_columns = EnabledColumns::default();
 
         Self {
-            records,
+            // records,
             filtered_records,
 
             offset: 0,
@@ -89,7 +92,17 @@ impl Gff3RecordList {
         }
     }
 
-    fn ui_row(&self, record: &Gff3Record, ui: &mut egui::Ui) -> egui::Response {
+    pub fn update_records(&mut self, records: &Gff3Records) {
+        self.filter = Gff3Filter::new(records);
+        self.enabled_columns = EnabledColumns::new(&records);
+    }
+
+    fn ui_row(
+        &self,
+        records: &Gff3Records,
+        record: &Gff3Record,
+        ui: &mut egui::Ui,
+    ) -> egui::Response {
         let mut resp = ui.label(format!("{}", record.seq_id().as_bstr()));
 
         if self.enabled_columns.source {
@@ -109,7 +122,7 @@ impl Gff3RecordList {
                 resp.union(ui.label(format!("{}", record.frame().as_bstr())));
         }
 
-        let mut keys = self.records.attribute_keys.iter().collect::<Vec<_>>();
+        let mut keys = records.attribute_keys.iter().collect::<Vec<_>>();
         keys.sort_by(|k1, k2| k1.cmp(k2));
 
         let attrs = record.attributes();
@@ -166,13 +179,13 @@ impl Gff3RecordList {
         }
     }
 
-    fn apply_filter(&mut self) {
+    fn apply_filter(&mut self, records: &Gff3Records) {
         self.filtered_records.clear();
 
         eprintln!("applying filter");
-        let total = self.records.records.len();
+        let total = records.records.len();
 
-        let records = &self.records.records;
+        let records = &records.records;
         let filter = &self.filter;
         let filtered_records = &mut self.filtered_records;
 
@@ -203,6 +216,7 @@ impl Gff3RecordList {
         ctx: &egui::CtxRef,
         graph_query: &GraphQuery,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        records: &Gff3Records,
         // open_gff3_window: &mut bool,
     ) -> Option<egui::Response> {
         let active_path_name = self
@@ -248,7 +262,7 @@ impl Gff3RecordList {
 
                 ui.horizontal(|ui| {
                     if ui.button("Apply filter").clicked() {
-                        self.apply_filter();
+                        self.apply_filter(records);
                     }
 
                     if ui.button("Clear filter").clicked() {
@@ -286,11 +300,8 @@ impl Gff3RecordList {
                             ui.label("frame");
                         }
 
-                        let mut keys = self
-                            .records
-                            .attribute_keys
-                            .iter()
-                            .collect::<Vec<_>>();
+                        let mut keys =
+                            records.attribute_keys.iter().collect::<Vec<_>>();
                         keys.sort_by(|k1, k2| k1.cmp(k2));
 
                         for key in keys {
@@ -306,16 +317,21 @@ impl Gff3RecordList {
                         for i in 0..self.slot_count {
                             let row_record = if self.filtered_records.is_empty()
                             {
-                                self.records.records.get(self.offset + i).map(
-                                    |record| (self.ui_row(record, ui), record),
+                                records.records.get(self.offset + i).map(
+                                    |record| {
+                                        (
+                                            self.ui_row(records, record, ui),
+                                            record,
+                                        )
+                                    },
                                 )
                             } else {
                                 self.filtered_records
                                     .get(self.offset + i)
                                     .and_then(|&ix| {
-                                        let record =
-                                            self.records.records.get(ix)?;
-                                        let row = self.ui_row(record, ui);
+                                        let record = records.records.get(ix)?;
+                                        let row =
+                                            self.ui_row(records, record, ui);
                                         Some((row, record))
                                     })
                             };
@@ -355,8 +371,7 @@ impl Gff3RecordList {
 
                         offset = offset.clamp(
                             0,
-                            (self.records.records.len() - self.slot_count)
-                                as isize,
+                            (records.records.len() - self.slot_count) as isize,
                         );
                         self.offset = offset as usize;
                     }
@@ -370,6 +385,18 @@ impl Gff3RecordList {
         }
 
         resp
+    }
+}
+
+impl std::default::Default for EnabledColumns {
+    fn default() -> Self {
+        Self {
+            source: true,
+            type_: true,
+            score: true,
+            frame: true,
+            attributes: Default::default(),
+        }
     }
 }
 

@@ -6,6 +6,7 @@ use anyhow::Result;
 
 use super::Strand;
 
+#[derive(Clone, Default)]
 pub struct Gff3Records {
     pub records: Vec<Gff3Record>,
 
