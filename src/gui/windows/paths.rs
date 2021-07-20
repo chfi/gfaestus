@@ -367,7 +367,7 @@ impl PathList {
 
         let mut slots: Vec<PathListSlot> = Vec::with_capacity(page_size);
 
-        for &path in all_paths[0..page_size].iter() {
+        for &path in all_paths.iter().take(page_size) {
             slots.push(PathListSlot::default());
         }
 
