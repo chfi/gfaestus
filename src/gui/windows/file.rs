@@ -19,7 +19,9 @@ pub struct FilePicker {
     current_dir: PathBuf,
     current_dir_text: String,
 
+    highlighted_dir: Option<PathBuf>,
     selected_path: Option<PathBuf>,
+
     dir_list: Vec<DirEntry>,
     history: Vec<PathBuf>,
 }
@@ -31,10 +33,6 @@ impl FilePicker {
         let current_dir_text = current_dir.as_os_str().to_str().unwrap();
         let current_dir_text = current_dir_text.to_owned();
 
-        let selected_path = None;
-        let dir_list = Vec::new();
-        let history = Vec::new();
-
         Self {
             id,
 
@@ -42,9 +40,11 @@ impl FilePicker {
             current_dir,
             current_dir_text,
 
-            selected_path,
-            dir_list,
-            history,
+            highlighted_dir: None,
+            selected_path: None,
+
+            dir_list: Vec::new(),
+            history: Vec::new(),
         }
     }
 
@@ -140,11 +140,14 @@ impl FilePicker {
                         &mut ui,
                         |ui| {
                             let mut goto_dir: Option<PathBuf> = None;
+
+                            let mut choose_path: Option<PathBuf> = None;
+
                             for dir in self.dir_list.iter() {
                                 let dir_path = dir.path();
                                 if let Some(name) = dir.file_name().to_str() {
                                     let checked = if let Some(sel_name) =
-                                        &self.selected_path
+                                        &self.highlighted_dir
                                     {
                                         sel_name == &dir_path
                                     } else {
@@ -154,7 +157,7 @@ impl FilePicker {
                                         ui.selectable_label(checked, name);
 
                                     if row.clicked() {
-                                        self.selected_path =
+                                        self.highlighted_dir =
                                             Some(dir_path.clone());
                                     }
 
@@ -162,7 +165,7 @@ impl FilePicker {
                                         if dir_path.is_dir() {
                                             goto_dir = Some(dir_path);
                                         } else if dir_path.is_file() {
-                                            // TODO
+                                            choose_path = Some(dir_path);
                                         }
                                     }
 
@@ -172,6 +175,10 @@ impl FilePicker {
 
                             if let Some(dir) = goto_dir {
                                 self.goto_dir(&dir, true).unwrap();
+                            }
+
+                            if let Some(path) = choose_path {
+                                self.selected_path = Some(path);
                             }
                         },
                     );
