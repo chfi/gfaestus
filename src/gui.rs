@@ -94,6 +94,8 @@ pub struct Gui {
     gff3_list: Gff3RecordList,
 
     path_picker_source: PathPickerSource,
+
+    file_picker: FilePicker,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -582,6 +584,12 @@ impl Gui {
         let gff3_list =
             Gff3RecordList::new(gff3, path_picker_source.create_picker());
 
+        let pwd = std::fs::canonicalize("./")?;
+        let mut file_picker =
+            FilePicker::new(egui::Id::new("file_picker_test"), &pwd);
+
+        file_picker.goto_dir(&pwd, false);
+
         let gui = Self {
             ctx,
             frame_input,
@@ -617,6 +625,8 @@ impl Gui {
             gff3_list,
 
             path_picker_source,
+
+            file_picker,
         };
 
         Ok(gui)
@@ -768,6 +778,9 @@ impl Gui {
         }
 
         self.gff3_list.ui(&self.ctx, graph_query, &self.app_msg_tx);
+
+        let mut file_picker_open = true;
+        self.file_picker.ui(&self.ctx, &mut file_picker_open);
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
