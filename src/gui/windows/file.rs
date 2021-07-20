@@ -118,7 +118,22 @@ impl FilePicker {
             .collapsible(false)
             .open(open)
             .show(ctx, |ui| {
-                ui.text_edit_singleline(&mut self.current_dir_text);
+                ui.horizontal(|ui| {
+                    ui.text_edit_singleline(&mut self.current_dir_text);
+                    if ui.button("Goto").clicked() {
+                        self.goto_path_in_text_box().unwrap();
+                    }
+                });
+
+                ui.horizontal(|ui| {
+                    if ui.button("Prev").clicked() {
+                        self.goto_prev().unwrap();
+                    }
+
+                    if ui.button("Up").clicked() {
+                        self.go_up().unwrap();
+                    }
+                });
 
                 egui::ScrollArea::auto_sized().show(ui, |mut ui| {
                     egui::Grid::new("file_list").striped(true).show(
