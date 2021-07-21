@@ -27,13 +27,13 @@ pub struct FilePicker {
 }
 
 impl FilePicker {
-    pub fn new<P: AsRef<Path>>(id: egui::Id, pwd: P) -> Self {
+    pub fn new<P: AsRef<Path>>(id: egui::Id, pwd: P) -> Result<Self> {
         let pwd = pwd.as_ref().to_owned();
         let current_dir = pwd.clone();
         let current_dir_text = current_dir.as_os_str().to_str().unwrap();
         let current_dir_text = current_dir_text.to_owned();
 
-        Self {
+        let mut result = Self {
             id,
 
             pwd,
@@ -45,7 +45,11 @@ impl FilePicker {
 
             dir_list: Vec::new(),
             history: Vec::new(),
-        }
+        };
+
+        result.load_current_dir()?;
+
+        Ok(result)
     }
 
     pub fn selected_path(&self) -> Option<&Path> {
@@ -53,11 +57,28 @@ impl FilePicker {
         Some(path.as_ref())
     }
 
-    fn reset(&mut self) {
+    pub fn reset(&mut self) {
         self.current_dir.clone_from(&self.pwd);
         self.selected_path = None;
         self.dir_list.clear();
         self.history.clear();
+    }
+
+    fn load_current_dir(&mut self) -> Result<()> {
+        let current_dir_text = self.current_dir.as_os_str().to_str().unwrap();
+        self.current_dir_text = current_dir_text.to_owned();
+
+        self.selected_path = None;
+        self.dir_list.clear();
+
+        let dirs = std::fs::read_dir(&self.current_dir)?;
+
+        for dir in dirs {
+            let entry = dir?;
+            self.dir_list.push(entry);
+        }
+
+        Ok(())
     }
 
     pub fn goto_dir<P: AsRef<Path>>(
@@ -72,18 +93,7 @@ impl FilePicker {
         }
 
         self.current_dir = new_dir.to_owned();
-        let current_dir_text = self.current_dir.as_os_str().to_str().unwrap();
-        self.current_dir_text = current_dir_text.to_owned();
-
-        self.selected_path = None;
-        self.dir_list.clear();
-
-        let dirs = std::fs::read_dir(new_dir)?;
-
-        for dir in dirs {
-            let entry = dir?;
-            self.dir_list.push(entry);
-        }
+        self.load_current_dir()?;
 
         Ok(())
     }

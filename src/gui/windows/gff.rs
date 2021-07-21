@@ -70,19 +70,17 @@ impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
     pub fn new(path_picker: PathPicker) -> Self {
-        // let filtered_records = Vec::with_capacity(records.records.len());
         let filtered_records = Vec::new();
 
-        // let filter = Gff3Filter::new(&records);
         let filter = Gff3Filter::default();
-        // let enabled_columns = EnabledColumns::new(&records);
         let enabled_columns = EnabledColumns::default();
 
         let pwd = std::fs::canonicalize("./").unwrap();
         let file_picker = FilePicker::new(
             egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
             pwd,
-        );
+        )
+        .unwrap();
 
         Self {
             // records,
@@ -242,6 +240,7 @@ impl Gff3RecordList {
 
         if let Some(query) = self.gff3_load_result.as_mut() {
             query.move_result_if_ready();
+            self.file_picker.reset();
         }
 
         if let Some(gff3_result) = self
@@ -290,6 +289,10 @@ impl Gff3RecordList {
         open: &mut bool,
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
     ) -> Option<egui::Response> {
+        if self.file_picker.selected_path().is_some() {
+            self.file_picker_open = false;
+        }
+
         self.file_picker.ui(ctx, &mut self.file_picker_open);
 
         let resp = egui::Window::new("GFF3")
