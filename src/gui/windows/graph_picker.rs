@@ -99,6 +99,7 @@ impl PathPicker {
         egui::Window::new("Path picker")
             .id(egui::Id::new(("Path picker", self.id)))
             .open(open)
+            .collapsible(false)
             .show(ctx, |mut ui| {
                 self.name_filter.ui(ui);
 
@@ -171,10 +172,10 @@ impl PathPicker {
 
                         offset += delta;
 
-                        offset = offset.clamp(
-                            0,
-                            (self.paths.len() - self.slot_count) as isize,
-                        );
+                        let path_count = self.paths.len() as isize;
+                        let slot_count = self.slot_count as isize;
+
+                        offset = offset.clamp(0, path_count - slot_count);
                         self.offset = offset as usize;
                     }
                 }
