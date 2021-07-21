@@ -301,23 +301,39 @@ impl Gff3RecordList {
             .collapsible(false)
             .open(open)
             .show(ctx, |mut ui| {
-                if ui.button("Choose GFF3 file").clicked() {
-                    self.file_picker_open = true;
-                }
-
-                if ui.button("Load").clicked() {
-                    if let Some(path) = self.file_picker.selected_path() {
-                        let path_str = path.to_str();
-                        eprintln!("Loading GFF3 file {:?}", path_str);
-                        let path = path.to_owned();
-                        let query = AsyncResult::new(thread_pool, async move {
-                            println!("parsing gff3 file");
-                            let records = Gff3Records::parse_gff3_file(path);
-                            println!("parsing complete");
-                            records
-                        });
-                        self.gff3_load_result = Some(query);
+                if self.gff3_load_result.is_none() {
+                    if ui.button("Choose GFF3 file").clicked() {
+                        self.file_picker_open = true;
                     }
+
+                    let label = if let Some(path) = self
+                        .file_picker
+                        .selected_path()
+                        .and_then(|p| p.to_str())
+                    {
+                        ui.label(path)
+                    } else {
+                        ui.label("No file selected")
+                    };
+
+                    if ui.button("Load").clicked() {
+                        if let Some(path) = self.file_picker.selected_path() {
+                            let path_str = path.to_str();
+                            eprintln!("Loading GFF3 file {:?}", path_str);
+                            let path = path.to_owned();
+                            let query =
+                                AsyncResult::new(thread_pool, async move {
+                                    println!("parsing gff3 file");
+                                    let records =
+                                        Gff3Records::parse_gff3_file(path);
+                                    println!("parsing complete");
+                                    records
+                                });
+                            self.gff3_load_result = Some(query);
+                        }
+                    }
+                } else {
+                    ui.label("Loading file");
                 }
             });
 

@@ -133,6 +133,10 @@ impl FilePicker {
             .collapsible(false)
             .open(open)
             .show(ctx, |ui| {
+                let max_height = ui.input().screen_rect.height() - 100.0;
+
+                ui.set_max_height(max_height);
+
                 ui.horizontal(|ui| {
                     ui.text_edit_singleline(&mut self.current_dir_text);
                     if ui.button("Goto").clicked() {
@@ -150,54 +154,70 @@ impl FilePicker {
                     }
                 });
 
-                egui::ScrollArea::auto_sized().show(ui, |mut ui| {
-                    egui::Grid::new("file_list").striped(true).show(
-                        &mut ui,
-                        |ui| {
-                            let mut goto_dir: Option<PathBuf> = None;
+                let mut goto_dir: Option<PathBuf> = None;
 
-                            let mut choose_path: Option<PathBuf> = None;
+                let mut choose_path: Option<PathBuf> = None;
 
-                            for dir in self.dir_list.iter() {
-                                let dir_path = dir.path();
-                                if let Some(name) = dir.file_name().to_str() {
-                                    let checked = if let Some(sel_name) =
-                                        &self.highlighted_dir
+                egui::ScrollArea::from_max_height(max_height - 100.0).show(
+                    ui,
+                    |mut ui| {
+                        egui::Grid::new("file_list").striped(true).show(
+                            &mut ui,
+                            |ui| {
+                                for dir in self.dir_list.iter() {
+                                    let dir_path = dir.path();
+
+                                    if let Some(name) = dir.file_name().to_str()
                                     {
-                                        sel_name == &dir_path
-                                    } else {
-                                        false
-                                    };
-                                    let row =
-                                        ui.selectable_label(checked, name);
+                                        let checked = if let Some(sel_name) =
+                                            &self.highlighted_dir
+                                        {
+                                            sel_name == &dir_path
+                                        } else {
+                                            false
+                                        };
+                                        let row =
+                                            ui.selectable_label(checked, name);
 
-                                    if row.clicked() {
-                                        self.highlighted_dir =
-                                            Some(dir_path.clone());
-                                    }
-
-                                    if row.double_clicked() {
-                                        if dir_path.is_dir() {
-                                            goto_dir = Some(dir_path);
-                                        } else if dir_path.is_file() {
-                                            choose_path = Some(dir_path);
+                                        if row.clicked() {
+                                            self.highlighted_dir =
+                                                Some(dir_path.clone());
                                         }
+
+                                        if row.double_clicked() {
+                                            if dir_path.is_dir() {
+                                                goto_dir = Some(dir_path);
+                                            } else if dir_path.is_file() {
+                                                choose_path = Some(dir_path);
+                                            }
+                                        }
+
+                                        ui.end_row();
                                     }
-
-                                    ui.end_row();
                                 }
-                            }
+                            },
+                        );
+                    },
+                );
 
-                            if let Some(dir) = goto_dir {
-                                self.goto_dir(&dir, true).unwrap();
-                            }
+                if ui.button("Ok").clicked() {
+                    if let Some(dir_path) = &self.highlighted_dir {
+                        if dir_path.is_dir() {
+                            goto_dir = Some(dir_path.to_owned());
+                        } else if dir_path.is_file() {
+                            choose_path = Some(dir_path.to_owned());
+                        }
+                    }
+                }
 
-                            if let Some(path) = choose_path {
-                                self.selected_path = Some(path);
-                            }
-                        },
-                    );
-                })
+                if let Some(dir) = goto_dir {
+                    self.goto_dir(&dir, true).unwrap();
+                    ui.scroll_to_cursor(egui::Align::TOP);
+                }
+
+                if let Some(path) = choose_path {
+                    self.selected_path = Some(path);
+                }
             })
     }
 }
