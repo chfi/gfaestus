@@ -425,6 +425,8 @@ pub struct OpenWindows {
     fps: bool,
     graph_stats: bool,
 
+    gff3: bool,
+
     nodes: bool,
     node_details: bool,
 
@@ -449,6 +451,8 @@ impl std::default::Default for OpenWindows {
 
             fps: true,
             graph_stats: true,
+
+            gff3: false,
 
             nodes: false,
             node_details: false,
@@ -784,6 +788,7 @@ impl Gui {
             &self.gui_msg_tx,
             &self.app_msg_tx,
             self.gff3_records.as_ref(),
+            &mut self.open_windows.gff3,
         );
 
         if self.open_windows.settings {

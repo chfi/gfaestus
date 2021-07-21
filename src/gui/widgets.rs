@@ -55,6 +55,8 @@ impl MenuBar {
         let fps = &mut open_windows.fps;
         let graph_stats = &mut open_windows.graph_stats;
 
+        let gff3 = &mut open_windows.gff3;
+
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
 
@@ -63,7 +65,7 @@ impl MenuBar {
 
         let repl = &mut open_windows.repl_window;
 
-        let resp = egui::TopPanel::top(Self::ID).show(ctx, |ui| {
+        let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(*nodes, "Nodes").clicked() {
                     *nodes = !*nodes;
@@ -79,6 +81,10 @@ impl MenuBar {
 
                 if ui.selectable_label(*overlays, "Overlays").clicked() {
                     *overlays = !*overlays;
+                }
+
+                if ui.selectable_label(*gff3, "GFF3").clicked() {
+                    *gff3 = !*gff3;
                 }
 
                 if ui.selectable_label(*fps, "FPS").clicked() {

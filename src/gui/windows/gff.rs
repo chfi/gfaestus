@@ -234,10 +234,8 @@ impl Gff3RecordList {
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         records: Option<&Gff3Records>,
-        // open: &mut bool,
+        open: &mut bool,
     ) -> Option<egui::Response> {
-        let mut open = true;
-
         if let Some(query) = self.gff3_load_result.as_mut() {
             query.move_result_if_ready();
             self.file_picker.reset();
@@ -261,16 +259,9 @@ impl Gff3RecordList {
         }
 
         if let Some(records) = records {
-            self.list_ui(
-                ctx,
-                &mut open,
-                graph_query,
-                // gui_msg_tx,
-                app_msg_tx,
-                records,
-            )
+            self.list_ui(ctx, open, graph_query, app_msg_tx, records)
         } else {
-            self.load_ui(ctx, thread_pool, &mut open, gui_msg_tx)
+            self.load_ui(ctx, thread_pool, open)
         }
     }
 
@@ -287,7 +278,6 @@ impl Gff3RecordList {
         ctx: &egui::CtxRef,
         thread_pool: &ThreadPool,
         open: &mut bool,
-        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
     ) -> Option<egui::Response> {
         if self.file_picker.selected_path().is_some() {
             self.file_picker_open = false;
