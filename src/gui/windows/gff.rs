@@ -1,3 +1,4 @@
+use futures::executor::ThreadPool;
 use gfa::gfa::Orientation;
 use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
@@ -24,7 +25,7 @@ use egui::emath::Numeric;
 
 use crate::{
     app::AppMsg, asynchronous::AsyncResult, geometry::Point,
-    graph_query::GraphQuery,
+    graph_query::GraphQuery, gui::GuiMsg,
 };
 
 use crate::annotations::{Gff3Record, Gff3Records};
@@ -48,6 +49,11 @@ pub struct Gff3RecordList {
     path_picker_open: bool,
     path_picker: PathPicker,
     active_path: Option<(PathId, String)>,
+
+    file_picker: FilePicker,
+    file_picker_open: bool,
+
+    gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
 }
 
 struct EnabledColumns {
@@ -72,6 +78,12 @@ impl Gff3RecordList {
         // let enabled_columns = EnabledColumns::new(&records);
         let enabled_columns = EnabledColumns::default();
 
+        let pwd = std::fs::canonicalize("./").unwrap();
+        let file_picker = FilePicker::new(
+            egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
+            pwd,
+        );
+
         Self {
             // records,
             filtered_records,
@@ -89,6 +101,11 @@ impl Gff3RecordList {
 
             path_picker_open: false,
             path_picker,
+
+            file_picker_open: false,
+            file_picker,
+
+            gff3_load_result: None,
         }
     }
 
@@ -214,10 +231,104 @@ impl Gff3RecordList {
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
+        thread_pool: &ThreadPool,
         graph_query: &GraphQuery,
+        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
+        app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        records: Option<&Gff3Records>,
+        // open: &mut bool,
+    ) -> Option<egui::Response> {
+        let mut open = true;
+
+        if let Some(query) = self.gff3_load_result.as_mut() {
+            query.move_result_if_ready();
+        }
+
+        if let Some(gff3_result) = self
+            .gff3_load_result
+            .as_mut()
+            .and_then(|r| r.take_result_if_ready())
+        {
+            match gff3_result {
+                Ok(records) => {
+                    gui_msg_tx
+                        .send(GuiMsg::Gff3RecordsLoaded(records))
+                        .unwrap();
+                }
+                Err(err) => {
+                    eprintln!("error loading GFF3 file: {}", err);
+                }
+            }
+        }
+
+        if let Some(records) = records {
+            self.list_ui(
+                ctx,
+                &mut open,
+                graph_query,
+                // gui_msg_tx,
+                app_msg_tx,
+                records,
+            )
+        } else {
+            self.load_ui(ctx, thread_pool, &mut open, gui_msg_tx)
+        }
+    }
+
+    fn load_id() -> egui::Id {
+        egui::Id::with(egui::Id::new(Self::ID), "load_records")
+    }
+
+    fn list_id() -> egui::Id {
+        egui::Id::with(egui::Id::new(Self::ID), "record_list")
+    }
+
+    fn load_ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        thread_pool: &ThreadPool,
+        open: &mut bool,
+        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
+    ) -> Option<egui::Response> {
+        self.file_picker.ui(ctx, &mut self.file_picker_open);
+
+        let resp = egui::Window::new("GFF3")
+            .id(Self::load_id())
+            .default_pos(egui::Pos2::new(600.0, 200.0))
+            .collapsible(false)
+            .open(open)
+            .show(ctx, |mut ui| {
+                if ui.button("Choose GFF3 file").clicked() {
+                    self.file_picker_open = true;
+                }
+
+                if ui.button("Load").clicked() {
+                    if let Some(path) = self.file_picker.selected_path() {
+                        let path_str = path.to_str();
+                        eprintln!("Loading GFF3 file {:?}", path_str);
+                        let path = path.to_owned();
+                        let query = AsyncResult::new(thread_pool, async move {
+                            println!("parsing gff3 file");
+                            let records = Gff3Records::parse_gff3_file(path);
+                            println!("parsing complete");
+                            records
+                        });
+                        self.gff3_load_result = Some(query);
+                    }
+                }
+            });
+
+        resp
+    }
+
+    fn list_ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+        graph_query: &GraphQuery,
+        // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         records: &Gff3Records,
-        // open_gff3_window: &mut bool,
     ) -> Option<egui::Response> {
         let active_path_name = self
             .path_picker
@@ -229,10 +340,10 @@ impl Gff3RecordList {
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
         let resp = egui::Window::new("GFF3")
-            .id(egui::Id::new(Self::ID))
+            .id(Self::list_id())
             .default_pos(egui::Pos2::new(600.0, 200.0))
-            // .collapsible(true)
-            // .open(open_gff3_window)
+            .collapsible(true)
+            .open(open)
             // .resizable(true)
             .show(ctx, |mut ui| {
                 ui.set_min_height(200.0);

@@ -48,6 +48,11 @@ impl FilePicker {
         }
     }
 
+    pub fn selected_path(&self) -> Option<&Path> {
+        let path = self.selected_path.as_ref()?;
+        Some(path.as_ref())
+    }
+
     fn reset(&mut self) {
         self.current_dir.clone_from(&self.pwd);
         self.selected_path = None;

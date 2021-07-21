@@ -97,8 +97,6 @@ pub struct Gui {
     gff3_list: Gff3RecordList,
 
     path_picker_source: PathPickerSource,
-
-    file_picker: FilePicker,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -473,14 +471,19 @@ impl std::default::Default for OpenWindows {
 
 pub enum GuiMsg {
     EnableView(Views),
+
     SetWindowOpen { window: Windows, open: Option<bool> },
     SetLightMode,
     SetDarkMode,
+
     EguiEvent(egui::Event),
     FileDropped { path: std::path::PathBuf },
+
     Cut,
     Copy,
     Paste,
+
+    Gff3RecordsLoaded(Gff3Records),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -512,7 +515,7 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
-        gff3: Gff3Records,
+        // gff3: Gff3Records,
     ) -> Result<Self> {
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
@@ -584,15 +587,9 @@ impl Gui {
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
 
-        // let gff3_records = None;
-        let gff3_records = Some(gff3);
+        let gff3_records = None;
+        // let gff3_records = Some(gff3);
         let gff3_list = Gff3RecordList::new(path_picker_source.create_picker());
-
-        let pwd = std::fs::canonicalize("./")?;
-        let mut file_picker =
-            FilePicker::new(egui::Id::new("file_picker_test"), &pwd);
-
-        file_picker.goto_dir(&pwd, false);
 
         let gui = Self {
             ctx,
@@ -630,8 +627,6 @@ impl Gui {
             gff3_list,
 
             path_picker_source,
-
-            file_picker,
         };
 
         Ok(gui)
@@ -782,17 +777,14 @@ impl Gui {
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
-        if let Some(records) = &self.gff3_records {
-            self.gff3_list.ui(
-                &self.ctx,
-                graph_query,
-                &self.app_msg_tx,
-                records,
-            );
-        }
-
-        let mut file_picker_open = true;
-        self.file_picker.ui(&self.ctx, &mut file_picker_open);
+        self.gff3_list.ui(
+            &self.ctx,
+            &self.thread_pool,
+            graph_query,
+            &self.gui_msg_tx,
+            &self.app_msg_tx,
+            self.gff3_records.as_ref(),
+        );
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
@@ -1033,6 +1025,14 @@ impl Gui {
                             .events
                             .push(egui::Event::Text(text.clone()));
                     }
+                }
+
+                GuiMsg::Gff3RecordsLoaded(records) => {
+                    eprintln!(
+                        "received {} GFF3 records",
+                        records.records.len()
+                    );
+                    self.gff3_records = Some(records);
                 }
             }
         }

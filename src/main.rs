@@ -183,6 +183,7 @@ fn main() {
     )
     .unwrap();
 
+    /*
     eprintln!("loading gff3");
 
     let gff_records = gfaestus::annotations::gff::Gff3Records::parse_gff3_file(
@@ -191,6 +192,7 @@ fn main() {
     .unwrap();
 
     eprintln!("loaded and parsed {} gff3 rows", gff_records.records.len());
+    */
 
     let mut gui = Gui::new(
         &gfaestus,
@@ -199,7 +201,7 @@ fn main() {
         app.settings.clone(),
         &graph_query,
         thread_pool.clone(),
-        gff_records,
+        // gff_records,
     )
     .unwrap();
 
