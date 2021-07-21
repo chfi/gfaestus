@@ -78,6 +78,8 @@ impl FilePicker {
             self.dir_list.push(entry);
         }
 
+        self.dir_list.sort_by_key(|dir| dir.path());
+
         Ok(())
     }
 
