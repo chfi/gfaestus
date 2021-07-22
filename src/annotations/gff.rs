@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use bstr::{ByteSlice, ByteVec};
+use bstr::ByteSlice;
 
 use anyhow::Result;
 
@@ -11,6 +11,56 @@ pub struct Gff3Records {
     pub records: Vec<Gff3Record>,
 
     pub attribute_keys: HashSet<Vec<u8>>,
+}
+
+#[derive(Clone)]
+pub struct Gff3Record {
+    seq_id: Vec<u8>,
+    source: Vec<u8>,
+    type_: Vec<u8>,
+
+    start: usize,
+    end: usize,
+
+    score: Option<f64>,
+
+    strand: Strand,
+
+    frame: Vec<u8>,
+
+    attributes: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+}
+
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
+pub enum Gff3Column {
+    SeqId,
+    Source,
+    Type,
+    Start,
+    End,
+    Score,
+    Strand,
+    Frame,
+    Attribute(Vec<u8>),
+}
+
+impl std::fmt::Display for Gff3Column {
+    fn fmt(
+        &self,
+        f: &mut std::fmt::Formatter<'_>,
+    ) -> std::result::Result<(), std::fmt::Error> {
+        match self {
+            Gff3Column::SeqId => write!(f, "seq_id"),
+            Gff3Column::Source => write!(f, "source"),
+            Gff3Column::Type => write!(f, "type"),
+            Gff3Column::Start => write!(f, "start"),
+            Gff3Column::End => write!(f, "end"),
+            Gff3Column::Score => write!(f, "score"),
+            Gff3Column::Strand => write!(f, "strand"),
+            Gff3Column::Frame => write!(f, "frame"),
+            Gff3Column::Attribute(attr) => write!(f, "{}", attr.as_bstr()),
+        }
+    }
 }
 
 impl Gff3Records {
@@ -68,24 +118,6 @@ impl Gff3Records {
             attribute_keys,
         })
     }
-}
-
-#[derive(Clone)]
-pub struct Gff3Record {
-    seq_id: Vec<u8>,
-    source: Vec<u8>,
-    type_: Vec<u8>,
-
-    start: usize,
-    end: usize,
-
-    score: Option<f64>,
-
-    strand: Strand,
-
-    frame: Vec<u8>,
-
-    attributes: HashMap<Vec<u8>, Vec<Vec<u8>>>,
 }
 
 impl Gff3Record {

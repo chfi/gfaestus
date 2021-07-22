@@ -14,7 +14,10 @@ use handlegraph::{
 };
 
 use crossbeam::{atomic::AtomicCell, channel::Sender};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use bstr::ByteSlice;
 
@@ -24,8 +27,8 @@ use anyhow::Result;
 use egui::emath::Numeric;
 
 use crate::{
-    app::AppMsg, asynchronous::AsyncResult, geometry::Point,
-    graph_query::GraphQuery, gui::GuiMsg,
+    annotations::Gff3Column, app::AppMsg, asynchronous::AsyncResult,
+    geometry::Point, graph_query::GraphQuery, gui::GuiMsg,
 };
 
 use crate::annotations::{Gff3Record, Gff3Records};
@@ -521,7 +524,7 @@ impl std::default::Default for EnabledColumns {
 }
 
 impl EnabledColumns {
-    pub const ID: &'static str = "gff_column_picker_window";
+    pub const ID: &'static str = "gff_enabled_columns_window";
 
     fn new(records: &Gff3Records) -> Self {
         let attributes = records
