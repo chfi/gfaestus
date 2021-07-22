@@ -93,7 +93,7 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
-    gff3_records: Option<Gff3Records>,
+    gff3_records: Option<Arc<Gff3Records>>,
     gff3_list: Gff3RecordList,
 
     path_picker_source: PathPickerSource,
@@ -1037,7 +1037,7 @@ impl Gui {
                         "received {} GFF3 records",
                         records.records.len()
                     );
-                    self.gff3_records = Some(records);
+                    self.gff3_records = Some(Arc::new(records));
                 }
             }
         }

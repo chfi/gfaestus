@@ -736,7 +736,7 @@ fn hash_node_paths(graph: &GraphHandle, node_id: u64) -> u64 {
     }
 }
 
-fn hash_node_color(hash: u64) -> (f32, f32, f32) {
+pub fn hash_node_color(hash: u64) -> (f32, f32, f32) {
     let r_u16 = ((hash >> 32) & 0xFFFFFFFF) as u16;
     let g_u16 = ((hash >> 16) & 0xFFFFFFFF) as u16;
     let b_u16 = (hash & 0xFFFFFFFF) as u16;

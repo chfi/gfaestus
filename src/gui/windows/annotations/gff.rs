@@ -62,6 +62,8 @@ pub struct Gff3RecordList {
     file_picker_open: bool,
 
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
+
+    overlay_creator: Gff3OverlayCreator,
 }
 
 struct EnabledColumns {
@@ -112,6 +114,8 @@ impl Gff3RecordList {
             file_picker,
 
             gff3_load_result: None,
+
+            overlay_creator: Default::default(),
         }
     }
 
@@ -238,7 +242,7 @@ impl Gff3RecordList {
         &mut self,
         ctx: &egui::CtxRef,
         thread_pool: &ThreadPool,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         records: Option<&Gff3Records>,
@@ -256,6 +260,7 @@ impl Gff3RecordList {
         {
             match gff3_result {
                 Ok(records) => {
+                    let records = records.to_owned();
                     gui_msg_tx
                         .send(GuiMsg::Gff3RecordsLoaded(records))
                         .unwrap();
@@ -342,7 +347,7 @@ impl Gff3RecordList {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
         // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         records: &Gff3Records,
@@ -355,6 +360,10 @@ impl Gff3RecordList {
         self.filter.ui(ctx, &mut self.filter_open);
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
+
+        if let Some(path) = self.active_path.map(|(p, _)| p) {
+            // TODO
+        }
 
         let resp = egui::Window::new("GFF3")
             .id(Self::list_id())
@@ -832,32 +841,32 @@ impl Gff3ColumnPicker {
     }
 }
 
+#[derive(Default)]
 pub struct Gff3OverlayCreator {
     overlay_name: String,
 
-    new_overlay_tx: Sender<OverlayCreatorMsg>,
-
+    // new_overlay_tx: Sender<OverlayCreatorMsg>,
     overlay_query: Option<AsyncResult<OverlayData>>,
 }
 
 impl Gff3OverlayCreator {
     pub const ID: &'static str = "gff3_overlay_creator_window";
 
-    pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
-        Self {
-            overlay_name: String::new(),
-            new_overlay_tx,
-            overlay_query: None,
-        }
-    }
+    // pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
+    //     Self {
+    //         overlay_name: String::new(),
+    //         new_overlay_tx,
+    //         overlay_query: None,
+    //     }
+    // }
 
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
         graph: &GraphQueryWorker,
         open: &mut bool,
-        // thread_pool: &ThreadPool,
-        records: &Gff3Records,
+        path_id: PathId,
+        records: Arc<Gff3Records>,
         filtered_records: &[usize],
         column: Option<&Gff3Column>,
     ) -> Option<egui::Response> {
@@ -884,10 +893,51 @@ impl Gff3OverlayCreator {
 
                     // just supporting one column for the moment
                     if let Some(Gff3Column::SeqId) = column {
-                        let query = graph.run_query(move |graph| async move {
-                            let mut data: Vec<rgb::RGB<f32>> = Vec::new();
+                        let indices = filtered_records
+                            .iter()
+                            .copied()
+                            .collect::<Vec<_>>();
 
-                            unimplemented!();
+                        let query = graph.run_query(move |graph| async move {
+                            use rustc_hash::FxHashMap;
+                            use std::collections::hash_map::DefaultHasher;
+                            use std::hash::{Hash, Hasher};
+
+                            let mut node_colors: FxHashMap<
+                                NodeId,
+                                rgb::RGB<f32>,
+                            > = FxHashMap::default();
+
+                            for record in indices
+                                .into_iter()
+                                .filter_map(|ix| records.records.get(ix))
+                            {
+                                if let Some(range) = graph.path_basepair_range(
+                                    path_id,
+                                    record.start(),
+                                    record.end(),
+                                ) {
+                                    let mut hasher = DefaultHasher::default();
+                                    record.seq_id().hash(&mut hasher);
+                                    let color = crate::gluon::hash_node_color(
+                                        hasher.finish(),
+                                    );
+
+                                    let color = rgb::RGB::from(color);
+
+                                    for (handle, _, _) in range {
+                                        let node_id = handle.id();
+                                        node_colors.insert(node_id, color);
+                                    }
+                                }
+                            }
+
+                            let data = (0..node_colors.len())
+                                .filter_map(|ix| {
+                                    let id = NodeId::from((ix + 1) as u64);
+                                    node_colors.get(&id).copied()
+                                })
+                                .collect::<Vec<_>>();
 
                             OverlayData::RGB(data)
                         });
