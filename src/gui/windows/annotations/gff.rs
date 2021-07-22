@@ -27,8 +27,13 @@ use anyhow::Result;
 use egui::emath::Numeric;
 
 use crate::{
-    annotations::Gff3Column, app::AppMsg, asynchronous::AsyncResult,
-    geometry::Point, graph_query::GraphQuery, gui::GuiMsg,
+    annotations::Gff3Column,
+    app::AppMsg,
+    asynchronous::AsyncResult,
+    geometry::Point,
+    graph_query::{GraphQuery, GraphQueryWorker},
+    gui::{windows::overlays::OverlayCreatorMsg, GuiMsg},
+    overlays::OverlayData,
 };
 
 use crate::annotations::{Gff3Record, Gff3Records};
@@ -823,6 +828,71 @@ impl Gff3ColumnPicker {
                         }
                     }
                 });
+            })
+    }
+}
+
+pub struct Gff3OverlayCreator {
+    overlay_name: String,
+
+    new_overlay_tx: Sender<OverlayCreatorMsg>,
+
+    overlay_query: Option<AsyncResult<OverlayData>>,
+}
+
+impl Gff3OverlayCreator {
+    pub const ID: &'static str = "gff3_overlay_creator_window";
+
+    pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
+        Self {
+            overlay_name: String::new(),
+            new_overlay_tx,
+            overlay_query: None,
+        }
+    }
+
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        graph: &GraphQueryWorker,
+        open: &mut bool,
+        // thread_pool: &ThreadPool,
+        records: &Gff3Records,
+        filtered_records: &[usize],
+        column: Option<&Gff3Column>,
+    ) -> Option<egui::Response> {
+        egui::Window::new("Create Overlay")
+            .id(egui::Id::new(Self::ID))
+            .open(open)
+            .show(ctx, |ui| {
+                let name = &mut self.overlay_name;
+
+                let _name_box = ui.horizontal(|ui| {
+                    ui.label("Overlay name");
+                    ui.separator();
+                    ui.text_edit_singleline(name)
+                });
+
+                let create_overlay = ui.add(
+                    egui::Button::new("Create overlay")
+                        .enabled(column.is_some()),
+                );
+
+                if create_overlay.clicked() && self.overlay_query.is_none() {
+                    // if let Some(column) = column {
+                    //     if let Gff3Column::SeqId == column {
+
+                    // just supporting one column for the moment
+                    if let Some(Gff3Column::SeqId) = column {
+                        let query = graph.run_query(move |graph| async move {
+                            let mut data: Vec<rgb::RGB<f32>> = Vec::new();
+
+                            unimplemented!();
+
+                            OverlayData::RGB(data)
+                        });
+                    }
+                }
             })
     }
 }
