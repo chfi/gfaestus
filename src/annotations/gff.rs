@@ -44,6 +44,16 @@ pub enum Gff3Column {
     Attribute(Vec<u8>),
 }
 
+impl Gff3Column {
+    pub fn attribute_key(&self) -> Option<&[u8]> {
+        if let Self::Attribute(attr) = &self {
+            Some(attr.as_slice())
+        } else {
+            None
+        }
+    }
+}
+
 impl std::fmt::Display for Gff3Column {
     fn fmt(
         &self,
