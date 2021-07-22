@@ -30,11 +30,11 @@ use crate::{
 
 use crate::annotations::{Gff3Record, Gff3Records};
 
-use super::graph_picker::PathPicker;
-use super::{file::FilePicker, filters::*};
+use crate::gui::windows::{
+    file::FilePicker, filters::*, graph_picker::PathPicker,
+};
 
 pub struct Gff3RecordList {
-    // records: Gff3Records,
     filtered_records: Vec<usize>,
 
     offset: usize,
