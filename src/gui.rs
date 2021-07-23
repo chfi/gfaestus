@@ -593,7 +593,11 @@ impl Gui {
 
         let gff3_records = None;
         // let gff3_records = Some(gff3);
-        let gff3_list = Gff3RecordList::new(path_picker_source.create_picker());
+
+        let overlay_tx =
+            view_state.overlay_creator.state.new_overlay_tx().to_owned();
+        let gff3_list =
+            Gff3RecordList::new(path_picker_source.create_picker(), overlay_tx);
 
         let gui = Self {
             ctx,
@@ -784,7 +788,7 @@ impl Gui {
         self.gff3_list.ui(
             &self.ctx,
             &self.thread_pool,
-            graph_query,
+            graph_query_worker,
             &self.gui_msg_tx,
             &self.app_msg_tx,
             self.gff3_records.as_ref(),

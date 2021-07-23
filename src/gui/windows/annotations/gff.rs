@@ -79,7 +79,10 @@ struct EnabledColumns {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    pub fn new(path_picker: PathPicker) -> Self {
+    pub fn new(
+        path_picker: PathPicker,
+        new_overlay_tx: Sender<OverlayCreatorMsg>,
+    ) -> Self {
         let filtered_records = Vec::new();
 
         let filter = Gff3Filter::default();
@@ -91,6 +94,8 @@ impl Gff3RecordList {
             pwd,
         )
         .unwrap();
+
+        let overlay_creator = Gff3OverlayCreator::new(new_overlay_tx);
 
         Self {
             // records,
@@ -115,7 +120,7 @@ impl Gff3RecordList {
 
             gff3_load_result: None,
 
-            overlay_creator: Default::default(),
+            overlay_creator,
         }
     }
 
@@ -242,10 +247,12 @@ impl Gff3RecordList {
         &mut self,
         ctx: &egui::CtxRef,
         thread_pool: &ThreadPool,
-        graph_query: &Arc<GraphQuery>,
+        graph_query: &GraphQueryWorker,
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
-        records: Option<&Gff3Records>,
+
+        records: Option<&Arc<Gff3Records>>,
+        // records: Option<&Gff3Records>,
         open: &mut bool,
     ) -> Option<egui::Response> {
         if let Some(query) = self.gff3_load_result.as_mut() {
@@ -347,7 +354,7 @@ impl Gff3RecordList {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        graph_query: &Arc<GraphQuery>,
+        graph_query: &GraphQueryWorker,
         // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         records: &Gff3Records,
@@ -361,9 +368,9 @@ impl Gff3RecordList {
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
-        if let Some(path) = self.active_path.map(|(p, _)| p) {
-            // TODO
-        }
+        // if let Some(path) = self.active_path.as_ref().map(|(p, _)| p) {
+        // TODO
+        // }
 
         let resp = egui::Window::new("GFF3")
             .id(Self::list_id())
@@ -483,7 +490,7 @@ impl Gff3RecordList {
                                 if row_interact.clicked() {
                                     self.select_record(
                                         app_msg_tx,
-                                        graph_query,
+                                        graph_query.graph(),
                                         record,
                                     );
                                 }
@@ -841,24 +848,23 @@ impl Gff3ColumnPicker {
     }
 }
 
-#[derive(Default)]
 pub struct Gff3OverlayCreator {
     overlay_name: String,
 
-    // new_overlay_tx: Sender<OverlayCreatorMsg>,
+    new_overlay_tx: Sender<OverlayCreatorMsg>,
     overlay_query: Option<AsyncResult<OverlayData>>,
 }
 
 impl Gff3OverlayCreator {
     pub const ID: &'static str = "gff3_overlay_creator_window";
 
-    // pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
-    //     Self {
-    //         overlay_name: String::new(),
-    //         new_overlay_tx,
-    //         overlay_query: None,
-    //     }
-    // }
+    pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
+        Self {
+            overlay_name: String::new(),
+            new_overlay_tx,
+            overlay_query: None,
+        }
+    }
 
     pub fn ui(
         &mut self,

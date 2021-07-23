@@ -196,6 +196,10 @@ impl OverlayCreator {
         })
     }
 
+    pub fn new_overlay_tx(&self) -> &Sender<OverlayCreatorMsg> {
+        &self.new_overlay_tx
+    }
+
     pub fn new_overlay_rx(&self) -> &Receiver<OverlayCreatorMsg> {
         &self.new_overlay_rx
     }

@@ -52,6 +52,10 @@ impl GraphQueryWorker {
 
         result
     }
+
+    pub fn graph(&self) -> &GraphQuery {
+        &self.graph_query
+    }
 }
 
 pub struct GraphQuery {
