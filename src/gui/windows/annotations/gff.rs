@@ -357,7 +357,7 @@ impl Gff3RecordList {
         graph_query: &GraphQueryWorker,
         // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
-        records: &Gff3Records,
+        records: &Arc<Gff3Records>,
     ) -> Option<egui::Response> {
         let active_path_name = self
             .path_picker
@@ -368,9 +368,18 @@ impl Gff3RecordList {
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
-        // if let Some(path) = self.active_path.as_ref().map(|(p, _)| p) {
-        // TODO
-        // }
+        if let Some(path) = self.path_picker.active_path().map(|(p, _)| p) {
+            let mut open = true;
+            self.overlay_creator.ui(
+                ctx,
+                graph_query,
+                &mut open,
+                path,
+                records.clone(),
+                &self.filtered_records,
+                Some(&Gff3Column::SeqId),
+            );
+        }
 
         let resp = egui::Window::new("GFF3")
             .id(Self::list_id())
@@ -876,6 +885,25 @@ impl Gff3OverlayCreator {
         filtered_records: &[usize],
         column: Option<&Gff3Column>,
     ) -> Option<egui::Response> {
+        if let Some(query) = self.overlay_query.as_mut() {
+            // dbg!();
+            query.move_result_if_ready();
+        }
+
+        if let Some(ov_data) = self
+            .overlay_query
+            .as_mut()
+            .and_then(|r| r.take_result_if_ready())
+        {
+            let msg = OverlayCreatorMsg::NewOverlay {
+                name: self.overlay_name.clone(),
+                data: ov_data,
+            };
+
+            self.overlay_name.clear();
+            self.new_overlay_tx.send(msg).unwrap();
+        }
+
         egui::Window::new("Create Overlay")
             .id(egui::Id::new(Self::ID))
             .open(open)
@@ -894,11 +922,14 @@ impl Gff3OverlayCreator {
                 );
 
                 if create_overlay.clicked() && self.overlay_query.is_none() {
+                    println!("creating overlay");
                     // if let Some(column) = column {
                     //     if let Gff3Column::SeqId == column {
 
                     // just supporting one column for the moment
                     if let Some(Gff3Column::SeqId) = column {
+                        dbg!();
+
                         let indices = filtered_records
                             .iter()
                             .copied()
@@ -909,15 +940,22 @@ impl Gff3OverlayCreator {
                             use std::collections::hash_map::DefaultHasher;
                             use std::hash::{Hash, Hasher};
 
+                            dbg!();
+
                             let mut node_colors: FxHashMap<
                                 NodeId,
                                 rgb::RGB<f32>,
                             > = FxHashMap::default();
 
-                            for record in indices
+                            for (i, record) in indices
                                 .into_iter()
                                 .filter_map(|ix| records.records.get(ix))
+                                .enumerate()
                             {
+                                if i % 100 == 0 {
+                                    println!("i {}", i);
+                                }
+
                                 if let Some(range) = graph.path_basepair_range(
                                     path_id,
                                     record.start(),
@@ -938,15 +976,24 @@ impl Gff3OverlayCreator {
                                 }
                             }
 
-                            let data = (0..node_colors.len())
-                                .filter_map(|ix| {
-                                    let id = NodeId::from((ix + 1) as u64);
-                                    node_colors.get(&id).copied()
-                                })
-                                .collect::<Vec<_>>();
+                            dbg!();
+
+                            let mut data = vec![
+                                rgb::RGB::new(0.3, 0.3, 0.3);
+                                graph.node_count()
+                            ];
+
+                            for (id, color) in node_colors {
+                                let ix = (id.0 - 1) as usize;
+                                data[ix] = color;
+                            }
+
+                            dbg!();
 
                             OverlayData::RGB(data)
                         });
+
+                        self.overlay_query = Some(query);
                     }
                 }
             })
