@@ -902,6 +902,8 @@ impl Gff3OverlayCreator {
 
             self.overlay_name.clear();
             self.new_overlay_tx.send(msg).unwrap();
+
+            self.overlay_query = None;
         }
 
         egui::Window::new("Create Overlay")
@@ -940,39 +942,55 @@ impl Gff3OverlayCreator {
                             use std::collections::hash_map::DefaultHasher;
                             use std::hash::{Hash, Hasher};
 
+                            use rayon::prelude::*;
+
                             dbg!();
+
+                            let counter = Arc::new(AtomicCell::new(0usize));
+
+                            let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
+                                indices
+                                    .into_par_iter()
+                                    .filter_map(|ix| {
+                                        let record = records.records.get(ix)?;
+
+                                        let color = {
+                                            let mut hasher =
+                                                DefaultHasher::default();
+                                            record.seq_id().hash(&mut hasher);
+                                            crate::gluon::hash_node_color(
+                                                hasher.finish(),
+                                            )
+                                        };
+
+                                        let steps = graph.path_basepair_range(
+                                            path_id,
+                                            record.start(),
+                                            record.end(),
+                                        )?;
+
+                                        let ids = steps
+                                            .into_iter()
+                                            .map(|(h, _, _)| h.id())
+                                            .collect();
+
+                                        Some((
+                                            ids,
+                                            rgb::RGB::new(
+                                                color.0, color.1, color.2,
+                                            ),
+                                        ))
+                                    })
+                                    .collect::<Vec<_>>();
 
                             let mut node_colors: FxHashMap<
                                 NodeId,
                                 rgb::RGB<f32>,
                             > = FxHashMap::default();
 
-                            for (i, record) in indices
-                                .into_iter()
-                                .filter_map(|ix| records.records.get(ix))
-                                .enumerate()
-                            {
-                                if i % 100 == 0 {
-                                    println!("i {}", i);
-                                }
-
-                                if let Some(range) = graph.path_basepair_range(
-                                    path_id,
-                                    record.start(),
-                                    record.end(),
-                                ) {
-                                    let mut hasher = DefaultHasher::default();
-                                    record.seq_id().hash(&mut hasher);
-                                    let color = crate::gluon::hash_node_color(
-                                        hasher.finish(),
-                                    );
-
-                                    let color = rgb::RGB::from(color);
-
-                                    for (handle, _, _) in range {
-                                        let node_id = handle.id();
-                                        node_colors.insert(node_id, color);
-                                    }
+                            for (ids, color) in colors_vec {
+                                for id in ids {
+                                    node_colors.insert(id, color);
                                 }
                             }
 
