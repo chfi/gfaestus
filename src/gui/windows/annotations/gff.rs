@@ -948,6 +948,7 @@ impl Gff3OverlayCreator {
 
                             let counter = Arc::new(AtomicCell::new(0usize));
 
+                            let t0 = std::time::Instant::now();
                             let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
                                 indices
                                     .into_par_iter()
@@ -983,6 +984,14 @@ impl Gff3OverlayCreator {
                                     })
                                     .collect::<Vec<_>>();
 
+                            println!(
+                                "parallel processing took {} seconds",
+                                t0.elapsed().as_secs_f64()
+                            );
+
+                            dbg!();
+
+                            let t1 = std::time::Instant::now();
                             let mut node_colors: FxHashMap<
                                 NodeId,
                                 rgb::RGB<f32>,
@@ -994,8 +1003,12 @@ impl Gff3OverlayCreator {
                                 }
                             }
 
-                            dbg!();
+                            println!(
+                                "building color map took {} seconds",
+                                t1.elapsed().as_secs_f64()
+                            );
 
+                            let t2 = std::time::Instant::now();
                             let mut data = vec![
                                 rgb::RGB::new(0.3, 0.3, 0.3);
                                 graph.node_count()
@@ -1006,7 +1019,10 @@ impl Gff3OverlayCreator {
                                 data[ix] = color;
                             }
 
-                            dbg!();
+                            println!(
+                                "building color vector took {} seconds",
+                                t2.elapsed().as_secs_f64()
+                            );
 
                             OverlayData::RGB(data)
                         });
