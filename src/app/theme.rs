@@ -2,21 +2,9 @@ use rgb::*;
 
 use anyhow::Result;
 
-use std::sync::Arc;
-
 use rustc_hash::FxHashMap;
 
-use crossbeam::atomic::AtomicCell;
-
-use crate::vulkan::{
-    context::VkContext,
-    draw_system::{
-        gui::{GuiPipeline, GuiVertex, GuiVertices},
-        nodes::NodeThemePipeline,
-    },
-    texture::*,
-    GfaestusVk, SwapchainProperties,
-};
+use crate::vulkan::{draw_system::nodes::NodeThemePipeline, GfaestusVk};
 
 #[derive(Debug, Clone)]
 pub enum AppThemeMsg {
@@ -181,7 +169,7 @@ impl std::default::Default for ThemeDef {
     }
 }
 
-const RAINBOW: [(f32, f32, f32); 7] = [
+pub const RAINBOW: [(f32, f32, f32); 7] = [
     (1.0, 0.0, 0.0),
     (1.0, 0.65, 0.0),
     (1.0, 1.0, 0.0),
@@ -191,7 +179,7 @@ const RAINBOW: [(f32, f32, f32); 7] = [
     (0.93, 0.51, 0.93),
 ];
 
-const RGB_NODES: [(f32, f32, f32); 6] = [
+pub const RGB_NODES: [(f32, f32, f32); 6] = [
     (1.0, 0.0, 0.0),
     (1.0, 0.0, 0.0),
     (0.0, 1.0, 0.0),

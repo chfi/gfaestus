@@ -1,24 +1,12 @@
-use ash::version::DeviceV1_0;
-use ash::{vk, Device};
 use gluon::{
     base::types::ArcType,
     vm::api::{Function, VmType, IO},
     RootedThread, Thread, ThreadExt,
 };
 
-use std::ffi::CString;
-
-use nalgebra_glm as glm;
-
 use anyhow::Result;
 
-use handlegraph::handle::NodeId;
-
-use crate::view::View;
-use crate::vulkan::GfaestusVk;
-use crate::{geometry::Point, gluon::GraphHandle};
-
-use crate::vulkan::draw_system::nodes::NodeOverlay;
+use crate::gluon::GraphHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Defines the type of mapping from node ID to colors used by an

@@ -1,12 +1,9 @@
-use crossbeam::channel;
 use crossbeam::{
     atomic::AtomicCell,
     channel::{Receiver, Sender},
 };
 
 use std::sync::Arc;
-
-use rgb::*;
 
 use anyhow::Result;
 
@@ -23,17 +20,13 @@ use crate::{
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
-    SystemInputBindings, WheelBind,
+    BindableInput, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
+    WheelBind,
 };
-use crate::input::MousePos;
 
 use crate::vulkan::{
-    context::VkContext,
-    draw_system::nodes::{
-        NodeIdBuffer, NodePipelines, NodeThemePipeline, NodeVertices,
-    },
-    GfaestusVk, SwapchainProperties,
+    draw_system::nodes::{NodeIdBuffer, NodePipelines},
+    GfaestusVk,
 };
 
 use ash::vk;
@@ -45,7 +38,7 @@ use view::*;
 use super::{AppChannels, SharedState};
 
 pub struct MainView {
-    pub node_draw_system: crate::vulkan::draw_system::nodes::NodePipelines,
+    pub node_draw_system: NodePipelines,
     pub node_id_buffer: NodeIdBuffer,
     pub selection_buffer: SelectionBuffer,
 
@@ -55,8 +48,6 @@ pub struct MainView {
 
     view_input_state: ViewInputState,
 
-    // msg_tx: Sender<MainViewMsg>,
-    // msg_rx: Receiver<MainViewMsg>,
     shared_state: SharedState,
     channels: AppChannels,
 
@@ -84,7 +75,6 @@ impl MainView {
 
         let node_draw_system = NodePipelines::new(
             app,
-            swapchain_props,
             msaa_samples,
             render_pass,
             selection_buffer.buffer,
@@ -110,8 +100,6 @@ impl MainView {
             screen_dims,
         );
 
-        let (msg_tx, msg_rx) = channel::unbounded::<MainViewMsg>();
-
         let main_view = Self {
             node_draw_system,
             node_id_buffer,
@@ -119,13 +107,10 @@ impl MainView {
 
             node_width,
 
-            // view,
             anim_handler,
 
             view_input_state: Default::default(),
 
-            // msg_tx,
-            // msg_rx,
             move_delta: AtomicCell::new(None),
 
             shared_state,
@@ -476,10 +461,8 @@ impl MainView {
                                     mouse_pos,
                                 );
 
-                                self.view_input_state.start_click_and_drag_pan(
-                                    view,
-                                    mouse_world,
-                                );
+                                self.view_input_state
+                                    .start_click_and_drag_pan(mouse_world);
                             }
                         } else {
                             if let Some(start) = self.move_delta.load() {
@@ -524,32 +507,11 @@ impl MainView {
 
                     In::ButtonRectangleSelect => {
                         use crate::app::AppMsg;
-                        use crate::app::Select;
 
                         if pressed {
-                            let view = self.shared_state.view();
-
-                            let mouse_pos_world = view
-                                .screen_point_to_world(screen_dims, mouse_pos);
-
                             self.shared_state.start_mouse_rect();
-                            // self.rectangle_select_start
-                            //     .store(Some(mouse_pos_world));
-                            // self.rectangle_select_start.store(Some(mouse_pos));
                         } else {
-                            // if let Some(start) =
-                            //     self.rectangle_select_start.load()
                             if self.shared_state.is_started_mouse_rect() {
-                                // let view = self.shared_state.view();
-
-                                // let mouse_pos_world = view
-                                //     .screen_point_to_world(
-                                //         screen_dims,
-                                //         mouse_pos,
-                                //     );
-
-                                // let rect = Rect::new(start, mouse_pos_world);
-
                                 if let Some(rect) =
                                     self.shared_state.close_mouse_rect_world()
                                 {
@@ -558,39 +520,7 @@ impl MainView {
                                         .send(AppMsg::RectSelect(rect))
                                         .unwrap();
                                 }
-
-                                /*
-                                let end = mouse_pos;
-
-                                let min = Point {
-                                    x: start.x.min(end.x),
-                                    y: start.y.min(end.y),
-                                };
-
-                                let max = Point {
-                                    x: start.x.max(end.x),
-                                    y: start.y.max(end.y),
-                                };
-
-                                let x_range = (min.x as u32)..=(max.x as u32);
-                                let y_range = (min.y as u32)..=(max.y as u32);
-
-                                let selection = self.node_id_buffer.read_rect(
-                                    self.node_draw_system.device(),
-                                    x_range,
-                                    y_range,
-                                );
-
-                                app_msg_tx
-                                    .send(AppMsg::Selection(Select::Many {
-                                        nodes: selection,
-                                        clear: false,
-                                    }))
-                                    .unwrap();
-                                */
                             }
-
-                            // self.rectangle_select_start.store(None);
                         }
                     }
                     _ => (),

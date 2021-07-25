@@ -37,14 +37,13 @@ impl Texture {
         height: usize,
         format: vk::Format,
     ) -> Result<Self> {
-        use vk::BufferUsageFlags as BufUsage;
         use vk::ImageLayout as Layout;
         use vk::ImageUsageFlags as ImgUsage;
-        use vk::MemoryPropertyFlags as MemProps;
 
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
+        /*
         let element_size = match format {
             vk::Format::R8_UNORM => std::mem::size_of::<u8>(),
             vk::Format::R8G8_UNORM => std::mem::size_of::<[u8; 2]>(),
@@ -52,8 +51,7 @@ impl Texture {
             vk::Format::R8G8B8A8_UNORM => std::mem::size_of::<[u8; 4]>(),
             _ => panic!("unsupported image format in Texture::allocate"),
         };
-
-        // let image_size = (width * height * element_size) as vk::DeviceSize;
+        */
 
         let extent = vk::Extent3D {
             width: width as u32,
@@ -104,7 +102,6 @@ impl Texture {
             command_pool,
             transition_queue,
             image,
-            format,
             Layout::UNDEFINED,
             Layout::SHADER_READ_ONLY_OPTIMAL,
         )?;
@@ -126,7 +123,7 @@ impl Texture {
             unsafe { device.create_image_view(&create_info, None) }
         }?;
 
-        let mut texture = Self::new(image, memory, view, None);
+        let texture = Self::new(image, memory, view, None);
 
         Ok(texture)
     }
@@ -137,7 +134,6 @@ impl Texture {
         command_pool: vk::CommandPool,
         transition_queue: vk::Queue,
         buffer: vk::Buffer,
-        format: vk::Format,
         width: usize,
         height: usize,
     ) -> Result<()> {
@@ -155,7 +151,6 @@ impl Texture {
             command_pool,
             transition_queue,
             self.image,
-            format,
             Layout::UNDEFINED,
             Layout::TRANSFER_DST_OPTIMAL,
         )?;
@@ -174,7 +169,6 @@ impl Texture {
             command_pool,
             transition_queue,
             self.image,
-            format,
             Layout::TRANSFER_DST_OPTIMAL,
             Layout::SHADER_READ_ONLY_OPTIMAL,
         )?;
@@ -277,7 +271,6 @@ impl Texture {
                 command_pool,
                 transition_queue,
                 image,
-                format,
                 Layout::UNDEFINED,
                 Layout::TRANSFER_DST_OPTIMAL,
             )?;
@@ -299,7 +292,6 @@ impl Texture {
                 command_pool,
                 transition_queue,
                 image,
-                format,
                 Layout::TRANSFER_DST_OPTIMAL,
                 Layout::SHADER_READ_ONLY_OPTIMAL,
             )?;
@@ -381,7 +373,6 @@ impl Texture {
             command_pool,
             transition_queue,
             img,
-            format,
             Layout::UNDEFINED,
             layout,
         )?;
@@ -424,7 +415,6 @@ impl Texture {
             command_pool,
             transition_queue,
             img,
-            format,
             Layout::UNDEFINED,
             Layout::COLOR_ATTACHMENT_OPTIMAL,
         )?;
@@ -576,7 +566,6 @@ impl Texture1D {
                 command_pool,
                 transition_queue,
                 image,
-                format,
                 Layout::UNDEFINED,
                 Layout::TRANSFER_DST_OPTIMAL,
             )?;
@@ -598,7 +587,6 @@ impl Texture1D {
                 command_pool,
                 transition_queue,
                 image,
-                format,
                 Layout::TRANSFER_DST_OPTIMAL,
                 Layout::SHADER_READ_ONLY_OPTIMAL,
             )?;

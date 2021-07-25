@@ -4,7 +4,7 @@ use winit::{
     event_loop::ControlFlow,
 };
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 
 use crate::geometry::*;
 
@@ -122,7 +122,7 @@ impl<T: Copy + PartialEq> WheelBind<T> {
         Self {
             invert,
             mult,
-            modifiers: Default::default(),
+            modifiers,
             payload,
         }
     }

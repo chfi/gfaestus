@@ -419,10 +419,9 @@ impl Gui {
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
     ) -> Result<Self> {
-        let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
 
-        let draw_system = GuiPipeline::new(app, msaa_samples, render_pass)?;
+        let draw_system = GuiPipeline::new(app, render_pass)?;
 
         let repl = GluonRepl::new(
             channels.app_tx.clone(),

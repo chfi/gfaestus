@@ -5,7 +5,7 @@ use futures::task::SpawnExt;
 
 use std::sync::Arc;
 
-use crate::geometry::{Point, Rect};
+use crate::geometry::Point;
 
 use crate::gluon::repl::GluonRepl;
 
@@ -124,25 +124,17 @@ pub struct HistoryBox {
 impl egui::Widget for HistoryBox {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
         use egui::epaint::text::Galley;
-        use egui::{Sense, Shape, Vec2, WidgetInfo};
+        use egui::Sense;
 
         let text_style = egui::TextStyle::Monospace;
         let line_spacing = ui.fonts().row_height(text_style);
         let available_width = ui.available_width();
-
-        // let make_galley = |ui: &egui::Ui, text: &str| {
-        //     let text = text.to_owned();
-
-        //     ui.fonts()
-        //         .layout_multiline(text_style, text, available_width)
-        // };
 
         let start_ix = if self.lines.len() >= self.history_lines {
             self.lines.len() - self.history_lines
         } else {
             0
         };
-        let lines = &self.lines[start_ix..];
 
         let mut galleys: Vec<(f32, Arc<Galley>)> =
             Vec::with_capacity(self.history_lines);

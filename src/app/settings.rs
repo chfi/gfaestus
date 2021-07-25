@@ -1,13 +1,7 @@
-use anyhow::Result;
 use crossbeam::atomic::AtomicCell;
-use crossbeam::channel;
-use handlegraph::handle::NodeId;
-use rustc_hash::FxHashSet;
 use std::sync::Arc;
 
 use crate::vulkan::draw_system::edges::EdgesUBO;
-
-use super::theme::ThemeDef;
 
 #[derive(Debug, Default, Clone)]
 pub struct AppSettings {

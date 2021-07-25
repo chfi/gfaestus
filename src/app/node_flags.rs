@@ -1,15 +1,9 @@
 use handlegraph::handle::NodeId;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
-use ash::{
-    extensions::{
-        ext::DebugReport,
-        khr::{Surface, Swapchain},
-    },
-    version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
-};
-use ash::{vk, Device, Entry, Instance};
+use ash::version::DeviceV1_0;
+use ash::{vk, Device};
 
 use anyhow::Result;
 
@@ -17,7 +11,6 @@ use crate::vulkan::GfaestusVk;
 
 pub struct SelectionBuffer {
     latest_selection: FxHashSet<NodeId>,
-    node_count: usize,
 
     pub buffer: vk::Buffer,
     memory: vk::DeviceMemory,
@@ -44,7 +37,6 @@ impl SelectionBuffer {
 
         Ok(Self {
             latest_selection,
-            node_count,
 
             buffer,
             memory,

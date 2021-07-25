@@ -1,5 +1,3 @@
-use gfa::gfa::Orientation;
-use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -12,19 +10,13 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crossbeam::{atomic::AtomicCell, channel::Sender};
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 use bstr::ByteSlice;
 
-use rustc_hash::FxHashSet;
-
 use anyhow::Result;
-use egui::emath::Numeric;
 
-use crate::{asynchronous::AsyncResult, graph_query::GraphQuery};
-
-use crate::annotations::{Gff3Record, Gff3Records};
+use crate::graph_query::GraphQuery;
 
 use super::filters::FilterString;
 

@@ -41,7 +41,6 @@ pub struct NodePipelines {
 impl NodePipelines {
     pub fn new(
         app: &GfaestusVk,
-        swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         selection_buffer: vk::Buffer,
@@ -51,12 +50,8 @@ impl NodePipelines {
 
         let vertices = NodeVertices::new(device);
 
-        let selection_descriptors = SelectionDescriptors::new(
-            app,
-            swapchain_props,
-            selection_buffer,
-            1,
-        )?;
+        let selection_descriptors =
+            SelectionDescriptors::new(app, selection_buffer, 1)?;
 
         let theme_pipeline = NodeThemePipeline::new(
             app,
@@ -472,7 +467,6 @@ pub struct SelectionDescriptors {
 impl SelectionDescriptors {
     fn new(
         app: &GfaestusVk,
-        swapchain_props: SwapchainProperties,
         buffer: vk::Buffer,
         image_count: u32,
         // msaa_samples: vk::SampleCountFlags,

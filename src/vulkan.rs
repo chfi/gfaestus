@@ -39,6 +39,7 @@ pub struct Queues {
 }
 
 impl Queues {
+    #[allow(dead_code)]
     fn new(
         graphics: vk::Queue,
         present: vk::Queue,
@@ -667,7 +668,6 @@ impl GfaestusVk {
         command_pool: vk::CommandPool,
         transition_queue: vk::Queue,
         image: vk::Image,
-        format: vk::Format,
         old_layout: vk::ImageLayout,
         new_layout: vk::ImageLayout,
     ) -> Result<()> {

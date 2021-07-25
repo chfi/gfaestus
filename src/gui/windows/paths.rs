@@ -1,4 +1,3 @@
-use gfa::gfa::Orientation;
 use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
 use handlegraph::{
@@ -157,7 +156,7 @@ impl PathDetails {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .open(open_path_details)
             .show(ctx, |ui| {
-                if let Some(path_id) = self.path_details.path_id.load() {
+                if let Some(_path_id) = self.path_details.path_id.load() {
                     ui.set_min_height(200.0);
                     ui.set_max_width(300.0);
 
@@ -220,7 +219,7 @@ impl PathList {
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
-        app_msg_tx: &Sender<AppMsg>,
+        _app_msg_tx: &Sender<AppMsg>,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
     ) -> Option<egui::Response> {
@@ -540,17 +539,13 @@ impl StepList {
         &mut self,
         ui: &mut egui::Ui,
         app_msg_tx: &Sender<AppMsg>,
-        graph_query: &GraphQuery,
+        _graph_query: &GraphQuery,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
     ) -> egui::InnerResponse<()> {
         if let Some(query) = self.step_query.as_mut() {
             query.move_result_if_ready();
         }
-
-        // let mut step_count = 0usize;
-
-        // let mut base_len = 0usize;
 
         let steps = if let Some((_path, path_base_len, result)) =
             self.step_query.as_ref().and_then(|q| q.get_result())

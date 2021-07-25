@@ -9,9 +9,9 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
+use crate::app::AppInput;
 use crate::gui::GuiInput;
 use crate::{app::mainview::MainViewInput, gui::GuiMsg};
-use crate::{app::AppInput, gui::GuiFocusState};
 use crate::{app::SharedState, geometry::*};
 
 pub mod binds;

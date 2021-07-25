@@ -5,8 +5,8 @@ use std::ffi::CString;
 
 use anyhow::Result;
 
-use crate::vulkan::texture::{GradientName, Gradients, Texture};
-use crate::vulkan::{render_pass::Framebuffers, GfaestusVk};
+use crate::vulkan::render_pass::Framebuffers;
+use crate::vulkan::texture::{Gradients, Texture};
 
 use super::create_shader_module;
 
@@ -31,7 +31,6 @@ pub struct GuiPipeline {
 impl GuiPipeline {
     pub fn new(
         app: &super::super::GfaestusVk,
-        msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
         let device = app.vk_context().device();
@@ -540,8 +539,6 @@ impl GuiPipeline {
 }
 
 pub struct GuiVertices {
-    capacity: usize,
-
     vertex_buffer: vk::Buffer,
     vertex_alloc: vk_mem::Allocation,
     vertex_alloc_info: Option<vk_mem::AllocationInfo>,
@@ -578,8 +575,6 @@ impl GuiVertices {
         let device = device.clone();
 
         Self {
-            capacity: 0,
-
             vertex_buffer,
             vertex_alloc,
             vertex_alloc_info,

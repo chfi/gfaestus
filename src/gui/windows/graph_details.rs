@@ -14,10 +14,9 @@ use handlegraph::{
 use crossbeam::{atomic::AtomicCell, channel::Sender};
 use std::sync::Arc;
 
-use bstr::{BStr, ByteSlice};
+use bstr::ByteSlice;
 
-use crate::graph_query::{GraphQuery, GraphQueryRequest, GraphQueryResp};
-use crate::view::View;
+use crate::graph_query::GraphQuery;
 use crate::{app::AppMsg, geometry::*};
 
 #[derive(Debug, Clone)]

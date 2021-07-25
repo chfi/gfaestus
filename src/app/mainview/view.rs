@@ -359,9 +359,6 @@ impl AnimHandler {
             let mut animation: Option<ViewAnimationBoxed> = None;
 
             let view = view_;
-            let mouse_pos = mouse_pos_;
-            let screen_dims = screen_dims_;
-            let initial_view = initial_view_;
 
             let mut last_update = Instant::now();
 
@@ -747,7 +744,7 @@ impl ViewInputState {
         }
     }
 
-    pub fn start_mouse_pan(&self, view: View, screen_mouse_pos: Point) {
+    pub fn start_mouse_pan(&self, screen_mouse_pos: Point) {
         let pan_state = MousePanState::Continuous {
             mouse_screen_origin: screen_mouse_pos,
         };
@@ -755,7 +752,7 @@ impl ViewInputState {
         self.mouse_pan.store(pan_state);
     }
 
-    pub fn start_click_and_drag_pan(&self, view: View, world_mouse_pos: Point) {
+    pub fn start_click_and_drag_pan(&self, world_mouse_pos: Point) {
         let pan_state = MousePanState::ClickAndDrag {
             mouse_world_origin: world_mouse_pos,
         };

@@ -5,10 +5,7 @@ pub mod settings;
 pub mod shared_state;
 pub mod theme;
 
-use crossbeam::{atomic::AtomicCell, channel::Sender};
-use std::sync::Arc;
-
-use crossbeam::channel;
+use crossbeam::channel::Sender;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -16,11 +13,11 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
+use crate::gui::GuiMsg;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
-use crate::{gui::GuiMsg, input::MousePos};
 use crate::{
-    input::binds::{BindableInput, InputPayload, KeyBind, SystemInput},
+    input::binds::{BindableInput, KeyBind, SystemInput},
     universe::Node,
 };
 
@@ -171,7 +168,7 @@ impl App {
         node_positions: &[Node],
     ) {
         match msg {
-            AppMsg::RectSelect(rect) => {
+            AppMsg::RectSelect(_rect) => {
                 //
             }
             AppMsg::TranslateSelected(delta) => {

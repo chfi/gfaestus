@@ -326,7 +326,6 @@ impl NodeAttachments {
             command_pool,
             queue,
             img,
-            format,
             Layout::UNDEFINED,
             Layout::COLOR_ATTACHMENT_OPTIMAL,
         )?;
