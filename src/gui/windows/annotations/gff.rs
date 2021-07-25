@@ -64,6 +64,7 @@ pub struct Gff3RecordList {
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
 
     overlay_creator: Gff3OverlayCreator,
+    overlay_creator_open: bool,
 }
 
 struct EnabledColumns {
@@ -120,13 +121,17 @@ impl Gff3RecordList {
 
             gff3_load_result: None,
 
+            overlay_creator_open: false,
             overlay_creator,
         }
     }
 
     pub fn update_records(&mut self, records: &Gff3Records) {
         self.filter = Gff3Filter::new(records);
-        self.enabled_columns = EnabledColumns::new(&records);
+        self.enabled_columns = EnabledColumns::new(records);
+        self.overlay_creator
+            .column_picker
+            .update_attributes(records);
     }
 
     fn ui_row(
@@ -369,15 +374,13 @@ impl Gff3RecordList {
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
         if let Some(path) = self.path_picker.active_path().map(|(p, _)| p) {
-            let mut open = true;
             self.overlay_creator.ui(
                 ctx,
                 graph_query,
-                &mut open,
+                &mut self.overlay_creator_open,
                 path,
                 records.clone(),
                 &self.filtered_records,
-                Some(&Gff3Column::SeqId),
             );
         }
 
@@ -423,19 +426,27 @@ impl Gff3RecordList {
                     }
                 });
 
-                let path_picker_btn = {
-                    let label = if let Some(name) = &active_path_name {
-                        format!("Path: {}", name)
-                    } else {
-                        "Select a path".to_string()
+                ui.horizontal(|ui| {
+                    let path_picker_btn = {
+                        let label = if let Some(name) = &active_path_name {
+                            format!("Path: {}", name)
+                        } else {
+                            "Select a path".to_string()
+                        };
+
+                        ui.button(label)
                     };
 
-                    ui.button(label)
-                };
+                    if path_picker_btn.clicked() {
+                        self.path_picker_open = !self.path_picker_open;
+                    }
 
-                if path_picker_btn.clicked() {
-                    self.path_picker_open = !self.path_picker_open;
-                }
+                    let overlay_creator_btn = ui.button("Overlay creator");
+
+                    if overlay_creator_btn.clicked() {
+                        self.overlay_creator_open = !self.overlay_creator_open;
+                    }
+                });
 
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
@@ -862,6 +873,9 @@ pub struct Gff3OverlayCreator {
 
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     overlay_query: Option<AsyncResult<OverlayData>>,
+
+    column_picker: Gff3ColumnPicker,
+    column_picker_open: bool,
 }
 
 impl Gff3OverlayCreator {
@@ -872,6 +886,9 @@ impl Gff3OverlayCreator {
             overlay_name: String::new(),
             new_overlay_tx,
             overlay_query: None,
+
+            column_picker: Gff3ColumnPicker::default(),
+            column_picker_open: false,
         }
     }
 
@@ -883,7 +900,7 @@ impl Gff3OverlayCreator {
         path_id: PathId,
         records: Arc<Gff3Records>,
         filtered_records: &[usize],
-        column: Option<&Gff3Column>,
+        // column: Option<&Gff3Column>,
     ) -> Option<egui::Response> {
         if let Some(query) = self.overlay_query.as_mut() {
             // dbg!();
@@ -906,10 +923,36 @@ impl Gff3OverlayCreator {
             self.overlay_query = None;
         }
 
+        {
+            let column_picker_open = &mut self.column_picker_open;
+
+            self.column_picker.ui(ctx, column_picker_open);
+        }
+
+        let label = {
+            let column_picker = &self.column_picker;
+            let column = column_picker.chosen_column();
+
+            if let Some(column) = column {
+                format!("Use column {}", column)
+            } else {
+                format!("Choose column")
+            }
+        };
+
         egui::Window::new("Create Overlay")
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
+                let column_picker_open = &mut self.column_picker_open;
+
+                let column_picker_btn =
+                    { ui.selectable_label(*column_picker_open, label) };
+
+                if column_picker_btn.clicked() {
+                    *column_picker_open = !*column_picker_open;
+                }
+
                 let name = &mut self.overlay_name;
 
                 let _name_box = ui.horizontal(|ui| {
@@ -917,6 +960,8 @@ impl Gff3OverlayCreator {
                     ui.separator();
                     ui.text_edit_singleline(name)
                 });
+                let column_picker = &self.column_picker;
+                let column = column_picker.chosen_column();
 
                 let create_overlay = ui.add(
                     egui::Button::new("Create overlay")

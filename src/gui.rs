@@ -1041,6 +1041,7 @@ impl Gui {
                         "received {} GFF3 records",
                         records.records.len()
                     );
+                    self.gff3_list.update_records(&records);
                     self.gff3_records = Some(Arc::new(records));
                 }
             }
