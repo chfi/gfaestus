@@ -878,6 +878,40 @@ pub struct Gff3OverlayCreator {
     column_picker_open: bool,
 }
 
+fn gff3_column_hash_color(
+    record: &Gff3Record,
+    column: &Gff3Column,
+) -> rgb::RGB<f32> {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::default();
+
+    match column {
+        Gff3Column::SeqId => record.seq_id().hash(&mut hasher),
+        Gff3Column::Source => record.source().hash(&mut hasher),
+        Gff3Column::Type => record.type_().hash(&mut hasher),
+        Gff3Column::Start => record.start().hash(&mut hasher),
+        Gff3Column::End => record.end().hash(&mut hasher),
+        Gff3Column::Score => {
+            // todo really gotta fix this
+            let v = record.score().unwrap_or(0.0) as usize;
+            v.hash(&mut hasher);
+        }
+        Gff3Column::Strand => record.strand().hash(&mut hasher),
+        Gff3Column::Frame => record.frame().hash(&mut hasher),
+        Gff3Column::Attribute(attr) => {
+            if let Some(val) = record.attributes().get(attr) {
+                val.hash(&mut hasher);
+            }
+        }
+    }
+
+    let (r, g, b) = crate::gluon::hash_node_color(hasher.finish());
+
+    rgb::RGB::new(r, g, b)
+}
+
 impl Gff3OverlayCreator {
     pub const ID: &'static str = "gff3_overlay_creator_window";
 
@@ -970,28 +1004,20 @@ impl Gff3OverlayCreator {
 
                 if create_overlay.clicked() && self.overlay_query.is_none() {
                     println!("creating overlay");
-                    // if let Some(column) = column {
-                    //     if let Gff3Column::SeqId == column {
-
-                    // just supporting one column for the moment
-                    if let Some(Gff3Column::SeqId) = column {
-                        dbg!();
-
+                    if let Some(column) = column {
                         let indices = filtered_records
                             .iter()
                             .copied()
                             .collect::<Vec<_>>();
 
+                        let column = column.to_owned();
+
                         let query = graph.run_query(move |graph| async move {
                             use rustc_hash::FxHashMap;
-                            use std::collections::hash_map::DefaultHasher;
-                            use std::hash::{Hash, Hasher};
 
                             use rayon::prelude::*;
 
                             dbg!();
-
-                            let counter = Arc::new(AtomicCell::new(0usize));
 
                             let t0 = std::time::Instant::now();
                             let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
@@ -1000,14 +1026,9 @@ impl Gff3OverlayCreator {
                                     .filter_map(|ix| {
                                         let record = records.records.get(ix)?;
 
-                                        let color = {
-                                            let mut hasher =
-                                                DefaultHasher::default();
-                                            record.seq_id().hash(&mut hasher);
-                                            crate::gluon::hash_node_color(
-                                                hasher.finish(),
-                                            )
-                                        };
+                                        let color = gff3_column_hash_color(
+                                            record, &column,
+                                        );
 
                                         let steps = graph.path_basepair_range(
                                             path_id,
@@ -1020,12 +1041,7 @@ impl Gff3OverlayCreator {
                                             .map(|(h, _, _)| h.id())
                                             .collect();
 
-                                        Some((
-                                            ids,
-                                            rgb::RGB::new(
-                                                color.0, color.1, color.2,
-                                            ),
-                                        ))
+                                        Some((ids, color))
                                     })
                                     .collect::<Vec<_>>();
 

@@ -26,7 +26,7 @@ pub mod gff;
 
 pub use gff::*;
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Strand {
     Pos,
     Neg,

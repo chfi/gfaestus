@@ -159,6 +159,10 @@ impl Gff3Record {
         &self.frame
     }
 
+    pub fn strand(&self) -> Strand {
+        self.strand
+    }
+
     pub fn attributes(&self) -> &HashMap<Vec<u8>, Vec<Vec<u8>>> {
         &self.attributes
     }
