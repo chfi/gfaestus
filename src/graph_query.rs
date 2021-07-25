@@ -138,6 +138,35 @@ impl GraphQuery {
         self.path_positions.handle_positions(&self.graph, handle)
     }
 
+    pub fn find_step_at_base(
+        &self,
+        path: PathId,
+        pos: usize,
+    ) -> Option<StepPtr> {
+        self.path_positions.find_step_at_base(path, pos)
+    }
+
+    pub fn path_pos_steps(
+        &self,
+        path_id: PathId,
+    ) -> Option<Vec<(Handle, StepPtr, usize)>> {
+        let path_steps = self.graph.path_steps(path_id)?;
+
+        let mut result = Vec::new();
+
+        for step in path_steps {
+            let step_ptr = step.0;
+            let handle = step.handle();
+
+            let base_pos =
+                self.path_positions.path_step_position(path_id, step_ptr)?;
+
+            result.push((handle, step_ptr, base_pos));
+        }
+
+        Some(result)
+    }
+
     pub fn path_range(
         &self,
         path_id: PathId,

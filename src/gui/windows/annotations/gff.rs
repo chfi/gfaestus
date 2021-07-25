@@ -1019,6 +1019,8 @@ impl Gff3OverlayCreator {
 
                             dbg!();
 
+                            let steps = graph.path_pos_steps(path_id).unwrap();
+
                             let t0 = std::time::Instant::now();
                             let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
                                 indices
@@ -1030,11 +1032,43 @@ impl Gff3OverlayCreator {
                                             record, &column,
                                         );
 
-                                        let steps = graph.path_basepair_range(
-                                            path_id,
-                                            record.start(),
-                                            record.end(),
-                                        )?;
+                                        let (start, end) = {
+                                            let start = steps
+                                                .binary_search_by_key(
+                                                    &record.start(),
+                                                    |(_, _, p)| *p,
+                                                );
+                                            let end = steps
+                                                .binary_search_by_key(
+                                                    &record.end(),
+                                                    |(_, _, p)| *p,
+                                                );
+
+                                            let (start, end) =
+                                                match (start, end) {
+                                                    (Ok(s), Ok(e)) => (s, e),
+                                                    (Ok(s), Err(e)) => (s, e),
+                                                    (Err(s), Ok(e)) => (s, e),
+                                                    (Err(s), Err(e)) => (s, e),
+                                                };
+
+                                            let start = steps.get(start)?.1;
+
+                                            let end = {
+                                                let ix = if end >= steps.len() {
+                                                    steps.len() - 1
+                                                } else {
+                                                    end
+                                                };
+
+                                                steps.get(ix)?.1
+                                            };
+
+                                            Some((start, end))
+                                        }?;
+
+                                        let steps = graph
+                                            .path_range(path_id, start, end)?;
 
                                         let ids = steps
                                             .into_iter()
@@ -1048,6 +1082,19 @@ impl Gff3OverlayCreator {
                             println!(
                                 "parallel processing took {} seconds",
                                 t0.elapsed().as_secs_f64()
+                            );
+                            let applied_records_count = colors_vec.len();
+                            println!(
+                                "colored record count: {}",
+                                applied_records_count
+                            );
+                            let colored_node_count: usize = colors_vec
+                                .iter()
+                                .map(|(nodes, _)| nodes.len())
+                                .sum();
+                            println!(
+                                "colored node count: {}",
+                                colored_node_count
                             );
 
                             dbg!();
