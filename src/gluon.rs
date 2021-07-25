@@ -197,7 +197,7 @@ impl GluonVM {
             _,
         ) = self.vm.run_expr_async("node_color_fun", &script).await?;
 
-        let mut colors: Vec<rgb::RGB<f32>> = Vec::with_capacity(node_count);
+        let mut colors: Vec<rgb::RGBA<f32>> = Vec::with_capacity(node_count);
 
         let node_color = node_color.call(graph.clone())?;
 
@@ -210,7 +210,7 @@ impl GluonVM {
             let node_id = (node_id + 1) as u64;
             let (r, g, b) = node_color.call(node_id)?;
 
-            colors.push(rgb::RGB::new(r, g, b));
+            colors.push(rgb::RGBA::new(r, g, b, 1.0));
         }
 
         Ok(OverlayData::RGB(colors))
@@ -292,7 +292,7 @@ impl GluonVM {
                     _,
                 ) = self.vm.run_expr_async("node_color_fun", &source).await?;
 
-                let mut colors: Vec<rgb::RGB<f32>> =
+                let mut colors: Vec<rgb::RGBA<f32>> =
                     Vec::with_capacity(node_count);
 
                 let node_color = node_color.call(graph.clone())?;
@@ -306,7 +306,7 @@ impl GluonVM {
                     let node_id = (node_id + 1) as u64;
                     let (r, g, b) = node_color.call(node_id)?;
 
-                    colors.push(rgb::RGB::new(r, g, b));
+                    colors.push(rgb::RGBA::new(r, g, b, 1.0));
                 }
 
                 OverlayData::RGB(colors)

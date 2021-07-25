@@ -935,7 +935,7 @@ impl NodeOverlay {
         new_colors: I,
     ) -> Result<()>
     where
-        I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGB<f32>)>,
+        I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGBA<f32>)>,
     {
         assert!(self.host_visible);
 
@@ -961,7 +961,7 @@ impl NodeOverlay {
                 val_ptr.write((color.b * 255.0) as u8);
 
                 let val_ptr = val_ptr.add(1);
-                val_ptr.write(255u8);
+                val_ptr.write((color.a * 255.0) as u8);
             }
 
             device.unmap_memory(self.memory);

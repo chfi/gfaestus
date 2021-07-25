@@ -33,7 +33,7 @@ pub enum OverlayKind {
 }
 
 pub enum OverlayData {
-    RGB(Vec<rgb::RGB<f32>>),
+    RGB(Vec<rgb::RGBA<f32>>),
     Value(Vec<f32>),
 }
 

@@ -934,10 +934,8 @@ impl Gff3OverlayCreator {
         path_id: PathId,
         records: Arc<Gff3Records>,
         filtered_records: &[usize],
-        // column: Option<&Gff3Column>,
     ) -> Option<egui::Response> {
         if let Some(query) = self.overlay_query.as_mut() {
-            // dbg!();
             query.move_result_if_ready();
         }
 
@@ -1117,14 +1115,17 @@ impl Gff3OverlayCreator {
                             );
 
                             let t2 = std::time::Instant::now();
-                            let mut data = vec![
-                                rgb::RGB::new(0.3, 0.3, 0.3);
-                                graph.node_count()
-                            ];
+                            let mut data =
+                                vec![
+                                    rgb::RGBA::new(0.3, 0.3, 0.3, 0.3);
+                                    graph.node_count()
+                                ];
 
                             for (id, color) in node_colors {
                                 let ix = (id.0 - 1) as usize;
-                                data[ix] = color;
+                                data[ix] = rgb::RGBA::new(
+                                    color.r, color.g, color.b, 1.0,
+                                );
                             }
 
                             println!(
