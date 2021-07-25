@@ -2,8 +2,6 @@ use std::{path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use futures::executor::ThreadPool;
-use gfa::gfa::Path;
-use gluon::vm::frunk_core::hlist::Sculptor;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -17,41 +15,28 @@ use anyhow::Result;
 
 use rustc_hash::FxHashMap;
 
-use crossbeam::{atomic::AtomicCell, channel};
-use parking_lot::Mutex;
-
-use crate::asynchronous::AsyncResult;
+use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Annotations, Gff3Record, Gff3Records},
+    annotations::{Annotations, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
-use crate::{
-    app::{NodeWidth, OverlayState},
-    geometry::*,
-};
+use crate::{app::OverlayState, geometry::*};
 
-use crate::overlays::{OverlayData, OverlayKind};
-use crate::{gluon::GraphHandle, view::View};
+use crate::gluon::GraphHandle;
+use crate::overlays::OverlayKind;
 
 use crate::graph_query::GraphQuery;
 
 use crate::input::binds::{
-    BindableInput, InputPayload, KeyBind, MouseButtonBind, SystemInput,
-    SystemInputBindings, WheelBind,
+    BindableInput, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
+    WheelBind,
 };
-use crate::input::MousePos;
 
-// use super::theme::{ThemeDef, ThemeId};
-
-use crate::vulkan::{
-    context::VkContext,
-    draw_system::gui::{GuiPipeline, GuiVertex, GuiVertices},
-    GfaestusVk, SwapchainProperties,
-};
+use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
 use ash::{extensions::khr::PushDescriptor, vk};
 
@@ -71,8 +56,6 @@ pub struct Gui {
     pub draw_system: GuiPipeline,
 
     hover_node_id: Option<NodeId>,
-
-    windows_active_view: FxHashMap<Windows, Views>,
 
     open_windows: OpenWindows,
 
@@ -313,31 +296,6 @@ impl AppViewState {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Views {
-    Settings,
-
-    // Console,
-    FPS,
-    GraphStats,
-
-    NodeList,
-    NodeDetails,
-
-    PathList,
-    PathDetails,
-
-    ThemeEditor,
-    ThemeList,
-
-    OverlayEditor,
-    OverlayList,
-
-    EguiInspection,
-    EguiSettings,
-    EguiMemory,
-}
-
 impl Windows {
     pub fn name(&self) -> &str {
         match self {
@@ -357,63 +315,6 @@ impl Windows {
             Windows::EguiInspection => "Egui Inspection",
             Windows::EguiSettings => "Egui Settings",
             Windows::EguiMemory => "Egui Memory",
-        }
-    }
-
-    pub fn views(&self) -> Vec<Views> {
-        match self {
-            Windows::Settings => vec![Views::Settings],
-
-            Windows::FPS => vec![Views::FPS],
-            Windows::GraphStats => vec![Views::GraphStats],
-
-            Windows::Nodes => vec![Views::NodeList],
-            Windows::NodeDetails => vec![Views::NodeDetails],
-
-            Windows::Paths => vec![Views::PathList, Views::PathDetails],
-
-            Windows::Themes => vec![Views::ThemeEditor, Views::ThemeList],
-            Windows::Overlays => vec![Views::OverlayEditor, Views::OverlayList],
-
-            Windows::EguiInspection => vec![Views::EguiInspection],
-            Windows::EguiSettings => vec![Views::EguiSettings],
-            Windows::EguiMemory => vec![Views::EguiMemory],
-        }
-    }
-
-    pub fn all_windows() -> [Windows; 10] {
-        [
-            Self::Settings,
-            Self::FPS,
-            Self::GraphStats,
-            Self::Nodes,
-            Self::Paths,
-            Self::Themes,
-            Self::Overlays,
-            Self::EguiInspection,
-            Self::EguiSettings,
-            Self::EguiMemory,
-        ]
-    }
-}
-
-impl Views {
-    pub fn window(&self) -> Windows {
-        match self {
-            Self::Settings => Windows::Settings,
-
-            Self::FPS => Windows::FPS,
-            Self::GraphStats => Windows::GraphStats,
-
-            Self::NodeList | Views::NodeDetails => Windows::Nodes,
-            Self::PathList | Views::PathDetails => Windows::Paths,
-
-            Self::ThemeEditor | Views::ThemeList => Windows::Themes,
-            Self::OverlayEditor | Views::OverlayList => Windows::Overlays,
-
-            Self::EguiInspection => Windows::EguiInspection,
-            Self::EguiSettings => Windows::EguiSettings,
-            Self::EguiMemory => Windows::EguiMemory,
         }
     }
 }
@@ -474,8 +375,6 @@ impl std::default::Default for OpenWindows {
 }
 
 pub enum GuiMsg {
-    EnableView(Views),
-
     SetWindowOpen { window: Windows, open: Option<bool> },
     SetLightMode,
     SetDarkMode,
@@ -519,7 +418,6 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
-        // gff3: Gff3Records,
     ) -> Result<Self> {
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.gui;
@@ -553,16 +451,6 @@ impl Gui {
 
         let hover_node_id: Option<NodeId> = None;
 
-        let windows = Windows::all_windows();
-
-        let windows_active_view = {
-            windows
-                .iter()
-                .copied()
-                .filter_map(|w| w.views().first().copied().map(|v| (w, v)))
-                .collect::<FxHashMap<_, _>>()
-        };
-
         let open_windows = OpenWindows::default();
 
         let frame_input = FrameInput::default();
@@ -585,14 +473,11 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
-        // let annotations = Annotations::from_bed_file(graph, path)
-
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
 
         let gff3_records = None;
-        // let gff3_records = Some(gff3);
 
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
@@ -609,8 +494,6 @@ impl Gui {
             draw_system,
 
             hover_node_id,
-
-            windows_active_view,
 
             open_windows,
 
@@ -915,13 +798,6 @@ impl Gui {
         self.ctx.tessellate(shapes)
     }
 
-    pub fn active_views(&self) -> Vec<Views> {
-        let mut views: Vec<_> =
-            self.windows_active_view.values().copied().collect();
-        views.sort();
-        views
-    }
-
     pub fn pointer_over_gui(&self) -> bool {
         self.ctx.is_pointer_over_area()
     }
@@ -974,9 +850,6 @@ impl Gui {
     pub fn apply_received_gui_msgs(&mut self) {
         while let Ok(msg) = self.gui_msg_rx.try_recv() {
             match msg {
-                GuiMsg::EnableView(view) => {
-                    //
-                }
                 GuiMsg::SetWindowOpen { window, open } => {
                     let open_windows = &mut self.open_windows;
 
@@ -1084,23 +957,6 @@ impl Gui {
                                 })
                                 .unwrap();
                         }
-                        // GuiInput::KeyToggleRender(opt) => {
-                        //     use crate::app::AppConfigMsg as Msg;
-                        //     use crate::app::RenderConfigOpts as Opts;
-
-                        //     let cfg_msg = match opt {
-                        //         Opts::SelOutlineEdge => {
-                        //             Msg::ToggleSelectionEdgeDetect
-                        //         }
-                        //         Opts::SelOutlineBlur => {
-                        //             Msg::ToggleSelectionEdgeBlur
-                        //         }
-                        //         Opts::SelOutline => Msg::ToggleSelectionOutline,
-                        //         Opts::NodesColor => Msg::ToggleNodesColor,
-                        //     };
-
-                        //     cfg_msg_tx.send(cfg_msg).unwrap();
-                        // }
                         _ => (),
                     }
                 }
@@ -1188,7 +1044,6 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
-    // KeyToggleRender(RenderConfigOpts),
 }
 
 impl BindableInput for GuiInput {
@@ -1201,22 +1056,6 @@ impl BindableInput for GuiInput {
             (Key::F1, Input::KeyEguiInspectionUi),
             (Key::F2, Input::KeyEguiSettingsUi),
             (Key::F3, Input::KeyEguiMemoryUi),
-            // (
-            //     Key::Key1,
-            //     Input::KeyToggleRender(RenderConfigOpts::SelOutlineEdge),
-            // ),
-            // (
-            //     Key::Key2,
-            //     Input::KeyToggleRender(RenderConfigOpts::SelOutlineBlur),
-            // ),
-            // (
-            //     Key::Key3,
-            //     Input::KeyToggleRender(RenderConfigOpts::SelOutline),
-            // ),
-            // (
-            //     Key::Key4,
-            //     Input::KeyToggleRender(RenderConfigOpts::NodesColor),
-            // ),
         ]
         .iter()
         .copied()

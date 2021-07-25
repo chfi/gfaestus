@@ -1,6 +1,4 @@
 use futures::executor::ThreadPool;
-use gfa::gfa::Orientation;
-use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -13,24 +11,19 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crossbeam::{atomic::AtomicCell, channel::Sender};
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use crossbeam::channel::Sender;
+use std::{collections::HashMap, sync::Arc};
 
 use bstr::ByteSlice;
 
 use rustc_hash::FxHashSet;
 
 use anyhow::Result;
-use egui::emath::Numeric;
 
 use crate::{
     annotations::Gff3Column,
     app::AppMsg,
     asynchronous::AsyncResult,
-    geometry::Point,
     graph_query::{GraphQuery, GraphQueryWorker},
     gui::{windows::overlays::OverlayCreatorMsg, GuiMsg},
     overlays::OverlayData,
@@ -643,7 +636,7 @@ impl EnabledColumns {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Gff3Filter {
     seq_id: FilterString,
     source: FilterString,
@@ -657,25 +650,6 @@ pub struct Gff3Filter {
     frame: FilterString,
 
     attributes: HashMap<Vec<u8>, FilterString>,
-    // attributes: ??
-}
-
-impl std::default::Default for Gff3Filter {
-    fn default() -> Self {
-        Self {
-            seq_id: FilterString::default(),
-            source: FilterString::default(),
-            type_: FilterString::default(),
-
-            start: FilterNum::default(),
-            end: FilterNum::default(),
-
-            score: FilterNum::default(),
-            frame: FilterString::default(),
-
-            attributes: Default::default(),
-        }
-    }
 }
 
 impl Gff3Filter {
@@ -736,9 +710,7 @@ impl Gff3Filter {
                     egui::ScrollArea::from_max_height(
                         ui.input().screen_rect.height() - 250.0,
                     )
-                    // egui::ScrollArea::auto_sized()
                     .show(&mut ui, |ui| {
-                        // ui.set_max_height(800.0);
                         let mut attr_filters =
                             self.attributes.iter_mut().collect::<Vec<_>>();
 
@@ -750,9 +722,6 @@ impl Gff3Filter {
                             ui.label(key.to_str().unwrap());
                             filter.ui(ui);
                             ui.separator();
-                            // if count % 5 == 0 {
-                            //     ui.end_row()
-                            // }
                         }
                     });
                 });
@@ -769,7 +738,6 @@ impl Gff3Filter {
     }
 
     fn attr_filter(&self, record: &Gff3Record) -> bool {
-        // let active_filters = self.attributes.iter().filter(|(_, filter)| !matches!(filter, FilterStringOp::None))
         self.attributes.iter().all(|(key, filter)| {
             if matches!(filter.op, FilterStringOp::None) {
                 return true;

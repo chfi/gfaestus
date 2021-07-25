@@ -1,3 +1,4 @@
+/*
 use egui::vec2;
 
 use rgb::*;
@@ -19,6 +20,7 @@ fn color32_to_rgb(color: egui::Color32) -> RGB<f32> {
     let b = (color.b() as f32) / 255.0;
     RGB::new(r, g, b)
 }
+*/
 
 // pub struct ThemeEditor {
 //     tx_theme: channel::Sender<AppThemeMsg>,

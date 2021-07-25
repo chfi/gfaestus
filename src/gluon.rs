@@ -490,6 +490,7 @@ impl GluonVM {
         Ok(result)
     }
 
+    /*
     async fn load_overlay_color_fn(
         &self,
         graph: &GraphHandle,
@@ -523,6 +524,7 @@ impl GluonVM {
 
         Ok(node_color)
     }
+    */
 }
 
 #[derive(Debug, Clone, Trace, Userdata, VmType)]

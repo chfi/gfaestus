@@ -44,22 +44,6 @@ macro_rules! load_shader {
     }};
 }
 
-pub(crate) fn read_shader_from_file<P>(path: P) -> Result<Vec<u32>>
-where
-    P: AsRef<std::path::Path>,
-{
-    use std::{fs::File, io::Read};
-
-    let mut buf = Vec::new();
-    let mut file = File::open(path)?;
-    file.read_to_end(&mut buf)?;
-
-    let mut cursor = std::io::Cursor::new(buf);
-
-    let spv = ash::util::read_spv(&mut cursor)?;
-    Ok(spv)
-}
-
 pub(crate) fn create_shader_module(
     device: &Device,
     code: &[u32],

@@ -25,8 +25,7 @@ pub struct OverlayList {
 
     overlay_names: FxHashMap<usize, (OverlayKind, String)>,
 
-    gradient_names: Vec<GradientName>,
-
+    // gradient_names: Vec<GradientName>,
     gradient_picker: GradientPicker,
 
     gradient_picker_open: AtomicCell<bool>,
@@ -36,9 +35,9 @@ impl OverlayList {
     pub const ID: &'static str = "overlay_list_window";
 
     pub fn new(overlay_state: OverlayState) -> Self {
-        let gradient_names =
-            std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
-                .collect::<Vec<_>>();
+        // let gradient_names =
+        //     std::array::IntoIter::new(Gradients::GRADIENT_NAMES)
+        //         .collect::<Vec<_>>();
 
         let gradient_picker = GradientPicker::new(overlay_state.clone());
 
@@ -46,8 +45,7 @@ impl OverlayList {
             overlay_state,
             overlay_names: Default::default(),
 
-            gradient_names,
-
+            // gradient_names,
             gradient_picker,
 
             gradient_picker_open: AtomicCell::new(false),
@@ -153,7 +151,6 @@ pub enum OverlayListMsg {
 pub struct OverlayCreator {
     name: String,
     script_path_input: String,
-    script_path: PathBuf,
 
     script_error: String,
 
@@ -182,7 +179,6 @@ impl OverlayCreator {
             name: String::new(),
             script_path_input: String::new(),
 
-            script_path: PathBuf::new(),
             script_error: String::new(),
 
             gluon: Arc::new(gluonvm),

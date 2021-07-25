@@ -8,8 +8,6 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use rustc_hash::FxHashMap;
-
 use crate::{app::AppMsg, view::View};
 use crate::{app::OverlayState, geometry::*};
 
@@ -53,14 +51,14 @@ impl MenuBar {
         let settings = &mut open_windows.settings;
 
         let fps = &mut open_windows.fps;
-        let graph_stats = &mut open_windows.graph_stats;
+        let _graph_stats = &mut open_windows.graph_stats;
 
         let gff3 = &mut open_windows.gff3;
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
 
-        let themes = &mut open_windows.themes;
+        let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
 
         let repl = &mut open_windows.repl_window;
@@ -130,87 +128,6 @@ pub struct NodeInfo {
     coverage: usize,
 }
 
-#[derive(Debug, Clone)]
-enum NodeSelection {
-    None,
-    One { info: NodeInfo },
-    Many { count: usize },
-}
-
-impl NodeSelection {
-    fn some_selection(&self) -> bool {
-        match self {
-            NodeSelection::None => false,
-            NodeSelection::One { .. } => true,
-            NodeSelection::Many { .. } => true,
-        }
-    }
-}
-
-impl std::default::Default for NodeSelection {
-    fn default() -> Self {
-        NodeSelection::None
-    }
-}
-
-impl Widget for NodeSelection {
-    #[inline]
-    fn id() -> &'static str {
-        "node_select_info"
-    }
-
-    fn ui(
-        &self,
-        ctx: &egui::CtxRef,
-        pos: Point,
-        size: Option<Point>,
-    ) -> Option<egui::Response> {
-        let scr = ctx.input().screen_rect();
-
-        let size = size.unwrap_or(Point {
-            x: pos.x + 200.0,
-            y: pos.y + scr.max.y,
-        });
-
-        let rect = egui::Rect {
-            min: pos.into(),
-            max: size.into(),
-        };
-
-        egui::Window::new(Self::id())
-            .fixed_rect(rect)
-            .title_bar(false)
-            .show(&ctx, |ui| {
-                ui.expand_to_include_rect(rect);
-
-                match &self {
-                    NodeSelection::None => (),
-                    NodeSelection::One { info } => {
-                        let node_info = info;
-
-                        let label =
-                            format!("Selected node: {}", node_info.node_id.0);
-                        ui.label(label);
-                        let lb_len = format!("Length: {}", node_info.len);
-                        let lb_deg = format!(
-                            "Degree: ({}, {})",
-                            node_info.degree.0, node_info.degree.1
-                        );
-                        let lb_cov =
-                            format!("Coverage: {}", node_info.coverage);
-
-                        ui.label(lb_len);
-                        ui.label(lb_deg);
-                        ui.label(lb_cov);
-                    }
-                    NodeSelection::Many { count } => {
-                        ui.label(format!("Selected {} nodes", count));
-                    }
-                }
-            })
-    }
-}
-
 #[derive(Debug, Default, Clone, Copy)]
 pub struct FrameRate {
     pub fps: f32,
@@ -237,7 +154,7 @@ impl Widget for FrameRate {
         &self,
         ctx: &egui::CtxRef,
         pos: Point,
-        size: Option<Point>,
+        _size: Option<Point>,
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
