@@ -41,6 +41,10 @@ impl Annotations2D {
         })
     }
 
+    pub fn path(&self) -> PathId {
+        self.ref_path
+    }
+
     // returns world coordinates for the center of the nodes covered
     // by the annotation, if it exists
     pub fn location_for_record(

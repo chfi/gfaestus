@@ -348,6 +348,11 @@ impl Gff3RecordList {
         resp
     }
 
+    pub fn active_path_id(&self) -> Option<PathId> {
+        let (path, _) = self.path_picker.active_path()?;
+        Some(path)
+    }
+
     fn list_ui(
         &mut self,
         ctx: &egui::CtxRef,
