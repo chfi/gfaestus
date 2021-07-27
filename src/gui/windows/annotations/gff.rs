@@ -854,7 +854,7 @@ pub struct Gff3OverlayCreator {
 fn gff3_column_hash_color(
     record: &Gff3Record,
     column: &Gff3Column,
-) -> rgb::RGB<f32> {
+) -> Option<rgb::RGB<f32>> {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -876,13 +876,15 @@ fn gff3_column_hash_color(
         Gff3Column::Attribute(attr) => {
             if let Some(val) = record.attributes().get(attr) {
                 val.hash(&mut hasher);
+            } else {
+                return None;
             }
         }
     }
 
     let (r, g, b) = crate::gluon::hash_node_color(hasher.finish());
 
-    rgb::RGB::new(r, g, b)
+    Some(rgb::RGB::new(r, g, b))
 }
 
 impl Gff3OverlayCreator {
@@ -1001,7 +1003,7 @@ impl Gff3OverlayCreator {
 
                                         let color = gff3_column_hash_color(
                                             record, &column,
-                                        );
+                                        )?;
 
                                         let (start, end) = {
                                             let start = steps
