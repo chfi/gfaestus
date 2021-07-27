@@ -111,6 +111,11 @@ fn main() {
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
+    let center = Point {
+        x: top_left.x + (bottom_right.x - top_left.x) / 2.0,
+        y: top_left.y + (bottom_right.y - top_left.y) / 2.0,
+    };
+
     eprintln!(
         "layout bounding box\t({:.2}, {:.2})\t({:.2}, {:.2})",
         top_left.x, top_left.y, bottom_right.x, bottom_right.y
@@ -620,6 +625,21 @@ fn main() {
                     &graph_query,
                     &graph_query_worker,
                     &graph_handle,
+                );
+
+                gfaestus::gui::text::draw_text_at_world_point(
+                    &gui.ctx,
+                    app.shared_state().view(),
+                    Point::ZERO,
+                    "hello world"
+                );
+
+
+                gfaestus::gui::text::draw_text_at_world_point(
+                    &gui.ctx,
+                    app.shared_state().view(),
+                    center,
+                    "layout center",
                 );
 
                 let meshes = gui.end_frame();

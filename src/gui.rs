@@ -40,14 +40,16 @@ use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
 use ash::{extensions::khr::PushDescriptor, vk};
 
+pub mod text;
 pub mod widgets;
 pub mod windows;
 
+use text::*;
 use widgets::*;
 use windows::*;
 
 pub struct Gui {
-    ctx: egui::CtxRef,
+    pub ctx: egui::CtxRef,
     frame_input: FrameInput,
 
     shared_state: SharedState,
