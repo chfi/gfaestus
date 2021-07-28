@@ -182,17 +182,6 @@ impl Widget for FrameRate {
 }
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct ViewInfo {
-    position: Point,
-    view: View,
-    mouse_screen: Point,
-    mouse_world: Point,
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ViewInfoMsg(ViewInfo);
-
-#[derive(Debug, Default, Clone, Copy)]
 pub struct GraphStats {
     pub node_count: usize,
     pub edge_count: usize,

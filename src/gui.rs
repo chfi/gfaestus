@@ -40,10 +40,12 @@ use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
 use ash::{extensions::khr::PushDescriptor, vk};
 
+pub mod debug;
 pub mod text;
 pub mod widgets;
 pub mod windows;
 
+use debug::*;
 use text::*;
 use widgets::*;
 use windows::*;
@@ -554,6 +556,11 @@ impl Gui {
         &self,
     ) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
         &self.view_state.overlay_creator.state.new_overlay_rx()
+    }
+
+    pub fn view_debug_info(&self) {
+        let view = self.shared_state.view();
+        ViewDebugInfo::ui(&self.ctx, view);
     }
 
     pub fn begin_frame(

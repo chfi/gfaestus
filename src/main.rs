@@ -627,6 +627,8 @@ fn main() {
                     &graph_handle,
                 );
 
+                gui.view_debug_info();
+
                 gfaestus::gui::text::draw_text_at_world_point(
                     &gui.ctx,
                     app.shared_state().view(),
