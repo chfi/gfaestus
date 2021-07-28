@@ -38,3 +38,30 @@ impl ViewDebugInfo {
             });
     }
 }
+
+pub struct MouseDebugInfo;
+
+impl MouseDebugInfo {
+    pub fn ui(ctx: &egui::CtxRef, view: View, mouse_screen: Point) {
+        let screen_rect = ctx.input().screen_rect();
+
+        let dims = ScreenDims {
+            width: screen_rect.width(),
+            height: screen_rect.height(),
+        };
+
+        let screen = mouse_screen;
+        let world = view.screen_point_to_world(dims, screen);
+
+        egui::Area::new("mouse_debug_info")
+            .movable(true)
+            .show(ctx, |ui| {
+                ui.label("Cursor position");
+
+                ui.separator();
+
+                ui.label(format!("Screen: ({}, {})", screen.x, screen.y));
+                ui.label(format!("World: ({}, {})", world.x, world.y));
+            });
+    }
+}

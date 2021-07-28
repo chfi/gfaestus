@@ -563,6 +563,12 @@ impl Gui {
         ViewDebugInfo::ui(&self.ctx, view);
     }
 
+    pub fn mouse_debug_info(&self) {
+        let view = self.shared_state.view();
+        let mouse = self.shared_state.mouse_pos();
+        MouseDebugInfo::ui(&self.ctx, view, mouse);
+    }
+
     pub fn begin_frame(
         &mut self,
         screen_rect: Option<Point>,
