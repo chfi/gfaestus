@@ -20,7 +20,10 @@ use rustc_hash::FxHashMap;
 
 use std::collections::hash_map::HashMap;
 
-use crate::{geometry::*, gluon::GraphHandle, view::*};
+use crate::{
+    geometry::*, gluon::GraphHandle, graph_query::GraphQuery, universe::Node,
+    view::*,
+};
 
 pub mod gff;
 
@@ -173,5 +176,61 @@ impl Annotations {
         res.insert(source);
 
         Ok(res)
+    }
+}
+
+pub struct PathCoordinateSystem {
+    path: PathId,
+
+    step_list: Vec<(Handle, StepPtr, usize)>,
+
+    // node_steps: FxHashMap<NodeId, Vec<StepPtr>>,
+    node_indices: FxHashMap<NodeId, Vec<usize>>,
+
+    points: Vec<Point>,
+}
+
+impl PathCoordinateSystem {
+    pub fn new(
+        graph: &GraphQuery,
+        nodes: &[Node],
+        path: PathId,
+    ) -> Option<Self> {
+        let step_list = graph.path_pos_steps(path)?;
+
+        let mut node_indices: FxHashMap<NodeId, Vec<usize>> =
+            FxHashMap::default();
+
+        let mut points: Vec<Point> = Vec::with_capacity(step_list.len());
+
+        for (ix, (handle, _, _)) in step_list.iter().enumerate() {
+            let id = handle.id();
+            node_indices.entry(id).or_default().push(ix);
+
+            let ix = (id.0 - 1) as usize;
+
+            let node = nodes.get(ix)?;
+
+            points.push(node.center());
+        }
+
+        Some(Self {
+            path,
+            step_list,
+            node_indices,
+            points,
+        })
+    }
+
+    pub fn update_points(&mut self, nodes: &[Node]) {
+        self.points.clear();
+
+        for (handle, _, _) in self.step_list.iter() {
+            let id = handle.id();
+            let ix = (id.0 - 1) as usize;
+
+            let node = nodes.get(ix).unwrap();
+            self.points.push(node.center());
+        }
     }
 }
