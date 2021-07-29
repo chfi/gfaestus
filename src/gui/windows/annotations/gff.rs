@@ -73,6 +73,49 @@ struct EnabledColumns {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
+    pub fn calculate_annotations(
+        &self,
+        graph: &GraphQuery,
+        records: &Gff3Records,
+    ) -> Option<Vec<(NodeId, String)>> {
+        if self.filtered_records.is_empty() {
+            return None;
+        }
+
+        let (path, _) = self.path_picker.active_path()?;
+
+        let steps = graph.path_pos_steps(path)?;
+
+        let mut result: Vec<(NodeId, String)> = Vec::new();
+
+        for &record_ix in self.filtered_records.iter() {
+            let record = records.records.get(record_ix)?;
+
+            let start = {
+                let start =
+                    steps.binary_search_by_key(&record.start(), |(_, _, p)| *p);
+
+                let start = match start {
+                    Ok(s) => s,
+                    Err(s) => s,
+                };
+
+                let start = steps.get(start)?.0;
+
+                Some(start)
+            }?;
+
+            // if let Some(names) = record.get_tag("Name") {
+            if let Some(name) = record.get_tag(b"Name").and_then(|n| n.first())
+            {
+                let label = format!("{}", name.as_bstr());
+                result.push((start.id(), label));
+            }
+        }
+
+        Some(result)
+    }
+
     pub fn new(
         path_picker: PathPicker,
         new_overlay_tx: Sender<OverlayCreatorMsg>,

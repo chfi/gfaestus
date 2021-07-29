@@ -544,6 +544,14 @@ impl Gui {
         &self.view_state
     }
 
+    pub fn calculate_annotations(
+        &self,
+        graph_query: &GraphQuery,
+    ) -> Option<Vec<(NodeId, String)>> {
+        let records = self.gff3_records.as_ref()?;
+        self.gff3_list.calculate_annotations(graph_query, records)
+    }
+
     // TODO this should be handled better
     pub fn populate_overlay_list<'a>(
         &mut self,

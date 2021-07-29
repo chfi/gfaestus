@@ -291,6 +291,8 @@ fn main() {
             .into_iter(),
     );
 
+    let mut annotations: Option<Vec<(NodeId, String)>> = None;
+
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
@@ -514,6 +516,12 @@ fn main() {
 
                 edge_renderer.write_ubo(&gfaestus, &edge_ubo).unwrap();
 
+                if annotations.is_none() {
+                    if let Some(annots) = gui.calculate_annotations(&graph_query) {
+                        annotations = Some(annots);
+                    }
+                }
+
             }
             Event::RedrawEventsCleared => {
 
@@ -631,31 +639,18 @@ fn main() {
 
                 gui.mouse_debug_info();
 
-                gfaestus::gui::text::draw_text_at_node(
-                    &gui.ctx,
-                    universe.layout().nodes(),
-                    app.shared_state().view(),
-                    NodeId(1),
-                    Point::new(0.0, 20.0),
-                    "Node 1",
-                );
-
-
-                gfaestus::gui::text::draw_text_at_node(
-                    &gui.ctx,
-                    universe.layout().nodes(),
-                    app.shared_state().view(),
-                    NodeId(1000),
-                    Point::new(0.0, 20.0),
-                    "Node 1000",
-                );
-
-                gfaestus::gui::text::draw_text_at_world_point(
-                    &gui.ctx,
-                    app.shared_state().view(),
-                    center,
-                    "layout center",
-                );
+                if let Some(annots) = &annotations {
+                    for (node, label) in annots.iter() {
+                        gfaestus::gui::text::draw_text_at_node(
+                            &gui.ctx,
+                            universe.layout().nodes(),
+                            app.shared_state().view(),
+                            *node,
+                            Point::new(0.0, 20.0),
+                            label
+                        );
+                    }
+                }
 
                 let meshes = gui.end_frame();
 
