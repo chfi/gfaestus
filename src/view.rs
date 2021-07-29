@@ -141,19 +141,19 @@ impl View {
                       0.0, 0.0, 1.0, 0.0,
                       0.0, 0.0, 0.0, 1.0);
 
-        scaling  * translation
+        scaling * translation
     }
 
     #[rustfmt::skip]
     #[inline]
     pub fn world_to_screen_map(&self) -> glm::Mat4 {
-        let s = self.scale;
+        let s = 1.0 / self.scale;
         let vcx = self.center.x;
         let vcy = self.center.y;
 
         let view_scale_screen =
-            glm::mat4(s,   0.0, 0.0, vcx - (s * 0.5),
-                      0.0, s,   0.0, vcy - (s * 0.5),
+            glm::mat4(s,   0.0, 0.0, (s * 0.5) - vcx,
+                      0.0, s,   0.0, (s * 0.5) - vcx,
                       0.0, 0.0, 1.0, 0.0,
                       0.0, 0.0, 0.0, 1.0);
 
@@ -200,7 +200,7 @@ impl View {
     }
 
     pub fn world_point_to_screen(&self, world: Point) -> Point {
-        let to_screen_mat = self.world_to_screen_map();
+        let to_screen_mat = self.to_scaled_matrix();
 
         let projected = to_screen_mat * glm::vec4(world.x, world.y, 0.0, 1.0);
 

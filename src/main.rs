@@ -634,14 +634,6 @@ fn main() {
                 gfaestus::gui::text::draw_text_at_world_point(
                     &gui.ctx,
                     app.shared_state().view(),
-                    Point::ZERO,
-                    "hello world"
-                );
-
-
-                gfaestus::gui::text::draw_text_at_world_point(
-                    &gui.ctx,
-                    app.shared_state().view(),
                     center,
                     "layout center",
                 );

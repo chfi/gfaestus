@@ -261,32 +261,6 @@ impl MainView {
                 offset,
             )
         }
-
-        /*
-        let has_overlay = self.node_draw_system.has_overlay();
-
-        if use_overlay && has_overlay {
-            self.node_draw_system.draw_overlay(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-            )
-        } else {
-            self.node_draw_system.draw_themed(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-            )
-        }
-        */
     }
 
     pub fn draw_nodes(

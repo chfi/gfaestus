@@ -21,56 +21,28 @@ pub fn draw_text_at_world_point(
 
     let screen_pos = view.world_point_to_screen(world);
 
-    if screen_pos.x > 0.0
-        && screen_pos.x < screen_rect.width()
-        && screen_pos.y > 0.0
-        && screen_pos.y < screen_rect.height()
+    let dims = Point::new(screen_rect.width(), screen_rect.height());
+
+    let screen_pos = screen_pos + dims / 2.0;
+
+    // hacky way to ensure that the text is only being rendered when
+    // (more or less) on the screen, without being cut off if the
+    // center of the text is just outside the visible area
+    if screen_pos.x > -screen_rect.width()
+        && screen_pos.x < 2.0 * screen_rect.width()
+        && screen_pos.y > -screen_rect.height()
+        && screen_pos.y < 2.0 * screen_rect.height()
     {
-        paint_area.painter().text(
+        let rect = paint_area.painter().text(
             screen_pos.into(),
             egui::Align2::CENTER_CENTER,
             text,
             egui::TextStyle::Body,
-            egui::Color32::WHITE,
+            egui::Color32::BLACK,
         );
+
+        let stroke =
+            egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
+        paint_area.painter().rect_stroke(rect, 0.0, stroke);
     }
 }
-
-/*
-fn hover_annotation(&self) {
-    if let Some(node_id) = self.hover_node_id {
-        if self.ctx.is_pointer_over_area() {
-            return;
-        }
-
-        let annots = self.annotations.annotations_for(node_id);
-
-        if annots.is_empty() {
-            egui::containers::popup::show_tooltip_text(
-                &self.ctx,
-                egui::Id::new("hover_node_id_tooltip"),
-                node_id.0.to_string(),
-            )
-        } else {
-            let mut string = String::new();
-
-            for (name, val) in annots {
-                string.push_str(name);
-                string.push_str(": ");
-                string.push_str(val);
-                string.push_str("\n");
-            }
-
-            egui::containers::popup::show_tooltip_text(
-                &self.ctx,
-                egui::Id::new("hover_node_id_tooltip"),
-                string,
-            )
-        }
-    }
-}
-*/
-
-// pub struct TextRenderer {
-
-// }
