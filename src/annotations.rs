@@ -1,29 +1,23 @@
 use anyhow::Result;
 
 use handlegraph::{
-    handle::{Direction, Handle, NodeId},
-    handlegraph::*,
-    mutablehandlegraph::*,
-    packed::*,
-    packedgraph::index::OneBasedIndex,
+    handle::{Handle, NodeId},
     pathhandlegraph::*,
 };
 
-use handlegraph::{
-    packedgraph::{paths::StepPtr, PackedGraph},
-    path_position::PathPositionMap,
-};
+use handlegraph::packedgraph::paths::StepPtr;
 
 use bstr::ByteSlice;
 
 use rustc_hash::FxHashMap;
 
-use std::collections::hash_map::HashMap;
-
 use crate::{
     geometry::*, gluon::GraphHandle, graph_query::GraphQuery, universe::Node,
     view::*,
 };
+
+use nalgebra as na;
+use nalgebra_glm as glm;
 
 pub mod gff;
 
@@ -232,5 +226,51 @@ impl PathCoordinateSystem {
             let node = nodes.get(ix).unwrap();
             self.points.push(node.center());
         }
+    }
+
+    pub fn node_step_indices(&self, node: NodeId) -> Option<&[usize]> {
+        let ixs = self.node_indices.get(&node)?;
+        Some(ixs.as_slice())
+    }
+
+    pub fn unit_normal(&self, ix: usize) -> Option<na::Vector2<f32>> {
+        // TODO handle 1st and last steps
+        let prev = *self.points.get(ix - 1)?;
+        // let mid = self.points.get(ix)?;
+        let next = *self.points.get(ix + 1)?;
+
+        let p = na::Vector2::new(prev.x, prev.y);
+        let n = na::Vector2::new(next.x, next.y);
+
+        let delta = n - p;
+
+        let mid = p + (delta * 0.5);
+
+        let rot = na::Rotation2::new(std::f32::consts::PI / 2.0);
+        let normal = rot * mid;
+
+        Some(normal.normalize())
+    }
+
+    pub fn rect_on_perp(
+        &self,
+        ix: usize,
+        offset: f32,
+        width: f32,
+        height: f32,
+    ) -> Option<Rect> {
+        let node = self.points.get(ix)?;
+        let node = na::Vector2::new(node.x, node.y);
+        let norm = self.unit_normal(ix)?;
+
+        let center = node + (norm * offset);
+
+        let rw = width / 2.0;
+        let rh = height / 2.0;
+
+        let center = Point::new(center[0], center[1]);
+        let diag = Point::new(rw, rh);
+
+        Some(Rect::new(center - diag, center + diag))
     }
 }
