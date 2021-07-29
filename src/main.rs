@@ -631,6 +631,25 @@ fn main() {
 
                 gui.mouse_debug_info();
 
+                gfaestus::gui::text::draw_text_at_node(
+                    &gui.ctx,
+                    universe.layout().nodes(),
+                    app.shared_state().view(),
+                    NodeId(1),
+                    Point::new(0.0, 20.0),
+                    "Node 1",
+                );
+
+
+                gfaestus::gui::text::draw_text_at_node(
+                    &gui.ctx,
+                    universe.layout().nodes(),
+                    app.shared_state().view(),
+                    NodeId(1000),
+                    Point::new(0.0, 20.0),
+                    "Node 1000",
+                );
+
                 gfaestus::gui::text::draw_text_at_world_point(
                     &gui.ctx,
                     app.shared_state().view(),
