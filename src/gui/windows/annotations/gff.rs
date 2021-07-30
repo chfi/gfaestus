@@ -229,15 +229,22 @@ impl Gff3RecordList {
         graph_query: &GraphQuery,
         record: &Gff3Record,
     ) {
-        let active_path_id =
-            self.path_picker.active_path().map(|(id, _name)| id);
+        let active_path = self.path_picker.active_path();
 
-        if let Some(path_id) = active_path_id {
-            if let Some(range) = graph_query.path_basepair_range(
-                path_id,
-                record.start(),
-                record.end(),
-            ) {
+        if let Some((path_id, name)) = active_path {
+            let mut start = record.start();
+            let mut end = record.end();
+
+            if let Some(offset) =
+                crate::annotations::path_name_offset(name.as_bytes())
+            {
+                start -= offset;
+                end -= offset;
+            }
+
+            if let Some(range) =
+                graph_query.path_basepair_range(path_id, start, end)
+            {
                 let nodes = range
                     .into_iter()
                     .map(|(handle, _, _)| handle.id())
@@ -1033,9 +1040,20 @@ impl Gff3OverlayCreator {
 
                             use rayon::prelude::*;
 
+                            use crate::annotations as annots;
+
                             dbg!();
 
                             let steps = graph.path_pos_steps(path_id).unwrap();
+
+                            let offset = graph
+                                .graph()
+                                .get_path_name_vec(path_id)
+                                .and_then(|name| {
+                                    annots::path_name_offset(&name)
+                                });
+
+                            println!("using annotation offset {:?}", offset);
 
                             let t0 = std::time::Instant::now();
                             let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
@@ -1048,45 +1066,14 @@ impl Gff3OverlayCreator {
                                             record, &column,
                                         )?;
 
-                                        let (start, end) = {
-                                            let start = steps
-                                                .binary_search_by_key(
-                                                    &record.start(),
-                                                    |(_, _, p)| *p,
-                                                );
-                                            let end = steps
-                                                .binary_search_by_key(
-                                                    &record.end(),
-                                                    |(_, _, p)| *p,
-                                                );
+                                        let range = annots::path_step_range(
+                                            &steps,
+                                            offset,
+                                            record.start(),
+                                            record.end(),
+                                        )?;
 
-                                            let (start, end) =
-                                                match (start, end) {
-                                                    (Ok(s), Ok(e)) => (s, e),
-                                                    (Ok(s), Err(e)) => (s, e),
-                                                    (Err(s), Ok(e)) => (s, e),
-                                                    (Err(s), Err(e)) => (s, e),
-                                                };
-
-                                            let start = steps.get(start)?.1;
-
-                                            let end = {
-                                                let ix = if end >= steps.len() {
-                                                    steps.len() - 1
-                                                } else {
-                                                    end
-                                                };
-
-                                                steps.get(ix)?.1
-                                            };
-
-                                            Some((start, end))
-                                        }?;
-
-                                        let steps = graph
-                                            .path_range(path_id, start, end)?;
-
-                                        let ids = steps
+                                        let ids = range
                                             .into_iter()
                                             .map(|(h, _, _)| h.id())
                                             .collect();
