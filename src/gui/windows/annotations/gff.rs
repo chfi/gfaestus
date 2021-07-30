@@ -82,34 +82,32 @@ impl Gff3RecordList {
             return None;
         }
 
-        let (path, _) = self.path_picker.active_path()?;
+        let (path_id, name) = self.path_picker.active_path()?;
 
-        let steps = graph.path_pos_steps(path)?;
+        let offset = crate::annotations::path_name_offset(name.as_bytes());
+
+        let steps = graph.path_pos_steps(path_id)?;
 
         let mut result: Vec<(NodeId, String)> = Vec::new();
 
         for &record_ix in self.filtered_records.iter() {
             let record = records.records.get(record_ix)?;
 
-            let start = {
-                let start =
-                    steps.binary_search_by_key(&record.start(), |(_, _, p)| *p);
-
-                let start = match start {
-                    Ok(s) => s,
-                    Err(s) => s,
-                };
-
-                let start = steps.get(start)?.0;
-
-                Some(start)
-            }?;
-
-            // if let Some(names) = record.get_tag("Name") {
-            if let Some(name) = record.get_tag(b"Name").and_then(|n| n.first())
-            {
-                let label = format!("{}", name.as_bstr());
-                result.push((start.id(), label));
+            if let Some(range) = crate::annotations::path_step_range(
+                &steps,
+                offset,
+                record.start(),
+                record.end(),
+            ) {
+                // if let Some(names) = record.get_tag("Name") {
+                if let Some(name) =
+                    record.get_tag(b"Name").and_then(|n| n.first())
+                {
+                    let label = format!("{}", name.as_bstr());
+                    if let Some((start, _, _)) = range.first() {
+                        result.push((start.id(), label));
+                    }
+                }
             }
         }
 

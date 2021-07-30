@@ -148,7 +148,27 @@ impl PathCoordinateSystem {
     }
 }
 
+pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
+    let mut range_split = path_name.split_str(":");
+    let _name = range_split.next()?;
+    let range = range_split.next()?;
+
+    let mut start_end = range.split_str("-");
+
+    let start = start_end.next()?;
+    let start_str = start.to_str().ok()?;
+    let start = start_str.parse().ok()?;
+
+    let end = start_end.next()?;
+    let end_str = end.to_str().ok()?;
+    let end = end_str.parse().ok()?;
+
+    Some((start, end))
+}
+
 pub fn path_name_offset(path_name: &[u8]) -> Option<usize> {
+    path_name_range(path_name).map(|(s, _)| s)
+    /*
     let mut range_split = path_name.split_str(":");
     let _name = range_split.next()?;
     let range = range_split.next()?;
@@ -158,6 +178,7 @@ pub fn path_name_offset(path_name: &[u8]) -> Option<usize> {
 
     let start_str = start.to_str().ok()?;
     start_str.parse().ok()
+    */
 }
 
 pub fn path_step_range(
@@ -166,14 +187,17 @@ pub fn path_step_range(
     start: usize,
     end: usize,
 ) -> Option<&[(Handle, StepPtr, usize)]> {
-    // ) -> Option<(StepPtr, StepPtr)>
-
     let offset = offset.unwrap_or(0);
 
+    let len = end - start;
+
+    let start = start.checked_sub(offset).unwrap_or(0);
+    let end = end.checked_sub(offset).unwrap_or(start + len);
+
     let (start, end) = {
-        let start =
-            steps.binary_search_by_key(&start, |(_, _, p)| (*p - offset));
-        let end = steps.binary_search_by_key(&end, |(_, _, p)| (*p - offset));
+        let start = steps.binary_search_by_key(&start, |(_, _, p)| *p);
+
+        let end = steps.binary_search_by_key(&end, |(_, _, p)| *p);
 
         let (start, end) = match (start, end) {
             (Ok(s), Ok(e)) => (s, e),
@@ -183,20 +207,6 @@ pub fn path_step_range(
         };
 
         let end = end.min(steps.len());
-
-        /*
-        let start = steps.get(start)?.1;
-
-        let end = {
-            let ix = if end >= steps.len() {
-                steps.len() - 1
-            } else {
-                end
-            };
-
-            steps.get(ix)?.1
-        };
-        */
 
         Some((start, end))
     }?;
