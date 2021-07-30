@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Annotations, Gff3Record, Gff3Records},
+    annotations::{Gff3Record, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,

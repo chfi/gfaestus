@@ -46,133 +46,6 @@ impl std::str::FromStr for Strand {
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub struct AnnotationSource {
-    name: String,
-    map: FxHashMap<NodeId, String>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct Annotations {
-    annotations: FxHashMap<usize, AnnotationSource>,
-    enabled: FxHashMap<usize, bool>,
-
-    next_id: usize,
-}
-
-// pub struct Annotations {
-//     annotations: HashMap<String, FxHashMap<NodeId, String>>,
-// }
-
-impl AnnotationSource {
-    // TODO built in parser for BED files, at least
-    // TODO support building multiple sources from a single file at once
-    // TODO support building sources via the gluon api
-    pub fn from_file<F, P>(path: P, name: &str, parser: F) -> Result<Self>
-    where
-        P: AsRef<std::path::Path>,
-        for<'a> F: Fn(&'a str) -> Result<(NodeId, String)>,
-    {
-        use std::fs::File;
-        use std::io::prelude::*;
-
-        let name = name.to_owned();
-
-        let file = File::open(path)?;
-
-        let lines = std::io::BufReader::new(file).lines();
-
-        let mut map: FxHashMap<NodeId, String> = FxHashMap::default();
-
-        for line in lines {
-            let line = line?;
-            let (node, val) = parser(&line)?;
-
-            map.insert(node, val);
-        }
-
-        Ok(Self { name, map })
-    }
-}
-
-impl Annotations {
-    pub fn insert(&mut self, source: AnnotationSource) {
-        let id = self.next_id;
-        self.next_id += 1;
-
-        self.annotations.insert(id, source);
-        self.enabled.insert(id, true);
-    }
-
-    pub fn annotations_for(&self, node: NodeId) -> Vec<(&str, &str)> {
-        let mut res: Vec<(&str, &str)> = Vec::new();
-
-        let mut sources = self
-            .annotations
-            .iter()
-            .filter(|(k, _)| self.enabled.get(k).copied() == Some(true))
-            .collect::<Vec<_>>();
-        sources.sort_by_key(|(k, _)| *k);
-
-        for (_id, source) in sources {
-            if let Some(val) = source.map.get(&node) {
-                let name = &source.name;
-                res.push((name, val));
-            }
-        }
-
-        res
-    }
-}
-
-impl Annotations {
-    pub fn from_bed_file<P: AsRef<std::path::Path>>(
-        graph: &GraphHandle,
-        path: P,
-    ) -> Result<Self> {
-        use crate::gluon::bed::BedRecord;
-
-        use crate::gluon;
-
-        let bed_records = BedRecord::parse_bed_file(path)?;
-
-        // NB: just doing names for now, and assuming that the BED file has names
-
-        let mut record_names: FxHashMap<NodeId, String> = Default::default();
-
-        for record in bed_records {
-            let chrom = record.chrom();
-            let start = record.chrom_start();
-            let end = record.chrom_end();
-
-            let name = record.name().unwrap();
-            let name = name.to_str().unwrap().to_owned();
-
-            let path_id = graph.graph.get_path_id(chrom).unwrap();
-
-            let steps =
-                gluon::path_base_range(graph, path_id.0, start, end).unwrap();
-
-            for (id, _, _) in steps {
-                let node_id = NodeId::from(id);
-
-                record_names.insert(node_id, name.clone());
-            }
-        }
-
-        let source = AnnotationSource {
-            name: "Name".to_string(),
-            map: record_names,
-        };
-
-        let mut res = Annotations::default();
-
-        res.insert(source);
-
-        Ok(res)
-    }
-}
-
 pub struct PathCoordinateSystem {
     path: PathId,
 
@@ -273,4 +146,60 @@ impl PathCoordinateSystem {
 
         Some(Rect::new(center - diag, center + diag))
     }
+}
+
+pub fn path_name_offset(path_name: &[u8]) -> Option<usize> {
+    let mut range_split = path_name.split_str(":");
+    let _name = range_split.next()?;
+    let range = range_split.next()?;
+
+    let mut start_end = range.split_str("-");
+    let start = start_end.next()?;
+
+    let start_str = start.to_str().ok()?;
+    start_str.parse().ok()
+}
+
+pub fn path_step_range(
+    steps: &[(Handle, StepPtr, usize)],
+    offset: Option<usize>,
+    start: usize,
+    end: usize,
+) -> Option<&[(Handle, StepPtr, usize)]> {
+    // ) -> Option<(StepPtr, StepPtr)>
+
+    let offset = offset.unwrap_or(0);
+
+    let (start, end) = {
+        let start =
+            steps.binary_search_by_key(&start, |(_, _, p)| (*p - offset));
+        let end = steps.binary_search_by_key(&end, |(_, _, p)| (*p - offset));
+
+        let (start, end) = match (start, end) {
+            (Ok(s), Ok(e)) => (s, e),
+            (Ok(s), Err(e)) => (s, e),
+            (Err(s), Ok(e)) => (s, e),
+            (Err(s), Err(e)) => (s, e),
+        };
+
+        let end = end.min(steps.len());
+
+        /*
+        let start = steps.get(start)?.1;
+
+        let end = {
+            let ix = if end >= steps.len() {
+                steps.len() - 1
+            } else {
+                end
+            };
+
+            steps.get(ix)?.1
+        };
+        */
+
+        Some((start, end))
+    }?;
+
+    Some(&steps[start..end])
 }
