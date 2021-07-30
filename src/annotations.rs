@@ -148,6 +148,36 @@ impl PathCoordinateSystem {
     }
 }
 
+// NB: this assumes that the path name is of the form
+// "path_name#seq_id:start-end", where seq_id is a string, and start
+// and end are unsigned integers
+pub fn path_name_chr_range(path_name: &[u8]) -> Option<(&[u8], usize, usize)> {
+    let pos_start_ix = path_name.find_byte(b'#')?;
+
+    if pos_start_ix + 1 >= path_name.len() {
+        return None;
+    }
+
+    let pos_str = &path_name[pos_start_ix + 1..];
+
+    let seq_id_end = pos_str.find_byte(b':')?;
+    let range_mid = pos_str.find_byte(b'-')?;
+
+    if range_mid + 1 >= pos_str.len() {
+        return None;
+    }
+
+    let chr = &pos_str[..seq_id_end];
+
+    let start_str = pos_str[seq_id_end + 1..range_mid].to_str().ok()?;
+    let start: usize = start_str.parse().ok()?;
+
+    let end_str = pos_str[range_mid + 1..].to_str().ok()?;
+    let end: usize = end_str.parse().ok()?;
+
+    Some((chr, start, end))
+}
+
 pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
     let mut range_split = path_name.split_str(":");
     let _name = range_split.next()?;

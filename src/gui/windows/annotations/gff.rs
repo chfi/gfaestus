@@ -500,18 +500,22 @@ impl Gff3RecordList {
                             .enabled(active_path_name.is_some()),
                     );
 
-                    let path_name_range = active_path_name.and_then(|n| {
-                        crate::annotations::path_name_range(n.as_bytes())
-                    });
+                    let path_name_range = if let Some(name) = &active_path_name
+                    {
+                        let n = name.as_bytes();
+                        crate::annotations::path_name_chr_range(n.as_bytes())
+                    } else {
+                        None
+                    };
 
                     let range_filter_btn = ui.add(
                         egui::Button::new("Filter by path range")
                             .enabled(path_name_range.is_some()),
                     );
 
-                    if let Some((start, end)) = path_name_range {
+                    if let Some((chr, start, end)) = path_name_range {
                         if range_filter_btn.clicked() {
-                            self.filter.range_filter(start, end);
+                            self.filter.chr_range_filter(chr, start, end);
                         }
                     }
 
@@ -765,6 +769,14 @@ impl Gff3Filter {
 
         self.end.op = FilterNumOp::LessThan;
         self.end.arg1 = end;
+    }
+
+    fn chr_range_filter(&mut self, seq_id: &[u8], start: usize, end: usize) {
+        if let Ok(seq_id) = seq_id.to_str().map(String::from) {
+            self.seq_id.op = FilterStringOp::ContainedIn;
+            self.seq_id.arg = seq_id;
+        }
+        self.range_filter(start, end);
     }
 
     pub fn ui(
