@@ -23,8 +23,10 @@ impl ViewDebugInfo {
                     y: screen_rect.height(),
                 };
 
-                let visible_top_left = view.center - (dims / 2.0);
-                let visible_bottom_right = view.center + (dims / 2.0);
+                let visible_top_left =
+                    view.screen_point_to_world(dims, Point::ZERO);
+                let visible_bottom_right =
+                    view.screen_point_to_world(dims, dims);
 
                 ui.label("Visible area");
                 ui.label(format!(
