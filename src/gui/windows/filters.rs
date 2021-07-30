@@ -19,6 +19,7 @@ pub enum FilterStringOp {
     None,
     Equal,
     Contains,
+    ContainedIn,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
@@ -42,6 +43,7 @@ impl FilterString {
             FilterStringOp::None => true,
             FilterStringOp::Equal => string == self.arg,
             FilterStringOp::Contains => string.contains(&self.arg),
+            FilterStringOp::ContainedIn => self.arg.contains(string),
         }
     }
 
@@ -56,6 +58,10 @@ impl FilterString {
                 let bytes = self.arg.as_bytes();
                 string.contains_str(bytes)
             }
+            FilterStringOp::ContainedIn => {
+                let bytes = self.arg.as_bytes();
+                bytes.contains_str(string)
+            }
         }
     }
 
@@ -68,6 +74,8 @@ impl FilterString {
             let _op_equal = ui.radio_value(op, FilterStringOp::Equal, "Equal");
             let _op_contains =
                 ui.radio_value(op, FilterStringOp::Contains, "Contains");
+            let _op_contained_in =
+                ui.radio_value(op, FilterStringOp::ContainedIn, "Contained in");
         });
 
         if *op != FilterStringOp::None {
