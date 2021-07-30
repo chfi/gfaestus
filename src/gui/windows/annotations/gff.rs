@@ -494,6 +494,21 @@ impl Gff3RecordList {
                     }
                 });
 
+                let path_name_range = active_path_name.and_then(|n| {
+                    crate::annotations::path_name_range(n.as_bytes())
+                });
+
+                let range_filter_btn = ui.add(
+                    egui::Button::new("Filter by path range")
+                        .enabled(path_name_range.is_some()),
+                );
+
+                if let Some((start, end)) = path_name_range {
+                    if range_filter_btn.clicked() {
+                        self.filter.range_filter(start, end);
+                    }
+                }
+
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
@@ -719,6 +734,20 @@ impl Gff3Filter {
             attributes,
             ..Gff3Filter::default()
         }
+    }
+
+    fn range_filter(&mut self, mut start: usize, mut end: usize) {
+        if start > 0 {
+            start -= 1;
+        }
+
+        end += 1;
+
+        self.start.op = FilterNumOp::MoreThan;
+        self.start.arg1 = start;
+
+        self.end.op = FilterNumOp::LessThan;
+        self.end.arg1 = end;
     }
 
     pub fn ui(
