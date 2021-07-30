@@ -188,17 +188,6 @@ fn main() {
     )
     .unwrap();
 
-    /*
-    eprintln!("loading gff3");
-
-    let gff_records = gfaestus::annotations::gff::Gff3Records::parse_gff3_file(
-        "/home/christian/data/Homo_sapiens.GRCh38.103.chr.gff3",
-    )
-    .unwrap();
-
-    eprintln!("loaded and parsed {} gff3 rows", gff_records.records.len());
-    */
-
     let mut gui = Gui::new(
         &gfaestus,
         app.shared_state().clone(),
@@ -290,8 +279,6 @@ fn main() {
             .overlay_names()
             .into_iter(),
     );
-
-    let mut annotations: Option<Vec<(NodeId, String)>> = None;
 
     dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
@@ -516,12 +503,6 @@ fn main() {
 
                 edge_renderer.write_ubo(&gfaestus, &edge_ubo).unwrap();
 
-                if annotations.is_none() {
-                    if let Some(annots) = gui.calculate_annotations(&graph_query) {
-                        annotations = Some(annots);
-                    }
-                }
-
             }
             Event::RedrawEventsCleared => {
 
@@ -639,17 +620,17 @@ fn main() {
 
                 gui.mouse_debug_info();
 
-                if let Some(annots) = &annotations {
-                    for (node, label) in annots.iter() {
-                        gfaestus::gui::text::draw_text_at_node(
-                            &gui.ctx,
-                            universe.layout().nodes(),
-                            app.shared_state().view(),
-                            *node,
-                            Point::new(0.0, 20.0),
-                            label
-                        );
-                    }
+
+
+                for (node, label) in app.node_labels() {
+                    gfaestus::gui::text::draw_text_at_node(
+                        &gui.ctx,
+                        universe.layout().nodes(),
+                        app.shared_state().view(),
+                        *node,
+                        Point::new(0.0, 20.0),
+                        label
+                    );
                 }
 
                 let meshes = gui.end_frame();
@@ -660,8 +641,6 @@ fn main() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
                 }
 
-                // let device = gfaestus.vk_context().device().clone();
-
                 let node_pass = gfaestus.render_passes.nodes;
                 let edges_pass = gfaestus.render_passes.edges;
                 let edge_pass = gfaestus.render_passes.selection_edge_detect;
@@ -669,8 +648,6 @@ fn main() {
                 let gui_pass = gfaestus.render_passes.gui;
 
                 let node_id_image = gfaestus.node_attachments.id_resolve.image;
-                // let node_mask_image =
-                //     gfaestus.node_attachments.mask_resolve.image;
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 

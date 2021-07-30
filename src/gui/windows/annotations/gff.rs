@@ -494,20 +494,37 @@ impl Gff3RecordList {
                     }
                 });
 
-                let path_name_range = active_path_name.and_then(|n| {
-                    crate::annotations::path_name_range(n.as_bytes())
-                });
+                ui.horizontal(|ui| {
+                    let apply_labels_btn = ui.add(
+                        egui::Button::new("Apply annotations")
+                            .enabled(active_path_name.is_some()),
+                    );
 
-                let range_filter_btn = ui.add(
-                    egui::Button::new("Filter by path range")
-                        .enabled(path_name_range.is_some()),
-                );
+                    let path_name_range = active_path_name.and_then(|n| {
+                        crate::annotations::path_name_range(n.as_bytes())
+                    });
 
-                if let Some((start, end)) = path_name_range {
-                    if range_filter_btn.clicked() {
-                        self.filter.range_filter(start, end);
+                    let range_filter_btn = ui.add(
+                        egui::Button::new("Filter by path range")
+                            .enabled(path_name_range.is_some()),
+                    );
+
+                    if let Some((start, end)) = path_name_range {
+                        if range_filter_btn.clicked() {
+                            self.filter.range_filter(start, end);
+                        }
                     }
-                }
+
+                    if apply_labels_btn.clicked() {
+                        if let Some(labels) = self
+                            .calculate_annotations(graph_query.graph(), records)
+                        {
+                            app_msg_tx
+                                .send(AppMsg::SetNodeLabels(labels))
+                                .unwrap();
+                        }
+                    }
+                });
 
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)

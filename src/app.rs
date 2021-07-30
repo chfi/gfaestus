@@ -40,6 +40,8 @@ pub struct App {
     selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
+
+    node_labels: Vec<(NodeId, String)>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -95,6 +97,8 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
 
     ToggleOverlay,
+
+    SetNodeLabels(Vec<(NodeId, String)>),
 }
 
 impl App {
@@ -116,6 +120,8 @@ impl App {
 
             // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
+
+            node_labels: Vec::new(),
         })
     }
 
@@ -147,6 +153,10 @@ impl App {
             self.selection_changed = false;
             Some(&self.selected_nodes)
         }
+    }
+
+    pub fn node_labels(&self) -> &[(NodeId, String)] {
+        &self.node_labels
     }
 
     pub fn dims(&self) -> ScreenDims {
@@ -309,6 +319,9 @@ impl App {
             },
             AppMsg::ToggleOverlay => {
                 self.shared_state.overlay_state.toggle_overlay();
+            }
+            AppMsg::SetNodeLabels(labels) => {
+                self.node_labels.clone_from(labels);
             }
         }
     }
