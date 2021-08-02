@@ -396,28 +396,3 @@ pub(super) fn find_memory_type(
 
     panic!("Failed to find suitable memory type");
 }
-
-pub(super) fn create_descriptor_pool(
-    device: &Device,
-    size: u32,
-) -> Result<vk::DescriptorPool> {
-    let ubo_pool_size = vk::DescriptorPoolSize {
-        ty: vk::DescriptorType::UNIFORM_BUFFER,
-        descriptor_count: size,
-    };
-    let sampler_pool_size = vk::DescriptorPoolSize {
-        ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-        descriptor_count: size,
-    };
-
-    let pool_sizes = [ubo_pool_size, sampler_pool_size];
-
-    let pool_info = vk::DescriptorPoolCreateInfo::builder()
-        .pool_sizes(&pool_sizes)
-        .max_sets(size)
-        .build();
-
-    let pool = unsafe { device.create_descriptor_pool(&pool_info, None) }?;
-
-    Ok(pool)
-}

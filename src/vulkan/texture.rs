@@ -43,16 +43,6 @@ impl Texture {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        /*
-        let element_size = match format {
-            vk::Format::R8_UNORM => std::mem::size_of::<u8>(),
-            vk::Format::R8G8_UNORM => std::mem::size_of::<[u8; 2]>(),
-            vk::Format::R8G8B8_UNORM => std::mem::size_of::<[u8; 3]>(),
-            vk::Format::R8G8B8A8_UNORM => std::mem::size_of::<[u8; 4]>(),
-            _ => panic!("unsupported image format in Texture::allocate"),
-        };
-        */
-
         let extent = vk::Extent3D {
             width: width as u32,
             height: height as u32,
@@ -264,8 +254,6 @@ impl Texture {
         };
 
         {
-            // use super::GfaestusVk;
-
             super::GfaestusVk::transition_image(
                 device,
                 command_pool,
@@ -559,8 +547,6 @@ impl Texture1D {
         };
 
         {
-            // use super::GfaestusVk;
-
             super::GfaestusVk::transition_image(
                 device,
                 command_pool,

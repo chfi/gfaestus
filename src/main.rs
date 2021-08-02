@@ -501,7 +501,7 @@ fn main() {
 
                 let edge_ubo = app.settings.edge_renderer().load();
 
-                edge_renderer.write_ubo(&gfaestus, &edge_ubo).unwrap();
+                edge_renderer.write_ubo(&edge_ubo).unwrap();
 
             }
             Event::RedrawEventsCleared => {

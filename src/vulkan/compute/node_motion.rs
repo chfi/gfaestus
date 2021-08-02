@@ -1,4 +1,4 @@
-use crate::geometry::{Point, Rect};
+use crate::geometry::Point;
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
@@ -25,7 +25,7 @@ impl NodeMotion {
     pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
         let translation = NodeTranslation::new(app, node_count)?;
 
-        let vertices = NodeVertices::new(app.vk_context().device());
+        let vertices = NodeVertices::new();
 
         Ok(Self {
             translation,

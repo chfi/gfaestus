@@ -1,8 +1,6 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
-use anyhow::Result;
-
 pub mod edges;
 pub mod gui;
 pub mod nodes;

@@ -367,13 +367,9 @@ impl EdgeRenderer {
         }
     }
 
-    pub fn write_ubo(
-        &mut self,
-        app: &GfaestusVk,
-        ubo: &EdgesUBO,
-    ) -> Result<()> {
+    pub fn write_ubo(&mut self, ubo: &EdgesUBO) -> Result<()> {
         self.ubo.ubo = *ubo;
-        self.ubo.write_ubo(app)
+        self.ubo.write_ubo()
     }
 
     pub fn draw(
@@ -381,7 +377,6 @@ impl EdgeRenderer {
         cmd_buf: vk::CommandBuffer,
         edge_width: f32,
         vertices: &NodeVertices,
-        // edges: &EdgeBuffers,
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
@@ -390,10 +385,6 @@ impl EdgeRenderer {
         offset: Point,
     ) -> Result<()> {
         let device = &self.device;
-
-        // dbg!();
-        // self.ubo.write_ubo();
-        // dbg!();
 
         let extent = vk::Extent2D {
             width: viewport_dims[0] as u32,
@@ -433,13 +424,8 @@ impl EdgeRenderer {
         };
 
         let vx_bufs = [vertices.vertex_buffer];
-        // let vx_bufs = [edges.edges_pos_buf];
 
-        let desc_sets = [
-            self.descriptor_set
-            // self.theme_pipeline.theme_set,
-            // self.selection_descriptors.descriptor_set,
-        ];
+        let desc_sets = [self.descriptor_set];
 
         let offsets = [0];
         unsafe {
@@ -488,7 +474,6 @@ impl EdgeRenderer {
         };
 
         unsafe {
-            // device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
             device.cmd_draw_indexed(
                 cmd_buf,
                 (self.edge_index_buffer.edge_count * 2) as u32,
@@ -666,8 +651,6 @@ impl EdgesUBOBuffer {
                 &data,
             )?;
 
-        // let mapped_ptr = app.allocator.map_memory(&allocation)?;
-
         let result = Self {
             ubo,
 
@@ -676,12 +659,12 @@ impl EdgesUBOBuffer {
             allocation_info,
         };
 
-        result.write_ubo(app)?;
+        result.write_ubo()?;
 
         Ok(result)
     }
 
-    pub fn write_ubo(&self, app: &GfaestusVk) -> Result<()> {
+    pub fn write_ubo(&self) -> Result<()> {
         let tls = &self.ubo.tess_levels;
 
         #[rustfmt::skip]

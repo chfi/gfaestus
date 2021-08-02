@@ -53,9 +53,7 @@ impl OffscreenAttachment {
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
-        // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
-        // format: vk::Format,
     ) -> Result<Self> {
         let format = vk::Format::R8G8B8A8_UNORM;
 
@@ -76,7 +74,6 @@ impl OffscreenAttachment {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
-        // format: vk::Format,
     ) -> Result<()> {
         self.destroy(vk_context.device());
 
@@ -114,7 +111,6 @@ impl OffscreenAttachment {
                 .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .anisotropy_enable(false)
-                // .max_anisotropy(16.0)
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .unnormalized_coordinates(false)
                 .compare_enable(false)
@@ -149,7 +145,6 @@ impl NodeAttachments {
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
-        // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
@@ -297,15 +292,12 @@ impl NodeAttachments {
     }
 
     fn id_color(
-        // app: &GfaestusVk,
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Texture> {
-        let extent = swapchain_props.extent;
-
         let format = vk::Format::R32_UINT;
 
         use vk::ImageLayout as Layout;
@@ -388,7 +380,6 @@ impl NodeAttachments {
         vk_context: &VkContext,
         command_pool: vk::CommandPool,
         queue: vk::Queue,
-        // app: &GfaestusVk,
         swapchain_props: SwapchainProperties,
     ) -> Result<Texture> {
         let device = vk_context.device();
@@ -402,7 +393,6 @@ impl NodeAttachments {
                 .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .anisotropy_enable(false)
-                // .max_anisotropy(16.0)
                 .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
                 .unnormalized_coordinates(false)
                 .compare_enable(false)
@@ -442,12 +432,11 @@ impl RenderPasses {
         let edges = Self::create_edges(device, swapchain_props, msaa_samples)?;
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
-            swapchain_props,
             vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
             Self::create_selection_blur(device, swapchain_props)?;
-        let gui = Self::create_gui(device, swapchain_props, msaa_samples)?;
+        let gui = Self::create_gui(device, swapchain_props)?;
 
         Ok(Self {
             nodes,
@@ -577,12 +566,11 @@ impl RenderPasses {
 
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
-            swapchain_props,
             vk::Format::R8G8B8A8_UNORM,
         )?;
         let selection_blur =
             Self::create_selection_blur(device, swapchain_props)?;
-        let gui = Self::create_gui(device, swapchain_props, msaa_samples)?;
+        let gui = Self::create_gui(device, swapchain_props)?;
 
         self.nodes = nodes;
         self.edges = edges;
@@ -821,7 +809,6 @@ impl RenderPasses {
 
     fn create_selection_edge_detect(
         device: &Device,
-        swapchain_props: SwapchainProperties,
         format: vk::Format,
     ) -> Result<vk::RenderPass> {
         let color_attch_desc = vk::AttachmentDescription::builder()
@@ -933,7 +920,6 @@ impl RenderPasses {
     fn create_gui(
         device: &Device,
         swapchain_props: SwapchainProperties,
-        msaa_samples: vk::SampleCountFlags,
     ) -> Result<vk::RenderPass> {
         let color_attch_desc = vk::AttachmentDescription::builder()
             .format(swapchain_props.format.format)

@@ -11,7 +11,6 @@ use anyhow::Result;
 
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
-use crate::vulkan::SwapchainProperties;
 use crate::{
     geometry::Point, overlays::OverlayKind, vulkan::texture::GradientTexture,
 };
@@ -48,7 +47,7 @@ impl NodePipelines {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        let vertices = NodeVertices::new(device);
+        let vertices = NodeVertices::new();
 
         let selection_descriptors =
             SelectionDescriptors::new(app, selection_buffer, 1)?;
@@ -758,26 +757,21 @@ pub struct NodeVertices {
 
     allocation: vk_mem::Allocation,
     allocation_info: Option<vk_mem::AllocationInfo>,
-
-    device: Device,
 }
 
 impl NodeVertices {
-    pub fn new(device: &Device) -> Self {
+    pub fn new() -> Self {
         let vertex_count = 0;
         let vertex_buffer = vk::Buffer::null();
 
         let allocation = vk_mem::Allocation::null();
         let allocation_info = None;
 
-        let device = device.clone();
-
         Self {
             vertex_count,
             vertex_buffer,
             allocation,
             allocation_info,
-            device,
         }
     }
 
@@ -876,14 +870,6 @@ impl NodeVertices {
 
         unsafe {
             let mapped_ptr = staging_alloc_info.get_mapped_data();
-
-            // let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
-            // let data_ptr = device.map_memory(
-            //     self.vertex_memory,
-            //     0,
-            //     vk::WHOLE_SIZE,
-            //     vk::MemoryMapFlags::empty(),
-            // )?;
 
             let val_ptr = mapped_ptr as *const crate::universe::Node;
 
@@ -1068,8 +1054,6 @@ fn create_pipeline(
         .depth_bias_slope_factor(0.0)
         .build();
 
-    // let depth_stencil_info = todo!();
-
     let multisampling_info = vk::PipelineMultisampleStateCreateInfo::builder()
         .sample_shading_enable(false)
         .rasterization_samples(msaa_samples)
@@ -1177,7 +1161,6 @@ fn create_sampler(device: &Device) -> Result<vk::Sampler> {
         .address_mode_v(vk::SamplerAddressMode::REPEAT)
         .address_mode_w(vk::SamplerAddressMode::REPEAT)
         .anisotropy_enable(false)
-        // .max_anisotropy(16.0)
         .border_color(vk::BorderColor::INT_OPAQUE_BLACK)
         .unnormalized_coordinates(false)
         .compare_enable(false)

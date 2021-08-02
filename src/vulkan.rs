@@ -1,7 +1,6 @@
 pub mod compute;
 pub mod context;
 pub mod debug;
-pub mod descriptor;
 pub mod draw_system;
 pub mod render_pass;
 pub mod texture;
@@ -132,10 +131,7 @@ pub struct GfaestusVk {
 
     pub command_pool: vk::CommandPool,
     pub transient_command_pool: vk::CommandPool,
-    // command_buffers: Vec<vk::CommandBuffer>,
     in_flight_frames: InFlightFrames,
-
-    pub descriptor_pool: Arc<vk::DescriptorPool>,
 
     vk_context: VkContext,
 }
@@ -227,8 +223,6 @@ impl GfaestusVk {
 
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
-        let descriptor_pool = create_descriptor_pool(vk_context.device(), 1)?;
-
         let render_passes = RenderPasses::create(
             vk_context.device(),
             swapchain_props,
@@ -292,7 +286,6 @@ impl GfaestusVk {
 
             command_pool,
             transient_command_pool,
-            descriptor_pool: Arc::new(descriptor_pool),
 
             in_flight_frames,
         })
@@ -950,13 +943,14 @@ impl GfaestusVk {
         let device = vk_context.device();
         let size = (element_count * size_of::<T>()) as vk::DeviceSize;
 
-        let (staging_buf, staging_mem, staging_mem_size) = self.create_buffer(
-            size,
-            Usage::TRANSFER_DST,
-            MemPropFlags::HOST_VISIBLE
-                | MemPropFlags::HOST_COHERENT
-                | MemPropFlags::HOST_CACHED,
-        )?;
+        let (staging_buf, staging_mem, _staging_mem_size) = self
+            .create_buffer(
+                size,
+                Usage::TRANSFER_DST,
+                MemPropFlags::HOST_VISIBLE
+                    | MemPropFlags::HOST_COHERENT
+                    | MemPropFlags::HOST_CACHED,
+            )?;
 
         GfaestusVk::copy_buffer(
             device,
@@ -1358,8 +1352,6 @@ impl Drop for GfaestusVk {
         self.in_flight_frames.destroy(device);
 
         unsafe {
-            device.destroy_descriptor_pool(*self.descriptor_pool, None);
-
             device.destroy_command_pool(self.transient_command_pool, None);
             device.destroy_command_pool(self.command_pool, None);
         }
