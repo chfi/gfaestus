@@ -203,8 +203,7 @@ impl AppViewState {
             total_len: graph.total_length(),
         };
 
-        let settings =
-            SettingsWindow::new(settings, shared_state.clone_edges_enabled());
+        let settings = SettingsWindow::new(settings, shared_state);
 
         let node_details_state = NodeDetails::default();
         let node_id_cell = node_details_state.node_id_cell().clone();
@@ -556,17 +555,6 @@ impl Gui {
         &self,
     ) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
         &self.view_state.overlay_creator.state.new_overlay_rx()
-    }
-
-    pub fn view_debug_info(&self) {
-        let view = self.shared_state.view();
-        ViewDebugInfo::ui(&self.ctx, view);
-    }
-
-    pub fn mouse_debug_info(&self) {
-        let view = self.shared_state.view();
-        let mouse = self.shared_state.mouse_pos();
-        MouseDebugInfo::ui(&self.ctx, view, mouse);
     }
 
     pub fn begin_frame(

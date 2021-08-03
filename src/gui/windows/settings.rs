@@ -1,18 +1,15 @@
-use std::sync::Arc;
-
-use crate::app::AppSettings;
-
-use super::MainViewSettings;
+use crate::app::{AppSettings, SharedState};
 
 pub mod debug;
-use crossbeam::atomic::AtomicCell;
+pub mod main_view;
+
 use debug::*;
+use main_view::*;
 
 pub struct SettingsWindow {
     current_tab: SettingsTab,
 
     pub(crate) main_view: MainViewSettings,
-
     pub(crate) debug: DebugSettings,
 }
 
@@ -25,12 +22,11 @@ enum SettingsTab {
 impl SettingsWindow {
     pub const ID: &'static str = "settings_window";
 
-    pub fn new(
-        settings: &AppSettings,
-        edges_enabled: Arc<AtomicCell<bool>>,
-    ) -> Self {
+    pub fn new(settings: &AppSettings, shared_state: &SharedState) -> Self {
         let current_tab = SettingsTab::MainView;
-        let main_view = MainViewSettings::new(settings, edges_enabled);
+
+        let main_view =
+            MainViewSettings::new(settings, shared_state.clone_edges_enabled());
 
         Self {
             current_tab,
@@ -58,7 +54,7 @@ impl SettingsWindow {
 
                 match self.current_tab {
                     SettingsTab::MainView => {
-                        self.main_view.inner_ui(ui);
+                        self.main_view.ui(ui);
                     }
                     SettingsTab::Debug => {
                         self.debug.ui(ui);
