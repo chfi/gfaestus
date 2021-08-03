@@ -4,7 +4,7 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
-use super::Strand;
+use super::{AnnotationRecord, Strand};
 
 #[derive(Clone, Default)]
 pub struct Gff3Records {
@@ -29,6 +29,88 @@ pub struct Gff3Record {
     frame: Vec<u8>,
 
     attributes: HashMap<Vec<u8>, Vec<Vec<u8>>>,
+}
+
+impl AnnotationRecord for Gff3Record {
+    type ColumnKey = Gff3Column;
+
+    fn columns(&self) -> Vec<Gff3Column> {
+        let mut columns = Vec::with_capacity(8 + self.attributes.len());
+
+        use Gff3Column::*;
+        columns.push(SeqId);
+        columns.push(Source);
+        columns.push(Type);
+        columns.push(Start);
+        columns.push(End);
+        columns.push(Score);
+        columns.push(Strand);
+        columns.push(Frame);
+
+        let mut attr_keys = self.attributes.keys().cloned().collect::<Vec<_>>();
+        attr_keys.sort();
+        columns.extend(attr_keys.into_iter().map(|k| Attribute(k)));
+
+        columns
+    }
+
+    fn seq_id(&self) -> &[u8] {
+        &self.seq_id
+    }
+
+    fn start(&self) -> usize {
+        self.start
+    }
+
+    fn end(&self) -> usize {
+        self.end
+    }
+
+    fn score(&self) -> Option<f64> {
+        self.score
+    }
+
+    fn get_first(&self, key: &Self::ColumnKey) -> Option<&[u8]> {
+        match key {
+            Gff3Column::SeqId => Some(&self.seq_id),
+            Gff3Column::Source => Some(&self.source),
+            Gff3Column::Type => Some(&self.type_),
+            Gff3Column::Strand => match self.strand {
+                Strand::Pos => Some(b"+"),
+                Strand::Neg => Some(b"-"),
+                Strand::None => Some(b"."),
+            },
+            Gff3Column::Frame => Some(&self.frame),
+            Gff3Column::Attribute(key) => self
+                .attributes
+                .get(key)
+                .and_then(|a| a.first())
+                .map(|a| a.as_slice()),
+            Gff3Column::Start | Gff3Column::End | Gff3Column::Score => None,
+        }
+    }
+
+    fn get_all(&self, key: &Self::ColumnKey) -> Vec<&[u8]> {
+        match key {
+            Gff3Column::SeqId => vec![&self.seq_id],
+            Gff3Column::Source => vec![&self.source],
+            Gff3Column::Type => vec![&self.type_],
+            Gff3Column::Strand => match self.strand {
+                Strand::Pos => vec![b"+"],
+                Strand::Neg => vec![b"-"],
+                Strand::None => vec![b"."],
+            },
+            Gff3Column::Frame => vec![&self.frame],
+            Gff3Column::Attribute(key) => {
+                if let Some(values) = self.attributes.get(key) {
+                    values.iter().map(|v| v.as_slice()).collect()
+                } else {
+                    Vec::new()
+                }
+            }
+            Gff3Column::Start | Gff3Column::End | Gff3Column::Score => vec![],
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]

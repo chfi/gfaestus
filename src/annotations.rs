@@ -23,6 +23,32 @@ pub mod gff;
 
 pub use gff::*;
 
+pub trait AnnotationRecord {
+    type ColumnKey: Clone + std::fmt::Display;
+
+    fn columns(&self) -> Vec<Self::ColumnKey>;
+
+    fn seq_id(&self) -> &[u8];
+
+    fn start(&self) -> usize;
+
+    fn end(&self) -> usize;
+
+    fn range(&self) -> (usize, usize) {
+        (self.start(), self.end())
+    }
+
+    fn score(&self) -> Option<f64>;
+
+    /// Get the value of one of the columns, other than those
+    /// corresponding to the range or the score
+    ///
+    /// If the column has multiple entries, return the first
+    fn get_first(&self, key: &Self::ColumnKey) -> Option<&[u8]>;
+
+    fn get_all(&self, key: &Self::ColumnKey) -> Vec<&[u8]>;
+}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Strand {
     Pos,
