@@ -23,72 +23,68 @@ use crate::{
     universe::GraphLayout,
 };
 
-use crate::annotations::Gff3Record;
+use crate::annotations::{AnnotationCollection, AnnotationRecord, Gff3Record};
 
-pub struct Annotations2D {
-    ref_path: PathId,
+// pub struct ColumnPickerOne<T: AnnotationRecord> {
+pub struct ColumnPickerOne<T: AnnotationCollection> {
+    columns: Vec<T::ColumnKey>,
+    chosen_column: Option<usize>,
 
-    steps: Vec<(Handle, StepPtr, usize)>,
+    id: egui::Id,
 }
 
-impl Annotations2D {
-    pub fn new(graph: &GraphQuery, path: PathId) -> Option<Self> {
-        let steps = graph.path_pos_steps(path)?;
+impl<T: AnnotationCollection> ColumnPickerOne<T> {
+    pub fn new(id_source: &str) -> Self {
+        let id = egui::Id::new(id_source);
 
-        Some(Self {
-            ref_path: path,
-            steps,
-        })
+        Self {
+            columns: Vec::new(),
+            chosen_column: None,
+
+            id,
+        }
     }
 
-    pub fn path(&self) -> PathId {
-        self.ref_path
+    pub fn update_attributes(&mut self, records: &T) {
+        self.chosen_column = None;
+        self.columns = records.all_columns();
     }
 
-    // returns world coordinates for the center of the nodes covered
-    // by the annotation, if it exists
-    pub fn location_for_record(
-        &self,
-        layout: impl GraphLayout,
-        record: &Gff3Record,
-    ) -> Option<Point> {
-        let (start, end) = {
-            let start = self
-                .steps
-                .binary_search_by_key(&record.start(), |(_, _, p)| *p);
-            let end = self
-                .steps
-                .binary_search_by_key(&record.end(), |(_, _, p)| *p);
+    pub fn chosen_column(&self) -> Option<&T::ColumnKey> {
+        let ix = self.chosen_column?;
+        self.columns.get(ix)
+    }
 
-            let (start, end) = match (start, end) {
-                (Ok(s), Ok(e)) => (s, e),
-                (Ok(s), Err(e)) => (s, e),
-                (Err(s), Ok(e)) => (s, e),
-                (Err(s), Err(e)) => (s, e),
-            };
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+        window_name: &str,
+    ) -> Option<egui::Response> {
+        egui::Window::new(window_name).id(self.id).open(open).show(
+            ctx,
+            |mut ui| {
+                egui::ScrollArea::from_max_height(
+                    ui.input().screen_rect.height() - 250.0,
+                )
+                .show(&mut ui, |ui| {
+                    let chosen_column = self.chosen_column;
 
-            // get the handle of the start & end
-            let start = self.steps.get(start)?.0;
-
-            let end = {
-                let ix = if end >= self.steps.len() {
-                    self.steps.len() - 1
-                } else {
-                    end
-                };
-
-                self.steps.get(ix)?.0
-            };
-
-            Some((start, end))
-        }?;
-
-        let node_pos = layout.nodes();
-
-        let start_ix = (start.0 - 1) as usize;
-
-        let node = node_pos.get(start_ix)?;
-
-        Some(node.center())
+                    for (ix, col) in self.columns.iter().enumerate() {
+                        let active = chosen_column == Some(ix);
+                        if ui
+                            .selectable_label(active, col.to_string())
+                            .clicked()
+                        {
+                            if active {
+                                self.chosen_column = None;
+                            } else {
+                                self.chosen_column = Some(ix);
+                            }
+                        }
+                    }
+                });
+            },
+        )
     }
 }

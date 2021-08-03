@@ -75,8 +75,6 @@ pub struct Gui {
 
     thread_pool: Arc<ThreadPool>,
 
-    annotations: Option<Annotations2D>,
-
     clipboard_ctx: ClipboardContext,
 
     gff3_records: Option<Arc<Gff3Records>>,
@@ -514,8 +512,6 @@ impl Gui {
             dropped_file,
 
             thread_pool,
-
-            annotations: Default::default(),
 
             clipboard_ctx,
 

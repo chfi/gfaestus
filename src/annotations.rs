@@ -49,6 +49,15 @@ pub trait AnnotationRecord {
     fn get_all(&self, key: &Self::ColumnKey) -> Vec<&[u8]>;
 }
 
+pub trait AnnotationCollection {
+    type ColumnKey: Clone + std::fmt::Display;
+    type Record: AnnotationRecord<ColumnKey = Self::ColumnKey>;
+
+    fn all_columns(&self) -> Vec<Self::ColumnKey>;
+
+    fn records(&self) -> &[Self::Record];
+}
+
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Strand {
     Pos,

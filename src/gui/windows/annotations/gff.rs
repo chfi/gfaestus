@@ -29,7 +29,11 @@ use crate::{
     overlays::OverlayData,
 };
 
-use crate::annotations::{Gff3Record, Gff3Records};
+use crate::annotations::{
+    AnnotationCollection, AnnotationRecord, Gff3Record, Gff3Records,
+};
+
+use super::ColumnPickerOne;
 
 use crate::gui::windows::{
     file::FilePicker, filters::*, graph_picker::PathPicker,
@@ -905,86 +909,13 @@ impl Gff3Filter {
     }
 }
 
-#[derive(Default)]
-pub struct Gff3ColumnPicker {
-    columns: Vec<Gff3Column>,
-
-    chosen_column: Option<usize>,
-}
-
-impl Gff3ColumnPicker {
-    pub const ID: &'static str = "gff3_column_picker_window";
-
-    pub fn update_attributes(&mut self, records: &Gff3Records) {
-        self.chosen_column = None;
-
-        self.columns.clear();
-
-        self.columns.push(Gff3Column::SeqId);
-        self.columns.push(Gff3Column::Source);
-        self.columns.push(Gff3Column::Type);
-        self.columns.push(Gff3Column::Start);
-        self.columns.push(Gff3Column::End);
-        self.columns.push(Gff3Column::Score);
-        self.columns.push(Gff3Column::Strand);
-        self.columns.push(Gff3Column::Frame);
-
-        self.columns.extend(
-            records
-                .attribute_keys
-                .iter()
-                .cloned()
-                .map(Gff3Column::Attribute),
-        );
-
-        self.columns.sort();
-    }
-
-    pub fn chosen_column(&self) -> Option<&Gff3Column> {
-        let ix = self.chosen_column?;
-        self.columns.get(ix)
-    }
-
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        open: &mut bool,
-    ) -> Option<egui::Response> {
-        egui::Window::new("GFF3 Columns")
-            .id(egui::Id::new(Self::ID))
-            .open(open)
-            .show(ctx, |mut ui| {
-                egui::ScrollArea::from_max_height(
-                    ui.input().screen_rect.height() - 250.0,
-                )
-                .show(&mut ui, |ui| {
-                    let chosen_column = self.chosen_column;
-
-                    for (ix, col) in self.columns.iter().enumerate() {
-                        let active = chosen_column == Some(ix);
-                        if ui
-                            .selectable_label(active, col.to_string())
-                            .clicked()
-                        {
-                            if active {
-                                self.chosen_column = None;
-                            } else {
-                                self.chosen_column = Some(ix);
-                            }
-                        }
-                    }
-                });
-            })
-    }
-}
-
 pub struct Gff3OverlayCreator {
     overlay_name: String,
 
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     overlay_query: Option<AsyncResult<OverlayData>>,
 
-    column_picker: Gff3ColumnPicker,
+    column_picker: ColumnPickerOne<Gff3Records>,
     column_picker_open: bool,
 }
 
@@ -1033,7 +964,7 @@ impl Gff3OverlayCreator {
             new_overlay_tx,
             overlay_query: None,
 
-            column_picker: Gff3ColumnPicker::default(),
+            column_picker: ColumnPickerOne::new("gff3_overlay_creator_picker"),
             column_picker_open: false,
         }
     }
@@ -1070,7 +1001,8 @@ impl Gff3OverlayCreator {
         {
             let column_picker_open = &mut self.column_picker_open;
 
-            self.column_picker.ui(ctx, column_picker_open);
+            self.column_picker
+                .ui(ctx, column_picker_open, "GFF3 Columns");
         }
 
         let label = {

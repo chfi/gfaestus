@@ -4,13 +4,43 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
-use super::{AnnotationRecord, Strand};
+use super::{AnnotationCollection, AnnotationRecord, Strand};
 
 #[derive(Clone, Default)]
 pub struct Gff3Records {
     pub records: Vec<Gff3Record>,
 
     pub attribute_keys: HashSet<Vec<u8>>,
+}
+
+impl AnnotationCollection for Gff3Records {
+    type ColumnKey = Gff3Column;
+    type Record = Gff3Record;
+
+    fn all_columns(&self) -> Vec<Gff3Column> {
+        let mut columns = Vec::with_capacity(8 + self.attribute_keys.len());
+
+        use Gff3Column::*;
+        columns.push(SeqId);
+        columns.push(Source);
+        columns.push(Type);
+        columns.push(Start);
+        columns.push(End);
+        columns.push(Score);
+        columns.push(Strand);
+        columns.push(Frame);
+
+        let mut attr_keys =
+            self.attribute_keys.iter().cloned().collect::<Vec<_>>();
+        attr_keys.sort();
+        columns.extend(attr_keys.into_iter().map(|k| Attribute(k)));
+
+        columns
+    }
+
+    fn records(&self) -> &[Gff3Record] {
+        &self.records
+    }
 }
 
 #[derive(Clone)]
