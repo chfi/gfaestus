@@ -99,13 +99,12 @@ impl Gff3RecordList {
                 record.start(),
                 record.end(),
             ) {
-                // if let Some(names) = record.get_tag("Name") {
                 if let Some(name) =
                     record.get_tag(b"Name").and_then(|n| n.first())
                 {
-                    let label = format!("{}", name.as_bstr());
-                    if let Some((start, _, _)) = range.first() {
-                        result.entry(start.id()).or_default().push(label);
+                    if let Some((mid, _, _)) = range.get(range.len() / 2) {
+                        let label = format!("{}", name.as_bstr());
+                        result.entry(mid.id()).or_default().push(label);
                     }
                 }
             }

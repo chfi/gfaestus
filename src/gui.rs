@@ -46,7 +46,6 @@ pub mod widgets;
 pub mod windows;
 
 use debug::*;
-use text::*;
 use widgets::*;
 use windows::*;
 
