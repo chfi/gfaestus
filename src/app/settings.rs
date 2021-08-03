@@ -3,11 +3,23 @@ use std::sync::Arc;
 
 use crate::vulkan::draw_system::edges::EdgesUBO;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct AppSettings {
     node_width: Arc<NodeWidth>,
 
     edge_renderer: Arc<AtomicCell<EdgesUBO>>,
+
+    label_radius: Arc<AtomicCell<f32>>,
+}
+
+impl std::default::Default for AppSettings {
+    fn default() -> Self {
+        Self {
+            node_width: Default::default(),
+            edge_renderer: Default::default(),
+            label_radius: Arc::new(AtomicCell::new(50.0)),
+        }
+    }
 }
 
 impl AppSettings {
@@ -21,6 +33,10 @@ impl AppSettings {
 
     pub fn update_edge_renderer(&self, conf: EdgesUBO) {
         self.edge_renderer.store(conf);
+    }
+
+    pub fn label_radius(&self) -> &Arc<AtomicCell<f32>> {
+        &self.label_radius
     }
 }
 

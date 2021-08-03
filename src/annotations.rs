@@ -304,12 +304,19 @@ pub fn cluster_annotations(
     let mut clusters: FxHashMap<(usize, usize), Vec<String>> =
         FxHashMap::default();
 
+    let view_matrix = view.to_scaled_matrix();
+    let to_screen = |p: Point| {
+        let v = glm::vec4(p.x, p.y, 0.0, 1.0);
+        let v_ = view_matrix * v;
+        Point::new(v_[0], v_[1])
+    };
+
     for (ix, (handle, _, _)) in steps.iter().enumerate() {
         let node = handle.id();
 
         if let Some(labels) = node_labels.get(&node) {
             let node_ix = (node.0 - 1) as usize;
-            let node_pos = nodes[node_ix].center();
+            let node_pos = to_screen(nodes[node_ix].center());
 
             if let Some(start_pos) = cluster_start_pos {
                 if node_pos.dist(start_pos) <= radius {

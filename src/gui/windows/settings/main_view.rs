@@ -8,6 +8,8 @@ use crate::{
 
 pub struct MainViewSettings {
     node_width: Arc<NodeWidth>,
+    label_radius: Arc<AtomicCell<f32>>,
+
     edges_enabled: Arc<AtomicCell<bool>>,
     edges_ubo: Arc<AtomicCell<EdgesUBO>>,
 }
@@ -18,10 +20,14 @@ impl MainViewSettings {
         edges_enabled: Arc<AtomicCell<bool>>,
     ) -> Self {
         let node_width = settings.node_width().clone();
+        let label_radius = settings.label_radius().clone();
+
         let edges_ubo = settings.edge_renderer().clone();
 
         Self {
             node_width,
+            label_radius,
+
             edges_enabled,
             edges_ubo,
         }
@@ -56,7 +62,6 @@ impl MainViewSettings {
                 ).on_hover_text("The scale above which the maximum node width will be used. Default: 200.0");
 
         let edges_enabled = self.edges_enabled.load();
-
         let edges_button = ui.selectable_label(edges_enabled, "Show Edges");
 
         let mut edges_ubo = self.edges_ubo.load();
@@ -109,6 +114,17 @@ impl MainViewSettings {
 
         if max_scale_slider.changed() {
             self.node_width.set_max_scale(max_scale);
+        }
+
+        let mut label_radius = self.label_radius.load();
+
+        let label_radius_slider = ui.add(
+            egui::Slider::new::<f32>(&mut label_radius, 10.0..=200.0)
+                .text("Label stacking radius"),
+        );
+
+        if label_radius_slider.changed() {
+            self.label_radius.store(label_radius);
         }
     }
 }

@@ -620,13 +620,14 @@ fn main() {
                 if let Some(path_id) = app.node_label_path() {
                     let steps = graph_query.path_pos_steps(path_id).unwrap();
 
+                    let label_radius = app.settings.label_radius().load();
+
                     let clustered = gfaestus::annotations::cluster_annotations(
                         &steps,
                         universe.layout().nodes(),
                         app.shared_state().view(),
                         app.node_labels(),
-                        1000_000.0
-                        // 1000.0,
+                        label_radius,
                     );
 
                     for (node, labels) in clustered.iter() {
@@ -647,7 +648,22 @@ fn main() {
                             y_offset += 15.0;
                             count += 1;
 
-                            if count > 5 {
+                            if count > 10 {
+                                let count = count.min(labels.len());
+                                let rem = labels.len() - count;
+
+                                if rem > 0 {
+                                    let more_label = format!("and {} more", rem);
+
+                                    gfaestus::gui::text::draw_text_at_node(
+                                        &gui.ctx,
+                                        universe.layout().nodes(),
+                                        app.shared_state().view(),
+                                        *node,
+                                        Point::new(0.0, y_offset),
+                                        &more_label
+                                    );
+                                }
                                 break;
                             }
                         }
