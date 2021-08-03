@@ -41,7 +41,7 @@ pub struct App {
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
-    node_labels: Vec<(NodeId, String)>,
+    node_labels: FxHashMap<NodeId, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -98,7 +98,7 @@ pub enum AppMsg {
 
     ToggleOverlay,
 
-    SetNodeLabels(Vec<(NodeId, String)>),
+    SetNodeLabels(FxHashMap<NodeId, Vec<String>>),
 }
 
 impl App {
@@ -121,7 +121,7 @@ impl App {
             // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
 
-            node_labels: Vec::new(),
+            node_labels: Default::default(),
         })
     }
 
@@ -155,7 +155,7 @@ impl App {
         }
     }
 
-    pub fn node_labels(&self) -> &[(NodeId, String)] {
+    pub fn node_labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
         &self.node_labels
     }
 

@@ -621,16 +621,29 @@ fn main() {
                 gui.mouse_debug_info();
 
 
+                for (node, labels) in app.node_labels() {
 
-                for (node, label) in app.node_labels() {
-                    gfaestus::gui::text::draw_text_at_node(
-                        &gui.ctx,
-                        universe.layout().nodes(),
-                        app.shared_state().view(),
-                        *node,
-                        Point::new(0.0, 20.0),
-                        label
-                    );
+                    let mut y_offset = 20.0;
+                    let mut count = 0;
+
+                    for label in labels {
+                        gfaestus::gui::text::draw_text_at_node(
+                            &gui.ctx,
+                            universe.layout().nodes(),
+                            app.shared_state().view(),
+                            *node,
+                            Point::new(0.0, y_offset),
+                            label
+                        );
+
+                        y_offset += 15.0;
+                        count += 1;
+
+                        if count > 5 {
+                            break;
+                        }
+                    }
+
                 }
 
                 let meshes = gui.end_frame();

@@ -16,7 +16,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use bstr::ByteSlice;
 
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use anyhow::Result;
 
@@ -77,7 +77,7 @@ impl Gff3RecordList {
         &self,
         graph: &GraphQuery,
         records: &Gff3Records,
-    ) -> Option<Vec<(NodeId, String)>> {
+    ) -> Option<FxHashMap<NodeId, Vec<String>>> {
         if self.filtered_records.is_empty() {
             return None;
         }
@@ -88,7 +88,7 @@ impl Gff3RecordList {
 
         let steps = graph.path_pos_steps(path_id)?;
 
-        let mut result: Vec<(NodeId, String)> = Vec::new();
+        let mut result: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
 
         for &record_ix in self.filtered_records.iter() {
             let record = records.records.get(record_ix)?;
@@ -105,10 +105,16 @@ impl Gff3RecordList {
                 {
                     let label = format!("{}", name.as_bstr());
                     if let Some((start, _, _)) = range.first() {
-                        result.push((start.id(), label));
+                        result.entry(start.id()).or_default().push(label);
                     }
                 }
             }
+        }
+
+        for labels in result.values_mut() {
+            labels.sort();
+            labels.dedup();
+            labels.shrink_to_fit();
         }
 
         Some(result)
