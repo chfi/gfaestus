@@ -642,30 +642,6 @@ impl Gui {
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
-        {
-            if let Some(ref_path) = self.gff3_list.active_path_id() {
-                if self.annotations.is_none() {
-                    self.annotations =
-                        Annotations2D::new(&graph_query, ref_path);
-                } else if let Some(annots) = self.annotations.as_ref() {
-                    if annots.path() != ref_path {
-                        self.annotations =
-                            Annotations2D::new(&graph_query, ref_path);
-                    }
-                }
-
-                let mut annots: Vec<(Point, String)> = Vec::new();
-
-                if let Some(annotations) = self.annotations.as_ref() {
-                    for record in self.annot_records.iter() {
-                        // temporary hardcoded column
-                        let label = record.type_();
-                        //
-                    }
-                }
-            }
-        }
-
         self.gff3_list.ui(
             &self.ctx,
             &self.thread_pool,

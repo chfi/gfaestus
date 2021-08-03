@@ -103,25 +103,21 @@ pub fn draw_text_at_world_point_offset(
     )
 }
 
-pub fn draw_rect<R: Into<egui::Rect>>(ctx: &egui::CtxRef, rect: R) {
-    let screen_rect = ctx.input().screen_rect();
+fn painter_layer() -> egui::LayerId {
+    egui::LayerId::new(
+        egui::Order::Background,
+        egui::Id::new("gui_text_background"),
+    )
+}
 
-    let paint_area = egui::Ui::new(
-        ctx.clone(),
-        egui::LayerId::new(
-            egui::Order::Background,
-            egui::Id::new("gui_text_background"),
-        ),
-        egui::Id::new("gui_text_ui"),
-        screen_rect,
-        screen_rect,
-    );
+pub fn draw_rect<R: Into<egui::Rect>>(ctx: &egui::CtxRef, rect: R) {
+    let painter = ctx.layer_painter(painter_layer());
 
     let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
 
     let rect = rect.into();
 
-    paint_area.painter().rect_stroke(rect, 0.0, stroke);
+    painter.rect_stroke(rect, 0.0, stroke);
 }
 
 pub fn draw_text_at_aligned_world_point_offset(
@@ -134,16 +130,7 @@ pub fn draw_text_at_aligned_world_point_offset(
 ) -> Option<Rect> {
     let screen_rect = ctx.input().screen_rect();
 
-    let paint_area = egui::Ui::new(
-        ctx.clone(),
-        egui::LayerId::new(
-            egui::Order::Background,
-            egui::Id::new("gui_text_background"),
-        ),
-        egui::Id::new("gui_text_ui"),
-        screen_rect,
-        screen_rect,
-    );
+    let painter = ctx.layer_painter(painter_layer());
 
     let screen_pos = view.world_point_to_screen(world);
 
@@ -162,7 +149,7 @@ pub fn draw_text_at_aligned_world_point_offset(
     {
         let align = offset_align(&anchor_dir);
 
-        let rect = paint_area.painter().text(
+        let rect = painter.text(
             screen_pos.into(),
             align,
             text,
