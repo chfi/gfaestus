@@ -641,7 +641,7 @@ fn main() {
                             let anchor_dir = Point::new(-offset.x, -offset.y);
                             let offset = *offset * 20.0;
 
-                            gfaestus::gui::text::draw_text_at_node_anchor(
+                            let rect = gfaestus::gui::text::draw_text_at_node_anchor(
                                 &gui.ctx,
                                 universe.layout().nodes(),
                                 app.shared_state().view(),
@@ -650,6 +650,13 @@ fn main() {
                                 anchor_dir,
                                 label
                             );
+
+                            if let Some(rect) = rect {
+                                let rect = rect.resize(0.98);
+                                if rect.contains(app.mouse_pos()) {
+                                    gfaestus::gui::text::draw_rect(&gui.ctx, rect);
+                                }
+                            }
 
                             y_offset += 15.0;
                             count += 1;

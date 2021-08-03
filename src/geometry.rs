@@ -83,6 +83,20 @@ impl From<(i32, i32)> for Point {
     }
 }
 
+impl From<egui::Pos2> for Point {
+    #[inline]
+    fn from(pos: egui::Pos2) -> Self {
+        Self { x: pos.x, y: pos.y }
+    }
+}
+
+impl From<egui::Vec2> for Point {
+    #[inline]
+    fn from(pos: egui::Vec2) -> Self {
+        Self { x: pos.x, y: pos.y }
+    }
+}
+
 impl Into<egui::Pos2> for Point {
     #[inline]
     fn into(self) -> egui::Pos2 {
@@ -162,6 +176,26 @@ impl Rect {
     }
 
     #[inline]
+    pub fn width(&self) -> f32 {
+        self.max.x - self.min.x
+    }
+
+    #[inline]
+    pub fn height(&self) -> f32 {
+        self.max.y - self.min.y
+    }
+
+    #[inline]
+    pub fn center(&self) -> Point {
+        let w = self.width();
+        let h = self.height();
+        let x = (w / 2.0) + self.min.x;
+        let y = (h / 2.0) + self.min.y;
+
+        Point::new(x, y)
+    }
+
+    #[inline]
     pub fn contains(&self, p: Point) -> bool {
         self.min.x <= p.x
             && self.max.x >= p.x
@@ -183,12 +217,38 @@ impl Rect {
 
         Self { min, max }
     }
+
+    #[inline]
+    pub fn resize(&self, factor: f32) -> Self {
+        let center = self.center();
+
+        let new_width = self.width() * factor;
+        let new_height = self.height() * factor;
+
+        let left = center.x - (new_width / 2.0);
+        let right = center.x + (new_width / 2.0);
+
+        let top = center.y - (new_height / 2.0);
+        let bottom = center.y + (new_height / 2.0);
+
+        Self {
+            min: Point::new(left, top),
+            max: Point::new(right, bottom),
+        }
+    }
 }
 
 impl From<(Point, Point)> for Rect {
     #[inline]
     fn from((p0, p1): (Point, Point)) -> Self {
         Self::new(p0, p1)
+    }
+}
+
+impl From<egui::Rect> for Rect {
+    #[inline]
+    fn from(rect: egui::Rect) -> Self {
+        Self::new(rect.min, rect.max)
     }
 }
 

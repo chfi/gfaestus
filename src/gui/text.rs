@@ -1,6 +1,10 @@
 use handlegraph::handle::NodeId;
 
-use crate::{geometry::Point, universe::Node, view::View};
+use crate::{
+    geometry::{Point, Rect},
+    universe::Node,
+    view::View,
+};
 
 pub fn offset_align(dir: &Point) -> egui::Align2 {
     let norm = *dir / dir.length();
@@ -29,13 +33,13 @@ pub fn draw_text_at_node_anchor(
     screen_offset: Point,
     anchor_dir: Point,
     text: &str,
-) {
+) -> Option<Rect> {
     let node_ix = (node.0 - 1) as usize;
 
     if let Some(node) = node_positions.get(node_ix) {
         let pos = node.center();
 
-        draw_text_at_aligned_world_point_offset(
+        return draw_text_at_aligned_world_point_offset(
             ctx,
             view,
             pos,
@@ -44,6 +48,8 @@ pub fn draw_text_at_node_anchor(
             text,
         );
     }
+
+    None
 }
 
 pub fn draw_text_at_world_point(
@@ -51,8 +57,8 @@ pub fn draw_text_at_world_point(
     view: View,
     world: Point,
     text: &str,
-) {
-    draw_text_at_world_point_offset(ctx, view, world, Point::ZERO, text);
+) -> Option<Rect> {
+    draw_text_at_world_point_offset(ctx, view, world, Point::ZERO, text)
 }
 
 pub fn draw_text_at_node(
@@ -62,14 +68,22 @@ pub fn draw_text_at_node(
     node: NodeId,
     screen_offset: Point,
     text: &str,
-) {
+) -> Option<Rect> {
     let node_ix = (node.0 - 1) as usize;
 
     if let Some(node) = node_positions.get(node_ix) {
         let pos = node.center();
 
-        draw_text_at_world_point_offset(ctx, view, pos, screen_offset, text);
+        return draw_text_at_world_point_offset(
+            ctx,
+            view,
+            pos,
+            screen_offset,
+            text,
+        );
     }
+
+    None
 }
 
 pub fn draw_text_at_world_point_offset(
@@ -78,7 +92,7 @@ pub fn draw_text_at_world_point_offset(
     world: Point,
     screen_offset: Point,
     text: &str,
-) {
+) -> Option<Rect> {
     draw_text_at_aligned_world_point_offset(
         ctx,
         view,
@@ -89,6 +103,27 @@ pub fn draw_text_at_world_point_offset(
     )
 }
 
+pub fn draw_rect<R: Into<egui::Rect>>(ctx: &egui::CtxRef, rect: R) {
+    let screen_rect = ctx.input().screen_rect();
+
+    let paint_area = egui::Ui::new(
+        ctx.clone(),
+        egui::LayerId::new(
+            egui::Order::Background,
+            egui::Id::new("gui_text_background"),
+        ),
+        egui::Id::new("gui_text_ui"),
+        screen_rect,
+        screen_rect,
+    );
+
+    let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
+
+    let rect = rect.into();
+
+    paint_area.painter().rect_stroke(rect, 0.0, stroke);
+}
+
 pub fn draw_text_at_aligned_world_point_offset(
     ctx: &egui::CtxRef,
     view: View,
@@ -96,7 +131,7 @@ pub fn draw_text_at_aligned_world_point_offset(
     screen_offset: Point,
     anchor_dir: Point,
     text: &str,
-) {
+) -> Option<Rect> {
     let screen_rect = ctx.input().screen_rect();
 
     let paint_area = egui::Ui::new(
@@ -127,13 +162,16 @@ pub fn draw_text_at_aligned_world_point_offset(
     {
         let align = offset_align(&anchor_dir);
 
-        let _rect = paint_area.painter().text(
+        let rect = paint_area.painter().text(
             screen_pos.into(),
             align,
-            // egui::Align2::CENTER_CENTER,
             text,
             egui::TextStyle::Body,
             egui::Color32::BLACK,
         );
+
+        return Some(rect.into());
     }
+
+    None
 }

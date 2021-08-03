@@ -1097,8 +1097,6 @@ impl Gff3OverlayCreator {
                         let column = column.to_owned();
 
                         let query = graph.run_query(move |graph| async move {
-                            use rustc_hash::FxHashMap;
-
                             use rayon::prelude::*;
 
                             use crate::annotations as annots;
