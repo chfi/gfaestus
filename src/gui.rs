@@ -544,14 +544,6 @@ impl Gui {
         &self.view_state
     }
 
-    pub fn calculate_annotations(
-        &self,
-        graph_query: &GraphQuery,
-    ) -> Option<Vec<(NodeId, String)>> {
-        let records = self.gff3_records.as_ref()?;
-        self.gff3_list.calculate_annotations(graph_query, records)
-    }
-
     // TODO this should be handled better
     pub fn populate_overlay_list<'a>(
         &mut self,
@@ -804,6 +796,19 @@ impl Gui {
         if self.open_windows.egui_memory {
             egui::Window::new("egui_memory_ui_window")
                 .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+        }
+
+        let settings = &self.app_view_state().settings;
+
+        if settings.debug.view_info {
+            let view = self.shared_state.view();
+            ViewDebugInfo::ui(&self.ctx, view);
+        }
+
+        if settings.debug.cursor_info {
+            let view = self.shared_state.view();
+            let mouse = self.shared_state.mouse_pos();
+            MouseDebugInfo::ui(&self.ctx, view, mouse);
         }
     }
 

@@ -616,10 +616,6 @@ fn main() {
                     &graph_handle,
                 );
 
-                gui.view_debug_info();
-
-                gui.mouse_debug_info();
-
 
                 for (node, labels) in app.node_labels() {
 

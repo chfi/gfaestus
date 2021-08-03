@@ -1,7 +1,7 @@
 #[derive(Debug, Clone, Copy)]
 pub struct DebugSettings {
-    view_info: bool,
-    cursor_info: bool,
+    pub(crate) view_info: bool,
+    pub(crate) cursor_info: bool,
 }
 
 impl std::default::Default for DebugSettings {

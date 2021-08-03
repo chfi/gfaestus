@@ -11,9 +11,9 @@ use debug::*;
 pub struct SettingsWindow {
     current_tab: SettingsTab,
 
-    main_view: MainViewSettings,
+    pub(crate) main_view: MainViewSettings,
 
-    debug: DebugSettings,
+    pub(crate) debug: DebugSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
@@ -29,8 +29,7 @@ impl SettingsWindow {
         settings: &AppSettings,
         edges_enabled: Arc<AtomicCell<bool>>,
     ) -> Self {
-        // let current_tab = SettingsTab::MainView;
-        let current_tab = SettingsTab::Debug;
+        let current_tab = SettingsTab::MainView;
         let main_view = MainViewSettings::new(settings, edges_enabled);
 
         Self {
