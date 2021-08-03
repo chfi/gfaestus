@@ -556,6 +556,12 @@ impl Gui {
         &self.view_state.overlay_creator.state.new_overlay_rx()
     }
 
+    pub fn scroll_to_gff_record(&mut self, name: &[u8]) {
+        if let Some(records) = self.gff3_records.as_ref() {
+            self.gff3_list.scroll_to_record_by_name(records, name);
+        }
+    }
+
     pub fn begin_frame(
         &mut self,
         screen_rect: Option<Point>,

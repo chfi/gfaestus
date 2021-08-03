@@ -173,6 +173,32 @@ impl Gff3RecordList {
             .update_attributes(records);
     }
 
+    // also hacky
+    pub fn scroll_to_record_by_name(
+        &mut self,
+        records: &Gff3Records,
+        name: &[u8],
+    ) {
+        let ix = self
+            .filtered_records
+            .iter()
+            .enumerate()
+            .find(|&(_ix, record_ix)| {
+                let record = &records.records[*record_ix];
+
+                if let Some(record_names) = record.get_tag(b"Name") {
+                    record_names.iter().any(|rn| rn == name)
+                } else {
+                    false
+                }
+            })
+            .map(|(ix, _)| ix);
+
+        if let Some(ix) = ix {
+            self.offset = ix;
+        }
+    }
+
     fn ui_row(
         &self,
         records: &Gff3Records,

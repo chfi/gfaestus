@@ -655,6 +655,13 @@ fn main() {
                                 let rect = rect.resize(0.98);
                                 if rect.contains(app.mouse_pos()) {
                                     gfaestus::gui::text::draw_rect(&gui.ctx, rect);
+
+                                    // hacky way to check for a click
+                                    // for now, because i can't figure
+                                    // egui out
+                                    if gui.ctx.input().pointer.any_click() {
+                                        gui.scroll_to_gff_record(label.as_bytes());
+                                    }
                                 }
                             }
 
