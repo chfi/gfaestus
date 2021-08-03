@@ -1,8 +1,9 @@
 pub mod gff;
 
+use std::collections::HashMap;
+
 pub use gff::*;
 
-use handlegraph::packedgraph::paths::StepPtr;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -17,15 +18,8 @@ use handlegraph::{
 
 use anyhow::Result;
 
-use crate::{
-    geometry::Point,
-    graph_query::{GraphQuery, GraphQueryWorker},
-    universe::GraphLayout,
-};
+use crate::annotations::{AnnotationCollection, AnnotationRecord};
 
-use crate::annotations::{AnnotationCollection, AnnotationRecord, Gff3Record};
-
-// pub struct ColumnPickerOne<T: AnnotationRecord> {
 pub struct ColumnPickerOne<T: AnnotationCollection> {
     columns: Vec<T::ColumnKey>,
     chosen_column: Option<usize>,
@@ -45,7 +39,7 @@ impl<T: AnnotationCollection> ColumnPickerOne<T> {
         }
     }
 
-    pub fn update_attributes(&mut self, records: &T) {
+    pub fn update_columns(&mut self, records: &T) {
         self.chosen_column = None;
         self.columns = records.all_columns();
     }
@@ -86,5 +80,51 @@ impl<T: AnnotationCollection> ColumnPickerOne<T> {
                 });
             },
         )
+    }
+}
+
+pub struct ColumnPickerMany<T: AnnotationCollection> {
+    enabled_columns: HashMap<T::ColumnKey, bool>,
+
+    id: egui::Id,
+}
+
+impl<T: AnnotationCollection> ColumnPickerMany<T> {
+    pub fn new(id_source: &str) -> Self {
+        let id = egui::Id::new(id_source);
+
+        Self {
+            enabled_columns: Default::default(),
+
+            id,
+        }
+    }
+
+    pub fn update_columns(&mut self, records: &T) {
+        let columns = records.all_columns();
+        self.enabled_columns = columns.into_iter().map(|c| (c, false)).collect()
+    }
+
+    pub fn set_column(&mut self, column: &T::ColumnKey, to: bool) {
+        self.enabled_columns.insert(column.clone(), to);
+    }
+
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        pos: impl Into<egui::Pos2>,
+        open: &mut bool,
+        window_name: &str,
+    ) -> Option<egui::Response> {
+        egui::Window::new(window_name)
+            .id(self.id)
+            .fixed_pos(pos)
+            .collapsible(false)
+            .open(open)
+            .show(ctx, |ui| {
+                ui.set_max_height(ui.input().screen_rect.height() - 250.0);
+
+                todo!();
+            })
     }
 }

@@ -143,7 +143,7 @@ impl AnnotationRecord for Gff3Record {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord)]
+#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Gff3Column {
     SeqId,
     Source,

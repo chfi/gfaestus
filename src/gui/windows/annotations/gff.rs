@@ -172,9 +172,7 @@ impl Gff3RecordList {
     pub fn update_records(&mut self, records: &Gff3Records) {
         self.filter = Gff3Filter::new(records);
         self.enabled_columns = EnabledColumns::new(records);
-        self.overlay_creator
-            .column_picker
-            .update_attributes(records);
+        self.overlay_creator.column_picker.update_columns(records);
     }
 
     // also hacky

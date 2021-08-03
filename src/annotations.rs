@@ -23,8 +23,18 @@ pub mod gff;
 
 pub use gff::*;
 
+pub trait ColumnKey:
+    Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
+{
+}
+
+impl<T> ColumnKey for T where
+    T: Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
+{
+}
+
 pub trait AnnotationRecord {
-    type ColumnKey: Clone + std::fmt::Display;
+    type ColumnKey: ColumnKey;
 
     fn columns(&self) -> Vec<Self::ColumnKey>;
 
@@ -50,7 +60,7 @@ pub trait AnnotationRecord {
 }
 
 pub trait AnnotationCollection {
-    type ColumnKey: Clone + std::fmt::Display;
+    type ColumnKey: ColumnKey;
     type Record: AnnotationRecord<ColumnKey = Self::ColumnKey>;
 
     fn all_columns(&self) -> Vec<Self::ColumnKey>;
