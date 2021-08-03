@@ -7,6 +7,7 @@ pub mod main_view_settings;
 pub mod overlays;
 pub mod paths;
 pub mod repl;
+pub mod settings;
 pub mod theme;
 pub mod util;
 
@@ -19,6 +20,7 @@ pub use main_view_settings::*;
 pub use overlays::*;
 pub use paths::*;
 pub use repl::*;
+pub use settings::*;
 pub use util::*;
 
 use theme::*;

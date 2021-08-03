@@ -159,7 +159,7 @@ where
 }
 
 pub struct AppViewState {
-    settings: MainViewSettings,
+    settings: SettingsWindow,
     // settings: (),
     fps: ViewStateChannel<FrameRate, FrameRateMsg>,
 
@@ -204,7 +204,7 @@ impl AppViewState {
         };
 
         let settings =
-            MainViewSettings::new(settings, shared_state.clone_edges_enabled());
+            SettingsWindow::new(settings, shared_state.clone_edges_enabled());
 
         let node_details_state = NodeDetails::default();
         let node_id_cell = node_details_state.node_id_cell().clone();
