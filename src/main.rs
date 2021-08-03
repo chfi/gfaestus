@@ -630,18 +630,24 @@ fn main() {
                         label_radius,
                     );
 
-                    for (node, labels) in clustered.iter() {
+                    for (node, (offset, labels)) in clustered.iter() {
 
                         let mut y_offset = 20.0;
+
                         let mut count = 0;
 
                         for label in labels {
-                            gfaestus::gui::text::draw_text_at_node(
+
+                            let anchor_dir = Point::new(-offset.x, -offset.y);
+                            let offset = *offset * 20.0;
+
+                            gfaestus::gui::text::draw_text_at_node_anchor(
                                 &gui.ctx,
                                 universe.layout().nodes(),
                                 app.shared_state().view(),
                                 *node,
-                                Point::new(0.0, y_offset),
+                                offset + Point::new(0.0, y_offset),
+                                anchor_dir,
                                 label
                             );
 
@@ -655,12 +661,13 @@ fn main() {
                                 if rem > 0 {
                                     let more_label = format!("and {} more", rem);
 
-                                    gfaestus::gui::text::draw_text_at_node(
+                                    gfaestus::gui::text::draw_text_at_node_anchor(
                                         &gui.ctx,
                                         universe.layout().nodes(),
                                         app.shared_state().view(),
                                         *node,
-                                        Point::new(0.0, y_offset),
+                                        offset + Point::new(0.0, y_offset),
+                                        anchor_dir,
                                         &more_label
                                     );
                                 }
