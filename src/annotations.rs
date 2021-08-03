@@ -9,7 +9,7 @@ use handlegraph::packedgraph::paths::StepPtr;
 
 use bstr::ByteSlice;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     geometry::*, gluon::GraphHandle, graph_query::GraphQuery, universe::Node,
@@ -242,4 +242,169 @@ pub fn path_step_range(
     }?;
 
     Some(&steps[start..end])
+}
+
+pub fn path_step_radius(
+    steps: &[(Handle, StepPtr, usize)],
+    nodes: &[Node],
+    step_ix: usize,
+    radius: f32,
+) -> FxHashSet<NodeId> {
+    let (handle, _, _) = steps[step_ix];
+    let node = handle.id();
+    let node_ix = (node.0 as usize) - 1;
+
+    let origin = nodes[node_ix].center();
+
+    let rad_sqr = radius * radius;
+
+    steps
+        .iter()
+        .filter_map(|(handle, _, _)| {
+            let ix = (handle.id().0 - 1) as usize;
+            let pos = nodes.get(ix)?.center();
+
+            if pos.dist_sqr(origin) <= rad_sqr {
+                let id = NodeId::from((ix + 1) as u64);
+                Some(id)
+            } else {
+                None
+            }
+        })
+        .collect()
+
+    /*
+    nodes
+        .iter()
+        .enumerate()
+        .filter_map(|(ix, node_loc)| {
+            let pos = node_loc.center();
+            if pos.dist_sqr(origin) <= rad_sqr {
+                let id = NodeId::from((ix + 1) as u64);
+                Some(id)
+            } else {
+                None
+            }
+        })
+        .collect()
+        */
+}
+
+pub fn cluster_annotations(
+    steps: &[(Handle, StepPtr, usize)],
+    nodes: &[Node],
+    view: View,
+    node_labels: &FxHashMap<NodeId, Vec<String>>,
+    radius: f32,
+) -> FxHashMap<NodeId, Vec<String>> {
+    let mut cluster_range_ix: Option<(usize, usize)> = None;
+    let mut cluster_start_pos: Option<Point> = None;
+    let mut current_cluster: Vec<String> = Vec::new();
+
+    let mut clusters: FxHashMap<(usize, usize), Vec<String>> =
+        FxHashMap::default();
+
+    for (ix, (handle, _, _)) in steps.iter().enumerate() {
+        let node = handle.id();
+
+        if let Some(labels) = node_labels.get(&node) {
+            let node_ix = (node.0 - 1) as usize;
+            let node_pos = nodes[node_ix].center();
+
+            if let Some(start_pos) = cluster_start_pos {
+                if node_pos.dist(start_pos) <= radius {
+                    cluster_range_ix.as_mut().map(|(_, end)| *end = ix);
+                    current_cluster.extend_from_slice(labels);
+                } else {
+                    clusters.insert(
+                        cluster_range_ix.unwrap(),
+                        current_cluster.clone(),
+                    );
+                    current_cluster.clear();
+
+                    cluster_start_pos = Some(node_pos);
+                    cluster_range_ix = Some((ix, ix));
+
+                    current_cluster.extend_from_slice(labels);
+                }
+            } else {
+                cluster_start_pos = Some(node_pos);
+                cluster_range_ix = Some((ix, ix));
+
+                current_cluster.extend_from_slice(labels);
+            }
+        }
+    }
+
+    // let mut res: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
+
+    clusters
+        .into_iter()
+        .map(|((start, end), labels)| {
+            let slice = &steps[start..=end];
+            let (mid_handle, _, _) = slice[slice.len() / 2];
+
+            (mid_handle.id(), labels)
+        })
+        .collect()
+}
+
+pub fn cluster_annotations_(
+    steps: &[(Handle, StepPtr, usize)],
+    nodes: &[Node],
+    labels: &FxHashMap<NodeId, Vec<String>>,
+    radius: f32,
+) -> FxHashMap<NodeId, Vec<String>> {
+    let mut res: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
+
+    // let mut open_cluster: Option<(NodeId, Vec<String>)>
+    // let mut open_cluster: Option<(Point, Vec<String>)>
+
+    let mut open_cluster_start: Option<Point> = None;
+    let mut open_cluster: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
+
+    for (handle, _, _) in steps {
+        let node = handle.id();
+
+        // the label sizes aren't yet taken into account
+        if let Some(local_labels) = labels.get(&node) {
+            let node_ix = (node.0 - 1) as usize;
+            let node_pos = nodes[node_ix].center();
+
+            if let Some(pos) = open_cluster_start {
+                if pos.dist(node_pos) <= radius {
+                    res.entry(node)
+                        .or_default()
+                        .extend_from_slice(local_labels);
+                } else {
+                    open_cluster_start = Some(node_pos);
+
+                    for (node, ls) in open_cluster.iter() {
+                        res.entry(*node).or_default().extend_from_slice(ls);
+                    }
+
+                    open_cluster.clear();
+                }
+            } else {
+                open_cluster_start = Some(node_pos);
+
+                res.entry(node).or_default().extend_from_slice(local_labels);
+
+                /*
+                for (node, ls) in open_cluster.iter() {
+                    res.entry(*node).or_default().extend_from_slice(ls);
+                }
+
+                open_cluster.clear();
+                */
+            }
+        }
+    }
+
+    for labels in res.values_mut() {
+        labels.sort();
+        labels.dedup();
+    }
+
+    res
 }

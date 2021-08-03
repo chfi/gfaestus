@@ -617,29 +617,42 @@ fn main() {
                 );
 
 
-                for (node, labels) in app.node_labels() {
+                if let Some(path_id) = app.node_label_path() {
+                    let steps = graph_query.path_pos_steps(path_id).unwrap();
 
-                    let mut y_offset = 20.0;
-                    let mut count = 0;
+                    let clustered = gfaestus::annotations::cluster_annotations(
+                        &steps,
+                        universe.layout().nodes(),
+                        app.shared_state().view(),
+                        app.node_labels(),
+                        1000_000.0
+                        // 1000.0,
+                    );
 
-                    for label in labels {
-                        gfaestus::gui::text::draw_text_at_node(
-                            &gui.ctx,
-                            universe.layout().nodes(),
-                            app.shared_state().view(),
-                            *node,
-                            Point::new(0.0, y_offset),
-                            label
-                        );
+                    for (node, labels) in clustered.iter() {
 
-                        y_offset += 15.0;
-                        count += 1;
+                        let mut y_offset = 20.0;
+                        let mut count = 0;
 
-                        if count > 5 {
-                            break;
+                        for label in labels {
+                            gfaestus::gui::text::draw_text_at_node(
+                                &gui.ctx,
+                                universe.layout().nodes(),
+                                app.shared_state().view(),
+                                *node,
+                                Point::new(0.0, y_offset),
+                                label
+                            );
+
+                            y_offset += 15.0;
+                            count += 1;
+
+                            if count > 5 {
+                                break;
+                            }
                         }
-                    }
 
+                    }
                 }
 
                 let meshes = gui.end_frame();

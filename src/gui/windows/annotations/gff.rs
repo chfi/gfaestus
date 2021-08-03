@@ -77,7 +77,7 @@ impl Gff3RecordList {
         &self,
         graph: &GraphQuery,
         records: &Gff3Records,
-    ) -> Option<FxHashMap<NodeId, Vec<String>>> {
+    ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)> {
         if self.filtered_records.is_empty() {
             return None;
         }
@@ -116,7 +116,7 @@ impl Gff3RecordList {
             labels.shrink_to_fit();
         }
 
-        Some(result)
+        Some((path_id, result))
     }
 
     pub fn new(
@@ -525,11 +525,11 @@ impl Gff3RecordList {
                     }
 
                     if apply_labels_btn.clicked() {
-                        if let Some(labels) = self
+                        if let Some((path, labels)) = self
                             .calculate_annotations(graph_query.graph(), records)
                         {
                             app_msg_tx
-                                .send(AppMsg::SetNodeLabels(labels))
+                                .send(AppMsg::SetNodeLabels { path, labels })
                                 .unwrap();
                         }
                     }

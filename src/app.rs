@@ -7,6 +7,7 @@ pub mod theme;
 
 use crossbeam::channel::Sender;
 
+use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use handlegraph::handle::NodeId;
@@ -42,6 +43,7 @@ pub struct App {
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
     node_labels: FxHashMap<NodeId, Vec<String>>,
+    node_label_path: Option<PathId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -98,7 +100,10 @@ pub enum AppMsg {
 
     ToggleOverlay,
 
-    SetNodeLabels(FxHashMap<NodeId, Vec<String>>),
+    SetNodeLabels {
+        path: PathId,
+        labels: FxHashMap<NodeId, Vec<String>>,
+    },
 }
 
 impl App {
@@ -122,6 +127,7 @@ impl App {
             settings: AppSettings::default(),
 
             node_labels: Default::default(),
+            node_label_path: None,
         })
     }
 
@@ -157,6 +163,10 @@ impl App {
 
     pub fn node_labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
         &self.node_labels
+    }
+
+    pub fn node_label_path(&self) -> Option<PathId> {
+        self.node_label_path
     }
 
     pub fn dims(&self) -> ScreenDims {
@@ -320,8 +330,9 @@ impl App {
             AppMsg::ToggleOverlay => {
                 self.shared_state.overlay_state.toggle_overlay();
             }
-            AppMsg::SetNodeLabels(labels) => {
+            AppMsg::SetNodeLabels { path, labels } => {
                 self.node_labels.clone_from(labels);
+                self.node_label_path = Some(*path);
             }
         }
     }
