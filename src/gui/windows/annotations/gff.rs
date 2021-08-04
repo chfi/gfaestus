@@ -163,9 +163,14 @@ impl Gff3RecordList {
         self.overlay_creator.column_picker.update_columns(records);
 
         self.enabled_columns.update_columns(records);
+
         use Gff3Column as Gff;
-        for col in [Gff::Source, Gff::Type, Gff::Score, Gff::Frame] {
+        for col in [Gff::Source, Gff::Type, Gff::Frame] {
             self.enabled_columns.set_column(&col, true);
+        }
+
+        for col in [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand] {
+            self.enabled_columns.hide_column_from_gui(&col, true);
         }
     }
 

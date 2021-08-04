@@ -1,6 +1,6 @@
 pub mod gff;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub use gff::*;
 
@@ -86,6 +86,8 @@ impl<T: AnnotationCollection> ColumnPickerOne<T> {
 pub struct ColumnPickerMany<T: AnnotationCollection> {
     enabled_columns: HashMap<T::ColumnKey, bool>,
 
+    hidden_columns: HashSet<T::ColumnKey>,
+
     id: egui::Id,
 }
 
@@ -95,6 +97,7 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
 
         Self {
             enabled_columns: Default::default(),
+            hidden_columns: Default::default(),
 
             id,
         }
@@ -102,7 +105,9 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
 
     pub fn update_columns(&mut self, records: &T) {
         let columns = records.all_columns();
-        self.enabled_columns = columns.into_iter().map(|c| (c, false)).collect()
+        self.enabled_columns =
+            columns.into_iter().map(|c| (c, false)).collect();
+        self.hidden_columns.clear();
     }
 
     pub fn get_column(&self, column: &T::ColumnKey) -> bool {
@@ -111,6 +116,14 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
 
     pub fn set_column(&mut self, column: &T::ColumnKey, to: bool) {
         self.enabled_columns.insert(column.clone(), to);
+    }
+
+    pub fn hide_column_from_gui(&mut self, column: &T::ColumnKey, hide: bool) {
+        if hide {
+            self.hidden_columns.insert(column.clone());
+        } else {
+            self.hidden_columns.remove(column);
+        }
     }
 
     pub fn ui(
@@ -129,8 +142,13 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
                 let max_height = ui.input().screen_rect.height() - 250.0;
                 ui.set_max_height(max_height);
 
-                let mut columns =
-                    self.enabled_columns.iter_mut().collect::<Vec<_>>();
+                let hidden_columns = &self.hidden_columns;
+
+                let mut columns = self
+                    .enabled_columns
+                    .iter_mut()
+                    .filter(|(c, _)| !hidden_columns.contains(c))
+                    .collect::<Vec<_>>();
 
                 columns.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
