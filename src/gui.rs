@@ -82,8 +82,6 @@ pub struct Gui {
 
     path_picker_source: PathPickerSource,
 
-    annot_records: Vec<Gff3Record>,
-
     annotation_file_list: AnnotationFileList,
 }
 
@@ -391,10 +389,6 @@ pub enum GuiMsg {
     Cut,
     Copy,
     Paste,
-
-    Gff3RecordsLoaded(Gff3Records),
-
-    AddAnnot(Gff3Record),
 }
 
 #[derive(Debug, Default, Clone)]
@@ -523,8 +517,6 @@ impl Gui {
             gff3_list,
 
             path_picker_source,
-
-            annot_records: Vec::new(),
 
             annotation_file_list: Default::default(),
         };
@@ -918,18 +910,6 @@ impl Gui {
                             .events
                             .push(egui::Event::Text(text.clone()));
                     }
-                }
-
-                GuiMsg::Gff3RecordsLoaded(records) => {
-                    eprintln!(
-                        "received {} GFF3 records",
-                        records.records.len()
-                    );
-                    self.gff3_list.update_records(&records);
-                    self.gff3_records = Some(Arc::new(records));
-                }
-                GuiMsg::AddAnnot(record) => {
-                    self.annot_records.push(record);
                 }
             }
         }

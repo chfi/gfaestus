@@ -40,17 +40,17 @@ use crate::gui::windows::{
 };
 
 pub struct Gff3RecordList {
+    current_file: Option<String>,
+
     filtered_records: Vec<usize>,
 
     offset: usize,
     slot_count: usize,
 
     filter_open: bool,
-    filter: Gff3Filter,
+    gff3_filters: HashMap<String, Gff3Filter>,
 
     column_picker_open: bool,
-    enabled_columns: ColumnPickerMany<Gff3Records>,
-
     gff3_enabled_columns: HashMap<String, ColumnPickerMany<Gff3Records>>,
 
     path_picker_open: bool,
@@ -120,8 +120,6 @@ impl Gff3RecordList {
     ) -> Self {
         let filtered_records = Vec::new();
 
-        let filter = Gff3Filter::default();
-
         let pwd = std::fs::canonicalize("./").unwrap();
         let file_picker = FilePicker::new(
             egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
@@ -132,16 +130,17 @@ impl Gff3RecordList {
         let overlay_creator = Gff3OverlayCreator::new(new_overlay_tx);
 
         Self {
+            current_file: None,
+
             filtered_records,
 
             offset: 0,
             slot_count: 20,
 
             filter_open: false,
-            filter,
+            gff3_filters: HashMap::default(),
 
             column_picker_open: false,
-            enabled_columns: ColumnPickerMany::new("gff3_enabled_columns"),
             gff3_enabled_columns: HashMap::default(),
 
             path_picker_open: false,
@@ -154,22 +153,6 @@ impl Gff3RecordList {
 
             overlay_creator_open: false,
             overlay_creator,
-        }
-    }
-
-    pub fn update_records(&mut self, records: &Gff3Records) {
-        self.filter = Gff3Filter::new(records);
-        self.overlay_creator.column_picker.update_columns(records);
-
-        self.enabled_columns.update_columns(records);
-
-        use Gff3Column as Gff;
-        for col in [Gff::Source, Gff::Type, Gff::Frame] {
-            self.enabled_columns.set_column(&col, true);
-        }
-
-        for col in [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand] {
-            self.enabled_columns.hide_column_from_gui(&col, true);
         }
     }
 
@@ -199,7 +182,7 @@ impl Gff3RecordList {
         }
     }
 
-    fn ui_row_new(
+    fn ui_row(
         &self,
         file_name: &str,
         records: &Gff3Records,
@@ -257,64 +240,6 @@ impl Gff3RecordList {
         resp
     }
 
-    fn ui_row(
-        &self,
-        records: &Gff3Records,
-        record: &Gff3Record,
-        ui: &mut egui::Ui,
-    ) -> egui::Response {
-        let mut resp = ui.label(format!("{}", record.seq_id().as_bstr()));
-
-        use Gff3Column as Gff;
-
-        if self.enabled_columns.get_column(&Gff::Source) {
-            resp =
-                resp.union(ui.label(format!("{}", record.source().as_bstr())));
-        }
-
-        if self.enabled_columns.get_column(&Gff::Type) {
-            resp =
-                resp.union(ui.label(format!("{}", record.type_().as_bstr())));
-        }
-        resp = resp.union(ui.label(format!("{}", record.start())));
-        resp = resp.union(ui.label(format!("{}", record.end())));
-
-        if self.enabled_columns.get_column(&Gff::Frame) {
-            resp =
-                resp.union(ui.label(format!("{}", record.frame().as_bstr())));
-        }
-
-        let mut keys = records.attribute_keys.iter().collect::<Vec<_>>();
-        keys.sort_by(|k1, k2| k1.cmp(k2));
-
-        let attrs = record.attributes();
-
-        for key in keys {
-            if self
-                .enabled_columns
-                .get_column(&Gff::Attribute(key.to_owned()))
-            {
-                let label = if let Some(values) = attrs.get(key) {
-                    let mut contents = String::new();
-                    for (ix, val) in values.into_iter().enumerate() {
-                        if ix != 0 {
-                            contents.push_str("; ");
-                        }
-                        contents.push_str(&format!("{}", val.as_bstr()));
-                    }
-                    contents
-                } else {
-                    "".to_string()
-                };
-                resp = resp.union(ui.label(label));
-            }
-        }
-
-        ui.end_row();
-
-        resp
-    }
-
     fn select_record(
         &self,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
@@ -351,14 +276,14 @@ impl Gff3RecordList {
         }
     }
 
-    fn apply_filter(&mut self, records: &Gff3Records) {
+    fn apply_filter(&mut self, file_name: &str, records: &Gff3Records) {
         self.filtered_records.clear();
 
         eprintln!("applying filter");
         let total = records.records.len();
 
         let records = &records.records;
-        let filter = &self.filter;
+        let filter = self.gff3_filters.get(file_name).unwrap();
         let filtered_records = &mut self.filtered_records;
 
         filtered_records.extend(records.iter().enumerate().filter_map(
@@ -426,11 +351,34 @@ impl Gff3RecordList {
                 .insert(file_name.to_string(), enabled_columns);
         }
 
-        self.filter.ui(ctx, &mut self.filter_open);
+        {
+            let filter = self
+                .gff3_filters
+                .entry(file_name.to_string())
+                .or_insert(Gff3Filter::new(records));
+
+            filter.ui(ctx, &mut self.filter_open);
+        }
+
+        if self.current_file.as_ref().map(|s| s.as_str()) != Some(file_name) {
+            self.current_file = Some(file_name.to_string());
+            self.apply_filter(file_name, records);
+        }
 
         self.path_picker.ui(ctx, &mut self.path_picker_open);
 
         if let Some(path) = self.path_picker.active_path().map(|(p, _)| p) {
+            if self
+                .overlay_creator
+                .current_file
+                .as_ref()
+                .map(|s| s.as_str())
+                != Some(file_name)
+            {
+                self.overlay_creator.current_file = Some(file_name.to_string());
+                self.overlay_creator.column_picker.update_columns(records);
+            }
+
             self.overlay_creator.ui(
                 ctx,
                 graph_query,
@@ -450,6 +398,9 @@ impl Gff3RecordList {
             .show(ctx, |mut ui| {
                 ui.set_min_height(200.0);
                 ui.set_max_height(ui.input().screen_rect.height() - 100.0);
+
+                ui.label(file_name);
+                ui.separator();
 
                 ui.horizontal(|ui| {
                     let filter_config_open = self.filter_open;
@@ -475,7 +426,7 @@ impl Gff3RecordList {
 
                 ui.horizontal(|ui| {
                     if ui.button("Apply filter").clicked() {
-                        self.apply_filter(records);
+                        self.apply_filter(file_name, records);
                     }
 
                     if ui.button("Clear filter").clicked() {
@@ -526,7 +477,9 @@ impl Gff3RecordList {
 
                     if let Some((chr, start, end)) = path_name_range {
                         if range_filter_btn.clicked() {
-                            self.filter.chr_range_filter(chr, start, end);
+                            let filter =
+                                self.gff3_filters.get_mut(file_name).unwrap();
+                            filter.chr_range_filter(chr, start, end);
                         }
                     }
 
@@ -582,7 +535,7 @@ impl Gff3RecordList {
                                 records.records.get(self.offset + i).map(
                                     |record| {
                                         (
-                                            self.ui_row_new(
+                                            self.ui_row(
                                                 file_name, records, record, ui,
                                             ),
                                             record,
@@ -594,7 +547,7 @@ impl Gff3RecordList {
                                     .get(self.offset + i)
                                     .and_then(|&ix| {
                                         let record = records.records.get(ix)?;
-                                        let row = self.ui_row_new(
+                                        let row = self.ui_row(
                                             file_name, records, record, ui,
                                         );
                                         Some((row, record))
@@ -816,6 +769,8 @@ pub struct Gff3OverlayCreator {
 
     column_picker: ColumnPickerOne<Gff3Records>,
     column_picker_open: bool,
+
+    current_file: Option<String>,
 }
 
 fn gff3_column_hash_color(
@@ -865,6 +820,8 @@ impl Gff3OverlayCreator {
 
             column_picker: ColumnPickerOne::new("gff3_overlay_creator_picker"),
             column_picker_open: false,
+
+            current_file: None,
         }
     }
 

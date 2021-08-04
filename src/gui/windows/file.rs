@@ -50,6 +50,11 @@ impl FilePicker {
         Some(path.as_ref())
     }
 
+    pub fn reset_selection(&mut self) {
+        self.selected_path = None;
+        self.highlighted_dir = None;
+    }
+
     pub fn reset(&mut self) {
         self.current_dir.clone_from(&self.pwd);
         self.selected_path = None;

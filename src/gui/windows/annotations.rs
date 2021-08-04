@@ -77,7 +77,7 @@ impl AnnotationFileList {
     ) -> Option<egui::Response> {
         if let Some(query) = self.gff3_load_result.as_mut() {
             query.move_result_if_ready();
-            self.file_picker.reset();
+            self.file_picker.reset_selection();
         }
 
         if let Some(gff3_result) = self
@@ -93,6 +93,7 @@ impl AnnotationFileList {
                     eprintln!("error loading GFF3 file: {}", err);
                 }
             }
+            self.gff3_load_result = None;
         }
 
         if self.file_picker.selected_path().is_some() {
