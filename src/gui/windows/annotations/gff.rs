@@ -51,6 +51,8 @@ pub struct Gff3RecordList {
     column_picker_open: bool,
     enabled_columns: ColumnPickerMany<Gff3Records>,
 
+    gff3_enabled_columns: HashMap<String, ColumnPickerMany<Gff3Records>>,
+
     path_picker_open: bool,
     path_picker: PathPicker,
 
@@ -140,6 +142,7 @@ impl Gff3RecordList {
 
             column_picker_open: false,
             enabled_columns: ColumnPickerMany::new("gff3_enabled_columns"),
+            gff3_enabled_columns: HashMap::default(),
 
             path_picker_open: false,
             path_picker,
@@ -194,6 +197,64 @@ impl Gff3RecordList {
         if let Some(ix) = ix {
             self.offset = ix;
         }
+    }
+
+    fn ui_row_new(
+        &self,
+        file_name: &str,
+        records: &Gff3Records,
+        record: &Gff3Record,
+        ui: &mut egui::Ui,
+    ) -> egui::Response {
+        let mut resp = ui.label(format!("{}", record.seq_id().as_bstr()));
+
+        use Gff3Column as Gff;
+
+        let enabled_columns = self.gff3_enabled_columns.get(file_name).unwrap();
+
+        if enabled_columns.get_column(&Gff::Source) {
+            resp =
+                resp.union(ui.label(format!("{}", record.source().as_bstr())));
+        }
+
+        if enabled_columns.get_column(&Gff::Type) {
+            resp =
+                resp.union(ui.label(format!("{}", record.type_().as_bstr())));
+        }
+        resp = resp.union(ui.label(format!("{}", record.start())));
+        resp = resp.union(ui.label(format!("{}", record.end())));
+
+        if enabled_columns.get_column(&Gff::Frame) {
+            resp =
+                resp.union(ui.label(format!("{}", record.frame().as_bstr())));
+        }
+
+        let mut keys = records.attribute_keys.iter().collect::<Vec<_>>();
+        keys.sort_by(|k1, k2| k1.cmp(k2));
+
+        let attrs = record.attributes();
+
+        for key in keys {
+            if enabled_columns.get_column(&Gff::Attribute(key.to_owned())) {
+                let label = if let Some(values) = attrs.get(key) {
+                    let mut contents = String::new();
+                    for (ix, val) in values.into_iter().enumerate() {
+                        if ix != 0 {
+                            contents.push_str("; ");
+                        }
+                        contents.push_str(&format!("{}", val.as_bstr()));
+                    }
+                    contents
+                } else {
+                    "".to_string()
+                };
+                resp = resp.union(ui.label(label));
+            }
+        }
+
+        ui.end_row();
+
+        resp
     }
 
     fn ui_row(
@@ -322,108 +383,8 @@ impl Gff3RecordList {
         self.filtered_records.clear();
     }
 
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        thread_pool: &ThreadPool,
-        graph_query: &GraphQueryWorker,
-        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
-        app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
-
-        records: Option<&Arc<Gff3Records>>,
-        // records: Option<&Gff3Records>,
-        open: &mut bool,
-    ) -> Option<egui::Response> {
-        if let Some(query) = self.gff3_load_result.as_mut() {
-            query.move_result_if_ready();
-            self.file_picker.reset();
-        }
-
-        if let Some(gff3_result) = self
-            .gff3_load_result
-            .as_mut()
-            .and_then(|r| r.take_result_if_ready())
-        {
-            match gff3_result {
-                Ok(records) => {
-                    app_msg_tx.send(AppMsg::AddGff3Records(records)).unwrap();
-                }
-                Err(err) => {
-                    eprintln!("error loading GFF3 file: {}", err);
-                }
-            }
-        }
-
-        if let Some(records) = records {
-            self.list_ui(ctx, open, graph_query, app_msg_tx, records)
-        } else {
-            self.load_ui(ctx, thread_pool, open)
-        }
-    }
-
-    fn load_id() -> egui::Id {
-        egui::Id::with(egui::Id::new(Self::ID), "load_records")
-    }
-
     fn list_id() -> egui::Id {
         egui::Id::with(egui::Id::new(Self::ID), "record_list")
-    }
-
-    fn load_ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        thread_pool: &ThreadPool,
-        open: &mut bool,
-    ) -> Option<egui::Response> {
-        if self.file_picker.selected_path().is_some() {
-            self.file_picker_open = false;
-        }
-
-        self.file_picker.ui(ctx, &mut self.file_picker_open);
-
-        let resp = egui::Window::new("GFF3")
-            .id(Self::load_id())
-            .default_pos(egui::Pos2::new(600.0, 200.0))
-            .collapsible(false)
-            .open(open)
-            .show(ctx, |ui| {
-                if self.gff3_load_result.is_none() {
-                    if ui.button("Choose GFF3 file").clicked() {
-                        self.file_picker_open = true;
-                    }
-
-                    let _label = if let Some(path) = self
-                        .file_picker
-                        .selected_path()
-                        .and_then(|p| p.to_str())
-                    {
-                        ui.label(path)
-                    } else {
-                        ui.label("No file selected")
-                    };
-
-                    if ui.button("Load").clicked() {
-                        if let Some(path) = self.file_picker.selected_path() {
-                            let path_str = path.to_str();
-                            eprintln!("Loading GFF3 file {:?}", path_str);
-                            let path = path.to_owned();
-                            let query =
-                                AsyncResult::new(thread_pool, async move {
-                                    println!("parsing gff3 file");
-                                    let records =
-                                        Gff3Records::parse_gff3_file(path);
-                                    println!("parsing complete");
-                                    records
-                                });
-                            self.gff3_load_result = Some(query);
-                        }
-                    }
-                } else {
-                    ui.label("Loading file");
-                }
-            });
-
-        resp
     }
 
     pub fn active_path_id(&self) -> Option<PathId> {
@@ -431,19 +392,39 @@ impl Gff3RecordList {
         Some(path)
     }
 
-    pub fn list_ui(
+    pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
         graph_query: &GraphQueryWorker,
         // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        file_name: &str,
         records: &Arc<Gff3Records>,
     ) -> Option<egui::Response> {
         let active_path_name = self
             .path_picker
             .active_path()
             .map(|(_id, name)| name.to_owned());
+
+        if !self.gff3_enabled_columns.contains_key(file_name) {
+            let mut enabled_columns: ColumnPickerMany<Gff3Records> =
+                ColumnPickerMany::new(file_name);
+
+            enabled_columns.update_columns(records);
+
+            use Gff3Column as Gff;
+            for col in [Gff::Source, Gff::Type, Gff::Frame] {
+                enabled_columns.set_column(&col, true);
+            }
+
+            for col in [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand] {
+                enabled_columns.hide_column_from_gui(&col, true);
+            }
+
+            self.gff3_enabled_columns
+                .insert(file_name.to_string(), enabled_columns);
+        }
 
         self.filter.ui(ctx, &mut self.filter_open);
 
@@ -562,19 +543,22 @@ impl Gff3RecordList {
 
                 use Gff3Column as Gff;
 
+                let enabled_columns =
+                    self.gff3_enabled_columns.get(file_name).unwrap();
+
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
                         ui.label("seq_id");
-                        if self.enabled_columns.get_column(&Gff::Source) {
+                        if enabled_columns.get_column(&Gff::Source) {
                             ui.label("source");
                         }
-                        if self.enabled_columns.get_column(&Gff::Type) {
+                        if enabled_columns.get_column(&Gff::Type) {
                             ui.label("type");
                         }
                         ui.label("start");
                         ui.label("end");
-                        if self.enabled_columns.get_column(&Gff::Frame) {
+                        if enabled_columns.get_column(&Gff::Frame) {
                             ui.label("frame");
                         }
 
@@ -583,8 +567,7 @@ impl Gff3RecordList {
                         keys.sort_by(|k1, k2| k1.cmp(k2));
 
                         for key in keys {
-                            if self
-                                .enabled_columns
+                            if enabled_columns
                                 .get_column(&Gff::Attribute(key.to_owned()))
                             {
                                 ui.label(format!("{}", key.as_bstr()));
@@ -599,7 +582,9 @@ impl Gff3RecordList {
                                 records.records.get(self.offset + i).map(
                                     |record| {
                                         (
-                                            self.ui_row(records, record, ui),
+                                            self.ui_row_new(
+                                                file_name, records, record, ui,
+                                            ),
                                             record,
                                         )
                                     },
@@ -609,8 +594,9 @@ impl Gff3RecordList {
                                     .get(self.offset + i)
                                     .and_then(|&ix| {
                                         let record = records.records.get(ix)?;
-                                        let row =
-                                            self.ui_row(records, record, ui);
+                                        let row = self.ui_row_new(
+                                            file_name, records, record, ui,
+                                        );
                                         Some((row, record))
                                     })
                             };
@@ -659,7 +645,9 @@ impl Gff3RecordList {
 
         if let Some(resp) = &resp {
             let pos = resp.rect.right_top();
-            self.enabled_columns.ui(
+            let enabled_columns =
+                self.gff3_enabled_columns.get_mut(file_name).unwrap();
+            enabled_columns.ui(
                 ctx,
                 pos,
                 &mut self.column_picker_open,
