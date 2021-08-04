@@ -2,6 +2,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 
+use crossbeam::atomic::AtomicCell;
 use handlegraph::{
     handle::{Handle, NodeId},
     pathhandlegraph::*,
@@ -13,10 +14,7 @@ use bstr::ByteSlice;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{
-    geometry::*, gluon::GraphHandle, graph_query::GraphQuery, universe::Node,
-    view::*,
-};
+use crate::{geometry::*, universe::Node, view::*};
 
 use nalgebra as na;
 use nalgebra_glm as glm;
@@ -27,11 +25,10 @@ pub use gff::*;
 
 #[derive(Debug, Default, Clone)]
 pub struct AnnotationLabelSet {
-    // pub name: String,
     pub annot_file_name: String,
     pub column: String,
     pub path_name: String,
-    pub show: bool,
+    pub show: Arc<AtomicCell<bool>>,
 
     path_id: PathId,
     labels: FxHashMap<NodeId, Vec<String>>,
@@ -54,7 +51,7 @@ impl AnnotationLabelSet {
         let column = column.to_string();
         let path_name = path_name.to_str().unwrap().to_string();
 
-        let show = false;
+        let show = Arc::new(AtomicCell::new(false));
 
         Self {
             annot_file_name,
@@ -69,6 +66,14 @@ impl AnnotationLabelSet {
 
     pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
         &self.labels
+    }
+
+    pub fn is_visible(&self) -> bool {
+        self.show.load()
+    }
+
+    pub fn set_visibility(&self, to: bool) {
+        self.show.store(to);
     }
 }
 
@@ -118,6 +123,12 @@ impl Annotations {
 
     pub fn get_label_set(&mut self, name: &str) -> Option<&AnnotationLabelSet> {
         self.label_sets.get(name)
+    }
+
+    pub fn visible_label_sets(
+        &self,
+    ) -> impl Iterator<Item = &'_ AnnotationLabelSet> + '_ {
+        self.label_sets.values().filter(|ls| ls.is_visible())
     }
 }
 
