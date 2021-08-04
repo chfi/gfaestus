@@ -27,10 +27,10 @@ pub use gff::*;
 pub struct AnnotationLabelSet {
     pub annot_file_name: String,
     pub column: String,
+    pub path_id: PathId,
     pub path_name: String,
-    pub show: Arc<AtomicCell<bool>>,
 
-    path_id: PathId,
+    show: Arc<AtomicCell<bool>>,
     labels: FxHashMap<NodeId, Vec<String>>,
 }
 

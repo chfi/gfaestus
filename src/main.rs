@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
+use rustc_hash::{FxHashMap, FxHashSet};
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -621,9 +622,43 @@ fn main() {
                     app.annotations()
                 );
 
+                {
+                    let label_sets = app.annotations().visible_label_sets().collect::<Vec<_>>();
 
-                if let Some(path_id) = app.node_label_path() {
-                    let steps = graph_query.path_pos_steps(path_id).unwrap();
+                    let mut label_sets_by_path: FxHashMap<PathId, FxHashMap<NodeId, Vec<String>>> =
+                        FxHashMap::default();
+
+                    for label_set in label_sets.iter() {
+                        let sets = label_sets_by_path.entry(label_set.path_id).or_default();
+
+                        for (node_id, labels) in label_set.labels() {
+                            sets.entry(*node_id).or_default().extend_from_slice(labels);
+                        }
+
+                    }
+
+                    for sets in label_sets_by_path.values_mut() {
+                        for (_, labels) in sets.iter_mut() {
+                            labels.sort();
+                            labels.dedup();
+                        }
+                    }
+
+
+                    let paths = label_sets
+                        .iter()
+                        .map(|ls| ls.path_id)
+                        .collect::<FxHashSet<_>>();
+
+                    let steps = paths
+                        .iter()
+                        .filter_map(|p| graph_query.path_pos_steps(*p))
+                        .collect::<Vec<_>>();
+                }
+
+                for label_set in app.annotations().visible_label_sets() {
+
+                    let steps = graph_query.path_pos_steps(label_set.path_id).unwrap();
 
                     let label_radius = app.settings.label_radius().load();
 
@@ -631,14 +666,13 @@ fn main() {
                         &steps,
                         universe.layout().nodes(),
                         app.shared_state().view(),
-                        app.node_labels(),
+                        label_set.labels(),
                         label_radius,
                     );
 
                     for (node, (offset, labels)) in clustered.iter() {
 
                         let mut y_offset = 20.0;
-
                         let mut count = 0;
 
                         for label in labels {
@@ -695,7 +729,9 @@ fn main() {
                         }
 
                     }
+
                 }
+
 
                 let meshes = gui.end_frame();
 

@@ -307,10 +307,6 @@ pub struct OpenWindows {
     overlay_creator: bool,
 
     repl_window: bool,
-
-    egui_inspection: bool,
-    egui_settings: bool,
-    egui_memory: bool,
 }
 
 impl std::default::Default for OpenWindows {
