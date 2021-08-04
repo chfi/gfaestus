@@ -38,6 +38,33 @@ impl AnnotationCollection for Gff3Records {
         columns
     }
 
+    fn mandatory_columns(&self) -> Vec<Gff3Column> {
+        let mut columns = Vec::with_capacity(8);
+
+        use Gff3Column::*;
+        columns.push(SeqId);
+        columns.push(Source);
+        columns.push(Type);
+        columns.push(Start);
+        columns.push(End);
+        columns.push(Score);
+        columns.push(Strand);
+        columns.push(Frame);
+
+        columns
+    }
+
+    fn optional_columns(&self) -> Vec<Gff3Column> {
+        let mut columns = Vec::with_capacity(self.attribute_keys.len());
+
+        let mut attr_keys =
+            self.attribute_keys.iter().cloned().collect::<Vec<_>>();
+        attr_keys.sort();
+        columns.extend(attr_keys.into_iter().map(|k| Gff3Column::Attribute(k)));
+
+        columns
+    }
+
     fn records(&self) -> &[Gff3Record] {
         &self.records
     }
@@ -139,6 +166,13 @@ impl AnnotationRecord for Gff3Record {
                 }
             }
             Gff3Column::Start | Gff3Column::End | Gff3Column::Score => vec![],
+        }
+    }
+
+    fn is_column_optional(key: &Self::ColumnKey) -> bool {
+        match key {
+            Gff3Column::Attribute(_key) => true,
+            _ => false,
         }
     }
 }

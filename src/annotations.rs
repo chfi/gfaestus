@@ -57,6 +57,8 @@ pub trait AnnotationRecord {
     fn get_first(&self, key: &Self::ColumnKey) -> Option<&[u8]>;
 
     fn get_all(&self, key: &Self::ColumnKey) -> Vec<&[u8]>;
+
+    fn is_column_optional(key: &Self::ColumnKey) -> bool;
 }
 
 pub trait AnnotationCollection {
@@ -65,7 +67,15 @@ pub trait AnnotationCollection {
 
     fn all_columns(&self) -> Vec<Self::ColumnKey>;
 
+    fn mandatory_columns(&self) -> Vec<Self::ColumnKey>;
+
+    fn optional_columns(&self) -> Vec<Self::ColumnKey>;
+
     fn records(&self) -> &[Self::Record];
+
+    fn is_column_optional(key: &Self::ColumnKey) -> bool {
+        Self::Record::is_column_optional(key)
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
