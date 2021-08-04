@@ -65,6 +65,104 @@ impl MenuBar {
         let repl = &mut open_windows.repl_window;
 
         let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
+            // ui.horizontal(|ui| {
+
+            use egui::menu;
+
+            menu::bar(ui, |ui| {
+                menu::menu(ui, "Graph", |ui| {
+                    if ui.selectable_label(*nodes, "Nodes").clicked() {
+                        *nodes = !*nodes;
+                    }
+
+                    if ui.selectable_label(*paths, "Paths").clicked() {
+                        *paths = !*paths;
+                    }
+                });
+
+                // if ui.selectable_label(*themes, "Themes").clicked() {
+                //     *themes = !*themes;
+                // }
+
+                menu::menu(ui, "Annotations", |ui| {
+                    if ui.selectable_label(*annotation_files, "Files").clicked()
+                    {
+                        *annotation_files = !*annotation_files;
+                    }
+
+                    if ui.selectable_label(*gff3, "GFF3").clicked() {
+                        *gff3 = !*gff3;
+                    }
+                });
+
+                menu::menu(ui, "Overlays", |ui| {
+                    if ui.selectable_label(*overlays, "Overlay list").clicked()
+                    {
+                        *overlays = !*overlays;
+                    }
+
+                    if ui
+                        .selectable_label(
+                            self.overlay_state.use_overlay(),
+                            "Show overlay",
+                        )
+                        .clicked()
+                    {
+                        self.overlay_state.toggle_overlay()
+                    }
+                });
+
+                menu::menu(ui, "View", |ui| {
+                    if ui.button("Goto selection").clicked() {
+                        app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                    }
+                });
+
+                menu::menu(ui, "Tools", |ui| {
+                    if ui.button("REPL").clicked() {
+                        *repl = !*repl;
+                    }
+                });
+
+                menu::menu(ui, "Settings", |ui| {
+                    if ui.selectable_label(*settings, "Settings").clicked() {
+                        *settings = !*settings;
+                    }
+
+                    if ui.selectable_label(*fps, "Show FPS").clicked() {
+                        *fps = !*fps;
+                    }
+                });
+            });
+        });
+
+        let height = resp.response.rect.height();
+        self.height.store(height);
+    }
+
+    pub fn ui_<'a>(
+        &self,
+        ctx: &egui::CtxRef,
+        open_windows: &'a mut super::OpenWindows,
+        app_msg_tx: &Sender<AppMsg>,
+    ) {
+        let settings = &mut open_windows.settings;
+
+        let fps = &mut open_windows.fps;
+        let _graph_stats = &mut open_windows.graph_stats;
+
+        let gff3 = &mut open_windows.gff3;
+        let annotation_files = &mut open_windows.annotation_files;
+
+        let nodes = &mut open_windows.nodes;
+        let paths = &mut open_windows.paths;
+
+        let _themes = &mut open_windows.themes;
+        let overlays = &mut open_windows.overlays;
+
+        let repl = &mut open_windows.repl_window;
+
+        let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
             ui.horizontal(|ui| {
                 if ui.selectable_label(*nodes, "Nodes").clicked() {
                     *nodes = !*nodes;
