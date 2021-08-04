@@ -322,7 +322,6 @@ impl Gff3RecordList {
         ctx: &egui::CtxRef,
         open: &mut bool,
         graph_query: &GraphQueryWorker,
-        // gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         file_name: &str,
         records: &Arc<Gff3Records>,
@@ -773,7 +772,7 @@ pub struct Gff3OverlayCreator {
     current_file: Option<String>,
 }
 
-fn gff3_column_hash_color(
+pub(crate) fn gff3_column_hash_color(
     record: &Gff3Record,
     column: &Gff3Column,
 ) -> Option<rgb::RGB<f32>> {

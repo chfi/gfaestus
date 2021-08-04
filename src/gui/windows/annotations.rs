@@ -1,7 +1,12 @@
 pub mod gff;
 
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
+use bstr::ByteSlice;
+use crossbeam::channel::Sender;
 use futures::executor::ThreadPool;
 pub use gff::*;
 
@@ -18,6 +23,7 @@ use handlegraph::{
 };
 
 use anyhow::Result;
+use rustc_hash::FxHashMap;
 
 use crate::{
     annotations::{
@@ -26,9 +32,11 @@ use crate::{
     app::AppMsg,
     asynchronous::AsyncResult,
     geometry::Point,
+    graph_query::{GraphQuery, GraphQueryWorker},
+    overlays::OverlayData,
 };
 
-use super::file::FilePicker;
+use super::{file::FilePicker, overlays::OverlayCreatorMsg};
 
 pub struct AnnotationFileList {
     current_annotation: Option<String>,
@@ -367,5 +375,361 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
                     );
                 });
             })
+    }
+}
+
+// pub struct OverlayLabelSetCreator<T: AnnotationCollection> {
+pub struct OverlayLabelSetCreator {
+    path_id: Option<PathId>,
+    path_name: String,
+
+    overlay_name: String,
+    overlay_description: String,
+
+    overlay_query: Option<AsyncResult<OverlayData>>,
+
+    label_set_name: String,
+
+    // new_overlay_tx: Sender<OverlayCreatorMsg>,
+
+    // column_picker: ColumnPickerOne<T>,
+    column_picker_gff3: ColumnPickerOne<Gff3Records>,
+    // column_picker_open: bool,
+    current_annotation_file: Option<String>,
+    // current_annotation_type: Option<AnnotationFileType>,
+    id: egui::Id,
+}
+
+// impl<T: AnnotationCollection> OverlayLabelSetCreator<T> {
+impl OverlayLabelSetCreator {
+    pub fn new(id_source: &str) -> Self {
+        let id = egui::Id::new(id_source);
+
+        Self {
+            path_id: None,
+            path_name: String::new(),
+
+            overlay_name: String::new(),
+            overlay_description: String::new(),
+
+            overlay_query: None,
+
+            label_set_name: String::new(),
+
+            column_picker_gff3: ColumnPickerOne::new(
+                "label_set_overlay_creator_gff3_columns",
+            ),
+            // column_picker_open: true,
+            current_annotation_file: None,
+
+            id,
+        }
+    }
+
+    // for now it's hardcoded to use Gff3Records, but that should be
+    // replaced with an enum or something similar later
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        overlay_tx: &Sender<OverlayCreatorMsg>,
+        app_msg_tx: &Sender<AppMsg>,
+        graph: &GraphQueryWorker,
+        open: &mut bool,
+        file_name: &str,
+        path_id: PathId,
+        records: Arc<Gff3Records>,
+        filtered_records: &[usize],
+    ) -> Option<egui::Response> {
+        if let Some(query) = self.overlay_query.as_mut() {
+            query.move_result_if_ready();
+        }
+
+        if Some(path_id) != self.path_id {
+            let path_name =
+                graph.graph().graph().get_path_name_vec(path_id).unwrap();
+            let path_name = path_name.to_str().unwrap().to_string();
+            self.path_id = Some(path_id);
+            self.path_name = path_name;
+        }
+
+        if let Some(ov_data) = self
+            .overlay_query
+            .as_mut()
+            .and_then(|r| r.take_result_if_ready())
+        {
+            let msg = OverlayCreatorMsg::NewOverlay {
+                name: self.overlay_name.clone(),
+                data: ov_data,
+            };
+
+            self.overlay_name.clear();
+            overlay_tx.send(msg).unwrap();
+
+            self.overlay_query = None;
+        }
+
+        if self.current_annotation_file.as_ref().map(|s| s.as_str())
+            != Some(file_name)
+        {
+            self.current_annotation_file = Some(file_name.to_string());
+            self.column_picker_gff3.update_columns(&records);
+        }
+
+        /*
+        {
+            let column_picker_open = &mut self.column_picker_open;
+
+            self.column_picker
+                .ui(ctx, column_picker_open, "GFF3 Columns");
+        }
+        */
+
+        let label = {
+            let column_picker = &self.column_picker_gff3;
+            let column = column_picker.chosen_column();
+
+            if let Some(column) = column {
+                format!("Use column {}", column)
+            } else {
+                format!("Choose column")
+            }
+        };
+
+        egui::Window::new("Create Annotation Labels & Overlays")
+            .id(self.id)
+            .open(open)
+            .show(ctx, |ui| {
+                ui.label(file_name);
+
+                ui.label(&label);
+                /*
+                let column_picker_open = &mut self.column_picker_open;
+
+                let column_picker_btn =
+                    { ui.selectable_label(*column_picker_open, label) };
+
+                if column_picker_btn.clicked() {
+                    *column_picker_open = !*column_picker_open;
+                }
+                */
+
+                ui.separator();
+
+                let name = &mut self.overlay_name;
+
+                let _name_box = ui.horizontal(|ui| {
+                    ui.label("Overlay name");
+                    ui.separator();
+                    ui.text_edit_singleline(name)
+                });
+                let column_picker = &self.column_picker_gff3;
+                let column = column_picker.chosen_column();
+
+                let create_overlay = ui.add(
+                    egui::Button::new("Create overlay")
+                        .enabled(column.is_some()),
+                );
+
+                if create_overlay.clicked() && self.overlay_query.is_none() {
+                    println!("creating overlay");
+                    if let Some(column) = column {
+                        let indices = filtered_records
+                            .iter()
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        let column = column.to_owned();
+
+                        let records = records.clone();
+
+                        let query = graph.run_query(move |graph| async move {
+                            use rayon::prelude::*;
+
+                            use crate::annotations as annots;
+
+                            dbg!();
+
+                            let steps = graph.path_pos_steps(path_id).unwrap();
+
+                            let offset = graph
+                                .graph()
+                                .get_path_name_vec(path_id)
+                                .and_then(|name| {
+                                    annots::path_name_offset(&name)
+                                });
+
+                            println!("using annotation offset {:?}", offset);
+
+                            let t0 = std::time::Instant::now();
+                            let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
+                                indices
+                                    .into_par_iter()
+                                    .filter_map(|ix| {
+                                        let record = records.records.get(ix)?;
+
+                                        let color = gff3_column_hash_color(
+                                            record, &column,
+                                        )?;
+
+                                        let range = annots::path_step_range(
+                                            &steps,
+                                            offset,
+                                            record.start(),
+                                            record.end(),
+                                        )?;
+
+                                        let ids = range
+                                            .into_iter()
+                                            .map(|(h, _, _)| h.id())
+                                            .collect();
+
+                                        Some((ids, color))
+                                    })
+                                    .collect::<Vec<_>>();
+
+                            println!(
+                                "parallel processing took {} seconds",
+                                t0.elapsed().as_secs_f64()
+                            );
+                            let applied_records_count = colors_vec.len();
+                            println!(
+                                "colored record count: {}",
+                                applied_records_count
+                            );
+                            let colored_node_count: usize = colors_vec
+                                .iter()
+                                .map(|(nodes, _)| nodes.len())
+                                .sum();
+                            println!(
+                                "colored node count: {}",
+                                colored_node_count
+                            );
+
+                            dbg!();
+
+                            let t1 = std::time::Instant::now();
+                            let mut node_colors: FxHashMap<
+                                NodeId,
+                                rgb::RGB<f32>,
+                            > = FxHashMap::default();
+
+                            for (ids, color) in colors_vec {
+                                for id in ids {
+                                    node_colors.insert(id, color);
+                                }
+                            }
+
+                            println!(
+                                "building color map took {} seconds",
+                                t1.elapsed().as_secs_f64()
+                            );
+
+                            let t2 = std::time::Instant::now();
+                            let mut data =
+                                vec![
+                                    rgb::RGBA::new(0.3, 0.3, 0.3, 0.3);
+                                    graph.node_count()
+                                ];
+
+                            for (id, color) in node_colors {
+                                let ix = (id.0 - 1) as usize;
+                                data[ix] = rgb::RGBA::new(
+                                    color.r, color.g, color.b, 1.0,
+                                );
+                            }
+
+                            println!(
+                                "building color vector took {} seconds",
+                                t2.elapsed().as_secs_f64()
+                            );
+
+                            OverlayData::RGB(data)
+                        });
+
+                        self.overlay_query = Some(query);
+                    }
+                }
+
+                ui.separator();
+
+                let name = &mut self.label_set_name;
+
+                let _name_box = ui.horizontal(|ui| {
+                    ui.label("Label set name");
+                    ui.separator();
+                    ui.text_edit_singleline(name)
+                });
+                let column_picker = &self.column_picker_gff3;
+                let column = column_picker.chosen_column();
+
+                let create_label_set = ui.add(
+                    egui::Button::new("Create label set")
+                        .enabled(column.is_some()),
+                );
+
+                if create_label_set.clicked() {
+                    if let Some((path, labels)) =
+                        Self::calculate_annotations_gff3(
+                            graph.graph(),
+                            &records,
+                            filtered_records,
+                            path_id,
+                            &self.path_name,
+                        )
+                    {
+                        app_msg_tx
+                            .send(AppMsg::SetNodeLabels { path, labels })
+                            .unwrap();
+                    }
+                }
+            })
+    }
+
+    fn calculate_annotations_gff3(
+        graph: &GraphQuery,
+        records: &Gff3Records,
+        record_indices: &[usize],
+        path_id: PathId,
+        path_name: &str,
+    ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)> {
+        if record_indices.is_empty() {
+            return None;
+        }
+
+        // let (path_id, name) = self.path_picker.active_path()?;
+
+        let offset = crate::annotations::path_name_offset(path_name.as_bytes());
+
+        let steps = graph.path_pos_steps(path_id)?;
+
+        let mut result: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
+
+        for &record_ix in record_indices.iter() {
+            let record = records.records.get(record_ix)?;
+
+            if let Some(range) = crate::annotations::path_step_range(
+                &steps,
+                offset,
+                record.start(),
+                record.end(),
+            ) {
+                if let Some(name) =
+                    record.get_tag(b"Name").and_then(|n| n.first())
+                {
+                    if let Some((mid, _, _)) = range.get(range.len() / 2) {
+                        let label = format!("{}", name.as_bstr());
+                        result.entry(mid.id()).or_default().push(label);
+                    }
+                }
+            }
+        }
+
+        for labels in result.values_mut() {
+            labels.sort();
+            labels.dedup();
+            labels.shrink_to_fit();
+        }
+
+        Some((path_id, result))
     }
 }
