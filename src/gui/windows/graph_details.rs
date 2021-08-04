@@ -34,7 +34,7 @@ pub struct NodeDetails {
 impl std::default::Default for NodeDetails {
     fn default() -> Self {
         Self {
-            node_id: Arc::new(AtomicCell::new(None)),
+            node_id: Arc::new(None.into()),
             fetched_node: None,
             sequence: Vec::new(),
             degree: (0, 0),
@@ -400,7 +400,7 @@ impl NodeList {
 
             update_slots: false,
 
-            apply_filter: AtomicCell::new(true),
+            apply_filter: true.into(),
 
             node_details_id,
         }

@@ -185,7 +185,7 @@ impl App {
     }
 
     pub fn mouse_pos(&self) -> Point {
-        self.shared_state.mouse_pos.read()
+        self.shared_state.mouse_pos.load()
     }
 
     pub fn update_dims<Dims: Into<ScreenDims>>(&mut self, screen_dims: Dims) {

@@ -23,9 +23,14 @@ impl std::default::Default for DebugSettings {
 
 impl DebugSettings {
     pub fn ui(&mut self, ui: &mut egui::Ui) {
-        // let view = ui.checkbox(&mut self.view_info, "Viewport Info");
-        // let cursor = ui.checkbox(&mut self.cursor_info, "Cursor Info");
         ui.checkbox(&mut self.view_info, "Viewport Info");
         ui.checkbox(&mut self.cursor_info, "Cursor Info");
+
+        ui.separator();
+        ui.label("Egui Debug Windows");
+
+        ui.checkbox(&mut self.egui_inspection, "Inspection");
+        ui.checkbox(&mut self.egui_settings, "Settings");
+        ui.checkbox(&mut self.egui_memory, "Memory");
     }
 }

@@ -17,7 +17,7 @@ impl std::default::Default for AppSettings {
         Self {
             node_width: Default::default(),
             edge_renderer: Default::default(),
-            label_radius: Arc::new(AtomicCell::new(50.0)),
+            label_radius: Arc::new(50.0.into()),
         }
     }
 }

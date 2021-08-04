@@ -3,13 +3,13 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
+use crate::overlays::OverlayKind;
 use crate::{geometry::*, gui::GuiFocusState};
-use crate::{input::MousePos, overlays::OverlayKind};
 use crate::{view::*, vulkan::texture::GradientName};
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(super) mouse_pos: MousePos,
+    pub(super) mouse_pos: Arc<AtomicCell<Point>>,
     pub(super) screen_dims: Arc<AtomicCell<ScreenDims>>,
 
     pub(super) view: Arc<AtomicCell<View>>,
@@ -28,12 +28,12 @@ pub struct SharedState {
 impl SharedState {
     pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Self {
         Self {
-            mouse_pos: MousePos::new(Point::ZERO),
-            screen_dims: Arc::new(AtomicCell::new(screen_dims.into())),
+            mouse_pos: Arc::new(Point::ZERO.into()),
+            screen_dims: Arc::new(screen_dims.into().into()),
 
-            view: Arc::new(AtomicCell::new(View::default())),
+            view: Arc::new(View::default().into()),
 
-            hover_node: Arc::new(AtomicCell::new(None)),
+            hover_node: Arc::new(None.into()),
 
             mouse_rect: MouseRect::default(),
 
@@ -41,12 +41,12 @@ impl SharedState {
 
             gui_focus_state: GuiFocusState::default(),
 
-            edges_enabled: Arc::new(AtomicCell::new(true)),
+            edges_enabled: Arc::new(true.into()),
         }
     }
 
     pub fn mouse_pos(&self) -> Point {
-        self.mouse_pos.read()
+        self.mouse_pos.load()
     }
 
     pub fn screen_dims(&self) -> ScreenDims {
@@ -73,7 +73,7 @@ impl SharedState {
         self.edges_enabled.clone()
     }
 
-    pub fn clone_mouse_pos(&self) -> MousePos {
+    pub fn clone_mouse_pos(&self) -> Arc<AtomicCell<Point>> {
         self.mouse_pos.clone()
     }
 

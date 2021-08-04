@@ -1,4 +1,7 @@
-use crate::app::{AppSettings, SharedState};
+use crate::{
+    app::{AppSettings, SharedState},
+    geometry::Point,
+};
 
 pub mod debug;
 pub mod gui;
@@ -49,6 +52,7 @@ impl SettingsWindow {
         egui::Window::new("Settings")
             .id(egui::Id::new(Self::ID))
             .open(open)
+            .default_pos(Point::new(300.0, 300.0))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(

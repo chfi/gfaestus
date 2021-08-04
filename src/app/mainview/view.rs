@@ -1,7 +1,11 @@
 use crate::geometry::*;
 use crate::view::{ScreenDims, View};
 
-use std::time::{Duration, Instant};
+use crossbeam::{atomic::AtomicCell, channel};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnimationKind {
@@ -318,10 +322,6 @@ impl<E: EasingFunction> ViewAnimation<E> {
         self.now += delta;
     }
 }
-
-use crossbeam::atomic::AtomicCell;
-use crossbeam::channel;
-use std::sync::Arc;
 
 pub struct AnimHandler {
     pub screen_dims: Arc<AtomicCell<ScreenDims>>,
@@ -712,8 +712,8 @@ impl std::default::Default for ViewInputState {
     fn default() -> Self {
         Self {
             key_pan: Default::default(),
-            mouse_pan: Arc::new(AtomicCell::new(MousePanState::Inactive)),
-            scroll_zoom: Arc::new(AtomicCell::new(None)),
+            mouse_pan: Arc::new(MousePanState::Inactive.into()),
+            scroll_zoom: Arc::new(None.into()),
         }
     }
 }

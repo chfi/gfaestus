@@ -63,7 +63,7 @@ pub struct PathListSlot {
 impl std::default::Default for PathListSlot {
     fn default() -> Self {
         Self {
-            path_id: Arc::new(AtomicCell::new(None)),
+            path_id: Arc::new(None.into()),
             path_name: Vec::new(),
             fetched_path: None,
 

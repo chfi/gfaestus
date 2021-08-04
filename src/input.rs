@@ -20,30 +20,6 @@ pub use binds::{BindableInput, DigitalState, SystemInputBindings};
 
 use binds::*;
 
-/// A wrapper over `Arc<AtomicCell<Point>>`, which can be shared
-/// across systems, but only the InputManager has access to the
-/// contents & the mutation method
-#[derive(Clone)]
-pub struct MousePos {
-    pos: Arc<AtomicCell<Point>>,
-}
-
-impl MousePos {
-    pub fn new(point: Point) -> Self {
-        Self {
-            pos: Arc::new(AtomicCell::new(point)),
-        }
-    }
-
-    fn store(&self, new: Point) {
-        self.pos.store(new);
-    }
-
-    pub fn read(&self) -> Point {
-        self.pos.load()
-    }
-}
-
 struct SubsystemInput<T: InputPayload + BindableInput> {
     bindings: SystemInputBindings<T>,
 
@@ -66,7 +42,7 @@ impl<T: InputPayload + BindableInput> SubsystemInput<T> {
 }
 
 pub struct InputManager {
-    mouse_screen_pos: MousePos,
+    mouse_screen_pos: Arc<AtomicCell<Point>>,
 
     modifiers: AtomicCell<event::ModifiersState>,
 
@@ -95,10 +71,10 @@ impl InputManager {
     }
 
     pub fn read_mouse_pos(&self) -> Point {
-        self.mouse_screen_pos.pos.load()
+        self.mouse_screen_pos.load()
     }
 
-    pub fn clone_mouse_pos(&self) -> MousePos {
+    pub fn clone_mouse_pos(&self) -> Arc<AtomicCell<Point>> {
         self.mouse_screen_pos.clone()
     }
 
@@ -115,7 +91,7 @@ impl InputManager {
                 self.modifiers.store(mods);
             }
 
-            let mouse_pos = self.mouse_screen_pos.read();
+            let mouse_pos = self.mouse_screen_pos.load();
 
             let gui_wants_keyboard =
                 self.gui_focus_state.wants_keyboard_input();

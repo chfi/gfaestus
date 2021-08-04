@@ -8,9 +8,8 @@ pub mod texture;
 mod init;
 
 use context::*;
-use render_pass::*;
-
 use init::*;
+use render_pass::*;
 
 use ash::{
     extensions::khr::{Surface, Swapchain},
