@@ -614,6 +614,7 @@ fn main() {
                     &graph_query,
                     &graph_query_worker,
                     &graph_handle,
+                    app.annotations()
                 );
 
 

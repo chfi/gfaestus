@@ -347,9 +347,11 @@ impl Gff3RecordList {
             match gff3_result {
                 Ok(records) => {
                     let records = records.to_owned();
-                    gui_msg_tx
-                        .send(GuiMsg::Gff3RecordsLoaded(records))
-                        .unwrap();
+                    // gui_msg_tx
+                    //     .send(GuiMsg::Gff3RecordsLoaded(records))
+                    //     .unwrap();
+
+                    app_msg_tx.send(AppMsg::AddGff3Records(records)).unwrap();
                 }
                 Err(err) => {
                     eprintln!("error loading GFF3 file: {}", err);

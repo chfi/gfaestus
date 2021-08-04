@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
 
@@ -74,18 +74,18 @@ impl AnnotationLabelSet {
 
 #[derive(Default, Clone)]
 pub struct Annotations {
-    gff3_annotations: HashMap<String, Gff3Records>,
+    gff3_annotations: HashMap<String, Arc<Gff3Records>>,
     // bed_annotations: HashMap<String, BedRecords>,
     label_sets: HashMap<String, AnnotationLabelSet>,
-    // label_sets: Vec<AnnotationLabelSet>,
 }
 
 impl Annotations {
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
+        let records = Arc::new(records);
         self.gff3_annotations.insert(name.to_string(), records);
     }
 
-    pub fn get_gff3(&self, name: &str) -> Option<&Gff3Records> {
+    pub fn get_gff3(&self, name: &str) -> Option<&Arc<Gff3Records>> {
         self.gff3_annotations.get(name)
     }
 
@@ -161,7 +161,7 @@ pub trait AnnotationCollection {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Strand {
     Pos,
     Neg,
@@ -181,108 +181,6 @@ impl std::str::FromStr for Strand {
         } else {
             Err(())
         }
-    }
-}
-
-pub struct PathCoordinateSystem {
-    path: PathId,
-
-    step_list: Vec<(Handle, StepPtr, usize)>,
-
-    // node_steps: FxHashMap<NodeId, Vec<StepPtr>>,
-    node_indices: FxHashMap<NodeId, Vec<usize>>,
-
-    points: Vec<Point>,
-}
-
-impl PathCoordinateSystem {
-    pub fn new(
-        graph: &GraphQuery,
-        nodes: &[Node],
-        path: PathId,
-    ) -> Option<Self> {
-        let step_list = graph.path_pos_steps(path)?;
-
-        let mut node_indices: FxHashMap<NodeId, Vec<usize>> =
-            FxHashMap::default();
-
-        let mut points: Vec<Point> = Vec::with_capacity(step_list.len());
-
-        for (ix, (handle, _, _)) in step_list.iter().enumerate() {
-            let id = handle.id();
-            node_indices.entry(id).or_default().push(ix);
-
-            let ix = (id.0 - 1) as usize;
-
-            let node = nodes.get(ix)?;
-
-            points.push(node.center());
-        }
-
-        Some(Self {
-            path,
-            step_list,
-            node_indices,
-            points,
-        })
-    }
-
-    pub fn update_points(&mut self, nodes: &[Node]) {
-        self.points.clear();
-
-        for (handle, _, _) in self.step_list.iter() {
-            let id = handle.id();
-            let ix = (id.0 - 1) as usize;
-
-            let node = nodes.get(ix).unwrap();
-            self.points.push(node.center());
-        }
-    }
-
-    pub fn node_step_indices(&self, node: NodeId) -> Option<&[usize]> {
-        let ixs = self.node_indices.get(&node)?;
-        Some(ixs.as_slice())
-    }
-
-    pub fn unit_normal(&self, ix: usize) -> Option<na::Vector2<f32>> {
-        // TODO handle 1st and last steps
-        let prev = *self.points.get(ix - 1)?;
-        // let mid = self.points.get(ix)?;
-        let next = *self.points.get(ix + 1)?;
-
-        let p = na::Vector2::new(prev.x, prev.y);
-        let n = na::Vector2::new(next.x, next.y);
-
-        let delta = n - p;
-
-        let mid = p + (delta * 0.5);
-
-        let rot = na::Rotation2::new(std::f32::consts::PI / 2.0);
-        let normal = rot * mid;
-
-        Some(normal.normalize())
-    }
-
-    pub fn rect_on_perp(
-        &self,
-        ix: usize,
-        offset: f32,
-        width: f32,
-        height: f32,
-    ) -> Option<Rect> {
-        let node = self.points.get(ix)?;
-        let node = na::Vector2::new(node.x, node.y);
-        let norm = self.unit_normal(ix)?;
-
-        let center = node + (norm * offset);
-
-        let rw = width / 2.0;
-        let rh = height / 2.0;
-
-        let center = Point::new(center[0], center[1]);
-        let diag = Point::new(rw, rh);
-
-        Some(Rect::new(center - diag, center + diag))
     }
 }
 

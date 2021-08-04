@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use futures::executor::ThreadPool;
@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Gff3Record, Gff3Records},
+    annotations::{Annotations, Gff3Record, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -564,6 +564,8 @@ impl Gui {
         graph_query: &GraphQuery,
         graph_query_worker: &GraphQueryWorker,
         graph_handle: &GraphHandle,
+        annotations: &Annotations,
+        // annotations: &HashMap<String, Arc<Gff3Records>>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 

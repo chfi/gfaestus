@@ -6,7 +6,7 @@ use anyhow::Result;
 
 use super::{AnnotationCollection, AnnotationRecord, Strand};
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Gff3Records {
     file_name: String,
 
@@ -80,7 +80,7 @@ impl AnnotationCollection for Gff3Records {
     }
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Gff3Record {
     seq_id: Vec<u8>,
     source: Vec<u8>,

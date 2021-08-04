@@ -14,6 +14,7 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
+use crate::annotations::{AnnotationCollection, Annotations, Gff3Records};
 use crate::gui::GuiMsg;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
@@ -44,6 +45,8 @@ pub struct App {
 
     node_labels: FxHashMap<NodeId, Vec<String>>,
     node_label_path: Option<PathId>,
+
+    annotations: Annotations,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -89,7 +92,7 @@ pub enum Select {
     },
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum AppMsg {
     Selection(Select),
     GotoSelection,
@@ -99,6 +102,8 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
 
     ToggleOverlay,
+
+    AddGff3Records(Gff3Records),
 
     SetNodeLabels {
         path: PathId,
@@ -128,6 +133,8 @@ impl App {
 
             node_labels: Default::default(),
             node_label_path: None,
+
+            annotations: Annotations::default(),
         })
     }
 
@@ -159,6 +166,10 @@ impl App {
             self.selection_changed = false;
             Some(&self.selected_nodes)
         }
+    }
+
+    pub fn annotations(&self) -> &Annotations {
+        &self.annotations
     }
 
     pub fn node_labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
@@ -329,6 +340,10 @@ impl App {
             },
             AppMsg::ToggleOverlay => {
                 self.shared_state.overlay_state.toggle_overlay();
+            }
+            AppMsg::AddGff3Records(records) => {
+                self.annotations
+                    .insert_gff3(records.file_name(), records.to_owned());
             }
             AppMsg::SetNodeLabels { path, labels } => {
                 self.node_labels.clone_from(labels);
