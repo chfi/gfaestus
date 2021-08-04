@@ -2,6 +2,7 @@ pub mod gff;
 
 use std::collections::{HashMap, HashSet};
 
+use futures::executor::ThreadPool;
 pub use gff::*;
 
 #[allow(unused_imports)]
@@ -18,7 +19,178 @@ use handlegraph::{
 
 use anyhow::Result;
 
-use crate::annotations::{AnnotationCollection, AnnotationRecord};
+use crate::{
+    annotations::{
+        AnnotationCollection, AnnotationRecord, Annotations, Gff3Records,
+    },
+    app::AppMsg,
+    asynchronous::AsyncResult,
+    geometry::Point,
+};
+
+use super::file::FilePicker;
+
+pub struct AnnotationFileList {
+    current_annotation: Option<String>,
+
+    file_picker: FilePicker,
+    file_picker_open: bool,
+
+    gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
+}
+
+impl std::default::Default for AnnotationFileList {
+    fn default() -> Self {
+        let pwd = std::fs::canonicalize("./").unwrap();
+
+        let file_picker = FilePicker::new(
+            egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
+            pwd,
+        )
+        .unwrap();
+
+        Self {
+            current_annotation: None,
+
+            file_picker,
+            file_picker_open: false,
+
+            gff3_load_result: None,
+        }
+    }
+}
+
+impl AnnotationFileList {
+    pub const ID: &'static str = "annotation_file_list";
+
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        thread_pool: &ThreadPool,
+        open: &mut bool,
+        app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        annotations: &Annotations,
+    ) -> Option<egui::Response> {
+        if let Some(query) = self.gff3_load_result.as_mut() {
+            query.move_result_if_ready();
+            self.file_picker.reset();
+        }
+
+        if let Some(gff3_result) = self
+            .gff3_load_result
+            .as_mut()
+            .and_then(|r| r.take_result_if_ready())
+        {
+            match gff3_result {
+                Ok(records) => {
+                    app_msg_tx.send(AppMsg::AddGff3Records(records)).unwrap();
+                }
+                Err(err) => {
+                    eprintln!("error loading GFF3 file: {}", err);
+                }
+            }
+        }
+
+        if self.file_picker.selected_path().is_some() {
+            self.file_picker_open = false;
+        }
+
+        self.file_picker.ui(ctx, &mut self.file_picker_open);
+
+        egui::Window::new("Annotation Files")
+            .id(egui::Id::new(Self::ID))
+            .open(open)
+            .show(ctx, |mut ui| {
+                if self.gff3_load_result.is_none() {
+                    if ui.button("Choose GFF3 file").clicked() {
+                        self.file_picker_open = true;
+                    }
+
+                    let _label = if let Some(path) = self
+                        .file_picker
+                        .selected_path()
+                        .and_then(|p| p.to_str())
+                    {
+                        ui.label(path)
+                    } else {
+                        ui.label("No file selected")
+                    };
+
+                    if ui.button("Load").clicked() {
+                        if let Some(path) = self.file_picker.selected_path() {
+                            let path_str = path.to_str();
+                            eprintln!("Loading GFF3 file {:?}", path_str);
+                            let path = path.to_owned();
+                            let query =
+                                AsyncResult::new(thread_pool, async move {
+                                    println!("parsing gff3 file");
+                                    let records =
+                                        Gff3Records::parse_gff3_file(path);
+                                    println!("parsing complete");
+                                    records
+                                });
+                            self.gff3_load_result = Some(query);
+                        }
+                    }
+                } else {
+                    ui.label("Loading file");
+                }
+
+                ui.separator();
+
+                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                    egui::Grid::new("annotations_file_list_grid")
+                        .spacing(Point::new(10.0, 5.0))
+                        .striped(true)
+                        .show(&mut ui, |ui| {
+                            ui.label("File name");
+                            ui.separator();
+
+                            ui.label("# Records");
+                            ui.separator();
+
+                            ui.label("Ref. path");
+                            ui.separator();
+
+                            // ui.label("Type");
+                            // ui.separator();
+
+                            ui.end_row();
+
+                            for (name, annot_type) in annotations.annot_names()
+                            {
+                                let record =
+                                    annotations.get_gff3(name).unwrap();
+
+                                let mut row = ui.label(name);
+                                row = row.union(ui.separator());
+
+                                row = row.union(
+                                    ui.label(format!("{}", record.len())),
+                                );
+                                row = row.union(ui.separator());
+
+                                row = row.union(ui.label("TODO path"));
+                                row = row.union(ui.separator());
+
+                                let row_interact = ui.interact(
+                                    row.rect,
+                                    egui::Id::new(ui.id().with(name)),
+                                    egui::Sense::click(),
+                                );
+
+                                if row_interact.clicked() {
+                                    self.current_annotation =
+                                        Some(name.to_string());
+                                }
+
+                                ui.end_row();
+                            }
+                        })
+                });
+            })
+    }
+}
 
 pub struct ColumnPickerOne<T: AnnotationCollection> {
     columns: Vec<T::ColumnKey>,

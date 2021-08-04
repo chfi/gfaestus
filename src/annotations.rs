@@ -72,17 +72,36 @@ impl AnnotationLabelSet {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum AnnotationFileType {
+    Gff3,
+    // Bed,
+}
+
 #[derive(Default, Clone)]
 pub struct Annotations {
+    annot_names: Vec<(String, AnnotationFileType)>,
+    // gff3_annot_names: Vec<(String>,
     gff3_annotations: HashMap<String, Arc<Gff3Records>>,
     // bed_annotations: HashMap<String, BedRecords>,
     label_sets: HashMap<String, AnnotationLabelSet>,
 }
 
 impl Annotations {
+    pub fn annot_names(&self) -> &[(String, AnnotationFileType)] {
+        &self.annot_names
+    }
+
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
         let records = Arc::new(records);
         self.gff3_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Gff3));
+    }
+
+    pub fn remove_gff3(&mut self, name: &str) {
+        self.gff3_annotations.remove(name);
+        self.annot_names.retain(|(n, _)| n != name);
     }
 
     pub fn get_gff3(&self, name: &str) -> Option<&Arc<Gff3Records>> {
