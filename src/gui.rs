@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 use futures::executor::ThreadPool;
@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Annotations, Gff3Record, Gff3Records},
+    annotations::{Annotations, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -89,9 +89,6 @@ pub struct Gui {
 pub enum Windows {
     Settings,
 
-    // Console,
-    FPS,
-    GraphStats,
     // ViewInfo,
     Nodes,
     NodeDetails,
@@ -157,25 +154,21 @@ where
 
 pub struct AppViewState {
     settings: SettingsWindow,
-    // settings: (),
     fps: ViewStateChannel<FrameRate, FrameRateMsg>,
 
     graph_stats: ViewStateChannel<GraphStats, GraphStatsMsg>,
 
-    // view_info: ViewStateChannel<ViewInfo, ViewInfoMsg>,
     node_list: ViewStateChannel<NodeList, NodeListMsg>,
     node_details: ViewStateChannel<NodeDetails, NodeDetailsMsg>,
 
     path_list: ViewStateChannel<PathList, PathListMsg>,
     path_details: ViewStateChannel<PathDetails, ()>,
-    // path_details: PathList,
 
     // theme_editor: ThemeEditor,
     // theme_list: ThemeList,
     overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
     overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
-    // overlay_editor: OverlayEditor,
-    // overlay_list: OverlayList,
+
     repl_window: ViewStateChannel<ReplWindow, ()>,
 }
 
@@ -189,8 +182,6 @@ impl AppViewState {
         thread_pool: &ThreadPool,
         repl: GluonRepl,
     ) -> Self {
-        // let fps = ViewStateChannel::<FrameRate, FrameRateMsg>::default();
-
         let graph = graph_query.graph();
 
         let stats = GraphStats {
@@ -298,35 +289,9 @@ impl AppViewState {
     }
 }
 
-impl Windows {
-    pub fn name(&self) -> &str {
-        match self {
-            Windows::Settings => "Settings",
-
-            Windows::FPS => "FPS",
-            Windows::GraphStats => "Graph Stats",
-
-            Windows::Nodes => "Nodes",
-            Windows::NodeDetails => "Node Details",
-
-            Windows::Paths => "Paths",
-
-            Windows::Themes => "Themes",
-            Windows::Overlays => "Overlays",
-
-            Windows::EguiInspection => "Egui Inspection",
-            Windows::EguiSettings => "Egui Settings",
-            Windows::EguiMemory => "Egui Memory",
-        }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct OpenWindows {
     settings: bool,
-
-    fps: bool,
-    graph_stats: bool,
 
     annotation_files: bool,
     gff3: bool,
@@ -353,10 +318,7 @@ impl std::default::Default for OpenWindows {
         Self {
             settings: false,
 
-            fps: true,
-            graph_stats: true,
-
-            annotation_files: true,
+            annotation_files: false,
             gff3: false,
 
             nodes: false,
@@ -370,10 +332,6 @@ impl std::default::Default for OpenWindows {
             overlay_creator: false,
 
             repl_window: false,
-
-            egui_inspection: false,
-            egui_settings: false,
-            egui_memory: false,
         }
     }
 }
@@ -391,6 +349,7 @@ pub enum GuiMsg {
     Paste,
 }
 
+// TODO: this can probably be replaced by egui's built in focus tracking
 #[derive(Debug, Default, Clone)]
 pub struct GuiFocusState {
     mouse_over_gui: Arc<AtomicCell<bool>>,
@@ -563,7 +522,6 @@ impl Gui {
         graph_query_worker: &GraphQueryWorker,
         graph_handle: &GraphHandle,
         annotations: &Annotations,
-        // annotations: &HashMap<String, Arc<Gff3Records>>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -599,8 +557,6 @@ impl Gui {
         self.menu_bar
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
 
-        // self.hover_annotation();
-
         self.view_state.apply_received();
 
         let scr = self.ctx.input().screen_rect();
@@ -609,16 +565,18 @@ impl Gui {
 
         {
             let overlay_creator = &mut self.open_windows.overlay_creator;
-            let overlays = &self.open_windows.overlays;
+            let overlays = &mut self.open_windows.overlays;
 
-            if *overlays {
-                view_state.overlay_list.state.ui(overlay_creator, &self.ctx);
-            }
+            view_state.overlay_list.state.ui(
+                &self.ctx,
+                overlays,
+                overlay_creator,
+            );
 
             view_state.overlay_creator.state.ui(
+                &self.ctx,
                 overlay_creator,
                 graph_handle,
-                &self.ctx,
                 &self.thread_pool,
             );
 
@@ -652,29 +610,30 @@ impl Gui {
             annotations,
         );
 
-        if let Some(annot_name) = self.annotation_file_list.current_annotation()
+        if let Some((annot_name, records)) = self
+            .annotation_file_list
+            .current_annotation()
+            .and_then(|name| {
+                let records = annotations.get_gff3(name)?;
+                Some((name, records))
+            })
         {
-            if let Some(records) = annotations.get_gff3(annot_name) {
-                let mut open = true;
-
-                self.gff3_list.ui(
-                    &self.ctx,
-                    &mut open,
-                    graph_query_worker,
-                    &self.app_msg_tx,
-                    annot_name,
-                    records,
-                );
-            }
+            self.gff3_list.ui(
+                &self.ctx,
+                &mut self.open_windows.gff3,
+                graph_query_worker,
+                &self.app_msg_tx,
+                annot_name,
+                records,
+            );
         }
 
-        if self.open_windows.settings {
-            view_state.settings.ui(&self.ctx);
-        }
+        view_state
+            .settings
+            .ui(&self.ctx, &mut self.open_windows.settings);
 
-        if self.open_windows.fps {
+        if view_state.settings.gui.show_fps {
             let top = self.menu_bar.height();
-
             view_state.fps.state.ui(
                 &self.ctx,
                 Point {
@@ -685,7 +644,7 @@ impl Gui {
             );
         }
 
-        if self.open_windows.graph_stats {
+        if view_state.settings.gui.show_graph_stats {
             let top = self.menu_bar.height();
 
             view_state.graph_stats.state.ui(
@@ -762,19 +721,25 @@ impl Gui {
             );
         }
 
-        if self.open_windows.egui_inspection {
+        {
+            let debug = &mut view_state.settings.debug;
+            let inspection = &mut debug.egui_inspection;
+            let settings = &mut debug.egui_settings;
+            let memory = &mut debug.egui_memory;
+
+            let ctx = &self.ctx;
+
             egui::Window::new("egui_inspection_ui_window")
-                .show(&self.ctx, |ui| self.ctx.inspection_ui(ui));
-        }
+                .open(inspection)
+                .show(ctx, |ui| ctx.inspection_ui(ui));
 
-        if self.open_windows.egui_settings {
             egui::Window::new("egui_settings_ui_window")
-                .show(&self.ctx, |ui| self.ctx.settings_ui(ui));
-        }
+                .open(settings)
+                .show(ctx, |ui| ctx.settings_ui(ui));
 
-        if self.open_windows.egui_memory {
             egui::Window::new("egui_memory_ui_window")
-                .show(&self.ctx, |ui| self.ctx.memory_ui(ui));
+                .open(memory)
+                .show(ctx, |ui| ctx.memory_ui(ui));
         }
 
         let settings = &self.app_view_state().settings;
@@ -855,23 +820,24 @@ impl Gui {
             match msg {
                 GuiMsg::SetWindowOpen { window, open } => {
                     let open_windows = &mut self.open_windows;
+                    let view_state = &mut self.view_state;
 
                     let win_state = match window {
                         Windows::Settings => &mut open_windows.settings,
-                        Windows::FPS => &mut open_windows.fps,
-                        Windows::GraphStats => &mut open_windows.graph_stats,
                         Windows::Nodes => &mut open_windows.nodes,
                         Windows::NodeDetails => &mut open_windows.node_details,
                         Windows::Paths => &mut open_windows.paths,
                         Windows::Themes => &mut open_windows.themes,
                         Windows::Overlays => &mut open_windows.overlays,
                         Windows::EguiInspection => {
-                            &mut open_windows.egui_inspection
+                            &mut view_state.settings.debug.egui_inspection
                         }
                         Windows::EguiSettings => {
-                            &mut open_windows.egui_settings
+                            &mut view_state.settings.debug.egui_settings
                         }
-                        Windows::EguiMemory => &mut open_windows.egui_memory,
+                        Windows::EguiMemory => {
+                            &mut view_state.settings.debug.egui_memory
+                        }
                     };
 
                     if let Some(open) = open {

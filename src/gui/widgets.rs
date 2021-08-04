@@ -8,7 +8,7 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crate::{app::AppMsg, view::View};
+use crate::app::AppMsg;
 use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
@@ -49,9 +49,6 @@ impl MenuBar {
         app_msg_tx: &Sender<AppMsg>,
     ) {
         let settings = &mut open_windows.settings;
-
-        let fps = &mut open_windows.fps;
-        let _graph_stats = &mut open_windows.graph_stats;
 
         let gff3 = &mut open_windows.gff3;
         let annotation_files = &mut open_windows.annotation_files;
@@ -124,100 +121,11 @@ impl MenuBar {
                     }
                 });
 
-                menu::menu(ui, "Settings", |ui| {
-                    if ui.selectable_label(*settings, "Settings").clicked() {
-                        *settings = !*settings;
-                    }
-
-                    if ui.selectable_label(*fps, "Show FPS").clicked() {
-                        *fps = !*fps;
-                    }
-                });
-            });
-        });
-
-        let height = resp.response.rect.height();
-        self.height.store(height);
-    }
-
-    pub fn ui_<'a>(
-        &self,
-        ctx: &egui::CtxRef,
-        open_windows: &'a mut super::OpenWindows,
-        app_msg_tx: &Sender<AppMsg>,
-    ) {
-        let settings = &mut open_windows.settings;
-
-        let fps = &mut open_windows.fps;
-        let _graph_stats = &mut open_windows.graph_stats;
-
-        let gff3 = &mut open_windows.gff3;
-        let annotation_files = &mut open_windows.annotation_files;
-
-        let nodes = &mut open_windows.nodes;
-        let paths = &mut open_windows.paths;
-
-        let _themes = &mut open_windows.themes;
-        let overlays = &mut open_windows.overlays;
-
-        let repl = &mut open_windows.repl_window;
-
-        let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                if ui.selectable_label(*nodes, "Nodes").clicked() {
-                    *nodes = !*nodes;
-                }
-
-                if ui.selectable_label(*paths, "Paths").clicked() {
-                    *paths = !*paths;
-                }
-
-                // if ui.selectable_label(*themes, "Themes").clicked() {
-                //     *themes = !*themes;
-                // }
-
-                if ui.selectable_label(*overlays, "Overlays").clicked() {
-                    *overlays = !*overlays;
-                }
-
-                if ui
-                    .selectable_label(*annotation_files, "Annotations")
-                    .clicked()
-                {
-                    *annotation_files = !*annotation_files;
-                }
-
-                // if ui.selectable_label(*gff3, "GFF3").clicked() {
-                //     *gff3 = !*gff3;
-                // }
-
-                if ui.selectable_label(*fps, "FPS").clicked() {
-                    *fps = !*fps;
-                }
-
+                // menu::menu(ui, "Settings", |ui| {
                 if ui.selectable_label(*settings, "Settings").clicked() {
                     *settings = !*settings;
                 }
-
-                if ui
-                    .selectable_label(
-                        self.overlay_state.use_overlay(),
-                        "Show overlay",
-                    )
-                    .clicked()
-                {
-                    self.overlay_state.toggle_overlay()
-                }
-
-                if ui.button("Goto selection").clicked() {
-                    app_msg_tx.send(AppMsg::GotoSelection).unwrap();
-                }
-
-                ui.add_space(100.0);
-
-                if ui.button("REPL").clicked() {
-                    *repl = !*repl;
-                }
+                // });
             });
         });
 

@@ -1,22 +1,26 @@
 use crate::app::{AppSettings, SharedState};
 
 pub mod debug;
+pub mod gui;
 pub mod main_view;
 
 use debug::*;
+use gui::*;
 use main_view::*;
 
 pub struct SettingsWindow {
     current_tab: SettingsTab,
 
-    pub(crate) main_view: MainViewSettings,
     pub(crate) debug: DebugSettings,
+    pub(crate) gui: GuiSettings,
+    pub(crate) main_view: MainViewSettings,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord)]
 enum SettingsTab {
     MainView,
     Debug,
+    Gui,
 }
 
 impl SettingsWindow {
@@ -30,20 +34,32 @@ impl SettingsWindow {
 
         Self {
             current_tab,
-            main_view,
+
             debug: Default::default(),
+            gui: Default::default(),
+            main_view,
         }
     }
 
-    pub fn ui(&mut self, ctx: &egui::CtxRef) -> Option<egui::Response> {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+    ) -> Option<egui::Response> {
         egui::Window::new("Settings")
             .id(egui::Id::new(Self::ID))
+            .open(open)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(
                         &mut self.current_tab,
                         SettingsTab::MainView,
                         "Main View",
+                    );
+                    ui.selectable_value(
+                        &mut self.current_tab,
+                        SettingsTab::Gui,
+                        "GUI",
                     );
                     ui.selectable_value(
                         &mut self.current_tab,
@@ -58,6 +74,9 @@ impl SettingsWindow {
                     }
                     SettingsTab::Debug => {
                         self.debug.ui(ui);
+                    }
+                    SettingsTab::Gui => {
+                        self.gui.ui(ui);
                     }
                 }
             })

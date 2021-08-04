@@ -2,6 +2,10 @@
 pub struct DebugSettings {
     pub(crate) view_info: bool,
     pub(crate) cursor_info: bool,
+
+    pub(crate) egui_inspection: bool,
+    pub(crate) egui_settings: bool,
+    pub(crate) egui_memory: bool,
 }
 
 impl std::default::Default for DebugSettings {
@@ -9,6 +13,10 @@ impl std::default::Default for DebugSettings {
         Self {
             view_info: false,
             cursor_info: false,
+
+            egui_inspection: false,
+            egui_settings: false,
+            egui_memory: false,
         }
     }
 }
