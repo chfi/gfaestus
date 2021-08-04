@@ -21,7 +21,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use anyhow::Result;
 
 use crate::{
-    annotations::Gff3Column,
+    annotations::{AnnotationLabelSet, Gff3Column},
     app::AppMsg,
     asynchronous::AsyncResult,
     graph_query::{GraphQuery, GraphQueryWorker},
@@ -53,7 +53,6 @@ pub struct Gff3RecordList {
 
     path_picker_open: bool,
     path_picker: PathPicker,
-    active_path: Option<(PathId, String)>,
 
     file_picker: FilePicker,
     file_picker_open: bool,
@@ -131,7 +130,6 @@ impl Gff3RecordList {
         let overlay_creator = Gff3OverlayCreator::new(new_overlay_tx);
 
         Self {
-            // records,
             filtered_records,
 
             offset: 0,
@@ -142,8 +140,6 @@ impl Gff3RecordList {
 
             column_picker_open: false,
             enabled_columns: ColumnPickerMany::new("gff3_enabled_columns"),
-
-            active_path: None,
 
             path_picker_open: false,
             path_picker,

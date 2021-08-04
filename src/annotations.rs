@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 
 use handlegraph::{
@@ -22,6 +24,83 @@ use nalgebra_glm as glm;
 pub mod gff;
 
 pub use gff::*;
+
+#[derive(Debug, Default, Clone)]
+pub struct AnnotationLabelSet {
+    // pub name: String,
+    pub annot_file_name: String,
+    pub column: String,
+    pub path_name: String,
+    pub show: bool,
+
+    path_id: PathId,
+    labels: FxHashMap<NodeId, Vec<String>>,
+}
+
+impl AnnotationLabelSet {
+    pub fn new<C, R, K>(
+        annotations: &C,
+        path_id: PathId,
+        path_name: &[u8],
+        column: &K,
+        labels: FxHashMap<NodeId, Vec<String>>,
+    ) -> Self
+    where
+        C: AnnotationCollection<ColumnKey = K, Record = R>,
+        R: AnnotationRecord<ColumnKey = K>,
+        K: ColumnKey,
+    {
+        let annot_file_name = annotations.file_name().to_string();
+        let column = column.to_string();
+        let path_name = path_name.to_str().unwrap().to_string();
+
+        let show = false;
+
+        Self {
+            annot_file_name,
+            column,
+            path_name,
+            show,
+
+            path_id,
+            labels,
+        }
+    }
+
+    pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
+        &self.labels
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Annotations {
+    gff3_annotations: HashMap<String, Gff3Records>,
+    // bed_annotations: HashMap<String, BedRecords>,
+    label_sets: HashMap<String, AnnotationLabelSet>,
+    // label_sets: Vec<AnnotationLabelSet>,
+}
+
+impl Annotations {
+    pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
+        self.gff3_annotations.insert(name.to_string(), records);
+    }
+
+    pub fn get_gff3(&self, name: &str) -> Option<&Gff3Records> {
+        self.gff3_annotations.get(name)
+    }
+
+    pub fn insert_label_set(
+        &mut self,
+        name: &str,
+        label_set: AnnotationLabelSet,
+    ) {
+        self.label_sets.insert(name.to_string(), label_set);
+    }
+
+    pub fn get_label_set(&mut self, name: &str) -> Option<&AnnotationLabelSet> {
+        self.label_sets.get(name)
+    }
+}
 
 pub trait ColumnKey:
     Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
@@ -64,6 +143,10 @@ pub trait AnnotationRecord {
 pub trait AnnotationCollection {
     type ColumnKey: ColumnKey;
     type Record: AnnotationRecord<ColumnKey = Self::ColumnKey>;
+
+    fn file_name(&self) -> &str;
+
+    fn len(&self) -> usize;
 
     fn all_columns(&self) -> Vec<Self::ColumnKey>;
 

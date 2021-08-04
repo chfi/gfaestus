@@ -8,6 +8,8 @@ use super::{AnnotationCollection, AnnotationRecord, Strand};
 
 #[derive(Clone, Default)]
 pub struct Gff3Records {
+    file_name: String,
+
     pub records: Vec<Gff3Record>,
 
     pub attribute_keys: HashSet<Vec<u8>>,
@@ -36,6 +38,14 @@ impl AnnotationCollection for Gff3Records {
         columns.extend(attr_keys.into_iter().map(|k| Attribute(k)));
 
         columns
+    }
+
+    fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    fn len(&self) -> usize {
+        self.records.len()
     }
 
     fn mandatory_columns(&self) -> Vec<Gff3Column> {
@@ -224,6 +234,9 @@ impl Gff3Records {
         use std::fs::File;
         use std::io::{BufRead, BufReader};
 
+        let file_name = path.as_ref().file_name().unwrap();
+        let file_name = file_name.to_str().unwrap().to_string();
+
         let file = File::open(path)?;
 
         let mut reader = BufReader::new(file);
@@ -270,6 +283,8 @@ impl Gff3Records {
         eprintln!("parsed {} attribute keys", attribute_keys.len());
 
         Ok(Self {
+            file_name,
+
             records,
             attribute_keys,
         })
