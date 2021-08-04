@@ -431,7 +431,7 @@ impl Gff3RecordList {
         Some(path)
     }
 
-    fn list_ui(
+    pub fn list_ui(
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,

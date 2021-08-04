@@ -54,6 +54,7 @@ impl MenuBar {
         let _graph_stats = &mut open_windows.graph_stats;
 
         let gff3 = &mut open_windows.gff3;
+        let annotation_files = &mut open_windows.annotation_files;
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
@@ -81,9 +82,16 @@ impl MenuBar {
                     *overlays = !*overlays;
                 }
 
-                if ui.selectable_label(*gff3, "GFF3").clicked() {
-                    *gff3 = !*gff3;
+                if ui
+                    .selectable_label(*annotation_files, "Annotations")
+                    .clicked()
+                {
+                    *annotation_files = !*annotation_files;
                 }
+
+                // if ui.selectable_label(*gff3, "GFF3").clicked() {
+                //     *gff3 = !*gff3;
+                // }
 
                 if ui.selectable_label(*fps, "FPS").clicked() {
                     *fps = !*fps;

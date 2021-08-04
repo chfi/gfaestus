@@ -195,7 +195,7 @@ impl App {
     pub fn apply_app_msg(
         &mut self,
         main_view_msg_tx: &Sender<MainViewMsg>,
-        msg: &AppMsg,
+        msg: AppMsg,
         node_positions: &[Node],
     ) {
         match msg {
@@ -220,7 +220,7 @@ impl App {
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }
             }
-            AppMsg::HoverNode(id) => self.shared_state.hover_node.store(*id),
+            AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
 
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
@@ -230,11 +230,11 @@ impl App {
                 }
                 Select::One { node, clear } => {
                     self.selection_changed = true;
-                    if *clear {
+                    if clear {
                         self.selected_nodes.clear();
                         self.selected_nodes_bounding_box = None;
                     }
-                    self.selected_nodes.insert(*node);
+                    self.selected_nodes.insert(node);
 
                     let node_pos = node_positions[(node.0 - 1) as usize];
 
@@ -278,7 +278,7 @@ impl App {
                 }
                 Select::Many { nodes, clear } => {
                     self.selection_changed = true;
-                    if *clear {
+                    if clear {
                         self.selected_nodes.clear();
                         self.selected_nodes_bounding_box = None;
                     }
@@ -342,12 +342,12 @@ impl App {
                 self.shared_state.overlay_state.toggle_overlay();
             }
             AppMsg::AddGff3Records(records) => {
-                self.annotations
-                    .insert_gff3(records.file_name(), records.to_owned());
+                let file_name = records.file_name().to_string();
+                self.annotations.insert_gff3(&file_name, records);
             }
             AppMsg::SetNodeLabels { path, labels } => {
-                self.node_labels.clone_from(labels);
-                self.node_label_path = Some(*path);
+                self.node_labels = labels;
+                self.node_label_path = Some(path);
             }
         }
     }

@@ -63,6 +63,10 @@ impl std::default::Default for AnnotationFileList {
 impl AnnotationFileList {
     pub const ID: &'static str = "annotation_file_list";
 
+    pub fn current_annotation(&self) -> Option<&str> {
+        self.current_annotation.as_ref().map(|n| n.as_str())
+    }
+
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
@@ -149,8 +153,8 @@ impl AnnotationFileList {
                             ui.label("# Records");
                             ui.separator();
 
-                            ui.label("Ref. path");
-                            ui.separator();
+                            // ui.label("Ref. path");
+                            // ui.separator();
 
                             // ui.label("Type");
                             // ui.separator();
@@ -170,8 +174,8 @@ impl AnnotationFileList {
                                 );
                                 row = row.union(ui.separator());
 
-                                row = row.union(ui.label("TODO path"));
-                                row = row.union(ui.separator());
+                                // row = row.union(ui.label("TODO path"));
+                                // row = row.union(ui.separator());
 
                                 let row_interact = ui.interact(
                                     row.rect,

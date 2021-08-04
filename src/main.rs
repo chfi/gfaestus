@@ -390,26 +390,23 @@ fn main() {
                 }
 
                 while let Ok(app_msg) = app.channels().app_rx.try_recv() {
-                    app.apply_app_msg(
-                        main_view.main_view_msg_tx(),
-                        &app_msg,
-                        universe.layout().nodes(),
-                    );
 
-                    if let AppMsg::RectSelect(rect) = app_msg {
+
+                    if let AppMsg::RectSelect(rect) = &app_msg {
 
                         if select_fence_id.is_none() && translate_fence_id.is_none() {
                             let fence_id = gpu_selection.rectangle_select(
                                 &mut compute_manager,
                                 &main_view.node_draw_system.vertices,
-                                rect).unwrap();
+                                *rect
+                            ).unwrap();
 
                             select_fence_id = Some(fence_id);
                         }
 
                     }
 
-                    if let AppMsg::TranslateSelected(delta) = app_msg {
+                    if let AppMsg::TranslateSelected(delta) = &app_msg {
                         if select_fence_id.is_none() && translate_fence_id.is_none() {
 
                             let fence_id = node_translation
@@ -417,12 +414,19 @@ fn main() {
                                     &mut compute_manager,
                                     &main_view.node_draw_system.vertices,
                                     &main_view.selection_buffer,
-                                    delta).unwrap();
+                                    *delta
+                                ).unwrap();
 
 
                             translate_fence_id = Some(fence_id);
                         }
                     }
+
+                    app.apply_app_msg(
+                        main_view.main_view_msg_tx(),
+                        app_msg,
+                        universe.layout().nodes(),
+                    );
                 }
 
                 gui.apply_received_gui_msgs();

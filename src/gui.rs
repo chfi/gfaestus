@@ -83,6 +83,8 @@ pub struct Gui {
     path_picker_source: PathPickerSource,
 
     annot_records: Vec<Gff3Record>,
+
+    annotation_file_list: AnnotationFileList,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -328,6 +330,7 @@ pub struct OpenWindows {
     fps: bool,
     graph_stats: bool,
 
+    annotation_files: bool,
     gff3: bool,
 
     nodes: bool,
@@ -355,6 +358,7 @@ impl std::default::Default for OpenWindows {
             fps: true,
             graph_stats: true,
 
+            annotation_files: true,
             gff3: false,
 
             nodes: false,
@@ -521,6 +525,8 @@ impl Gui {
             path_picker_source,
 
             annot_records: Vec::new(),
+
+            annotation_file_list: Default::default(),
         };
 
         Ok(gui)
@@ -646,6 +652,32 @@ impl Gui {
             paint_area.painter().rect_stroke(rect.into(), 0.0, stroke);
         }
 
+        // let mut annot_open = true;
+
+        self.annotation_file_list.ui(
+            &self.ctx,
+            &self.thread_pool,
+            &mut self.open_windows.annotation_files,
+            &self.app_msg_tx,
+            annotations,
+        );
+
+        if let Some(annot_name) = self.annotation_file_list.current_annotation()
+        {
+            if let Some(records) = annotations.get_gff3(annot_name) {
+                let mut open = true;
+
+                self.gff3_list.list_ui(
+                    &self.ctx,
+                    &mut open,
+                    graph_query_worker,
+                    &self.app_msg_tx,
+                    records,
+                );
+            }
+        }
+
+        /*
         self.gff3_list.ui(
             &self.ctx,
             &self.thread_pool,
@@ -655,6 +687,7 @@ impl Gui {
             self.gff3_records.as_ref(),
             &mut self.open_windows.gff3,
         );
+        */
 
         if self.open_windows.settings {
             view_state.settings.ui(&self.ctx);
