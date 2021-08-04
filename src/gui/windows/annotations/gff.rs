@@ -33,7 +33,7 @@ use crate::annotations::{
     AnnotationCollection, AnnotationRecord, Gff3Record, Gff3Records,
 };
 
-use super::ColumnPickerOne;
+use super::{ColumnPickerMany, ColumnPickerOne};
 
 use crate::gui::windows::{
     file::FilePicker, filters::*, graph_picker::PathPicker,
@@ -49,7 +49,7 @@ pub struct Gff3RecordList {
     filter: Gff3Filter,
 
     column_picker_open: bool,
-    enabled_columns: EnabledColumns,
+    enabled_columns: ColumnPickerMany<Gff3Records>,
 
     path_picker_open: bool,
     path_picker: PathPicker,
@@ -62,16 +62,6 @@ pub struct Gff3RecordList {
 
     overlay_creator: Gff3OverlayCreator,
     overlay_creator_open: bool,
-}
-
-struct EnabledColumns {
-    source: bool,
-    type_: bool,
-
-    score: bool,
-    frame: bool,
-
-    attributes: HashMap<Vec<u8>, bool>,
 }
 
 impl Gff3RecordList {
@@ -130,7 +120,6 @@ impl Gff3RecordList {
         let filtered_records = Vec::new();
 
         let filter = Gff3Filter::default();
-        let enabled_columns = EnabledColumns::default();
 
         let pwd = std::fs::canonicalize("./").unwrap();
         let file_picker = FilePicker::new(
@@ -152,7 +141,7 @@ impl Gff3RecordList {
             filter,
 
             column_picker_open: false,
-            enabled_columns,
+            enabled_columns: ColumnPickerMany::new("gff3_enabled_columns"),
 
             active_path: None,
 
@@ -171,8 +160,13 @@ impl Gff3RecordList {
 
     pub fn update_records(&mut self, records: &Gff3Records) {
         self.filter = Gff3Filter::new(records);
-        self.enabled_columns = EnabledColumns::new(records);
         self.overlay_creator.column_picker.update_columns(records);
+
+        self.enabled_columns.update_columns(records);
+        use Gff3Column as Gff;
+        for col in [Gff::Source, Gff::Type, Gff::Score, Gff::Frame] {
+            self.enabled_columns.set_column(&col, true);
+        }
     }
 
     // also hacky
@@ -209,19 +203,21 @@ impl Gff3RecordList {
     ) -> egui::Response {
         let mut resp = ui.label(format!("{}", record.seq_id().as_bstr()));
 
-        if self.enabled_columns.source {
+        use Gff3Column as Gff;
+
+        if self.enabled_columns.get_column(&Gff::Source) {
             resp =
                 resp.union(ui.label(format!("{}", record.source().as_bstr())));
         }
 
-        if self.enabled_columns.type_ {
+        if self.enabled_columns.get_column(&Gff::Type) {
             resp =
                 resp.union(ui.label(format!("{}", record.type_().as_bstr())));
         }
         resp = resp.union(ui.label(format!("{}", record.start())));
         resp = resp.union(ui.label(format!("{}", record.end())));
 
-        if self.enabled_columns.frame {
+        if self.enabled_columns.get_column(&Gff::Frame) {
             resp =
                 resp.union(ui.label(format!("{}", record.frame().as_bstr())));
         }
@@ -232,7 +228,10 @@ impl Gff3RecordList {
         let attrs = record.attributes();
 
         for key in keys {
-            if self.enabled_columns.attributes.get(key) == Some(&true) {
+            if self
+                .enabled_columns
+                .get_column(&Gff::Attribute(key.to_owned()))
+            {
                 let label = if let Some(values) = attrs.get(key) {
                     let mut contents = String::new();
                     for (ix, val) in values.into_iter().enumerate() {
@@ -389,13 +388,13 @@ impl Gff3RecordList {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .collapsible(false)
             .open(open)
-            .show(ctx, |mut ui| {
+            .show(ctx, |ui| {
                 if self.gff3_load_result.is_none() {
                     if ui.button("Choose GFF3 file").clicked() {
                         self.file_picker_open = true;
                     }
 
-                    let label = if let Some(path) = self
+                    let _label = if let Some(path) = self
                         .file_picker
                         .selected_path()
                         .and_then(|p| p.to_str())
@@ -563,19 +562,21 @@ impl Gff3RecordList {
                     }
                 });
 
+                use Gff3Column as Gff;
+
                 let grid = egui::Grid::new("gff3_record_list_grid")
                     .striped(true)
                     .show(&mut ui, |ui| {
                         ui.label("seq_id");
-                        if self.enabled_columns.source {
+                        if self.enabled_columns.get_column(&Gff::Source) {
                             ui.label("source");
                         }
-                        if self.enabled_columns.type_ {
+                        if self.enabled_columns.get_column(&Gff::Type) {
                             ui.label("type");
                         }
                         ui.label("start");
                         ui.label("end");
-                        if self.enabled_columns.frame {
+                        if self.enabled_columns.get_column(&Gff::Frame) {
                             ui.label("frame");
                         }
 
@@ -584,8 +585,9 @@ impl Gff3RecordList {
                         keys.sort_by(|k1, k2| k1.cmp(k2));
 
                         for key in keys {
-                            if self.enabled_columns.attributes.get(key)
-                                == Some(&true)
+                            if self
+                                .enabled_columns
+                                .get_column(&Gff::Attribute(key.to_owned()))
                             {
                                 ui.label(format!("{}", key.as_bstr()));
                             }
@@ -659,102 +661,15 @@ impl Gff3RecordList {
 
         if let Some(resp) = &resp {
             let pos = resp.rect.right_top();
-            self.enabled_columns
-                .ui(ctx, pos, &mut self.column_picker_open);
+            self.enabled_columns.ui(
+                ctx,
+                pos,
+                &mut self.column_picker_open,
+                "Gff3 Columns",
+            );
         }
 
         resp
-    }
-}
-
-impl std::default::Default for EnabledColumns {
-    fn default() -> Self {
-        Self {
-            source: true,
-            type_: true,
-            score: true,
-            frame: true,
-            attributes: Default::default(),
-        }
-    }
-}
-
-impl EnabledColumns {
-    pub const ID: &'static str = "gff_enabled_columns_window";
-
-    fn new(records: &Gff3Records) -> Self {
-        let attributes = records
-            .attribute_keys
-            .iter()
-            .map(|k| (k.to_owned(), false))
-            .collect::<HashMap<_, _>>();
-
-        Self {
-            source: true,
-            type_: true,
-            score: true,
-            frame: true,
-            attributes,
-        }
-    }
-
-    fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        pos: impl Into<egui::Pos2>,
-        open: &mut bool,
-    ) -> Option<egui::Response> {
-        macro_rules! bool_label {
-            ($ui:ident, $field:ident, $label:expr) => {
-                if $ui.selectable_label(self.$field, $label).clicked() {
-                    self.$field = !self.$field;
-                }
-            };
-        }
-
-        egui::Window::new("GFF3 Columns")
-            .id(egui::Id::new(Self::ID))
-            .fixed_pos(pos)
-            .collapsible(false)
-            .open(open)
-            .show(ctx, |ui| {
-                ui.set_max_height(ui.input().screen_rect.height() - 250.0);
-
-                ui.label("Mandatory fields");
-                ui.horizontal(|ui| {
-                    bool_label!(ui, source, "Source");
-                    bool_label!(ui, type_, "Type");
-
-                    // bool_label!(ui, score, "Score");
-                    bool_label!(ui, frame, "Frame");
-                });
-
-                ui.collapsing("Attributes", |mut ui| {
-                    egui::ScrollArea::from_max_height(
-                        ui.input().screen_rect.height() - 250.0,
-                    )
-                    .show(&mut ui, |ui| {
-                        let mut enabled_attrs =
-                            self.attributes.iter_mut().collect::<Vec<_>>();
-
-                        enabled_attrs.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-
-                        for (_count, (key, enabled)) in
-                            enabled_attrs.into_iter().enumerate()
-                        {
-                            if ui
-                                .selectable_label(
-                                    *enabled,
-                                    key.to_str().unwrap(),
-                                )
-                                .clicked()
-                            {
-                                *enabled = !*enabled;
-                            }
-                        }
-                    });
-                });
-            })
     }
 }
 

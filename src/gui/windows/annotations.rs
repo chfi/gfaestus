@@ -105,6 +105,10 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
         self.enabled_columns = columns.into_iter().map(|c| (c, false)).collect()
     }
 
+    pub fn get_column(&self, column: &T::ColumnKey) -> bool {
+        self.enabled_columns.get(column).copied().unwrap_or(false)
+    }
+
     pub fn set_column(&mut self, column: &T::ColumnKey, to: bool) {
         self.enabled_columns.insert(column.clone(), to);
     }
@@ -122,9 +126,51 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
             .collapsible(false)
             .open(open)
             .show(ctx, |ui| {
-                ui.set_max_height(ui.input().screen_rect.height() - 250.0);
+                let max_height = ui.input().screen_rect.height() - 250.0;
+                ui.set_max_height(max_height);
 
-                todo!();
+                let mut columns =
+                    self.enabled_columns.iter_mut().collect::<Vec<_>>();
+
+                columns.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+                let (optional, mandatory): (Vec<_>, Vec<_>) = columns
+                    .into_iter()
+                    .partition(|(col, _en)| T::is_column_optional(col));
+
+                let scroll_height = (max_height / 2.0) - 50.0;
+
+                ui.collapsing("Mandatory fields", |mut ui| {
+                    egui::ScrollArea::from_max_height(scroll_height).show(
+                        &mut ui,
+                        |ui| {
+                            for (key, enabled) in mandatory.into_iter() {
+                                if ui
+                                    .selectable_label(*enabled, key.to_string())
+                                    .clicked()
+                                {
+                                    *enabled = !*enabled;
+                                }
+                            }
+                        },
+                    );
+                });
+
+                ui.collapsing("Optional fields", |mut ui| {
+                    egui::ScrollArea::from_max_height(scroll_height).show(
+                        &mut ui,
+                        |ui| {
+                            for (key, enabled) in optional.into_iter() {
+                                if ui
+                                    .selectable_label(*enabled, key.to_string())
+                                    .clicked()
+                                {
+                                    *enabled = !*enabled;
+                                }
+                            }
+                        },
+                    );
+                });
             })
     }
 }
