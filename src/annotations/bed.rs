@@ -38,6 +38,95 @@ pub enum BedColumn {
     // Header(Vec<u8>),
 }
 
+impl BedRecords {
+    pub fn parse_bed_file<P: AsRef<std::path::Path>>(path: P) -> Result<Self> {
+        use std::fs::File;
+
+        use std::io::{BufRead, BufReader};
+
+        let file_name = path.as_ref().file_name().unwrap();
+        let file_name = file_name.to_str().unwrap().to_string();
+
+        let file = File::open(path)?;
+
+        let mut reader = BufReader::new(file);
+
+        let mut buf: Vec<u8> = Vec::new();
+
+        let mut records = Vec::new();
+
+        let mut column_count = 0;
+
+        loop {
+            buf.clear();
+
+            let read = reader.read_until(b'\n', &mut buf)?;
+
+            if read == 0 {
+                break;
+            }
+
+            let line = &buf[0..read];
+
+            if line[0] == b'#' {
+                continue;
+            }
+
+            let fields = line.fields();
+
+            if let Some(record) = BedRecord::parse_row(fields) {
+                column_count = record.rest.len();
+            }
+        }
+
+        let mut column_keys: Vec<BedColumn> =
+            vec![BedColumn::Chr, BedColumn::Start, BedColumn::End];
+
+        column_keys.extend((0..column_count).map(|ix| BedColumn::Index(ix)));
+
+        Ok(Self {
+            file_name,
+            records,
+            column_keys,
+        })
+    }
+}
+
+fn parse_next<'a, T, I>(fields: &mut I) -> Option<T>
+where
+    T: std::str::FromStr,
+    I: Iterator<Item = &'a [u8]> + 'a,
+{
+    let field = fields.next()?;
+    let field = field.as_bstr().to_str().ok()?;
+    field.parse().ok()
+}
+
+impl BedRecord {
+    fn parse_row<'a, I>(mut fields: I) -> Option<Self>
+    where
+        I: Iterator<Item = &'a [u8]> + 'a,
+    {
+        let chr = fields.next()?;
+
+        let start: usize = parse_next(&mut fields)?;
+        let end: usize = parse_next(&mut fields)?;
+
+        let mut rest: Vec<Vec<u8>> = Vec::new();
+
+        while let Some(field) = fields.next() {
+            rest.push(field.to_owned());
+        }
+
+        Some(Self {
+            chr: chr.to_owned(),
+            start,
+            end,
+            rest,
+        })
+    }
+}
+
 impl std::fmt::Display for BedColumn {
     fn fmt(
         &self,
