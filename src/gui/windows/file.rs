@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs::DirEntry;
 use std::path::{Path, PathBuf};
 
@@ -15,8 +16,10 @@ pub struct FilePicker {
     highlighted_dir: Option<PathBuf>,
     selected_path: Option<PathBuf>,
 
-    dir_list: Vec<DirEntry>,
+    dir_list: Vec<PathBuf>,
     history: Vec<PathBuf>,
+
+    extensions: HashSet<String>,
 }
 
 impl FilePicker {
@@ -38,11 +41,23 @@ impl FilePicker {
 
             dir_list: Vec::new(),
             history: Vec::new(),
+
+            extensions: HashSet::default(),
         };
 
         result.load_current_dir()?;
 
         Ok(result)
+    }
+
+    pub fn set_visible_extensions(
+        &mut self,
+        extensions: &[&str],
+    ) -> Result<()> {
+        let extensions = extensions.iter().map(|s| s.to_string()).collect();
+        self.extensions = extensions;
+        self.load_current_dir()?;
+        Ok(())
     }
 
     pub fn selected_path(&self) -> Option<&Path> {
@@ -73,10 +88,28 @@ impl FilePicker {
 
         for dir in dirs {
             let entry = dir?;
-            self.dir_list.push(entry);
+            let path = entry.path();
+
+            if self.extensions.is_empty()
+                || self.extensions.iter().any(|ext| {
+                    if path.is_dir() {
+                        return true;
+                    }
+
+                    if let Some(file_ext) =
+                        path.extension().and_then(|f_ext| f_ext.to_str())
+                    {
+                        file_ext == ext
+                    } else {
+                        false
+                    }
+                })
+            {
+                self.dir_list.push(path);
+            }
         }
 
-        self.dir_list.sort_by_key(|dir| dir.path());
+        self.dir_list.sort();
 
         Ok(())
     }
@@ -164,15 +197,15 @@ impl FilePicker {
                         egui::Grid::new("file_list").striped(true).show(
                             &mut ui,
                             |ui| {
-                                for dir in self.dir_list.iter() {
-                                    let dir_path = dir.path();
-
-                                    if let Some(name) = dir.file_name().to_str()
+                                for dir_path in self.dir_list.iter() {
+                                    if let Some(name) = dir_path
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
                                     {
                                         let checked = if let Some(sel_name) =
                                             &self.highlighted_dir
                                         {
-                                            sel_name == &dir_path
+                                            sel_name == dir_path
                                         } else {
                                             false
                                         };
@@ -186,9 +219,11 @@ impl FilePicker {
 
                                         if row.double_clicked() {
                                             if dir_path.is_dir() {
-                                                goto_dir = Some(dir_path);
+                                                goto_dir =
+                                                    Some(dir_path.to_owned());
                                             } else if dir_path.is_file() {
-                                                choose_path = Some(dir_path);
+                                                choose_path =
+                                                    Some(dir_path.to_owned());
                                             }
                                         }
 
