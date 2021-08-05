@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
-use gfaestus::annotations::Gff3Records;
+use gfaestus::annotations::{BedRecords, Gff3Records};
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::{FxHashMap, FxHashSet};
 use texture::Gradients;
@@ -665,16 +665,29 @@ fn main() {
 
                     use gfaestus::annotations::AnnotationColumn;
 
-                    let column = if let AnnotationColumn::Gff3(col) = &label_set.column {
-                        Some(col)
-                    } else {
-                        None
-                    }.unwrap();
+                    let column = &label_set.column;
 
-                    let records: &Gff3Records = app
-                        .annotations()
-                        .get_gff3(&label_set.annotation_name)
-                        .unwrap();
+                    let records: &dyn std::any::Any = match column {
+                        AnnotationColumn::Gff3(_) => {
+                            let records: &Gff3Records = app
+                                .annotations()
+                                .get_gff3(&label_set.annotation_name)
+                                .unwrap();
+
+                            let records_any: &dyn std::any::Any = records as _;
+                            records_any
+                        }
+                        AnnotationColumn::Bed(_) => {
+                            let records: &BedRecords = app
+                                .annotations()
+                                .get_bed(&label_set.annotation_name)
+                                .unwrap();
+
+                            let records_any: &dyn std::any::Any = records as _;
+                            records_any
+                        }
+                    };
+
 
                     let clustered = gfaestus::annotations::cluster_annotations(
                         &steps,
@@ -714,7 +727,18 @@ fn main() {
                                     // for now, because i can't figure
                                     // egui out
                                     if gui.ctx.input().pointer.any_click() {
-                                        gui.scroll_to_gff_record(records, column, label.as_bytes());
+                                        match column {
+                                            AnnotationColumn::Gff3(col) => {
+                                                if let Some(gff) = records.downcast_ref::<Gff3Records>() {
+                                                    gui.scroll_to_gff_record(gff, col, label.as_bytes());
+                                                }
+                                            }
+                                            AnnotationColumn::Bed(col) => {
+                                                if let Some(bed) = records.downcast_ref::<BedRecords>() {
+                                                    gui.scroll_to_bed_record(bed, col, label.as_bytes());
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
