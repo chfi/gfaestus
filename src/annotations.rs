@@ -23,10 +23,11 @@ pub mod gff;
 
 pub use gff::*;
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct AnnotationLabelSet {
-    pub annot_file_name: String,
-    pub column: String,
+    pub annotation_name: String,
+    pub column_str: String,
+    pub column: AnnotationColumn,
     pub path_id: PathId,
     pub path_name: String,
 
@@ -47,16 +48,19 @@ impl AnnotationLabelSet {
         R: AnnotationRecord<ColumnKey = K>,
         K: ColumnKey,
     {
-        let annot_file_name = annotations.file_name().to_string();
-        let column = column.to_string();
+        let annotation_name = annotations.file_name().to_string();
+        let column_str = column.to_string();
         let path_name = path_name.to_str().unwrap().to_string();
 
-        // let show = Arc::new(false.into());
         let show = Arc::new(true.into());
 
+        let column = C::wrap_column(column.to_owned());
+
         Self {
-            annot_file_name,
+            annotation_name,
+            column_str,
             column,
+
             path_name,
             show,
 
@@ -82,6 +86,12 @@ impl AnnotationLabelSet {
 pub enum AnnotationFileType {
     Gff3,
     // Bed,
+}
+
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
+pub enum AnnotationColumn {
+    Gff3(Gff3Column),
+    // Bed(BedColumn),
 }
 
 #[derive(Default, Clone)]
@@ -194,6 +204,8 @@ pub trait AnnotationCollection {
     fn is_column_optional(key: &Self::ColumnKey) -> bool {
         Self::Record::is_column_optional(key)
     }
+
+    fn wrap_column(column: Self::ColumnKey) -> AnnotationColumn;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]

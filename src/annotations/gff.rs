@@ -4,7 +4,7 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
-use super::{AnnotationCollection, AnnotationRecord, Strand};
+use super::{AnnotationCollection, AnnotationColumn, AnnotationRecord, Strand};
 
 #[derive(Debug, Clone, Default)]
 pub struct Gff3Records {
@@ -77,6 +77,10 @@ impl AnnotationCollection for Gff3Records {
 
     fn records(&self) -> &[Gff3Record] {
         &self.records
+    }
+
+    fn wrap_column(column: Gff3Column) -> AnnotationColumn {
+        AnnotationColumn::Gff3(column)
     }
 }
 
@@ -187,7 +191,7 @@ impl AnnotationRecord for Gff3Record {
     }
 }
 
-#[derive(Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub enum Gff3Column {
     SeqId,
     Source,

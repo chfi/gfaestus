@@ -56,11 +56,6 @@ pub struct Gff3RecordList {
     path_picker_open: bool,
     path_picker: PathPicker,
 
-    file_picker: FilePicker,
-    file_picker_open: bool,
-
-    gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
-
     creator_open: bool,
     creator: OverlayLabelSetCreator,
     overlay_tx: Sender<OverlayCreatorMsg>,
@@ -121,13 +116,6 @@ impl Gff3RecordList {
     ) -> Self {
         let filtered_records = Vec::new();
 
-        let pwd = std::fs::canonicalize("./").unwrap();
-        let file_picker = FilePicker::new(
-            egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
-            pwd,
-        )
-        .unwrap();
-
         Self {
             current_file: None,
 
@@ -145,22 +133,17 @@ impl Gff3RecordList {
             path_picker_open: false,
             path_picker,
 
-            file_picker_open: false,
-            file_picker,
-
-            gff3_load_result: None,
-
             creator_open: false,
             creator: OverlayLabelSetCreator::new("overlay_label_set_creator"),
             overlay_tx: new_overlay_tx,
         }
     }
 
-    // also hacky
-    pub fn scroll_to_record_by_name(
+    pub fn scroll_to_label_record(
         &mut self,
         records: &Gff3Records,
-        name: &[u8],
+        column: &Gff3Column,
+        value: &[u8],
     ) {
         let ix = self
             .filtered_records
@@ -168,12 +151,8 @@ impl Gff3RecordList {
             .enumerate()
             .find(|&(_ix, record_ix)| {
                 let record = &records.records[*record_ix];
-
-                if let Some(record_names) = record.get_tag(b"Name") {
-                    record_names.iter().any(|rn| rn == name)
-                } else {
-                    false
-                }
+                let column_values = record.get_all(column);
+                column_values.iter().any(|&rec_val| rec_val == value)
             })
             .map(|(ix, _)| ix);
 

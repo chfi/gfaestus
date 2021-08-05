@@ -27,8 +27,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationLabelSet, AnnotationRecord,
-        Annotations, Gff3Column, Gff3Records,
+        AnnotationCollection, AnnotationFileType, AnnotationLabelSet,
+        AnnotationRecord, Annotations, Gff3Column, Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -39,6 +39,14 @@ use crate::{
 };
 
 use super::{file::FilePicker, overlays::OverlayCreatorMsg};
+
+pub struct AnnotationRecordList {
+    current_file: Option<String>,
+
+    file_type: AnnotationFileList,
+    offset: usize,
+    slot_count: usize,
+}
 
 pub struct LabelSetList {}
 
@@ -75,9 +83,9 @@ impl LabelSetList {
 
                             for (name, label_set) in label_sets {
                                 let file_name =
-                                    if label_set.annot_file_name.len() > 20 {
+                                    if label_set.annotation_name.len() > 20 {
                                         let file_name =
-                                            label_set.annot_file_name.as_str();
+                                            label_set.annotation_name.as_str();
                                         let len = file_name.len();
 
                                         let start = &file_name[0..8];
@@ -85,7 +93,7 @@ impl LabelSetList {
 
                                         format!("{}...{}", start, end)
                                     } else {
-                                        label_set.annot_file_name.to_string()
+                                        label_set.annotation_name.to_string()
                                     };
 
                                 let is_visible =
@@ -94,7 +102,7 @@ impl LabelSetList {
                                 let fields: [&str; 5] = [
                                     &name,
                                     &file_name,
-                                    &label_set.column,
+                                    &label_set.column_str,
                                     &label_set.path_name,
                                     &is_visible,
                                 ];
@@ -103,7 +111,7 @@ impl LabelSetList {
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
-                                    true,
+                                    false,
                                 );
 
                                 if row.clicked() {

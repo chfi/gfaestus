@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
+use gfaestus::annotations::Gff3Records;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::{FxHashMap, FxHashSet};
 use texture::Gradients;
@@ -662,6 +663,15 @@ fn main() {
 
                     let label_radius = app.settings.label_radius().load();
 
+                    let column = match &label_set.column {
+                        gfaestus::annotations::AnnotationColumn::Gff3(col) => col,
+                    };
+
+                    let records: &Gff3Records = app
+                        .annotations()
+                        .get_gff3(&label_set.annotation_name)
+                        .unwrap();
+
                     let clustered = gfaestus::annotations::cluster_annotations(
                         &steps,
                         universe.layout().nodes(),
@@ -674,6 +684,7 @@ fn main() {
 
                         let mut y_offset = 20.0;
                         let mut count = 0;
+
 
                         for label in labels {
 
@@ -699,7 +710,7 @@ fn main() {
                                     // for now, because i can't figure
                                     // egui out
                                     if gui.ctx.input().pointer.any_click() {
-                                        gui.scroll_to_gff_record(label.as_bytes());
+                                        gui.scroll_to_gff_record(records, column, label.as_bytes());
                                     }
                                 }
                             }

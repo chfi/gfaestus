@@ -18,7 +18,7 @@ use rustc_hash::FxHashMap;
 use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Annotations, Gff3Records},
+    annotations::{Annotations, Gff3Column, Gff3Records},
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -79,7 +79,6 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
-    gff3_records: Option<Arc<Gff3Records>>,
     gff3_list: Gff3RecordList,
 
     path_picker_source: PathPickerSource,
@@ -509,10 +508,14 @@ impl Gui {
         &self.view_state.overlay_creator.state.new_overlay_rx()
     }
 
-    pub fn scroll_to_gff_record(&mut self, name: &[u8]) {
-        if let Some(records) = self.gff3_records.as_ref() {
-            self.gff3_list.scroll_to_record_by_name(records, name);
-        }
+    pub fn scroll_to_gff_record(
+        &mut self,
+        records: &Gff3Records,
+        column: &Gff3Column,
+        value: &[u8],
+    ) {
+        self.gff3_list
+            .scroll_to_label_record(records, column, value);
     }
 
     pub fn begin_frame(
