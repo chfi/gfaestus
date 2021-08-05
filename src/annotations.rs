@@ -19,8 +19,10 @@ use crate::{geometry::*, universe::Node, view::*};
 use nalgebra as na;
 use nalgebra_glm as glm;
 
+pub mod bed;
 pub mod gff;
 
+pub use bed::*;
 pub use gff::*;
 
 #[derive(Debug, Clone)]
