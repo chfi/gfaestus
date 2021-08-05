@@ -64,52 +64,6 @@ pub struct Gff3RecordList {
 impl Gff3RecordList {
     pub const ID: &'static str = "gff_record_list_window";
 
-    pub fn calculate_annotations(
-        &self,
-        graph: &GraphQuery,
-        records: &Gff3Records,
-    ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)> {
-        if self.filtered_records.is_empty() {
-            return None;
-        }
-
-        let (path_id, name) = self.path_picker.active_path()?;
-
-        let offset = crate::annotations::path_name_offset(name.as_bytes());
-
-        let steps = graph.path_pos_steps(path_id)?;
-
-        let mut result: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
-
-        for &record_ix in self.filtered_records.iter() {
-            let record = records.records.get(record_ix)?;
-
-            if let Some(range) = crate::annotations::path_step_range(
-                &steps,
-                offset,
-                record.start(),
-                record.end(),
-            ) {
-                if let Some(name) =
-                    record.get_tag(b"Name").and_then(|n| n.first())
-                {
-                    if let Some((mid, _, _)) = range.get(range.len() / 2) {
-                        let label = format!("{}", name.as_bstr());
-                        result.entry(mid.id()).or_default().push(label);
-                    }
-                }
-            }
-        }
-
-        for labels in result.values_mut() {
-            labels.sort();
-            labels.dedup();
-            labels.shrink_to_fit();
-        }
-
-        Some((path_id, result))
-    }
-
     pub fn new(
         path_picker: PathPicker,
         new_overlay_tx: Sender<OverlayCreatorMsg>,

@@ -31,7 +31,7 @@ use rustc_hash::FxHashMap;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationFileType, AnnotationLabelSet,
-        AnnotationRecord, Annotations, Gff3Column, Gff3Records,
+        AnnotationRecord, Annotations, ColumnKey, Gff3Column, Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -769,16 +769,14 @@ impl OverlayLabelSetCreator {
                 );
 
                 if create_label_set.clicked() {
-                    if let Some((path, labels)) =
-                        Self::calculate_annotations_gff3(
-                            graph.graph(),
-                            &records,
-                            filtered_records,
-                            path_id,
-                            &self.path_name,
-                            column.unwrap(),
-                        )
-                    {
+                    if let Some((path, labels)) = Self::calculate_annotations(
+                        graph.graph(),
+                        records.as_ref(),
+                        filtered_records,
+                        path_id,
+                        &self.path_name,
+                        column.unwrap(),
+                    ) {
                         let label_set = AnnotationLabelSet::new(
                             records.as_ref(),
                             path,
@@ -797,28 +795,32 @@ impl OverlayLabelSetCreator {
             })
     }
 
-    fn calculate_annotations_gff3(
+    fn calculate_annotations<C, R, K>(
         graph: &GraphQuery,
-        records: &Gff3Records,
+        records: &C,
         record_indices: &[usize],
         path_id: PathId,
         path_name: &str,
-        column: &Gff3Column,
-    ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)> {
+        column: &K,
+    ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)>
+    where
+        C: AnnotationCollection<ColumnKey = K, Record = R>,
+        R: AnnotationRecord<ColumnKey = K>,
+        K: ColumnKey,
+    {
         if record_indices.is_empty() {
             return None;
         }
-
-        // let (path_id, name) = self.path_picker.active_path()?;
 
         let offset = crate::annotations::path_name_offset(path_name.as_bytes());
 
         let steps = graph.path_pos_steps(path_id)?;
 
+        // let records_slice = records.records()
         let mut result: FxHashMap<NodeId, Vec<String>> = FxHashMap::default();
 
         for &record_ix in record_indices.iter() {
-            let record = records.records.get(record_ix)?;
+            let record = records.records().get(record_ix)?;
 
             if let Some(range) = crate::annotations::path_step_range(
                 &steps,
