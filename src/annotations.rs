@@ -87,13 +87,13 @@ impl AnnotationLabelSet {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AnnotationFileType {
     Gff3,
-    // Bed,
+    Bed,
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum AnnotationColumn {
     Gff3(Gff3Column),
-    // Bed(BedColumn),
+    Bed(BedColumn),
 }
 
 #[derive(Default, Clone)]

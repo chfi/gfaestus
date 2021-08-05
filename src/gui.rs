@@ -436,8 +436,6 @@ impl Gui {
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
 
-        let gff3_records = None;
-
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
         let gff3_list =
@@ -471,7 +469,6 @@ impl Gui {
 
             clipboard_ctx,
 
-            gff3_records,
             gff3_list,
 
             path_picker_source,

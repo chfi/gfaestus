@@ -663,9 +663,13 @@ fn main() {
 
                     let label_radius = app.settings.label_radius().load();
 
-                    let column = match &label_set.column {
-                        gfaestus::annotations::AnnotationColumn::Gff3(col) => col,
-                    };
+                    use gfaestus::annotations::AnnotationColumn;
+
+                    let column = if let AnnotationColumn::Gff3(col) = &label_set.column {
+                        Some(col)
+                    } else {
+                        None
+                    }.unwrap();
 
                     let records: &Gff3Records = app
                         .annotations()

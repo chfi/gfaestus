@@ -11,6 +11,8 @@ pub struct BedRecords {
     file_name: String,
 
     pub records: Vec<BedRecord>,
+
+    column_keys: Vec<BedColumn>,
     // TODO add header support
     // pub column_header: Vec<Vec<u8>>,
 }
@@ -52,6 +54,42 @@ impl std::fmt::Display for BedColumn {
     }
 }
 
+impl AnnotationCollection for BedRecords {
+    type ColumnKey = BedColumn;
+    type Record = BedRecord;
+
+    fn file_name(&self) -> &str {
+        &self.file_name
+    }
+
+    fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    fn all_columns(&self) -> Vec<Self::ColumnKey> {
+        self.column_keys.clone()
+    }
+
+    fn mandatory_columns(&self) -> Vec<Self::ColumnKey> {
+        let slice = &self.column_keys[0..=2];
+        Vec::from(slice)
+    }
+
+    fn optional_columns(&self) -> Vec<Self::ColumnKey> {
+        let mut res = Vec::new();
+        res.extend(self.column_keys.iter().cloned().skip(3));
+        res
+    }
+
+    fn records(&self) -> &[Self::Record] {
+        &self.records
+    }
+
+    fn wrap_column(column: Self::ColumnKey) -> AnnotationColumn {
+        AnnotationColumn::Bed(column)
+    }
+}
+
 impl AnnotationRecord for BedRecord {
     type ColumnKey = BedColumn;
 
@@ -63,7 +101,7 @@ impl AnnotationRecord for BedRecord {
         columns.push(Start);
         columns.push(End);
         for i in 0..self.rest.len() {
-            columns.push(Index(i + 3));
+            columns.push(Index(i));
         }
 
         columns
@@ -94,7 +132,7 @@ impl AnnotationRecord for BedRecord {
             BedColumn::Start => None,
             BedColumn::End => None,
             BedColumn::Name => self.rest.get(0).map(|v| v.as_bytes()),
-            BedColumn::Index(i) => self.rest.get(i - 3).map(|v| v.as_bytes()),
+            BedColumn::Index(i) => self.rest.get(*i).map(|v| v.as_bytes()),
             // BedColumn::Header(h) => todo!(),
         }
     }
@@ -109,18 +147,17 @@ impl AnnotationRecord for BedRecord {
             }
             BedColumn::Index(i) => self
                 .rest
-                .get(i - 3)
+                .get(*i)
                 .map(|v| v.as_bytes())
                 .into_iter()
-                .collect(),
-            // BedColumn::Header(h) => todo!(),
+                .collect(), // BedColumn::Header(h) => todo!(),
         }
     }
 
     fn is_column_optional(key: &Self::ColumnKey) -> bool {
         use BedColumn::*;
         match key {
-            Chr | Start | End | Index(0 | 1 | 2) => false,
+            Chr | Start | End => false,
             _ => true,
         }
     }
