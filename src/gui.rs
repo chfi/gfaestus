@@ -94,6 +94,8 @@ pub struct Gui {
 pub enum Windows {
     Settings,
 
+    AnnotationRecords,
+
     // ViewInfo,
     Nodes,
     NodeDetails,
@@ -626,6 +628,7 @@ impl Gui {
             &self.thread_pool,
             &mut self.open_windows.annotation_files,
             &self.app_msg_tx,
+            &self.gui_msg_tx,
             annotations,
         );
 
@@ -634,26 +637,28 @@ impl Gui {
         {
             match annot_type {
                 AnnotationFileType::Gff3 => {
-                    let records = annotations.get_gff3(annot_name).unwrap();
-                    self.gff3_list.ui(
-                        &self.ctx,
-                        &mut self.open_windows.annotation_records,
-                        graph_query_worker,
-                        &self.app_msg_tx,
-                        annot_name,
-                        records,
-                    );
+                    if let Some(records) = annotations.get_gff3(annot_name) {
+                        self.gff3_list.ui(
+                            &self.ctx,
+                            &mut self.open_windows.annotation_records,
+                            graph_query_worker,
+                            &self.app_msg_tx,
+                            annot_name,
+                            records,
+                        );
+                    }
                 }
                 AnnotationFileType::Bed => {
-                    let records = annotations.get_bed(annot_name).unwrap();
-                    self.bed_list.ui(
-                        &self.ctx,
-                        &mut self.open_windows.annotation_records,
-                        graph_query_worker,
-                        &self.app_msg_tx,
-                        annot_name,
-                        records,
-                    );
+                    if let Some(records) = annotations.get_bed(annot_name) {
+                        self.bed_list.ui(
+                            &self.ctx,
+                            &mut self.open_windows.annotation_records,
+                            graph_query_worker,
+                            &self.app_msg_tx,
+                            annot_name,
+                            records,
+                        );
+                    }
                 }
             }
         }
@@ -860,6 +865,9 @@ impl Gui {
 
                     let win_state = match window {
                         Windows::Settings => &mut open_windows.settings,
+                        Windows::AnnotationRecords => {
+                            &mut open_windows.annotation_records
+                        }
                         Windows::Nodes => &mut open_windows.nodes,
                         Windows::NodeDetails => &mut open_windows.node_details,
                         Windows::Paths => &mut open_windows.paths,

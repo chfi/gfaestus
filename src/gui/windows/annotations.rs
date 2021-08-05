@@ -38,7 +38,7 @@ use crate::{
     asynchronous::AsyncResult,
     geometry::Point,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::util::grid_row_label,
+    gui::{util::grid_row_label, GuiMsg, Windows},
     overlays::OverlayData,
 };
 
@@ -187,6 +187,7 @@ impl AnnotationFileList {
         thread_pool: &ThreadPool,
         open: &mut bool,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         annotations: &Annotations,
     ) -> Option<egui::Response> {
         if let Some(query) = self.gff3_load_result.as_mut() {
@@ -200,7 +201,17 @@ impl AnnotationFileList {
         {
             match gff3_result {
                 Ok(records) => {
+                    let name = records.file_name().to_string();
                     app_msg_tx.send(AppMsg::AddGff3Records(records)).unwrap();
+                    gui_msg_tx
+                        .send(GuiMsg::SetWindowOpen {
+                            window: Windows::AnnotationRecords,
+                            open: Some(true),
+                        })
+                        .unwrap();
+
+                    self.current_annotation =
+                        Some((AnnotationFileType::Gff3, name));
                 }
                 Err(err) => {
                     eprintln!("error loading GFF3 file: {}", err);
@@ -220,7 +231,17 @@ impl AnnotationFileList {
         {
             match bed_result {
                 Ok(records) => {
+                    let name = records.file_name().to_string();
                     app_msg_tx.send(AppMsg::AddBedRecords(records)).unwrap();
+                    gui_msg_tx
+                        .send(GuiMsg::SetWindowOpen {
+                            window: Windows::AnnotationRecords,
+                            open: Some(true),
+                        })
+                        .unwrap();
+
+                    self.current_annotation =
+                        Some((AnnotationFileType::Bed, name));
                 }
                 Err(err) => {
                     eprintln!("error loading BED file: {}", err);
@@ -360,6 +381,13 @@ impl AnnotationFileList {
                                 if row.clicked() {
                                     self.current_annotation =
                                         Some((*annot_type, name.to_string()));
+
+                                    gui_msg_tx
+                                        .send(GuiMsg::SetWindowOpen {
+                                            window: Windows::AnnotationRecords,
+                                            open: Some(true),
+                                        })
+                                        .unwrap();
                                 }
 
                                 ui.end_row();
