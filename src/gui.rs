@@ -42,10 +42,12 @@ use ash::{extensions::khr::PushDescriptor, vk};
 
 pub mod debug;
 pub mod text;
+pub mod util;
 pub mod widgets;
 pub mod windows;
 
 use debug::*;
+use util::*;
 use widgets::*;
 use windows::*;
 

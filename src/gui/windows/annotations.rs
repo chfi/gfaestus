@@ -34,6 +34,7 @@ use crate::{
     asynchronous::AsyncResult,
     geometry::Point,
     graph_query::{GraphQuery, GraphQueryWorker},
+    gui::util::grid_row_label,
     overlays::OverlayData,
 };
 
@@ -73,8 +74,6 @@ impl LabelSetList {
                             label_sets.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
 
                             for (name, label_set) in label_sets {
-                                let mut row = ui.label(name);
-
                                 let file_name =
                                     if label_set.annot_file_name.len() > 20 {
                                         let file_name =
@@ -89,23 +88,24 @@ impl LabelSetList {
                                         label_set.annot_file_name.to_string()
                                     };
 
-                                row = row.union(ui.label(&file_name));
-                                row = row.union(ui.label(&label_set.column));
-                                row = row.union(ui.label(&label_set.path_name));
+                                let is_visible =
+                                    format!("{}", label_set.is_visible());
 
-                                row = row.union(ui.label(&format!(
-                                    "{}",
-                                    label_set.is_visible()
-                                )));
+                                let fields: [&str; 5] = [
+                                    &name,
+                                    &file_name,
+                                    &label_set.column,
+                                    &label_set.path_name,
+                                    &is_visible,
+                                ];
 
-                                let row_interact = ui.interact(
-                                    row.rect,
+                                let row = grid_row_label(
+                                    ui,
                                     egui::Id::new(ui.id().with(name)),
-                                    egui::Sense::click()
-                                        .union(egui::Sense::hover()),
+                                    &fields,
                                 );
 
-                                if row_interact.clicked() {
+                                if row.clicked() {
                                     label_set.set_visibility(
                                         !label_set.is_visible(),
                                     );
@@ -252,42 +252,35 @@ impl AnnotationFileList {
                         .striped(true)
                         .show(&mut ui, |ui| {
                             ui.label("File name");
-                            ui.separator();
 
+                            ui.separator();
                             ui.label("# Records");
-                            ui.separator();
 
+                            // ui.separator();
                             // ui.label("Ref. path");
-                            // ui.separator();
 
-                            // ui.label("Type");
                             // ui.separator();
+                            // ui.label("Type");
 
                             ui.end_row();
 
-                            for (name, annot_type) in annotations.annot_names()
+                            for (name, _annot_type) in annotations.annot_names()
                             {
                                 let record =
                                     annotations.get_gff3(name).unwrap();
 
-                                let mut row = ui.label(name);
-                                row = row.union(ui.separator());
+                                let record_len = format!("{}", record.len());
 
-                                row = row.union(
-                                    ui.label(format!("{}", record.len())),
-                                );
-                                row = row.union(ui.separator());
+                                let fields =
+                                    [name.as_str(), record_len.as_str()];
 
-                                // row = row.union(ui.label("TODO path"));
-                                // row = row.union(ui.separator());
-
-                                let row_interact = ui.interact(
-                                    row.rect,
+                                let row = grid_row_label(
+                                    ui,
                                     egui::Id::new(ui.id().with(name)),
-                                    egui::Sense::click(),
+                                    &fields,
                                 );
 
-                                if row_interact.clicked() {
+                                if row.clicked() {
                                     self.current_annotation =
                                         Some(name.to_string());
                                 }
