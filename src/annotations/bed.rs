@@ -19,9 +19,9 @@ pub struct BedRecords {
 
 #[derive(Debug, Clone)]
 pub struct BedRecord {
-    chr: Vec<u8>,
-    start: usize,
-    end: usize,
+    pub chr: Vec<u8>,
+    pub start: usize,
+    pub end: usize,
 
     // TODO add header support
     rest: Vec<Vec<u8>>,

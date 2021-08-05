@@ -1,5 +1,3 @@
-pub mod gff;
-
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -8,6 +6,11 @@ use std::{
 use bstr::ByteSlice;
 use crossbeam::channel::Sender;
 use futures::executor::ThreadPool;
+
+pub mod bed;
+pub mod gff;
+
+pub use bed::*;
 pub use gff::*;
 
 #[allow(unused_imports)]
