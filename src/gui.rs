@@ -18,7 +18,10 @@ use rustc_hash::FxHashMap;
 use crossbeam::atomic::AtomicCell;
 
 use crate::{
-    annotations::{Annotations, Gff3Column, Gff3Records},
+    annotations::{
+        AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
+        Gff3Records,
+    },
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
@@ -80,6 +83,7 @@ pub struct Gui {
     clipboard_ctx: ClipboardContext,
 
     gff3_list: Gff3RecordList,
+    bed_list: BedRecordList,
 
     path_picker_source: PathPickerSource,
 
@@ -438,8 +442,13 @@ impl Gui {
 
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
-        let gff3_list =
-            Gff3RecordList::new(path_picker_source.create_picker(), overlay_tx);
+
+        let gff3_list = Gff3RecordList::new(
+            path_picker_source.create_picker(),
+            overlay_tx.clone(),
+        );
+        let bed_list =
+            BedRecordList::new(path_picker_source.create_picker(), overlay_tx);
 
         let gui = Self {
             ctx,
@@ -470,6 +479,7 @@ impl Gui {
             clipboard_ctx,
 
             gff3_list,
+            bed_list,
 
             path_picker_source,
 
@@ -513,6 +523,15 @@ impl Gui {
     ) {
         self.gff3_list
             .scroll_to_label_record(records, column, value);
+    }
+
+    pub fn scroll_to_bed_record(
+        &mut self,
+        records: &BedRecords,
+        column: &BedColumn,
+        value: &[u8],
+    ) {
+        self.bed_list.scroll_to_label_record(records, column, value);
     }
 
     pub fn begin_frame(
@@ -610,22 +629,33 @@ impl Gui {
             annotations,
         );
 
-        if let Some((annot_name, records)) = self
-            .annotation_file_list
-            .current_annotation()
-            .and_then(|name| {
-                let records = annotations.get_gff3(name)?;
-                Some((name, records))
-            })
+        if let Some((annot_type, annot_name)) =
+            self.annotation_file_list.current_annotation()
         {
-            self.gff3_list.ui(
-                &self.ctx,
-                &mut self.open_windows.gff3,
-                graph_query_worker,
-                &self.app_msg_tx,
-                annot_name,
-                records,
-            );
+            match annot_type {
+                AnnotationFileType::Gff3 => {
+                    let records = annotations.get_gff3(annot_name).unwrap();
+                    self.gff3_list.ui(
+                        &self.ctx,
+                        &mut self.open_windows.gff3,
+                        graph_query_worker,
+                        &self.app_msg_tx,
+                        annot_name,
+                        records,
+                    );
+                }
+                AnnotationFileType::Bed => {
+                    let records = annotations.get_bed(annot_name).unwrap();
+                    self.bed_list.ui(
+                        &self.ctx,
+                        &mut self.open_windows.gff3,
+                        graph_query_worker,
+                        &self.app_msg_tx,
+                        annot_name,
+                        records,
+                    );
+                }
+            }
         }
 
         LabelSetList::ui(

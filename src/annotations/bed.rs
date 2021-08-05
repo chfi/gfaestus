@@ -76,6 +76,7 @@ impl BedRecords {
 
             if let Some(record) = BedRecord::parse_row(fields) {
                 column_count = record.rest.len();
+                records.push(record);
             }
         }
 

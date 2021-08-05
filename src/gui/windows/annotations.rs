@@ -47,7 +47,7 @@ use super::{file::FilePicker, overlays::OverlayCreatorMsg};
 pub struct AnnotationRecordList {
     current_file: Option<String>,
 
-    file_type: AnnotationFileList,
+    file_type: AnnotationFileType,
     offset: usize,
     slot_count: usize,
 }
@@ -132,12 +132,13 @@ impl LabelSetList {
 }
 
 pub struct AnnotationFileList {
-    current_annotation: Option<String>,
+    current_annotation: Option<(AnnotationFileType, String)>,
 
     file_picker: FilePicker,
     file_picker_open: bool,
 
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
+    bed_load_result: Option<AsyncResult<Result<BedRecords>>>,
     // overlay_label_set_creator: OverlayLabelSetCreator,
     // creator_open: bool,
 }
@@ -146,11 +147,14 @@ impl std::default::Default for AnnotationFileList {
     fn default() -> Self {
         let pwd = std::fs::canonicalize("./").unwrap();
 
-        let file_picker = FilePicker::new(
+        let mut file_picker = FilePicker::new(
             egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
             pwd,
         )
         .unwrap();
+
+        let extensions: [&str; 2] = ["gff3", "bed"];
+        file_picker.set_visible_extensions(&extensions).unwrap();
 
         Self {
             current_annotation: None,
@@ -159,6 +163,7 @@ impl std::default::Default for AnnotationFileList {
             file_picker_open: false,
 
             gff3_load_result: None,
+            bed_load_result: None,
             // overlay_label_set_creator: OverlayLabelSetCreator::new(
             //     "overlay_label_set_creator",
             // ),
@@ -170,8 +175,10 @@ impl std::default::Default for AnnotationFileList {
 impl AnnotationFileList {
     pub const ID: &'static str = "annotation_file_list";
 
-    pub fn current_annotation(&self) -> Option<&str> {
-        self.current_annotation.as_ref().map(|n| n.as_str())
+    pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
+        self.current_annotation
+            .as_ref()
+            .map(|(t, n)| (*t, n.as_str()))
     }
 
     pub fn ui(
@@ -184,7 +191,6 @@ impl AnnotationFileList {
     ) -> Option<egui::Response> {
         if let Some(query) = self.gff3_load_result.as_mut() {
             query.move_result_if_ready();
-            self.file_picker.reset_selection();
         }
 
         if let Some(gff3_result) = self
@@ -203,6 +209,26 @@ impl AnnotationFileList {
             self.gff3_load_result = None;
         }
 
+        if let Some(query) = self.bed_load_result.as_mut() {
+            query.move_result_if_ready();
+        }
+
+        if let Some(bed_result) = self
+            .bed_load_result
+            .as_mut()
+            .and_then(|r| r.take_result_if_ready())
+        {
+            match bed_result {
+                Ok(records) => {
+                    app_msg_tx.send(AppMsg::AddBedRecords(records)).unwrap();
+                }
+                Err(err) => {
+                    eprintln!("error loading BED file: {}", err);
+                }
+            }
+            self.bed_load_result = None;
+        }
+
         if self.file_picker.selected_path().is_some() {
             self.file_picker_open = false;
         }
@@ -214,7 +240,7 @@ impl AnnotationFileList {
             .open(open)
             .show(ctx, |mut ui| {
                 if self.gff3_load_result.is_none() {
-                    if ui.button("Choose GFF3 file").clicked() {
+                    if ui.button("Choose annotation file").clicked() {
                         self.file_picker_open = true;
                     }
 
@@ -229,19 +255,43 @@ impl AnnotationFileList {
                     };
 
                     if ui.button("Load").clicked() {
-                        if let Some(path) = self.file_picker.selected_path() {
+                        if let Some((path, ext)) =
+                            self.file_picker.selected_path().and_then(|path| {
+                                let ext = path.extension()?;
+                                let ext_str = ext.to_str()?;
+                                Some((path, ext_str))
+                            })
+                        {
                             let path_str = path.to_str();
-                            eprintln!("Loading GFF3 file {:?}", path_str);
-                            let path = path.to_owned();
-                            let query =
-                                AsyncResult::new(thread_pool, async move {
-                                    println!("parsing gff3 file");
-                                    let records =
-                                        Gff3Records::parse_gff3_file(path);
-                                    println!("parsing complete");
-                                    records
-                                });
-                            self.gff3_load_result = Some(query);
+
+                            let ext = ext.to_ascii_lowercase();
+                            if ext == "gff3" {
+                                eprintln!("Loading GFF3 file {:?}", path_str);
+                                let path = path.to_owned();
+                                let query =
+                                    AsyncResult::new(thread_pool, async move {
+                                        println!("parsing gff3 file");
+                                        let records =
+                                            Gff3Records::parse_gff3_file(path);
+                                        println!("parsing complete");
+                                        records
+                                    });
+                                self.gff3_load_result = Some(query);
+                                self.file_picker.reset_selection();
+                            } else if ext == "bed" {
+                                eprintln!("Loading BED file {:?}", path_str);
+                                let path = path.to_owned();
+                                let query =
+                                    AsyncResult::new(thread_pool, async move {
+                                        println!("parsing bed file");
+                                        let records =
+                                            BedRecords::parse_bed_file(path);
+                                        println!("parsing complete");
+                                        records
+                                    });
+                                self.bed_load_result = Some(query);
+                                self.file_picker.reset_selection();
+                            }
                         }
                     }
                 } else {
@@ -272,20 +322,33 @@ impl AnnotationFileList {
                             // ui.separator();
                             // ui.label("Ref. path");
 
-                            // ui.separator();
-                            // ui.label("Type");
+                            ui.separator();
+                            ui.label("Type");
 
                             ui.end_row();
 
-                            for (name, _annot_type) in annotations.annot_names()
+                            for (name, annot_type) in annotations.annot_names()
                             {
-                                let record =
-                                    annotations.get_gff3(name).unwrap();
+                                let record_len = match annot_type {
+                                    AnnotationFileType::Gff3 => {
+                                        let records =
+                                            annotations.get_gff3(name).unwrap();
+                                        format!("{}", records.len())
+                                    }
+                                    AnnotationFileType::Bed => {
+                                        let records =
+                                            annotations.get_bed(name).unwrap();
+                                        format!("{}", records.len())
+                                    }
+                                };
 
-                                let record_len = format!("{}", record.len());
+                                let type_str = format!("{:?}", annot_type);
 
-                                let fields =
-                                    [name.as_str(), record_len.as_str()];
+                                let fields = [
+                                    name.as_str(),
+                                    record_len.as_str(),
+                                    type_str.as_str(),
+                                ];
 
                                 let row = grid_row_label(
                                     ui,
@@ -296,7 +359,7 @@ impl AnnotationFileList {
 
                                 if row.clicked() {
                                     self.current_annotation =
-                                        Some(name.to_string());
+                                        Some((*annot_type, name.to_string()));
                                 }
 
                                 ui.end_row();

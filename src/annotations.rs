@@ -101,7 +101,8 @@ pub struct Annotations {
     annot_names: Vec<(String, AnnotationFileType)>,
     // gff3_annot_names: Vec<(String>,
     gff3_annotations: HashMap<String, Arc<Gff3Records>>,
-    // bed_annotations: HashMap<String, BedRecords>,
+    bed_annotations: HashMap<String, Arc<BedRecords>>,
+
     label_sets: HashMap<String, AnnotationLabelSet>,
 }
 
@@ -124,6 +125,22 @@ impl Annotations {
 
     pub fn get_gff3(&self, name: &str) -> Option<&Arc<Gff3Records>> {
         self.gff3_annotations.get(name)
+    }
+
+    pub fn insert_bed(&mut self, name: &str, records: BedRecords) {
+        let records = Arc::new(records);
+        self.bed_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Bed));
+    }
+
+    pub fn remove_bed(&mut self, name: &str) {
+        self.bed_annotations.remove(name);
+        self.annot_names.retain(|(n, _)| n != name);
+    }
+
+    pub fn get_bed(&self, name: &str) -> Option<&Arc<BedRecords>> {
+        self.bed_annotations.get(name)
     }
 
     pub fn insert_label_set(

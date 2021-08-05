@@ -15,7 +15,8 @@ use handlegraph::handle::NodeId;
 use anyhow::Result;
 
 use crate::annotations::{
-    AnnotationCollection, AnnotationLabelSet, Annotations, Gff3Records,
+    AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
+    Gff3Records,
 };
 use crate::gui::GuiMsg;
 use crate::view::*;
@@ -103,6 +104,7 @@ pub enum AppMsg {
     ToggleOverlay,
 
     AddGff3Records(Gff3Records),
+    AddBedRecords(BedRecords),
 
     NewNodeLabels {
         name: String,
@@ -332,6 +334,10 @@ impl App {
             AppMsg::AddGff3Records(records) => {
                 let file_name = records.file_name().to_string();
                 self.annotations.insert_gff3(&file_name, records);
+            }
+            AppMsg::AddBedRecords(records) => {
+                let file_name = records.file_name().to_string();
+                self.annotations.insert_bed(&file_name, records);
             }
             AppMsg::NewNodeLabels { name, label_set } => {
                 self.annotations.insert_label_set(&name, label_set);
