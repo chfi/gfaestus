@@ -25,7 +25,7 @@ use crate::{
     app::AppMsg,
     asynchronous::AsyncResult,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::{windows::overlays::OverlayCreatorMsg, GuiMsg},
+    gui::{util::grid_row_label, windows::overlays::OverlayCreatorMsg, GuiMsg},
     overlays::OverlayData,
 };
 
@@ -184,32 +184,32 @@ impl Gff3RecordList {
 
     fn ui_row(
         &self,
+        ui: &mut egui::Ui,
         file_name: &str,
         records: &Gff3Records,
         record: &Gff3Record,
-        ui: &mut egui::Ui,
+        index: usize,
     ) -> egui::Response {
-        let mut resp = ui.label(format!("{}", record.seq_id().as_bstr()));
+        let mut fields: Vec<String> =
+            vec![format!("{}", record.seq_id().as_bstr())];
 
         use Gff3Column as Gff;
 
         let enabled_columns = self.gff3_enabled_columns.get(file_name).unwrap();
 
         if enabled_columns.get_column(&Gff::Source) {
-            resp =
-                resp.union(ui.label(format!("{}", record.source().as_bstr())));
+            fields.push(format!("{}", record.source().as_bstr()));
         }
 
         if enabled_columns.get_column(&Gff::Type) {
-            resp =
-                resp.union(ui.label(format!("{}", record.type_().as_bstr())));
+            fields.push(format!("{}", record.type_().as_bstr()));
         }
-        resp = resp.union(ui.label(format!("{}", record.start())));
-        resp = resp.union(ui.label(format!("{}", record.end())));
+
+        fields.push(format!("{}", record.start()));
+        fields.push(format!("{}", record.end()));
 
         if enabled_columns.get_column(&Gff::Frame) {
-            resp =
-                resp.union(ui.label(format!("{}", record.frame().as_bstr())));
+            fields.push(format!("{}", record.frame().as_bstr()));
         }
 
         let mut keys = records.attribute_keys.iter().collect::<Vec<_>>();
@@ -231,10 +231,20 @@ impl Gff3RecordList {
                 } else {
                     "".to_string()
                 };
-                resp = resp.union(ui.label(label));
+
+                fields.push(label);
             }
         }
 
+        let fields_ref: Vec<&str> =
+            fields.iter().map(|f| f.as_str()).collect::<Vec<_>>();
+
+        let resp = grid_row_label(
+            ui,
+            egui::Id::new(ui.id().with(index)),
+            &fields_ref,
+            false,
+        );
         ui.end_row();
 
         resp
@@ -524,7 +534,8 @@ impl Gff3RecordList {
                                     |record| {
                                         (
                                             self.ui_row(
-                                                file_name, records, record, ui,
+                                                ui, file_name, records, record,
+                                                i,
                                             ),
                                             record,
                                         )
@@ -536,7 +547,7 @@ impl Gff3RecordList {
                                     .and_then(|&ix| {
                                         let record = records.records.get(ix)?;
                                         let row = self.ui_row(
-                                            file_name, records, record, ui,
+                                            ui, file_name, records, record, i,
                                         );
                                         Some((row, record))
                                     })

@@ -2,6 +2,7 @@ pub fn grid_row_label(
     ui: &mut egui::Ui,
     id: egui::Id,
     fields: &[&str],
+    with_separator: bool,
 ) -> egui::Response {
     assert!(!fields.is_empty());
 
@@ -9,7 +10,9 @@ pub fn grid_row_label(
     let mut row = ui.label(*fields.next().unwrap());
 
     for field in fields {
-        row = row.union(ui.separator());
+        if with_separator {
+            row = row.union(ui.separator())
+        };
         row = row.union(ui.label(*field));
     }
 

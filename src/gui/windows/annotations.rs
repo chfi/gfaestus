@@ -103,6 +103,7 @@ impl LabelSetList {
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
+                                    true,
                                 );
 
                                 if row.clicked() {
@@ -278,6 +279,7 @@ impl AnnotationFileList {
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
+                                    true,
                                 );
 
                                 if row.clicked() {

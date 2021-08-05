@@ -18,7 +18,7 @@ use bstr::ByteSlice;
 
 use rustc_hash::FxHashSet;
 
-use crate::asynchronous::AsyncResult;
+use crate::{asynchronous::AsyncResult, gui::util::grid_row_label};
 
 use crate::graph_query::{GraphQuery, GraphQueryWorker};
 use crate::{
@@ -309,35 +309,31 @@ impl PathList {
                                 // let slot = &slot.path_details;
 
                                 if let Some(path_id) = slot.path_id.load() {
-                                    let mut row = ui.label(format!(
-                                        "{}",
-                                        slot.path_name.as_bstr()
-                                    ));
+                                    let path_name =
+                                        format!("{}", slot.path_name.as_bstr());
 
-                                    row =
-                                        row.union(ui.label(format!(
-                                            "{}",
-                                            slot.step_count
-                                        )));
+                                    let step_count =
+                                        format!("{}", slot.step_count);
 
-                                    row =
-                                        row.union(ui.label(format!(
-                                            "{}",
-                                            slot.base_count
-                                        )));
+                                    let base_count =
+                                        format!("{}", slot.base_count);
 
-                                    let row_interact = ui.interact(
-                                        row.rect,
+                                    let fields: [&str; 3] =
+                                        [&path_name, &step_count, &base_count];
+
+                                    let row = grid_row_label(
+                                        ui,
                                         egui::Id::new(ui.id().with(ix)),
-                                        egui::Sense::click(),
+                                        &fields,
+                                        false,
                                     );
 
-                                    if row_interact.clicked() {
+                                    if row.clicked() {
                                         path_id_cell.store(Some(path_id));
                                         *open_path_details = true;
                                     }
 
-                                    ui.end_row();
+                                    // ui.end_row();
                                 }
                             }
                         },
@@ -692,28 +688,28 @@ impl StepList {
                     {
                         let node_id = handle.id();
 
-                        let mut row = if handle.is_reverse() {
-                            ui.label(format!("{}-", node_id.0))
+                        let handle_str = if handle.is_reverse() {
+                            format!("{}-", node_id.0)
                         } else {
-                            ui.label(format!("{}+", node_id.0))
+                            format!("{}+", node_id.0)
                         };
-                        row = row.union(ui.add(separator()));
 
-                        row = row.union(
-                            ui.label(format!("{}", step_ptr.to_vector_value())),
-                        );
-                        row = row.union(ui.add(separator()));
+                        let step_ptr_str =
+                            format!("{}", step_ptr.to_vector_value());
 
-                        row = row.union(ui.label(format!("{}", pos)));
-                        ui.end_row();
+                        let pos_str = format!("{}", pos);
 
-                        let row_interact = ui.interact(
-                            row.rect,
+                        let fields: [&str; 3] =
+                            [&handle_str, &step_ptr_str, &pos_str];
+
+                        let row = grid_row_label(
+                            ui,
                             egui::Id::new(ui.id().with(slot_ix)),
-                            egui::Sense::click(),
+                            &fields,
+                            true,
                         );
 
-                        if row_interact.clicked() {
+                        if row.clicked() {
                             node_details_id_cell.store(Some(handle.id()));
                             *open_node_details = true;
                         }

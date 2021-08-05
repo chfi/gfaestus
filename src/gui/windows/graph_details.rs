@@ -16,8 +16,8 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 
-use crate::graph_query::GraphQuery;
 use crate::{app::AppMsg, geometry::*};
+use crate::{graph_query::GraphQuery, gui::util::grid_row_label};
 
 #[derive(Debug, Clone)]
 pub struct NodeDetails {
@@ -180,38 +180,34 @@ impl NodeDetails {
                                         .graph()
                                         .get_path_name_vec(*path_id);
 
-                                    let mut row = if let Some(name) = path_name
-                                    {
-                                        ui.label(format!("{}", name.as_bstr()))
+                                    let name = if let Some(name) = path_name {
+                                        format!("{}", name.as_bstr())
                                     } else {
-                                        ui.label(format!(
-                                            "Path ID {}",
-                                            path_id.0
-                                        ))
+                                        format!("Path ID {}", path_id.0)
                                     };
 
-                                    row = row.union(ui.add(separator()));
-
-                                    row = row.union(ui.label(format!(
+                                    let step_str = format!(
                                         "{}",
                                         step_ptr.to_vector_value()
-                                    )));
-                                    row = row.union(ui.add(separator()));
+                                    );
 
-                                    row =
-                                        row.union(ui.label(format!("{}", pos)));
+                                    let pos_str = format!("{}", pos);
 
-                                    let row_interact = ui.interact(
-                                        row.rect,
+                                    let fields: [&str; 3] =
+                                        [&name, &step_str, &pos_str];
+
+                                    let row = grid_row_label(
+                                        ui,
                                         egui::Id::new(ui.id().with(format!(
                                             "path_{}_{}",
                                             path_id.0,
                                             step_ptr.to_vector_value()
                                         ))),
-                                        egui::Sense::click(),
+                                        &fields,
+                                        true,
                                     );
 
-                                    if row_interact.clicked() {
+                                    if row.clicked() {
                                         path_details_id_cell
                                             .store(Some(*path_id));
                                         *open_path_details = true;
@@ -565,31 +561,36 @@ impl NodeList {
 
                             for (ix, slot) in self.slots.iter().enumerate() {
                                 if slot.visible {
-                                    let mut row =
-                                        ui.label(format!("{}", slot.node_id));
+                                    let node_id = format!("{}", slot.node_id);
 
-                                    row = row.union(ui.label(format!(
+                                    let degree = format!(
                                         "({}, {})",
                                         slot.degree.0, slot.degree.1
-                                    )));
-
-                                    row = row.union(ui.label(format!(
-                                        "{}",
-                                        slot.sequence.len()
-                                    )));
-
-                                    row = row.union(ui.label(format!(
-                                        "{}",
-                                        slot.unique_paths.len() // slot.paths.len()
-                                    )));
-
-                                    let row_interact = ui.interact(
-                                        row.rect,
-                                        egui::Id::new(ui.id().with(ix)),
-                                        egui::Sense::click(),
                                     );
 
-                                    if row_interact.clicked() {
+                                    let seq_len =
+                                        format!("{}", slot.sequence.len());
+
+                                    let uniq_paths = format!(
+                                        "{}",
+                                        slot.unique_paths.len() // slot.paths.len()
+                                    );
+
+                                    let fields: [&str; 4] = [
+                                        &node_id,
+                                        &degree,
+                                        &seq_len,
+                                        &uniq_paths,
+                                    ];
+
+                                    let row = grid_row_label(
+                                        ui,
+                                        egui::Id::new(ui.id().with(ix)),
+                                        &fields,
+                                        false,
+                                    );
+
+                                    if row.clicked() {
                                         node_id_cell.store(Some(slot.node_id));
 
                                         *open_node_details = true;
