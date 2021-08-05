@@ -61,10 +61,9 @@ pub struct Gff3RecordList {
 
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
 
-    overlay_creator: Gff3OverlayCreator,
-    overlay_creator_open: bool,
-
+    creator_open: bool,
     creator: OverlayLabelSetCreator,
+    overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
 impl Gff3RecordList {
@@ -129,8 +128,6 @@ impl Gff3RecordList {
         )
         .unwrap();
 
-        let overlay_creator = Gff3OverlayCreator::new(new_overlay_tx);
-
         Self {
             current_file: None,
 
@@ -153,10 +150,9 @@ impl Gff3RecordList {
 
             gff3_load_result: None,
 
-            overlay_creator_open: false,
-            overlay_creator,
-
+            creator_open: false,
             creator: OverlayLabelSetCreator::new("overlay_label_set_creator"),
+            overlay_tx: new_overlay_tx,
         }
     }
 
@@ -385,37 +381,15 @@ impl Gff3RecordList {
 
             self.creator.ui(
                 ctx,
-                &self.overlay_creator.new_overlay_tx,
+                &self.overlay_tx,
                 app_msg_tx,
                 graph_query,
-                &mut self.overlay_creator_open,
+                &mut self.creator_open,
                 file_name,
                 path,
                 records.clone(),
                 &self.filtered_records,
             );
-
-            /*
-            if self
-                .overlay_creator
-                .current_file
-                .as_ref()
-                .map(|s| s.as_str())
-                != Some(file_name)
-            {
-                self.overlay_creator.current_file = Some(file_name.to_string());
-                self.overlay_creator.column_picker.update_columns(records);
-            }
-
-            self.overlay_creator.ui(
-                ctx,
-                graph_query,
-                &mut self.overlay_creator_open,
-                path,
-                records.clone(),
-                &self.filtered_records,
-            );
-            */
         }
 
         let resp = egui::Window::new("GFF3")
@@ -478,19 +452,14 @@ impl Gff3RecordList {
                         self.path_picker_open = !self.path_picker_open;
                     }
 
-                    let overlay_creator_btn = ui.button("Overlay creator");
+                    let creator_btn = ui.button("Label & Overlay creator");
 
-                    if overlay_creator_btn.clicked() {
-                        self.overlay_creator_open = !self.overlay_creator_open;
+                    if creator_btn.clicked() {
+                        self.creator_open = !self.creator_open;
                     }
                 });
 
                 ui.horizontal(|ui| {
-                    let apply_labels_btn = ui.add(
-                        egui::Button::new("Apply annotations")
-                            .enabled(active_path_name.is_some()),
-                    );
-
                     let path_name_range = if let Some(name) = &active_path_name
                     {
                         let n = name.as_bytes();
@@ -509,16 +478,6 @@ impl Gff3RecordList {
                             let filter =
                                 self.gff3_filters.get_mut(file_name).unwrap();
                             filter.chr_range_filter(chr, start, end);
-                        }
-                    }
-
-                    if apply_labels_btn.clicked() {
-                        if let Some((path, labels)) = self
-                            .calculate_annotations(graph_query.graph(), records)
-                        {
-                            app_msg_tx
-                                .send(AppMsg::SetNodeLabels { path, labels })
-                                .unwrap();
                         }
                     }
                 });
@@ -790,18 +749,6 @@ impl Gff3Filter {
     }
 }
 
-pub struct Gff3OverlayCreator {
-    overlay_name: String,
-
-    new_overlay_tx: Sender<OverlayCreatorMsg>,
-    overlay_query: Option<AsyncResult<OverlayData>>,
-
-    column_picker: ColumnPickerOne<Gff3Records>,
-    column_picker_open: bool,
-
-    current_file: Option<String>,
-}
-
 pub(crate) fn gff3_column_hash_color(
     record: &Gff3Record,
     column: &Gff3Column,
@@ -836,216 +783,4 @@ pub(crate) fn gff3_column_hash_color(
     let (r, g, b) = crate::gluon::hash_node_color(hasher.finish());
 
     Some(rgb::RGB::new(r, g, b))
-}
-
-impl Gff3OverlayCreator {
-    pub const ID: &'static str = "gff3_overlay_creator_window";
-
-    pub fn new(new_overlay_tx: Sender<OverlayCreatorMsg>) -> Self {
-        Self {
-            overlay_name: String::new(),
-            new_overlay_tx,
-            overlay_query: None,
-
-            column_picker: ColumnPickerOne::new("gff3_overlay_creator_picker"),
-            column_picker_open: false,
-
-            current_file: None,
-        }
-    }
-
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        graph: &GraphQueryWorker,
-        open: &mut bool,
-        path_id: PathId,
-        records: Arc<Gff3Records>,
-        filtered_records: &[usize],
-    ) -> Option<egui::Response> {
-        if let Some(query) = self.overlay_query.as_mut() {
-            query.move_result_if_ready();
-        }
-
-        if let Some(ov_data) = self
-            .overlay_query
-            .as_mut()
-            .and_then(|r| r.take_result_if_ready())
-        {
-            let msg = OverlayCreatorMsg::NewOverlay {
-                name: self.overlay_name.clone(),
-                data: ov_data,
-            };
-
-            self.overlay_name.clear();
-            self.new_overlay_tx.send(msg).unwrap();
-
-            self.overlay_query = None;
-        }
-
-        {
-            let column_picker_open = &mut self.column_picker_open;
-
-            self.column_picker
-                .ui(ctx, column_picker_open, "GFF3 Columns");
-        }
-
-        let label = {
-            let column_picker = &self.column_picker;
-            let column = column_picker.chosen_column();
-
-            if let Some(column) = column {
-                format!("Use column {}", column)
-            } else {
-                format!("Choose column")
-            }
-        };
-
-        egui::Window::new("Create Overlay")
-            .id(egui::Id::new(Self::ID))
-            .open(open)
-            .show(ctx, |ui| {
-                let column_picker_open = &mut self.column_picker_open;
-
-                let column_picker_btn =
-                    { ui.selectable_label(*column_picker_open, label) };
-
-                if column_picker_btn.clicked() {
-                    *column_picker_open = !*column_picker_open;
-                }
-
-                let name = &mut self.overlay_name;
-
-                let _name_box = ui.horizontal(|ui| {
-                    ui.label("Overlay name");
-                    ui.separator();
-                    ui.text_edit_singleline(name)
-                });
-                let column_picker = &self.column_picker;
-                let column = column_picker.chosen_column();
-
-                let create_overlay = ui.add(
-                    egui::Button::new("Create overlay")
-                        .enabled(column.is_some()),
-                );
-
-                if create_overlay.clicked() && self.overlay_query.is_none() {
-                    println!("creating overlay");
-                    if let Some(column) = column {
-                        let indices = filtered_records
-                            .iter()
-                            .copied()
-                            .collect::<Vec<_>>();
-
-                        let column = column.to_owned();
-
-                        let query = graph.run_query(move |graph| async move {
-                            use rayon::prelude::*;
-
-                            use crate::annotations as annots;
-
-                            dbg!();
-
-                            let steps = graph.path_pos_steps(path_id).unwrap();
-
-                            let offset = graph
-                                .graph()
-                                .get_path_name_vec(path_id)
-                                .and_then(|name| {
-                                    annots::path_name_offset(&name)
-                                });
-
-                            println!("using annotation offset {:?}", offset);
-
-                            let t0 = std::time::Instant::now();
-                            let colors_vec: Vec<(Vec<NodeId>, rgb::RGB<f32>)> =
-                                indices
-                                    .into_par_iter()
-                                    .filter_map(|ix| {
-                                        let record = records.records.get(ix)?;
-
-                                        let color = gff3_column_hash_color(
-                                            record, &column,
-                                        )?;
-
-                                        let range = annots::path_step_range(
-                                            &steps,
-                                            offset,
-                                            record.start(),
-                                            record.end(),
-                                        )?;
-
-                                        let ids = range
-                                            .into_iter()
-                                            .map(|(h, _, _)| h.id())
-                                            .collect();
-
-                                        Some((ids, color))
-                                    })
-                                    .collect::<Vec<_>>();
-
-                            println!(
-                                "parallel processing took {} seconds",
-                                t0.elapsed().as_secs_f64()
-                            );
-                            let applied_records_count = colors_vec.len();
-                            println!(
-                                "colored record count: {}",
-                                applied_records_count
-                            );
-                            let colored_node_count: usize = colors_vec
-                                .iter()
-                                .map(|(nodes, _)| nodes.len())
-                                .sum();
-                            println!(
-                                "colored node count: {}",
-                                colored_node_count
-                            );
-
-                            dbg!();
-
-                            let t1 = std::time::Instant::now();
-                            let mut node_colors: FxHashMap<
-                                NodeId,
-                                rgb::RGB<f32>,
-                            > = FxHashMap::default();
-
-                            for (ids, color) in colors_vec {
-                                for id in ids {
-                                    node_colors.insert(id, color);
-                                }
-                            }
-
-                            println!(
-                                "building color map took {} seconds",
-                                t1.elapsed().as_secs_f64()
-                            );
-
-                            let t2 = std::time::Instant::now();
-                            let mut data =
-                                vec![
-                                    rgb::RGBA::new(0.3, 0.3, 0.3, 0.3);
-                                    graph.node_count()
-                                ];
-
-                            for (id, color) in node_colors {
-                                let ix = (id.0 - 1) as usize;
-                                data[ix] = rgb::RGBA::new(
-                                    color.r, color.g, color.b, 1.0,
-                                );
-                            }
-
-                            println!(
-                                "building color vector took {} seconds",
-                                t2.elapsed().as_secs_f64()
-                            );
-
-                            OverlayData::RGB(data)
-                        });
-
-                        self.overlay_query = Some(query);
-                    }
-                }
-            })
-    }
 }

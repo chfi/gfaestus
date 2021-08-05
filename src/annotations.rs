@@ -51,7 +51,8 @@ impl AnnotationLabelSet {
         let column = column.to_string();
         let path_name = path_name.to_str().unwrap().to_string();
 
-        let show = Arc::new(false.into());
+        // let show = Arc::new(false.into());
+        let show = Arc::new(true.into());
 
         Self {
             annot_file_name,

@@ -14,7 +14,9 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
-use crate::annotations::{AnnotationCollection, Annotations, Gff3Records};
+use crate::annotations::{
+    AnnotationCollection, AnnotationLabelSet, Annotations, Gff3Records,
+};
 use crate::gui::GuiMsg;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
@@ -42,9 +44,6 @@ pub struct App {
     selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
-
-    node_labels: FxHashMap<NodeId, Vec<String>>,
-    node_label_path: Option<PathId>,
 
     annotations: Annotations,
 }
@@ -105,9 +104,9 @@ pub enum AppMsg {
 
     AddGff3Records(Gff3Records),
 
-    SetNodeLabels {
-        path: PathId,
-        labels: FxHashMap<NodeId, Vec<String>>,
+    NewNodeLabels {
+        name: String,
+        label_set: AnnotationLabelSet,
     },
 }
 
@@ -130,9 +129,6 @@ impl App {
 
             // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
-
-            node_labels: Default::default(),
-            node_label_path: None,
 
             annotations: Annotations::default(),
         })
@@ -170,14 +166,6 @@ impl App {
 
     pub fn annotations(&self) -> &Annotations {
         &self.annotations
-    }
-
-    pub fn node_labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
-        &self.node_labels
-    }
-
-    pub fn node_label_path(&self) -> Option<PathId> {
-        self.node_label_path
     }
 
     pub fn dims(&self) -> ScreenDims {
@@ -345,9 +333,8 @@ impl App {
                 let file_name = records.file_name().to_string();
                 self.annotations.insert_gff3(&file_name, records);
             }
-            AppMsg::SetNodeLabels { path, labels } => {
-                self.node_labels = labels;
-                self.node_label_path = Some(path);
+            AppMsg::NewNodeLabels { name, label_set } => {
+                self.annotations.insert_label_set(&name, label_set);
             }
         }
     }

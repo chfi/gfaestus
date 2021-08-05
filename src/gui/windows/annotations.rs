@@ -27,8 +27,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationRecord, Annotations, Gff3Column,
-        Gff3Records,
+        AnnotationCollection, AnnotationLabelSet, AnnotationRecord,
+        Annotations, Gff3Column, Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -665,13 +665,16 @@ impl OverlayLabelSetCreator {
 
                 ui.separator();
 
-                let name = &mut self.label_set_name;
+                {
+                    let name = &mut self.label_set_name;
 
-                let _name_box = ui.horizontal(|ui| {
-                    ui.label("Label set name");
-                    ui.separator();
-                    ui.text_edit_singleline(name)
-                });
+                    let _name_box = ui.horizontal(|ui| {
+                        ui.label("Label set name");
+                        ui.separator();
+                        ui.text_edit_singleline(name)
+                    });
+                }
+
                 let column_picker = &self.column_picker_gff3;
                 let column = column_picker.chosen_column();
 
@@ -691,8 +694,18 @@ impl OverlayLabelSetCreator {
                             column.unwrap(),
                         )
                     {
+                        let label_set = AnnotationLabelSet::new(
+                            records.as_ref(),
+                            path,
+                            self.path_name.as_bytes(),
+                            column.unwrap(),
+                            labels,
+                        );
+
+                        let name = std::mem::take(&mut self.label_set_name);
+
                         app_msg_tx
-                            .send(AppMsg::SetNodeLabels { path, labels })
+                            .send(AppMsg::NewNodeLabels { name, label_set })
                             .unwrap();
                     }
                 }
