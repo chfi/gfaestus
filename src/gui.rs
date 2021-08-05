@@ -295,6 +295,7 @@ pub struct OpenWindows {
 
     annotation_files: bool,
     gff3: bool,
+    label_set_list: bool,
 
     nodes: bool,
     node_details: bool,
@@ -316,6 +317,7 @@ impl std::default::Default for OpenWindows {
 
             annotation_files: false,
             gff3: false,
+            label_set_list: false,
 
             nodes: false,
             node_details: false,
@@ -623,6 +625,12 @@ impl Gui {
                 records,
             );
         }
+
+        LabelSetList::ui(
+            &self.ctx,
+            &mut self.open_windows.label_set_list,
+            annotations,
+        );
 
         view_state
             .settings

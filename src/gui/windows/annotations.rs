@@ -39,6 +39,85 @@ use crate::{
 
 use super::{file::FilePicker, overlays::OverlayCreatorMsg};
 
+pub struct LabelSetList {}
+
+impl LabelSetList {
+    pub const ID: &'static str = "label_set_list";
+
+    pub fn ui(
+        // &mut self,
+        ctx: &egui::CtxRef,
+        open: &mut bool,
+        annotations: &Annotations,
+    ) -> Option<egui::Response> {
+        egui::Window::new("Label sets")
+            .id(egui::Id::new(Self::ID))
+            .open(open)
+            .show(ctx, |mut ui| {
+                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                    egui::Grid::new("label_set_list_grid").striped(true).show(
+                        &mut ui,
+                        |ui| {
+                            ui.label("Name");
+                            ui.label("File");
+                            ui.label("Column");
+                            ui.label("Path");
+                            ui.label("Visible");
+                            ui.end_row();
+
+                            let mut label_sets = annotations
+                                .label_sets()
+                                .into_iter()
+                                .collect::<Vec<_>>();
+
+                            label_sets.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
+
+                            for (name, label_set) in label_sets {
+                                let mut row = ui.label(name);
+
+                                let file_name =
+                                    if label_set.annot_file_name.len() > 20 {
+                                        let file_name =
+                                            label_set.annot_file_name.as_str();
+                                        let len = file_name.len();
+
+                                        let start = &file_name[0..8];
+                                        let end = &file_name[len - 8..];
+
+                                        format!("{}...{}", start, end)
+                                    } else {
+                                        label_set.annot_file_name.to_string()
+                                    };
+
+                                row = row.union(ui.label(&file_name));
+                                row = row.union(ui.label(&label_set.column));
+                                row = row.union(ui.label(&label_set.path_name));
+
+                                row = row.union(ui.label(&format!(
+                                    "{}",
+                                    label_set.is_visible()
+                                )));
+
+                                let row_interact = ui.interact(
+                                    row.rect,
+                                    egui::Id::new(ui.id().with(name)),
+                                    egui::Sense::click()
+                                        .union(egui::Sense::hover()),
+                                );
+
+                                if row_interact.clicked() {
+                                    label_set.set_visibility(
+                                        !label_set.is_visible(),
+                                    );
+                                }
+                            }
+                        },
+                    );
+                });
+            })
+    }
+}
+
 pub struct AnnotationFileList {
     current_annotation: Option<String>,
 

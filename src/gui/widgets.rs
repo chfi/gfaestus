@@ -52,6 +52,7 @@ impl MenuBar {
 
         let gff3 = &mut open_windows.gff3;
         let annotation_files = &mut open_windows.annotation_files;
+        let label_set_list = &mut open_windows.label_set_list;
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
@@ -89,6 +90,13 @@ impl MenuBar {
 
                     if ui.selectable_label(*gff3, "GFF3").clicked() {
                         *gff3 = !*gff3;
+                    }
+
+                    if ui
+                        .selectable_label(*label_set_list, "Label sets")
+                        .clicked()
+                    {
+                        *label_set_list = !*label_set_list;
                     }
                 });
 

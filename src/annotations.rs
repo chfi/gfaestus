@@ -131,6 +131,10 @@ impl Annotations {
     ) -> impl Iterator<Item = &'_ AnnotationLabelSet> + '_ {
         self.label_sets.values().filter(|ls| ls.is_visible())
     }
+
+    pub fn label_sets(&self) -> &HashMap<String, AnnotationLabelSet> {
+        &self.label_sets
+    }
 }
 
 pub trait ColumnKey:
