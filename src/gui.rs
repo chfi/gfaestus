@@ -299,7 +299,7 @@ pub struct OpenWindows {
     settings: bool,
 
     annotation_files: bool,
-    gff3: bool,
+    annotation_records: bool,
     label_set_list: bool,
 
     nodes: bool,
@@ -321,7 +321,7 @@ impl std::default::Default for OpenWindows {
             settings: false,
 
             annotation_files: false,
-            gff3: false,
+            annotation_records: false,
             label_set_list: false,
 
             nodes: false,
@@ -637,7 +637,7 @@ impl Gui {
                     let records = annotations.get_gff3(annot_name).unwrap();
                     self.gff3_list.ui(
                         &self.ctx,
-                        &mut self.open_windows.gff3,
+                        &mut self.open_windows.annotation_records,
                         graph_query_worker,
                         &self.app_msg_tx,
                         annot_name,
@@ -648,7 +648,7 @@ impl Gui {
                     let records = annotations.get_bed(annot_name).unwrap();
                     self.bed_list.ui(
                         &self.ctx,
-                        &mut self.open_windows.gff3,
+                        &mut self.open_windows.annotation_records,
                         graph_query_worker,
                         &self.app_msg_tx,
                         annot_name,

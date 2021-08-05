@@ -50,7 +50,7 @@ impl MenuBar {
     ) {
         let settings = &mut open_windows.settings;
 
-        let gff3 = &mut open_windows.gff3;
+        let annotation_records = &mut open_windows.annotation_records;
         let annotation_files = &mut open_windows.annotation_files;
         let label_set_list = &mut open_windows.label_set_list;
 
@@ -88,8 +88,11 @@ impl MenuBar {
                         *annotation_files = !*annotation_files;
                     }
 
-                    if ui.selectable_label(*gff3, "GFF3").clicked() {
-                        *gff3 = !*gff3;
+                    if ui
+                        .selectable_label(*annotation_records, "Records")
+                        .clicked()
+                    {
+                        *annotation_records = !*annotation_records;
                     }
 
                     if ui

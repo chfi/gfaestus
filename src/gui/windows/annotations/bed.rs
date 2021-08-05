@@ -311,7 +311,7 @@ impl BedRecordList {
             );
         }
 
-        let resp = egui::Window::new("GFF3")
+        let resp = egui::Window::new("BED")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .collapsible(true)
@@ -565,7 +565,7 @@ impl BedFilter {
         ctx: &egui::CtxRef,
         open: &mut bool,
     ) -> Option<egui::Response> {
-        egui::Window::new("GFF3 Filter")
+        egui::Window::new("BED Filter")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .open(open)
