@@ -24,7 +24,7 @@ pub struct BedRecord {
     pub end: usize,
 
     // TODO add header support
-    rest: Vec<Vec<u8>>,
+    pub rest: Vec<Vec<u8>>,
     // headers: FxHashMap<Vec<u8>, usize>
 }
 
