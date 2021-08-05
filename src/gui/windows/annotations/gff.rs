@@ -33,7 +33,7 @@ use crate::annotations::{
     AnnotationCollection, AnnotationRecord, Gff3Record, Gff3Records,
 };
 
-use super::{ColumnPickerMany, ColumnPickerOne};
+use super::{ColumnPickerMany, ColumnPickerOne, OverlayLabelSetCreator};
 
 use crate::gui::windows::{
     file::FilePicker, filters::*, graph_picker::PathPicker,
@@ -63,6 +63,8 @@ pub struct Gff3RecordList {
 
     overlay_creator: Gff3OverlayCreator,
     overlay_creator_open: bool,
+
+    creator: OverlayLabelSetCreator,
 }
 
 impl Gff3RecordList {
@@ -153,6 +155,8 @@ impl Gff3RecordList {
 
             overlay_creator_open: false,
             overlay_creator,
+
+            creator: OverlayLabelSetCreator::new("overlay_label_set_creator"),
         }
     }
 
@@ -368,6 +372,31 @@ impl Gff3RecordList {
 
         if let Some(path) = self.path_picker.active_path().map(|(p, _)| p) {
             if self
+                .creator
+                .current_annotation_file
+                .as_ref()
+                .map(|s| s.as_str())
+                != Some(file_name)
+            {
+                self.creator.current_annotation_file =
+                    Some(file_name.to_string());
+                self.creator.column_picker_gff3.update_columns(records);
+            }
+
+            self.creator.ui(
+                ctx,
+                &self.overlay_creator.new_overlay_tx,
+                app_msg_tx,
+                graph_query,
+                &mut self.overlay_creator_open,
+                file_name,
+                path,
+                records.clone(),
+                &self.filtered_records,
+            );
+
+            /*
+            if self
                 .overlay_creator
                 .current_file
                 .as_ref()
@@ -386,6 +415,7 @@ impl Gff3RecordList {
                 records.clone(),
                 &self.filtered_records,
             );
+            */
         }
 
         let resp = egui::Window::new("GFF3")

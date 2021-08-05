@@ -27,7 +27,8 @@ use rustc_hash::FxHashMap;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationRecord, Annotations, Gff3Records,
+        AnnotationCollection, AnnotationRecord, Annotations, Gff3Column,
+        Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -45,6 +46,8 @@ pub struct AnnotationFileList {
     file_picker_open: bool,
 
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
+    // overlay_label_set_creator: OverlayLabelSetCreator,
+    // creator_open: bool,
 }
 
 impl std::default::Default for AnnotationFileList {
@@ -64,6 +67,10 @@ impl std::default::Default for AnnotationFileList {
             file_picker_open: false,
 
             gff3_load_result: None,
+            // overlay_label_set_creator: OverlayLabelSetCreator::new(
+            //     "overlay_label_set_creator",
+            // ),
+            // creator_open: false,
         }
     }
 }
@@ -148,6 +155,15 @@ impl AnnotationFileList {
                 } else {
                     ui.label("Loading file");
                 }
+
+                // if ui
+                //     .selectable_label(self.creator_open, "Open creator")
+                //     .clicked()
+                // {
+                //     self.creator_open = !self.creator_open;
+                // }
+
+                // self.overlay_label_set_creator.ui
 
                 ui.separator();
 
@@ -394,7 +410,7 @@ pub struct OverlayLabelSetCreator {
 
     // column_picker: ColumnPickerOne<T>,
     column_picker_gff3: ColumnPickerOne<Gff3Records>,
-    // column_picker_open: bool,
+    column_picker_open: bool,
     current_annotation_file: Option<String>,
     // current_annotation_type: Option<AnnotationFileType>,
     id: egui::Id,
@@ -419,7 +435,7 @@ impl OverlayLabelSetCreator {
             column_picker_gff3: ColumnPickerOne::new(
                 "label_set_overlay_creator_gff3_columns",
             ),
-            // column_picker_open: true,
+            column_picker_open: false,
             current_annotation_file: None,
 
             id,
@@ -475,14 +491,12 @@ impl OverlayLabelSetCreator {
             self.column_picker_gff3.update_columns(&records);
         }
 
-        /*
         {
             let column_picker_open = &mut self.column_picker_open;
 
-            self.column_picker
+            self.column_picker_gff3
                 .ui(ctx, column_picker_open, "GFF3 Columns");
         }
-        */
 
         let label = {
             let column_picker = &self.column_picker_gff3;
@@ -502,7 +516,7 @@ impl OverlayLabelSetCreator {
                 ui.label(file_name);
 
                 ui.label(&label);
-                /*
+
                 let column_picker_open = &mut self.column_picker_open;
 
                 let column_picker_btn =
@@ -511,7 +525,6 @@ impl OverlayLabelSetCreator {
                 if column_picker_btn.clicked() {
                     *column_picker_open = !*column_picker_open;
                 }
-                */
 
                 ui.separator();
 
@@ -675,6 +688,7 @@ impl OverlayLabelSetCreator {
                             filtered_records,
                             path_id,
                             &self.path_name,
+                            column.unwrap(),
                         )
                     {
                         app_msg_tx
@@ -691,6 +705,7 @@ impl OverlayLabelSetCreator {
         record_indices: &[usize],
         path_id: PathId,
         path_name: &str,
+        column: &Gff3Column,
     ) -> Option<(PathId, FxHashMap<NodeId, Vec<String>>)> {
         if record_indices.is_empty() {
             return None;
@@ -713,11 +728,9 @@ impl OverlayLabelSetCreator {
                 record.start(),
                 record.end(),
             ) {
-                if let Some(name) =
-                    record.get_tag(b"Name").and_then(|n| n.first())
-                {
+                if let Some(value) = record.get_first(column) {
                     if let Some((mid, _, _)) = range.get(range.len() / 2) {
-                        let label = format!("{}", name.as_bstr());
+                        let label = format!("{}", value.as_bstr());
                         result.entry(mid.id()).or_default().push(label);
                     }
                 }
