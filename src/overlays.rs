@@ -1,12 +1,4 @@
-use gluon::{
-    base::types::ArcType,
-    vm::api::{Function, VmType, IO},
-    RootedThread, Thread, ThreadExt,
-};
-
 use anyhow::Result;
-
-use crate::gluon::GraphHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Defines the type of mapping from node ID to colors used by an
@@ -25,6 +17,7 @@ pub enum OverlayData {
     Value(Vec<f32>),
 }
 
+/*
 pub type OverlayScriptType<T> = Function<
     RootedThread,
     fn(GraphHandle) -> IO<Function<RootedThread, fn(u64) -> T>>,
@@ -82,4 +75,17 @@ impl OverlayKind {
 
         anyhow::bail!("Overlay script has incorrect type")
     }
+}
+*/
+
+pub fn hash_node_color(hash: u64) -> (f32, f32, f32) {
+    let r_u16 = ((hash >> 32) & 0xFFFFFFFF) as u16;
+    let g_u16 = ((hash >> 16) & 0xFFFFFFFF) as u16;
+    let b_u16 = (hash & 0xFFFFFFFF) as u16;
+
+    let max = r_u16.max(g_u16).max(b_u16) as f32;
+    let r = (r_u16 as f32) / max;
+    let g = (g_u16 as f32) / max;
+    let b = (b_u16 as f32) / max;
+    (r, g, b)
 }

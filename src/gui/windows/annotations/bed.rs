@@ -661,7 +661,7 @@ pub(crate) fn bed_column_hash_color(
         }
     }
 
-    let (r, g, b) = crate::gluon::hash_node_color(hasher.finish());
+    let (r, g, b) = crate::overlays::hash_node_color(hasher.finish());
 
     Some(rgb::RGB::new(r, g, b))
 }

@@ -23,13 +23,13 @@ use crate::{
         Gff3Records,
     },
     app::{AppChannels, AppMsg, AppSettings, SharedState},
-    gluon::repl::GluonRepl,
+    // gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
 use crate::{app::OverlayState, geometry::*};
 
-use crate::gluon::GraphHandle;
+// use crate::gluon::GraphHandle;
 use crate::overlays::OverlayKind;
 
 use crate::graph_query::GraphQuery;
@@ -175,8 +175,7 @@ pub struct AppViewState {
     // theme_list: ThemeList,
     overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
     overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
-
-    repl_window: ViewStateChannel<ReplWindow, ()>,
+    // repl_window: ViewStateChannel<ReplWindow, ()>,
 }
 
 impl AppViewState {
@@ -187,7 +186,7 @@ impl AppViewState {
         overlay_state: OverlayState,
         dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
         thread_pool: &ThreadPool,
-        repl: GluonRepl,
+        // repl: GluonRepl,
     ) -> Self {
         let graph = graph_query.graph();
 
@@ -232,9 +231,9 @@ impl AppViewState {
             OverlayCreatorMsg,
         >::new(overlay_creator_state);
 
-        let repl_window_state = ReplWindow::new(repl).unwrap();
-        let repl_window =
-            ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
+        // let repl_window_state = ReplWindow::new(repl).unwrap();
+        // let repl_window =
+        //     ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
 
         Self {
             settings,
@@ -250,8 +249,7 @@ impl AppViewState {
 
             overlay_list,
             overlay_creator,
-
-            repl_window,
+            // repl_window,
         }
     }
 
@@ -389,11 +387,11 @@ impl Gui {
 
         let draw_system = GuiPipeline::new(app, render_pass)?;
 
-        let repl = GluonRepl::new(
-            channels.app_tx.clone(),
-            channels.main_view_tx.clone(),
-        )
-        .unwrap();
+        // let repl = GluonRepl::new(
+        //     channels.app_tx.clone(),
+        //     channels.main_view_tx.clone(),
+        // )
+        // .unwrap();
 
         let ctx = egui::CtxRef::default();
 
@@ -433,7 +431,6 @@ impl Gui {
             shared_state.overlay_state().clone(),
             dropped_file.clone(),
             &thread_pool,
-            repl,
         );
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
@@ -541,7 +538,7 @@ impl Gui {
         screen_rect: Option<Point>,
         graph_query: &GraphQuery,
         graph_query_worker: &GraphQueryWorker,
-        graph_handle: &GraphHandle,
+        // graph_handle: &GraphHandle,
         annotations: &Annotations,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
@@ -594,12 +591,14 @@ impl Gui {
                 overlay_creator,
             );
 
+            /*
             view_state.overlay_creator.state.ui(
                 &self.ctx,
                 overlay_creator,
                 graph_handle,
                 &self.thread_pool,
             );
+            */
 
             view_state.overlay_list.state.gradient_picker_ui(&self.ctx);
         }
@@ -753,14 +752,14 @@ impl Gui {
             }
         }
 
-        if self.open_windows.repl_window {
-            let repl_window = &mut self.open_windows.repl_window;
-            view_state.repl_window.state.ui(
-                repl_window,
-                &self.ctx,
-                &self.thread_pool,
-            );
-        }
+        // if self.open_windows.repl_window {
+        //     let repl_window = &mut self.open_windows.repl_window;
+        //     view_state.repl_window.state.ui(
+        //         repl_window,
+        //         &self.ctx,
+        //         &self.thread_pool,
+        //     );
+        // }
 
         {
             let debug = &mut view_state.settings.debug;

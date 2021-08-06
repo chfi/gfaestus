@@ -15,10 +15,8 @@ use crate::{
     vulkan::texture::{GradientName, Gradients},
 };
 
+use crate::app::OverlayState;
 use crate::overlays::{OverlayData, OverlayKind};
-use crate::{app::OverlayState, gluon::GraphHandle};
-
-use crate::gluon::GluonVM;
 
 pub struct OverlayList {
     overlay_state: OverlayState,
@@ -149,8 +147,6 @@ pub struct OverlayCreator {
 
     script_error: String,
 
-    gluon: Arc<GluonVM>,
-
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     new_overlay_rx: Receiver<OverlayCreatorMsg>,
 
@@ -168,7 +164,7 @@ impl OverlayCreator {
         let (new_overlay_tx, new_overlay_rx) =
             crossbeam::channel::unbounded::<OverlayCreatorMsg>();
 
-        let gluonvm = crate::gluon::GluonVM::new()?;
+        // let gluonvm = crate::gluon::GluonVM::new()?;
 
         Ok(Self {
             name: String::new(),
@@ -176,8 +172,7 @@ impl OverlayCreator {
 
             script_error: String::new(),
 
-            gluon: Arc::new(gluonvm),
-
+            // gluon: Arc::new(gluonvm),
             new_overlay_tx,
             new_overlay_rx,
 
@@ -199,7 +194,7 @@ impl OverlayCreator {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        graph: &GraphHandle,
+        // graph: &GraphHandle,
         thread_pool: &ThreadPool,
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
@@ -251,6 +246,7 @@ impl OverlayCreator {
 
                 let _script_error_msg = ui.label(&self.script_error);
 
+                /*
                 if run_script.clicked() && self.script_query.is_none() {
                     let path = PathBuf::from(path_str.as_str());
                     println!(
@@ -320,6 +316,7 @@ impl OverlayCreator {
 
                     self.script_query = None;
                 }
+                */
             })
     }
 }

@@ -208,10 +208,10 @@ fn main() {
     let mut initialized_view = false;
 
     let graph_arc = graph_query.graph_arc().clone();
-    let graph_handle = gfaestus::gluon::GraphHandle::new(
-        graph_arc,
-        graph_query.path_positions_arc().clone(),
-    );
+    // let graph_handle = gfaestus::gluon::GraphHandle::new(
+    //     graph_arc,
+    //     graph_query.path_positions_arc().clone(),
+    // );
 
     let new_overlay_rx = gui.new_overlay_rx().clone();
 
@@ -626,7 +626,6 @@ fn main() {
                     Some(app.dims().into()),
                     &graph_query,
                     &graph_query_worker,
-                    &graph_handle,
                     app.annotations()
                 );
 
