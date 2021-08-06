@@ -624,8 +624,14 @@ fn main() {
                 );
 
                 {
-                    let label_sets = app.annotations().visible_label_sets().collect::<Vec<_>>();
+                    let label_sets = app
+                        .annotations()
+                        .visible_label_sets()
+                        .collect::<Vec<_>>();
 
+
+
+                    /*
                     let mut label_sets_by_path: FxHashMap<PathId, FxHashMap<NodeId, Vec<String>>> =
                         FxHashMap::default();
 
@@ -644,6 +650,7 @@ fn main() {
                             labels.dedup();
                         }
                     }
+                    */
 
 
                     let paths = label_sets
@@ -689,6 +696,7 @@ fn main() {
                     };
 
 
+                    /*
                     let clustered = gfaestus::annotations::cluster_annotations(
                         &steps,
                         universe.layout().nodes(),
@@ -768,6 +776,7 @@ fn main() {
                         }
 
                     }
+                    */
 
                 }
 

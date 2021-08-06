@@ -865,7 +865,7 @@ impl OverlayLabelSetCreator {
                 );
 
                 if create_label_set.clicked() {
-                    if let Some((path, labels)) = Self::calculate_annotations(
+                    if let Some(label_set) = Self::calculate_annotation_set(
                         graph.graph(),
                         records.as_ref(),
                         filtered_records,
@@ -873,14 +873,6 @@ impl OverlayLabelSetCreator {
                         &self.path_name,
                         column.unwrap(),
                     ) {
-                        let label_set = AnnotationLabelSet::new(
-                            records.as_ref(),
-                            path,
-                            self.path_name.as_bytes(),
-                            column.unwrap(),
-                            labels,
-                        );
-
                         let name = std::mem::take(&mut self.label_set_name);
 
                         app_msg_tx
@@ -1131,7 +1123,7 @@ impl OverlayLabelSetCreator {
                 );
 
                 if create_label_set.clicked() {
-                    if let Some((path, labels)) = Self::calculate_annotations(
+                    if let Some(label_set) = Self::calculate_annotation_set(
                         graph.graph(),
                         records.as_ref(),
                         filtered_records,
@@ -1139,14 +1131,6 @@ impl OverlayLabelSetCreator {
                         &self.path_name,
                         column.unwrap(),
                     ) {
-                        let label_set = AnnotationLabelSet::new(
-                            records.as_ref(),
-                            path,
-                            self.path_name.as_bytes(),
-                            column.unwrap(),
-                            labels,
-                        );
-
                         let name = std::mem::take(&mut self.label_set_name);
 
                         app_msg_tx
@@ -1155,6 +1139,73 @@ impl OverlayLabelSetCreator {
                     }
                 }
             })
+    }
+
+    fn calculate_annotation_set<C, R, K>(
+        graph: &GraphQuery,
+        records: &C,
+        record_indices: &[usize],
+        path_id: PathId,
+        path_name: &str,
+        column: &K,
+    ) -> Option<AnnotationLabelSet>
+    where
+        C: AnnotationCollection<ColumnKey = K, Record = R>,
+        R: AnnotationRecord<ColumnKey = K>,
+        K: ColumnKey,
+    {
+        if record_indices.is_empty() {
+            return None;
+        }
+
+        let offset = crate::annotations::path_name_offset(path_name.as_bytes());
+
+        let steps = graph.path_pos_steps(path_id)?;
+
+        let mut label_strings: Vec<String> =
+            Vec::with_capacity(record_indices.len());
+        let mut label_indices: FxHashMap<NodeId, Vec<usize>> =
+            FxHashMap::default();
+
+        for &record_ix in record_indices.iter() {
+            let record = records.records().get(record_ix)?;
+
+            if let Some(range) = crate::annotations::path_step_range(
+                &steps,
+                offset,
+                record.start(),
+                record.end(),
+            ) {
+                if let Some(value) = record.get_first(column) {
+                    if let Some((mid, _, _)) = range.get(range.len() / 2) {
+                        let index = label_strings.len();
+                        let label = format!("{}", value.as_bstr());
+                        label_strings.push(label);
+                        label_indices.entry(mid.id()).or_default().push(index);
+                    }
+                }
+            }
+        }
+
+        for labels in label_indices.values_mut() {
+            labels.sort();
+            labels.dedup();
+            labels.shrink_to_fit();
+        }
+
+        label_strings.shrink_to_fit();
+        label_indices.shrink_to_fit();
+
+        AnnotationLabelSet::new(
+            records,
+            path_id,
+            path_name.as_bytes(),
+            column,
+            label_strings,
+            label_indices,
+        );
+
+        None
     }
 
     fn calculate_annotations<C, R, K>(

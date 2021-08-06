@@ -34,7 +34,9 @@ pub struct AnnotationLabelSet {
     pub path_name: String,
 
     show: Arc<AtomicCell<bool>>,
-    labels: FxHashMap<NodeId, Vec<String>>,
+
+    label_strings: Vec<String>,
+    labels: FxHashMap<NodeId, Vec<usize>>,
 }
 
 impl AnnotationLabelSet {
@@ -43,7 +45,8 @@ impl AnnotationLabelSet {
         path_id: PathId,
         path_name: &[u8],
         column: &K,
-        labels: FxHashMap<NodeId, Vec<String>>,
+        label_strings: Vec<String>,
+        labels: FxHashMap<NodeId, Vec<usize>>,
     ) -> Self
     where
         C: AnnotationCollection<ColumnKey = K, Record = R>,
@@ -67,11 +70,17 @@ impl AnnotationLabelSet {
             show,
 
             path_id,
+            label_strings,
             labels,
         }
     }
 
-    pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
+    pub fn label_strings(&self) -> &[String] {
+        &self.label_strings
+    }
+
+    // pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
+    pub fn labels(&self) -> &FxHashMap<NodeId, Vec<usize>> {
         &self.labels
     }
 
