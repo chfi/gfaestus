@@ -36,7 +36,7 @@ pub enum BedColumn {
     End,
     Name,
     Index(usize),
-    // Header(Vec<u8>),
+    Header { index: usize, name: Vec<u8> },
 }
 
 impl BedRecords {
@@ -82,11 +82,10 @@ impl BedRecords {
                 }
                 continue;
             }
-
-            let fields = line.fields();
+            let fields = line.split_str("\t");
 
             if let Some(record) = BedRecord::parse_row(fields) {
-                column_count = record.rest.len();
+                column_count = record.rest.len().max(column_count);
                 records.push(record);
             }
         }
@@ -94,7 +93,17 @@ impl BedRecords {
         let mut column_keys: Vec<BedColumn> =
             vec![BedColumn::Chr, BedColumn::Start, BedColumn::End];
 
-        column_keys.extend((0..column_count).map(|ix| BedColumn::Index(ix)));
+        if headers.is_empty() {
+            column_keys
+                .extend((0..column_count).map(|ix| BedColumn::Index(ix)));
+        } else {
+            column_keys.extend(headers.iter().skip(3).enumerate().map(
+                |(ix, h)| BedColumn::Header {
+                    index: ix,
+                    name: h.to_owned(),
+                },
+            ));
+        }
 
         Ok(Self {
             file_name,
@@ -124,7 +133,11 @@ impl BedRecords {
             1 => Bed::Start,
             2 => Bed::End,
             // 3 => Bed::Name,
-            ix => Bed::Index(ix - 3),
+            ix => Bed::Header {
+                index: ix,
+                name: header.to_owned(),
+            },
+            // ix => Bed::Index(ix - 3),
         };
 
         Some(column)
@@ -151,11 +164,15 @@ impl BedRecord {
         let start: usize = parse_next(&mut fields)?;
         let end: usize = parse_next(&mut fields)?;
 
-        let mut rest: Vec<Vec<u8>> = Vec::new();
+        let rest: Vec<Vec<u8>> = fields.map(|field| field.to_owned()).collect();
+        // let mut rest: Vec<Vec<u8>> = Vec::new();
 
-        while let Some(field) = fields.next() {
-            rest.push(field.to_owned());
-        }
+        // let mut count = 0;
+        // while let Some(field) = fields.next() {
+        //     count += 1;
+        //     rest.push(field.to_owned());
+        // }
+        // println!("adding {} columns", count);
 
         Some(Self {
             chr: chr.to_owned(),
@@ -177,7 +194,7 @@ impl std::fmt::Display for BedColumn {
             BedColumn::End => write!(f, "end"),
             BedColumn::Name => write!(f, "name"),
             BedColumn::Index(i) => write!(f, "{}", i),
-            // BedColumn::Header(h) => write!(f, "{}", h.as_bstr()),
+            BedColumn::Header { name, .. } => write!(f, "{}", name.as_bstr()),
         }
     }
 }
@@ -261,10 +278,11 @@ impl AnnotationRecord for BedRecord {
             BedColumn::End => None,
             BedColumn::Name => self.rest.get(0).map(|v| v.as_bytes()),
             BedColumn::Index(i) => self.rest.get(*i).map(|v| v.as_bytes()),
-            // BedColumn::Header(h) => {
-            //     let index = self.headers.iter().fi
-            //     todo!(),
-            // }
+            BedColumn::Header { index, .. } => {
+                self.rest.get(*index).map(|v| v.as_bytes())
+            } //     let index = self.headers.iter().fi
+              //     todo!(),
+              // }
         }
     }
 
@@ -281,7 +299,14 @@ impl AnnotationRecord for BedRecord {
                 .get(*i)
                 .map(|v| v.as_bytes())
                 .into_iter()
-                .collect(), // BedColumn::Header(h) => todo!(),
+                .collect(),
+
+            BedColumn::Header { index, .. } => self
+                .rest
+                .get(*index)
+                .map(|v| v.as_bytes())
+                .into_iter()
+                .collect(),
         }
     }
 
