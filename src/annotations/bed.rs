@@ -15,6 +15,7 @@ pub struct BedRecords {
     column_keys: Vec<BedColumn>,
     // TODO add header support
     // pub column_header: Vec<Vec<u8>>,
+    headers: Vec<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +58,10 @@ impl BedRecords {
 
         let mut column_count = 0;
 
+        let mut headers = Vec::new();
+
+        let mut line_num = 0;
+
         loop {
             buf.clear();
 
@@ -68,7 +73,13 @@ impl BedRecords {
 
             let line = &buf[0..read];
 
+            line_num += 1;
+
             if line[0] == b'#' {
+                if line_num == 1 && line.len() > 1 {
+                    let fields = (&line[1..]).fields();
+                    headers.extend(fields.map(|field| field.to_owned()));
+                }
                 continue;
             }
 
@@ -89,7 +100,34 @@ impl BedRecords {
             file_name,
             records,
             column_keys,
+
+            headers,
         })
+    }
+
+    pub fn has_headers(&self) -> bool {
+        !self.headers.is_empty()
+    }
+
+    pub fn header_to_column(&self, header: &[u8]) -> Option<BedColumn> {
+        let raw_index = self
+            .headers
+            .iter()
+            .enumerate()
+            .find(|(_, h)| h == &header)
+            .map(|(ix, _)| ix)?;
+
+        use BedColumn as Bed;
+
+        let column = match raw_index {
+            0 => Bed::Chr,
+            1 => Bed::Start,
+            2 => Bed::End,
+            // 3 => Bed::Name,
+            ix => Bed::Index(ix - 3),
+        };
+
+        Some(column)
     }
 }
 
@@ -223,7 +261,10 @@ impl AnnotationRecord for BedRecord {
             BedColumn::End => None,
             BedColumn::Name => self.rest.get(0).map(|v| v.as_bytes()),
             BedColumn::Index(i) => self.rest.get(*i).map(|v| v.as_bytes()),
-            // BedColumn::Header(h) => todo!(),
+            // BedColumn::Header(h) => {
+            //     let index = self.headers.iter().fi
+            //     todo!(),
+            // }
         }
     }
 
