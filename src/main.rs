@@ -1,6 +1,6 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
-use gfaestus::annotations::{BedRecords, Gff3Records};
+use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::{FxHashMap, FxHashSet};
 use texture::Gradients;
@@ -695,6 +695,90 @@ fn main() {
                         }
                     };
 
+
+                    let cluster_cache = ClusterCache::new_cluster(
+                        &steps,
+                        universe.layout().nodes(),
+                        label_set,
+                        app.shared_state().view(),
+                        label_radius
+                    );
+
+
+                    for (node, cluster_indices) in cluster_cache.node_labels.iter() {
+                        let mut y_offset = 20.0;
+                        let mut count = 0;
+
+                        let label_indices = &cluster_indices.label_indices;
+
+                        for &label_ix in label_indices.iter() {
+
+                            let label = &cluster_cache.label_set.label_strings()[label_ix];
+                            let offset = &cluster_cache
+                                .cluster_offsets[cluster_indices.offset_ix];
+
+                            let anchor_dir = Point::new(-offset.x, -offset.y);
+                            let offset = *offset * 20.0;
+
+                            let rect = gfaestus::gui::text::draw_text_at_node_anchor(
+                                &gui.ctx,
+                                universe.layout().nodes(),
+                                app.shared_state().view(),
+                                *node,
+                                offset + Point::new(0.0, y_offset),
+                                anchor_dir,
+                                label
+                            );
+
+                            if let Some(rect) = rect {
+                                let rect = rect.resize(0.98);
+                                if rect.contains(app.mouse_pos()) {
+                                    gfaestus::gui::text::draw_rect(&gui.ctx, rect);
+
+                                    // hacky way to check for a click
+                                    // for now, because i can't figure
+                                    // egui out
+                                    if gui.ctx.input().pointer.any_click() {
+                                        match column {
+                                            AnnotationColumn::Gff3(col) => {
+                                                if let Some(gff) = records.downcast_ref::<Gff3Records>() {
+                                                    gui.scroll_to_gff_record(gff, col, label.as_bytes());
+                                                }
+                                            }
+                                            AnnotationColumn::Bed(col) => {
+                                                if let Some(bed) = records.downcast_ref::<BedRecords>() {
+                                                    gui.scroll_to_bed_record(bed, col, label.as_bytes());
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            y_offset += 15.0;
+                            count += 1;
+
+                            if count > 10 {
+                                let count = count.min(label_indices.len());
+                                let rem = label_indices.len() - count;
+
+                                if rem > 0 {
+                                    let more_label = format!("and {} more", rem);
+
+                                    gfaestus::gui::text::draw_text_at_node_anchor(
+                                        &gui.ctx,
+                                        universe.layout().nodes(),
+                                        app.shared_state().view(),
+                                        *node,
+                                        offset + Point::new(0.0, y_offset),
+                                        anchor_dir,
+                                        &more_label
+                                    );
+                                }
+                                break;
+                            }
+                        }
+                    }
 
                     /*
                     let clustered = gfaestus::annotations::cluster_annotations(

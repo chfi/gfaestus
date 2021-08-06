@@ -386,23 +386,37 @@ pub fn path_step_radius(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct ClusterIndices {
-    label_indices: Vec<usize>,
-    offset_ix: usize,
+pub struct ClusterIndices {
+    pub label_indices: Vec<usize>,
+    pub offset_ix: usize,
 }
 
 pub struct ClusterCache<'a> {
     // labels: Vec<String>,
-    label_set: &'a AnnotationLabelSet,
-    cluster_offsets: Vec<Point>,
+    pub label_set: &'a AnnotationLabelSet,
+    pub cluster_offsets: Vec<Point>,
 
-    node_labels: FxHashMap<NodeId, ClusterIndices>,
+    pub node_labels: FxHashMap<NodeId, ClusterIndices>,
 
-    view_scale: f32,
-    radius: f32,
+    pub view_scale: f32,
+    pub radius: f32,
 }
 
 impl<'a> ClusterCache<'a> {
+    /*
+    pub fn clusters(
+        &self,
+    ) -> impl Iterator<Item = (NodeId, Point, &'_ [usize])> + '_ {
+        self.node_labels.iter().map(|(node, cluster_indices)| {
+            (
+                *node,
+                self.cluster_offsets[cluster_indices.offset_ix],
+                cluster_indices.label_indices.as_slice(),
+            )
+        })
+    }
+    */
+
     pub fn new_cluster(
         steps: &[(Handle, StepPtr, usize)],
         nodes: &[Node],
