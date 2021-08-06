@@ -112,7 +112,7 @@ pub struct Annotations {
     gff3_annotations: HashMap<String, Arc<Gff3Records>>,
     bed_annotations: HashMap<String, Arc<BedRecords>>,
 
-    label_sets: HashMap<String, AnnotationLabelSet>,
+    label_sets: HashMap<String, Arc<AnnotationLabelSet>>,
 }
 
 impl Annotations {
@@ -157,20 +157,24 @@ impl Annotations {
         name: &str,
         label_set: AnnotationLabelSet,
     ) {
-        self.label_sets.insert(name.to_string(), label_set);
+        self.label_sets
+            .insert(name.to_string(), Arc::new(label_set));
     }
 
-    pub fn get_label_set(&mut self, name: &str) -> Option<&AnnotationLabelSet> {
+    pub fn get_label_set(
+        &mut self,
+        name: &str,
+    ) -> Option<&Arc<AnnotationLabelSet>> {
         self.label_sets.get(name)
     }
 
     pub fn visible_label_sets(
         &self,
-    ) -> impl Iterator<Item = &'_ AnnotationLabelSet> + '_ {
+    ) -> impl Iterator<Item = &'_ Arc<AnnotationLabelSet>> + '_ {
         self.label_sets.values().filter(|ls| ls.is_visible())
     }
 
-    pub fn label_sets(&self) -> &HashMap<String, AnnotationLabelSet> {
+    pub fn label_sets(&self) -> &HashMap<String, Arc<AnnotationLabelSet>> {
         &self.label_sets
     }
 }
@@ -391,9 +395,9 @@ pub struct ClusterIndices {
     pub offset_ix: usize,
 }
 
-pub struct ClusterCache<'a> {
+pub struct ClusterCache {
     // labels: Vec<String>,
-    pub label_set: &'a AnnotationLabelSet,
+    pub label_set: Arc<AnnotationLabelSet>,
     pub cluster_offsets: Vec<Point>,
 
     pub node_labels: FxHashMap<NodeId, ClusterIndices>,
@@ -402,7 +406,7 @@ pub struct ClusterCache<'a> {
     pub radius: f32,
 }
 
-impl<'a> ClusterCache<'a> {
+impl ClusterCache {
     /*
     pub fn clusters(
         &self,
@@ -420,7 +424,7 @@ impl<'a> ClusterCache<'a> {
     pub fn new_cluster(
         steps: &[(Handle, StepPtr, usize)],
         nodes: &[Node],
-        label_set: &'a AnnotationLabelSet,
+        label_set: &Arc<AnnotationLabelSet>,
         view: View,
         radius: f32,
     ) -> Self {
@@ -507,7 +511,7 @@ impl<'a> ClusterCache<'a> {
         }
 
         Self {
-            label_set,
+            label_set: label_set.clone(),
             cluster_offsets,
             node_labels: node_label_indices,
 
@@ -520,7 +524,6 @@ impl<'a> ClusterCache<'a> {
         &mut self,
         steps: &[(Handle, StepPtr, usize)],
         nodes: &[Node],
-        label_set: &'a AnnotationLabelSet,
         view: View,
         radius: f32,
     ) -> bool {
@@ -530,12 +533,17 @@ impl<'a> ClusterCache<'a> {
             return false;
         }
 
+        self.view_scale = view.scale;
+        self.radius = radius;
+
         self.cluster_offsets.clear();
         self.node_labels.clear();
 
         let mut cluster_range_ix: Option<(usize, usize)> = None;
         let mut cluster_start_pos: Option<Point> = None;
         let mut current_cluster: Vec<usize> = Vec::new();
+
+        let label_set = &self.label_set;
 
         let mut clusters: FxHashMap<(usize, usize), Vec<usize>> =
             FxHashMap::default();

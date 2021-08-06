@@ -1,6 +1,8 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
-use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
+use gfaestus::annotations::{
+    AnnotationLabelSet, BedRecords, ClusterCache, Gff3Records,
+};
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::{FxHashMap, FxHashSet};
 use texture::Gradients;
@@ -44,6 +46,7 @@ use ash::{vk, Device};
 #[allow(unused_imports)]
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 #[allow(unused_imports)]
@@ -320,6 +323,8 @@ fn main() {
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
     */
+
+    let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -623,48 +628,10 @@ fn main() {
                     app.annotations()
                 );
 
-                {
-                    let label_sets = app
-                        .annotations()
-                        .visible_label_sets()
-                        .collect::<Vec<_>>();
+                let annotations = app.annotations();
 
 
-
-                    /*
-                    let mut label_sets_by_path: FxHashMap<PathId, FxHashMap<NodeId, Vec<String>>> =
-                        FxHashMap::default();
-
-                    for label_set in label_sets.iter() {
-                        let sets = label_sets_by_path.entry(label_set.path_id).or_default();
-
-                        for (node_id, labels) in label_set.labels() {
-                            sets.entry(*node_id).or_default().extend_from_slice(labels);
-                        }
-
-                    }
-
-                    for sets in label_sets_by_path.values_mut() {
-                        for (_, labels) in sets.iter_mut() {
-                            labels.sort();
-                            labels.dedup();
-                        }
-                    }
-                    */
-
-
-                    let paths = label_sets
-                        .iter()
-                        .map(|ls| ls.path_id)
-                        .collect::<FxHashSet<_>>();
-
-                    let steps = paths
-                        .iter()
-                        .filter_map(|p| graph_query.path_pos_steps(*p))
-                        .collect::<Vec<_>>();
-                }
-
-                for label_set in app.annotations().visible_label_sets() {
+                for label_set in annotations.visible_label_sets() {
 
                     let steps = graph_query.path_pos_steps(label_set.path_id).unwrap();
 
@@ -696,14 +663,30 @@ fn main() {
                     };
 
 
-                    let cluster_cache = ClusterCache::new_cluster(
-                        &steps,
-                        universe.layout().nodes(),
-                        label_set,
-                        app.shared_state().view(),
-                        label_radius
-                    );
+                    if !cluster_caches.contains_key(&label_set.annotation_name) {
+                        let cluster_cache = ClusterCache::new_cluster(
+                            &steps,
+                            universe.layout().nodes(),
+                            label_set,
+                            app.shared_state().view(),
+                            label_radius
+                        );
 
+                        cluster_caches.insert(label_set.annotation_name.clone(),
+                                              cluster_cache);
+                    }
+
+                    let cluster_cache = cluster_caches
+                        .get_mut(&label_set.annotation_name)
+                        .unwrap();
+
+                    cluster_cache
+                        .rebuild_cluster(
+                            &steps,
+                            universe.layout().nodes(),
+                            app.shared_state().view(),
+                            label_radius
+                        );
 
                     for (node, cluster_indices) in cluster_cache.node_labels.iter() {
                         let mut y_offset = 20.0;
