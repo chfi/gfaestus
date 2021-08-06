@@ -118,6 +118,10 @@ impl BedRecords {
         !self.headers.is_empty()
     }
 
+    pub fn headers(&self) -> &[Vec<u8>] {
+        &self.headers
+    }
+
     pub fn header_to_column(&self, header: &[u8]) -> Option<BedColumn> {
         let raw_index = self
             .headers

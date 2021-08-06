@@ -515,6 +515,7 @@ pub struct BedFilter {
     end: FilterNum<usize>,
 
     rest: Vec<FilterString>,
+    headers: Option<Vec<Vec<u8>>>,
     // score: FilterNum<f64>,
 
     // frame: FilterString,
@@ -532,8 +533,15 @@ impl BedFilter {
             .map(|_| FilterString::default())
             .collect::<Vec<_>>();
 
+        let headers = if records.has_headers() {
+            Some(records.headers().to_owned())
+        } else {
+            None
+        };
+
         Self {
             rest,
+            headers,
             ..BedFilter::default()
         }
     }
@@ -602,7 +610,13 @@ impl BedFilter {
                         for (_count, (index, filter)) in
                             col_filters.into_iter().enumerate()
                         {
-                            ui.label(&index.to_string());
+                            if let Some(headers) = &self.headers {
+                                let label =
+                                    format!("{}", headers[index].as_bstr());
+                                ui.label(&label);
+                            } else {
+                                ui.label(&index.to_string());
+                            }
                             filter.ui(ui);
                             ui.separator();
                         }
