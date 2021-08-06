@@ -1196,16 +1196,14 @@ impl OverlayLabelSetCreator {
         label_strings.shrink_to_fit();
         label_indices.shrink_to_fit();
 
-        AnnotationLabelSet::new(
+        Some(AnnotationLabelSet::new(
             records,
             path_id,
             path_name.as_bytes(),
             column,
             label_strings,
             label_indices,
-        );
-
-        None
+        ))
     }
 
     fn calculate_annotations<C, R, K>(
