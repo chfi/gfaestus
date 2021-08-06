@@ -325,6 +325,8 @@ fn main() {
     */
 
     let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
+    let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
+        FxHashMap::default();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -633,7 +635,12 @@ fn main() {
 
                 for label_set in annotations.visible_label_sets() {
 
-                    let steps = graph_query.path_pos_steps(label_set.path_id).unwrap();
+                    if !step_caches.contains_key(&label_set.path_id) {
+                        let steps = graph_query.path_pos_steps(label_set.path_id).unwrap();
+                        step_caches.insert(label_set.path_id, steps);
+                    }
+
+                    let steps = step_caches.get(&label_set.path_id).unwrap();
 
                     let label_radius = app.settings.label_radius().load();
 
