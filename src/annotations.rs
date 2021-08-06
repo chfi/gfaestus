@@ -516,17 +516,103 @@ impl<'a> ClusterCache<'a> {
         }
     }
 
-    /*
-    pub fn new_cluster(
+    pub fn rebuild_cluster(
+        &mut self,
         steps: &[(Handle, StepPtr, usize)],
         nodes: &[Node],
-        node_labels: &FxHashMap<NodeId, Vec<String>>,
+        label_set: &'a AnnotationLabelSet,
         view: View,
         radius: f32,
-    ) -> Self {
-        unimplemented!();
+    ) -> bool {
+        if (view.scale - self.view_scale).abs() < 0.0001
+            && radius == self.radius
+        {
+            return false;
+        }
+
+        self.cluster_offsets.clear();
+        self.node_labels.clear();
+
+        let mut cluster_range_ix: Option<(usize, usize)> = None;
+        let mut cluster_start_pos: Option<Point> = None;
+        let mut current_cluster: Vec<usize> = Vec::new();
+
+        let mut clusters: FxHashMap<(usize, usize), Vec<usize>> =
+            FxHashMap::default();
+
+        let view_matrix = view.to_scaled_matrix();
+        let to_screen = |p: Point| {
+            let v = glm::vec4(p.x, p.y, 0.0, 1.0);
+            let v_ = view_matrix * v;
+            Point::new(v_[0], v_[1])
+        };
+
+        for (ix, (handle, _, _)) in steps.iter().enumerate() {
+            let node = handle.id();
+
+            if let Some(label_indices) = label_set.labels.get(&node) {
+                let node_ix = (node.0 - 1) as usize;
+                let node_pos = to_screen(nodes[node_ix].center());
+
+                if let Some(start_pos) = cluster_start_pos {
+                    if node_pos.dist(start_pos) <= radius {
+                        cluster_range_ix.as_mut().map(|(_, end)| *end = ix);
+                        current_cluster.extend_from_slice(label_indices);
+                    } else {
+                        clusters.insert(
+                            cluster_range_ix.unwrap(),
+                            current_cluster.clone(),
+                        );
+                        current_cluster.clear();
+
+                        cluster_start_pos = Some(node_pos);
+                        cluster_range_ix = Some((ix, ix));
+
+                        current_cluster.extend_from_slice(label_indices);
+                    }
+                } else {
+                    cluster_start_pos = Some(node_pos);
+                    cluster_range_ix = Some((ix, ix));
+
+                    current_cluster.extend_from_slice(label_indices);
+                }
+            }
+        }
+
+        for ((start, end), cluster_label_indices) in clusters {
+            let slice = &steps[start..=end];
+            let (mid_handle, _, _) = slice[slice.len() / 2];
+
+            let (start_h, _, _) = steps[start];
+            let (end_h, _, _) = steps[end];
+
+            let s_ix = (start_h.id().0 - 1) as usize;
+            let e_ix = (end_h.id().0 - 1) as usize;
+
+            let start_p = nodes[s_ix].p0;
+            let end_p = nodes[e_ix].p1;
+
+            let start_v = glm::vec2(start_p.x, start_p.y);
+            let end_v = glm::vec2(end_p.x, end_p.y);
+
+            let del = end_v - start_v;
+            let rot_del = glm::rotate_vec2(&del, std::f32::consts::PI / 2.0);
+
+            let rot_del_norm = rot_del.normalize();
+
+            let offset = Point::new(rot_del_norm[0], rot_del_norm[1]);
+
+            let cluster_indices = ClusterIndices {
+                label_indices: cluster_label_indices,
+                offset_ix: self.cluster_offsets.len(),
+            };
+
+            self.node_labels.insert(mid_handle.id(), cluster_indices);
+            self.cluster_offsets.push(offset);
+        }
+
+        true
     }
-    */
 }
 
 pub fn cluster_annotations(
