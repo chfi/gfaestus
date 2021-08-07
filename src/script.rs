@@ -100,40 +100,55 @@ pub fn overlay_colors(
 
     let engine = create_engine();
 
-    let node_count = engine.eval_with_scope::<Vec<u8>>(
-        &mut scope,
-        "
-let seq = graph.sequence(node_id(5));
-seq
-",
-    );
+    let node_color_script = "
+fn node_color(id) {
+  let seq = graph.sequence(id);
+  let hash = hash_bytes(seq);
+  let color = hash_color(hash);
+  color
+}
+";
 
-    println!("eval results: {:?}", node_count);
+    let node_color_ast = engine.compile(node_color_script)?;
 
-    let color = engine.eval_with_scope::<rgb::RGBA<f32>>(
-        &mut scope,
-        "
-let seq = graph.sequence(node_id(5));
-let hash = hash_bytes(seq);
-let color = hash_color(hash);
-color
-",
-    );
+    let mut colors: Vec<rgb::RGBA<f32>> =
+        Vec::with_capacity(graph.node_count());
 
-    println!("eval results: {:?}", color);
+    let mut node_ids =
+        graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
+    node_ids.sort();
 
+    for id in node_ids {
+        let color =
+            engine.call_fn(&mut scope, &node_color_ast, "node_color", (id,))?;
+        colors.push(color);
+    }
     /*
-    let result = engine.eval::<Vec<(f32, f32, f32, f32)>>(script)?;
-    let result = result
-        .into_iter()
-        // .map(|(r, g, b, a)| rgb::RGBA::new(r, g, b, a))
-        .map(rgb::RGBA::from)
-        .collect::<Vec<_>>();
-    */
 
-    let result = Vec::new();
+        let node_count = engine.eval_with_scope::<Vec<u8>>(
+            &mut scope,
+            "
+    let seq = graph.sequence(node_id(5));
+    seq
+    ",
+        );
 
-    Ok(result)
+        println!("eval results: {:?}", node_count);
+
+        let color = engine.eval_with_scope::<rgb::RGBA<f32>>(
+            &mut scope,
+            "
+    let seq = graph.sequence(node_id(5));
+    let hash = hash_bytes(seq);
+    let color = hash_color(hash);
+    color
+    ",
+        );
+
+        println!("eval results: {:?}", color);
+        */
+
+    Ok(colors)
 }
 
 pub fn hash_node_seq(graph: &GraphQuery, node_id: NodeId) -> u64 {

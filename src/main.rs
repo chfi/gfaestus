@@ -328,7 +328,21 @@ fn main() {
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
 
-    gfaestus::script::overlay_colors(&graph_query, "");
+    match gfaestus::script::overlay_colors(&graph_query, "") {
+        Ok(colors) => {
+            let overlay_data = OverlayData::RGB(colors);
+            gui.new_overlay_tx()
+                .send(OverlayCreatorMsg::NewOverlay {
+                    name: "rhai overlay".to_string(),
+                    data: overlay_data,
+                })
+                .unwrap();
+            println!("sent rhai overlay");
+        }
+        Err(err) => {
+            println!("rhai error: {:?}", err);
+        }
+    }
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;

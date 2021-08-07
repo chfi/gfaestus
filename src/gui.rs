@@ -514,6 +514,12 @@ impl Gui {
         &self.view_state.overlay_creator.state.new_overlay_rx()
     }
 
+    pub fn new_overlay_tx(
+        &self,
+    ) -> &crossbeam::channel::Sender<OverlayCreatorMsg> {
+        &self.view_state.overlay_creator.state.new_overlay_tx()
+    }
+
     pub fn scroll_to_gff_record(
         &mut self,
         records: &Gff3Records,
