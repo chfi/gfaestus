@@ -141,9 +141,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.5.0"
+version = "1.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a4bad0c5981acc24bc09e532f35160f952e35422603f0563cd7a73c2c2e65a0"
+checksum = "72957246c41db82b8ef88a5486143830adeb8227ef9837740bdec67724cf2c5b"
 dependencies = [
  "bytemuck_derive",
 ]
@@ -691,6 +691,7 @@ dependencies = [
  "ash",
  "ash-window",
  "bstr",
+ "bytemuck",
  "clipboard",
  "colorous",
  "crossbeam",

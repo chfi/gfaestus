@@ -59,8 +59,8 @@ impl GraphQueryWorker {
 }
 
 pub struct GraphQuery {
-    graph: Arc<PackedGraph>,
-    path_positions: Arc<PathPositionMap>,
+    pub graph: Arc<PackedGraph>,
+    pub path_positions: Arc<PathPositionMap>,
     query_thread: QueryThread,
 }
 

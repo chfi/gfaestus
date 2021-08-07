@@ -44,5 +44,7 @@ bstr = "0.2"
 
 rhai = { version = "1.0.1", features = ["sync", "f32_float"] }
 
+bytemuck = { version = "1.7", features = ["derive"] }
+
 [profile.dev]
 opt-level = 2
