@@ -328,7 +328,12 @@ fn main() {
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
 
-    match gfaestus::script::overlay_colors(&graph_query, "") {
+    let rayon_pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(6)
+        .build()
+        .unwrap();
+
+    match gfaestus::script::overlay_colors(&rayon_pool, &graph_query, "") {
         Ok(colors) => {
             let overlay_data = OverlayData::RGB(colors);
             gui.new_overlay_tx()

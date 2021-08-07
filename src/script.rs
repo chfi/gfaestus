@@ -88,6 +88,7 @@ pub fn create_engine() -> Engine {
 }
 
 pub fn overlay_colors(
+    rayon_pool: &rayon::ThreadPool,
     graph: &GraphQuery,
     script: &str,
 ) -> std::result::Result<Vec<rgb::RGBA<f32>>, Box<EvalAltResult>> {
@@ -109,44 +110,33 @@ fn node_color(id) {
 }
 ";
 
-    let node_color_ast = engine.compile(node_color_script)?;
-
-    let mut colors: Vec<rgb::RGBA<f32>> =
-        Vec::with_capacity(graph.node_count());
-
     let mut node_ids =
         graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
     node_ids.sort();
 
-    for id in node_ids {
-        let color =
-            engine.call_fn(&mut scope, &node_color_ast, "node_color", (id,))?;
-        colors.push(color);
-    }
-    /*
+    let node_color_ast = engine.compile(node_color_script)?;
 
-        let node_count = engine.eval_with_scope::<Vec<u8>>(
-            &mut scope,
-            "
-    let seq = graph.sequence(node_id(5));
-    seq
-    ",
-        );
+    let colors = rayon_pool.install(|| {
+        let mut colors: Vec<rgb::RGBA<f32>> =
+            Vec::with_capacity(node_ids.len());
+        node_ids
+            .into_par_iter()
+            .map_with(scope, |mut thread_scope, node_id| {
+                let color = engine
+                    .call_fn(
+                        &mut thread_scope,
+                        &node_color_ast,
+                        "node_color",
+                        (node_id,),
+                    )
+                    .unwrap();
 
-        println!("eval results: {:?}", node_count);
+                color
+            })
+            .collect_into_vec(&mut colors);
 
-        let color = engine.eval_with_scope::<rgb::RGBA<f32>>(
-            &mut scope,
-            "
-    let seq = graph.sequence(node_id(5));
-    let hash = hash_bytes(seq);
-    let color = hash_color(hash);
-    color
-    ",
-        );
-
-        println!("eval results: {:?}", color);
-        */
+        colors
+    });
 
     Ok(colors)
 }
