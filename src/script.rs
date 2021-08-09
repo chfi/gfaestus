@@ -96,8 +96,7 @@ pub enum ScriptTarget {
 
 #[derive(Debug, Clone, Copy)]
 pub struct ScriptConfig {
-    default_color: rgb::RGBA<f32>,
-    overlay_kind: OverlayKind,
+    pub default_color: rgb::RGBA<f32>,
 }
 
 pub fn check_overlay_kind(data: rhai::Dynamic) -> Option<OverlayKind> {
@@ -135,7 +134,7 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
     None
 }
 
-pub fn overlay_colors_tgt_(
+pub fn overlay_colors_tgt(
     rayon_pool: &rayon::ThreadPool,
     config: ScriptConfig,
     target: &ScriptTarget,
@@ -273,6 +272,7 @@ pub fn overlay_colors_tgt_(
     }
 }
 
+/*
 pub fn overlay_colors_tgt(
     rayon_pool: &rayon::ThreadPool,
     config: ScriptConfig,
@@ -380,6 +380,7 @@ pub fn overlay_colors_tgt(
         }
     }
 }
+*/
 
 pub fn overlay_colors(
     rayon_pool: &rayon::ThreadPool,

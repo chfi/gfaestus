@@ -542,10 +542,11 @@ impl Gui {
     pub fn begin_frame(
         &mut self,
         screen_rect: Option<Point>,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         // graph_handle: &GraphHandle,
         annotations: &Annotations,
+        rayon_pool: &Arc<rayon::ThreadPool>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -597,14 +598,13 @@ impl Gui {
                 overlay_creator,
             );
 
-            /*
             view_state.overlay_creator.state.ui(
                 &self.ctx,
                 overlay_creator,
-                graph_handle,
+                graph_query.clone(),
                 &self.thread_pool,
+                rayon_pool.clone(),
             );
-            */
 
             view_state.overlay_list.state.gradient_picker_ui(&self.ctx);
         }

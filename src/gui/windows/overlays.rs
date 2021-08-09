@@ -1,14 +1,18 @@
+use std::io::Read;
 use std::{path::PathBuf, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel::{Receiver, Sender};
 
+use rhai::EvalAltResult;
 use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
 use futures::executor::ThreadPool;
 
+use crate::graph_query::GraphQuery;
+use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
     asynchronous::AsyncResult,
     geometry::Point,
@@ -152,7 +156,9 @@ pub struct OverlayCreator {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    script_query: Option<AsyncResult<anyhow::Result<OverlayData>>>,
+    script_query: Option<
+        AsyncResult<std::result::Result<OverlayData, Box<EvalAltResult>>>,
+    >,
 }
 
 impl OverlayCreator {
@@ -194,8 +200,10 @@ impl OverlayCreator {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
+        graph: Arc<GraphQuery>,
         // graph: &GraphHandle,
         thread_pool: &ThreadPool,
+        rayon_pool: Arc<rayon::ThreadPool>,
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
@@ -246,7 +254,6 @@ impl OverlayCreator {
 
                 let _script_error_msg = ui.label(&self.script_error);
 
-                /*
                 if run_script.clicked() && self.script_query.is_none() {
                     let path = PathBuf::from(path_str.as_str());
                     println!(
@@ -254,16 +261,35 @@ impl OverlayCreator {
                         path.to_str()
                     );
 
-                    let gluon_ = self.gluon.clone();
-                    let graph_ = graph.clone();
+                    let target = ScriptTarget::Nodes;
+
+                    let config = ScriptConfig {
+                        default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+                    };
 
                     dbg!();
                     let query = AsyncResult::new(thread_pool, async move {
+                        let mut file = std::fs::File::open(path)
+                            .map_err(|_| "error loading script file")?;
+                        let mut script = String::new();
+                        file.read_to_string(&mut script)
+                            .map_err(|_| "error loading script file")?;
+
+                        let overlay_data = crate::script::overlay_colors_tgt(
+                            &rayon_pool,
+                            config,
+                            &target,
+                            &graph,
+                            &script,
+                        );
+                        overlay_data
+                        /*
                         let path = path;
                         let gluon_vm = gluon_;
                         let graph = graph_;
 
                         gluon_vm.overlay_per_node_expr_(&graph, &path).await
+                        */
                     });
 
                     self.script_query = Some(query);
@@ -292,6 +318,8 @@ impl OverlayCreator {
                             self.new_overlay_tx.send(msg).unwrap();
                         }
                         Err(err) => {
+                            self.script_error = err.to_string();
+                            /*
                             let root_cause = err.root_cause();
 
                             if let Some(io_err) =
@@ -309,6 +337,7 @@ impl OverlayCreator {
                                 self.script_error =
                                     "Gluon error, see console".to_string();
                             }
+                            */
 
                             eprintln!("Script error:\n{:?}", err);
                         }
@@ -316,7 +345,6 @@ impl OverlayCreator {
 
                     self.script_query = None;
                 }
-                */
             })
     }
 }

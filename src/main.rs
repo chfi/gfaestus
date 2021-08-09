@@ -333,6 +333,8 @@ fn main() {
         .build()
         .unwrap();
 
+    let rayon_pool = Arc::new(rayon_pool);
+
     match gfaestus::script::overlay_colors(&rayon_pool, &graph_query, "") {
         Ok(colors) => {
             let overlay_data = OverlayData::RGB(colors);
@@ -647,7 +649,8 @@ fn main() {
                     Some(app.dims().into()),
                     &graph_query,
                     &graph_query_worker,
-                    app.annotations()
+                    app.annotations(),
+                    &rayon_pool
                 );
 
                 let annotations = app.annotations();
