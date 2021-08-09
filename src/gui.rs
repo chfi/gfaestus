@@ -544,7 +544,6 @@ impl Gui {
         screen_rect: Option<Point>,
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
-        // graph_handle: &GraphHandle,
         annotations: &Annotations,
         rayon_pool: &Arc<rayon::ThreadPool>,
     ) {
