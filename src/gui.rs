@@ -79,6 +79,7 @@ pub struct Gui {
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     thread_pool: Arc<ThreadPool>,
+    rayon_pool: Arc<rayon::ThreadPool>,
 
     clipboard_ctx: ClipboardContext,
 
@@ -382,6 +383,7 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: Arc<ThreadPool>,
+        rayon_pool: Arc<rayon::ThreadPool>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -474,6 +476,7 @@ impl Gui {
             dropped_file,
 
             thread_pool,
+            rayon_pool,
 
             clipboard_ctx,
 
@@ -545,7 +548,6 @@ impl Gui {
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         annotations: &Annotations,
-        rayon_pool: &Arc<rayon::ThreadPool>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -602,7 +604,7 @@ impl Gui {
                 overlay_creator,
                 graph_query.clone(),
                 &self.thread_pool,
-                rayon_pool.clone(),
+                self.rayon_pool.clone(),
             );
 
             view_state.overlay_list.state.gradient_picker_ui(&self.ctx);

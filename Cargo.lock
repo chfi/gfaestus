@@ -701,6 +701,7 @@ dependencies = [
  "handlegraph",
  "nalgebra",
  "nalgebra-glm",
+ "num_cpus",
  "parking_lot",
  "rayon",
  "rgb",

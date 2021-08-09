@@ -99,9 +99,40 @@ fn main() {
         std::process::exit(1);
     };
 
+    let num_cpus = num_cpus::get();
+
+    let mut futures_cpus;
+    let mut rayon_cpus;
+
+    // TODO this has to be done much more intelligently
+    if num_cpus < 4 {
+        futures_cpus = 1;
+        rayon_cpus = 1;
+    } else if num_cpus == 4 {
+        futures_cpus = 1;
+        rayon_cpus = 2;
+    } else if num_cpus <= 6 {
+        futures_cpus = 2;
+        rayon_cpus = num_cpus - 3;
+    } else {
+        futures_cpus = 3;
+        rayon_cpus = num_cpus - 4;
+    }
+
     // TODO make sure to set thread pool size to less than number of CPUs
-    let thread_pool =
-        Arc::new(ThreadPoolBuilder::new().pool_size(3).create().unwrap());
+    let thread_pool = Arc::new(
+        ThreadPoolBuilder::new()
+            .pool_size(futures_cpus)
+            .create()
+            .unwrap(),
+    );
+
+    let rayon_pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(rayon_cpus)
+        .build()
+        .unwrap();
+
+    let rayon_pool = Arc::new(rayon_pool);
 
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
@@ -200,18 +231,12 @@ fn main() {
         app.settings.clone(),
         &graph_query,
         thread_pool.clone(),
-        // gff_records,
+        rayon_pool.clone(),
     )
     .unwrap();
 
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
-
-    let graph_arc = graph_query.graph_arc().clone();
-    // let graph_handle = gfaestus::gluon::GraphHandle::new(
-    //     graph_arc,
-    //     graph_query.path_positions_arc().clone(),
-    // );
 
     let new_overlay_rx = gui.new_overlay_rx().clone();
 
@@ -327,13 +352,6 @@ fn main() {
     let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
-
-    let rayon_pool = rayon::ThreadPoolBuilder::new()
-        .num_threads(6)
-        .build()
-        .unwrap();
-
-    let rayon_pool = Arc::new(rayon_pool);
 
     match gfaestus::script::overlay_colors(&rayon_pool, &graph_query, "") {
         Ok(colors) => {
@@ -650,7 +668,6 @@ fn main() {
                     &graph_query,
                     &graph_query_worker,
                     app.annotations(),
-                    &rayon_pool
                 );
 
                 let annotations = app.annotations();
