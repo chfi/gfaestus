@@ -262,6 +262,7 @@ impl AnnotationFileList {
             .show(ctx, |mut ui| {
                 if self.gff3_load_result.is_none() {
                     if ui.button("Choose annotation file").clicked() {
+                        self.file_picker.reset_selection();
                         self.file_picker_open = true;
                     }
 

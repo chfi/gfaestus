@@ -22,6 +22,8 @@ use crate::{
 use crate::app::OverlayState;
 use crate::overlays::{OverlayData, OverlayKind};
 
+use super::file::FilePicker;
+
 pub struct OverlayList {
     overlay_state: OverlayState,
 
@@ -154,6 +156,9 @@ pub struct OverlayCreator {
     new_overlay_tx: Sender<OverlayCreatorMsg>,
     new_overlay_rx: Receiver<OverlayCreatorMsg>,
 
+    file_picker: FilePicker,
+    file_picker_open: bool,
+
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
     script_query: Option<
@@ -170,7 +175,16 @@ impl OverlayCreator {
         let (new_overlay_tx, new_overlay_rx) =
             crossbeam::channel::unbounded::<OverlayCreatorMsg>();
 
-        // let gluonvm = crate::gluon::GluonVM::new()?;
+        let pwd = std::fs::canonicalize("./").unwrap();
+
+        let mut file_picker = FilePicker::new(
+            egui::Id::with(egui::Id::new(Self::ID), "file_picker"),
+            pwd,
+        )
+        .unwrap();
+
+        let extensions: [&str; 1] = ["rhai"];
+        file_picker.set_visible_extensions(&extensions).unwrap();
 
         Ok(Self {
             name: String::new(),
@@ -181,6 +195,9 @@ impl OverlayCreator {
             // gluon: Arc::new(gluonvm),
             new_overlay_tx,
             new_overlay_rx,
+
+            file_picker,
+            file_picker_open: false,
 
             dropped_file,
 
@@ -209,11 +226,39 @@ impl OverlayCreator {
 
         let pos = egui::pos2(scr.center().x - 150.0, scr.center().y - 60.0);
 
+        if self.file_picker.selected_path().is_some() {
+            self.file_picker_open = false;
+        }
+
+        self.file_picker.ui(ctx, &mut self.file_picker_open);
+
+        if let Some(path) = self.file_picker.selected_path() {
+            let path_str = path.to_str().unwrap();
+            self.script_path_input = path_str.to_string();
+        }
+
         egui::Window::new("Create Overlay")
             .id(egui::Id::new(Self::ID))
             .open(open)
             .default_pos(pos)
             .show(ctx, |ui| {
+                if self.script_query.is_none() {
+                    if ui.button("Choose script file").clicked() {
+                        self.file_picker.reset_selection();
+                        self.file_picker_open = true;
+                    }
+
+                    let _label = if let Some(path) = self
+                        .file_picker
+                        .selected_path()
+                        .and_then(|p| p.to_str())
+                    {
+                        ui.label(path)
+                    } else {
+                        ui.label("No file selected")
+                    };
+                }
+
                 let name = &mut self.name;
 
                 let _name_box = ui.horizontal(|ui| {
@@ -255,6 +300,7 @@ impl OverlayCreator {
                 let _script_error_msg = ui.label(&self.script_error);
 
                 if run_script.clicked() && self.script_query.is_none() {
+                    self.file_picker.reset_selection();
                     let path = PathBuf::from(path_str.as_str());
                     println!(
                         "loading gluon script from path {:?}",
