@@ -159,8 +159,6 @@ pub struct OverlayCreator {
     file_picker: FilePicker,
     file_picker_open: bool,
 
-    dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-
     script_query: Option<
         AsyncResult<std::result::Result<OverlayData, Box<EvalAltResult>>>,
     >,
@@ -169,9 +167,7 @@ pub struct OverlayCreator {
 impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
-    pub fn new(
-        dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-    ) -> Result<Self> {
+    pub fn new() -> Result<Self> {
         let (new_overlay_tx, new_overlay_rx) =
             crossbeam::channel::unbounded::<OverlayCreatorMsg>();
 
@@ -198,8 +194,6 @@ impl OverlayCreator {
 
             file_picker,
             file_picker_open: false,
-
-            dropped_file,
 
             script_query: None,
         })
@@ -275,26 +269,6 @@ impl OverlayCreator {
                     ui.text_edit_singleline(path_str)
                 });
 
-                if path_box.response.hovered() {
-                    if let Ok(mut guard) = self.dropped_file.lock() {
-                        let mut retrieved = false;
-                        if let Some(path) = guard.as_mut() {
-                            println!(
-                                "Retrieved dropped file with {:?}",
-                                path.to_str()
-                            );
-                            if let Some(p) = path.to_str() {
-                                *path_str = p.to_string();
-                            }
-                            retrieved = true;
-                        }
-
-                        if retrieved {
-                            *guard = None;
-                        }
-                    }
-                }
-
                 let run_script = ui.button("Load and execute");
 
                 let _script_error_msg = ui.label(&self.script_error);
@@ -329,13 +303,6 @@ impl OverlayCreator {
                             &script,
                         );
                         overlay_data
-                        /*
-                        let path = path;
-                        let gluon_vm = gluon_;
-                        let graph = graph_;
-
-                        gluon_vm.overlay_per_node_expr_(&graph, &path).await
-                        */
                     });
 
                     self.script_query = Some(query);
@@ -365,25 +332,6 @@ impl OverlayCreator {
                         }
                         Err(err) => {
                             self.script_error = err.to_string();
-                            /*
-                            let root_cause = err.root_cause();
-
-                            if let Some(io_err) =
-                                root_cause.downcast_ref::<std::io::Error>()
-                            {
-                                if let std::io::ErrorKind::NotFound =
-                                    io_err.kind()
-                                {
-                                    self.script_error =
-                                        "Script not found".to_string();
-                                }
-                            } else if let Some(_gluon_err) =
-                                root_cause.downcast_ref::<gluon::Error>()
-                            {
-                                self.script_error =
-                                    "Gluon error, see console".to_string();
-                            }
-                            */
 
                             eprintln!("Script error:\n{:?}", err);
                         }
@@ -423,7 +371,6 @@ impl GradientPicker {
         &self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        // gradients: &Gradients,
     ) -> Option<egui::Response> {
         egui::Window::new("Gradients")
             .id(egui::Id::new(Self::ID))

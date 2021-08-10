@@ -185,7 +185,7 @@ impl AppViewState {
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
-        dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
+        _dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
         thread_pool: &ThreadPool,
         // repl: GluonRepl,
     ) -> Self {
@@ -226,7 +226,7 @@ impl AppViewState {
             overlay_list_state,
         );
 
-        let overlay_creator_state = OverlayCreator::new(dropped_file).unwrap();
+        let overlay_creator_state = OverlayCreator::new().unwrap();
         let overlay_creator = ViewStateChannel::<
             OverlayCreator,
             OverlayCreatorMsg,
