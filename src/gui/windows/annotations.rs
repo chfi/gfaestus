@@ -873,6 +873,7 @@ impl OverlayLabelSetCreator {
                         path_id,
                         &self.path_name,
                         column.unwrap(),
+                        &self.label_set_name,
                     ) {
                         let name = std::mem::take(&mut self.label_set_name);
 
@@ -1131,6 +1132,7 @@ impl OverlayLabelSetCreator {
                         path_id,
                         &self.path_name,
                         column.unwrap(),
+                        &self.label_set_name,
                     ) {
                         let name = std::mem::take(&mut self.label_set_name);
 
@@ -1149,6 +1151,7 @@ impl OverlayLabelSetCreator {
         path_id: PathId,
         path_name: &str,
         column: &K,
+        label_set_name: &str,
     ) -> Option<AnnotationLabelSet>
     where
         C: AnnotationCollection<ColumnKey = K, Record = R>,
@@ -1202,6 +1205,7 @@ impl OverlayLabelSetCreator {
             path_id,
             path_name.as_bytes(),
             column,
+            label_set_name,
             label_strings,
             label_indices,
         ))

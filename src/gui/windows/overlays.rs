@@ -188,7 +188,6 @@ impl OverlayCreator {
 
             script_error: String::new(),
 
-            // gluon: Arc::new(gluonvm),
             new_overlay_tx,
             new_overlay_rx,
 

@@ -28,6 +28,7 @@ pub use gff::*;
 #[derive(Debug, Clone)]
 pub struct AnnotationLabelSet {
     pub annotation_name: String,
+    pub label_set_name: String,
     pub column_str: String,
     pub column: AnnotationColumn,
     pub path_id: PathId,
@@ -45,6 +46,7 @@ impl AnnotationLabelSet {
         path_id: PathId,
         path_name: &[u8],
         column: &K,
+        label_set_name: &str,
         label_strings: Vec<String>,
         labels: FxHashMap<NodeId, Vec<usize>>,
     ) -> Self
@@ -61,8 +63,12 @@ impl AnnotationLabelSet {
 
         let column = C::wrap_column(column.to_owned());
 
+        let label_set_name = label_set_name.to_owned();
+
         Self {
             annotation_name,
+            label_set_name,
+
             column_str,
             column,
 
@@ -73,6 +79,10 @@ impl AnnotationLabelSet {
             label_strings,
             labels,
         }
+    }
+
+    pub fn name(&self) -> &str {
+        &self.label_set_name
     }
 
     pub fn label_strings(&self) -> &[String] {

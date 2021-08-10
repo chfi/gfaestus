@@ -710,7 +710,7 @@ fn main() {
                     };
 
 
-                    if !cluster_caches.contains_key(&label_set.annotation_name) {
+                    if !cluster_caches.contains_key(label_set.name()) {
                         let cluster_cache = ClusterCache::new_cluster(
                             &steps,
                             universe.layout().nodes(),
@@ -719,12 +719,12 @@ fn main() {
                             label_radius
                         );
 
-                        cluster_caches.insert(label_set.annotation_name.clone(),
+                        cluster_caches.insert(label_set.name().to_string(),
                                               cluster_cache);
                     }
 
                     let cluster_cache = cluster_caches
-                        .get_mut(&label_set.annotation_name)
+                        .get_mut(label_set.name())
                         .unwrap();
 
                     cluster_cache
