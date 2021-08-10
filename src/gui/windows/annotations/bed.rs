@@ -23,7 +23,7 @@ use anyhow::Result;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationLabelSet, AnnotationRecord, BedColumn,
-        BedRecord, BedRecords,
+        BedRecord, BedRecords, Gff3Column,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -50,7 +50,7 @@ pub struct BedRecordList {
     filters: HashMap<String, BedFilter>,
 
     column_picker_open: bool,
-    enabled_columns: HashMap<String, ColumnPickerMany<BedRecords>>,
+    enabled_columns: HashMap<String, ColumnPickerMany<BedColumn>>,
 
     path_picker_open: bool,
     path_picker: PathPicker,
@@ -254,10 +254,10 @@ impl BedRecordList {
             .map(|(_id, name)| name.to_owned());
 
         if !self.enabled_columns.contains_key(file_name) {
-            let mut enabled_columns: ColumnPickerMany<BedRecords> =
+            let mut enabled_columns: ColumnPickerMany<BedColumn> =
                 ColumnPickerMany::new(file_name);
 
-            enabled_columns.update_columns(records);
+            enabled_columns.update_columns(records.as_ref());
 
             use BedColumn as Bed;
             for col in [Bed::Chr, Bed::Start, Bed::End] {
@@ -295,7 +295,9 @@ impl BedRecordList {
             {
                 self.creator.current_annotation_file =
                     Some(file_name.to_string());
-                self.creator.column_picker_bed.update_columns(records);
+                self.creator
+                    .column_picker_bed
+                    .update_columns(records.as_ref());
             }
 
             self.creator.ui_bed(

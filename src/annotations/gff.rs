@@ -4,7 +4,9 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
-use super::{AnnotationCollection, AnnotationColumn, AnnotationRecord, Strand};
+use super::{
+    AnnotationCollection, AnnotationColumn, AnnotationRecord, ColumnKey, Strand,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct Gff3Records {
@@ -182,13 +184,6 @@ impl AnnotationRecord for Gff3Record {
             Gff3Column::Start | Gff3Column::End | Gff3Column::Score => vec![],
         }
     }
-
-    fn is_column_optional(key: &Self::ColumnKey) -> bool {
-        match key {
-            Gff3Column::Attribute(_key) => true,
-            _ => false,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
@@ -202,6 +197,15 @@ pub enum Gff3Column {
     Strand,
     Frame,
     Attribute(Vec<u8>),
+}
+
+impl ColumnKey for Gff3Column {
+    fn is_column_optional(key: &Self) -> bool {
+        match key {
+            Self::Attribute(_key) => true,
+            _ => false,
+        }
+    }
 }
 
 impl Gff3Column {

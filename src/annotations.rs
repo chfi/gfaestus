@@ -192,11 +192,7 @@ impl Annotations {
 pub trait ColumnKey:
     Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
 {
-}
-
-impl<T> ColumnKey for T where
-    T: Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
-{
+    fn is_column_optional(key: &Self) -> bool;
 }
 
 pub trait AnnotationRecord {
@@ -223,8 +219,6 @@ pub trait AnnotationRecord {
     fn get_first(&self, key: &Self::ColumnKey) -> Option<&[u8]>;
 
     fn get_all(&self, key: &Self::ColumnKey) -> Vec<&[u8]>;
-
-    fn is_column_optional(key: &Self::ColumnKey) -> bool;
 }
 
 pub trait AnnotationCollection {
@@ -242,10 +236,6 @@ pub trait AnnotationCollection {
     fn optional_columns(&self) -> Vec<Self::ColumnKey>;
 
     fn records(&self) -> &[Self::Record];
-
-    fn is_column_optional(key: &Self::ColumnKey) -> bool {
-        Self::Record::is_column_optional(key)
-    }
 
     fn wrap_column(column: Self::ColumnKey) -> AnnotationColumn;
 }

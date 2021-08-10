@@ -4,7 +4,9 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
-use super::{AnnotationCollection, AnnotationColumn, AnnotationRecord, Strand};
+use super::{
+    AnnotationCollection, AnnotationColumn, AnnotationRecord, ColumnKey, Strand,
+};
 
 #[derive(Debug, Clone, Default)]
 pub struct BedRecords {
@@ -37,6 +39,16 @@ pub enum BedColumn {
     Name,
     Index(usize),
     Header { index: usize, name: Vec<u8> },
+}
+
+impl ColumnKey for BedColumn {
+    fn is_column_optional(key: &Self) -> bool {
+        use BedColumn::*;
+        match key {
+            Chr | Start | End => false,
+            _ => true,
+        }
+    }
 }
 
 impl BedRecords {
@@ -311,14 +323,6 @@ impl AnnotationRecord for BedRecord {
                 .map(|v| v.as_bytes())
                 .into_iter()
                 .collect(),
-        }
-    }
-
-    fn is_column_optional(key: &Self::ColumnKey) -> bool {
-        use BedColumn::*;
-        match key {
-            Chr | Start | End => false,
-            _ => true,
         }
     }
 }

@@ -31,8 +31,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationFileType, AnnotationLabelSet,
-        AnnotationRecord, Annotations, BedRecords, ColumnKey, Gff3Column,
-        Gff3Records,
+        AnnotationRecord, Annotations, BedColumn, BedRecords, ColumnKey,
+        Gff3Column, Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -399,14 +399,15 @@ impl AnnotationFileList {
     }
 }
 
-pub struct ColumnPickerOne<T: AnnotationCollection> {
-    columns: Vec<T::ColumnKey>,
+// pub struct ColumnPickerOne<T: AnnotationCollection> {
+pub struct ColumnPickerOne<T: ColumnKey> {
+    columns: Vec<T>,
     chosen_column: Option<usize>,
 
     id: egui::Id,
 }
 
-impl<T: AnnotationCollection> ColumnPickerOne<T> {
+impl<T: ColumnKey> ColumnPickerOne<T> {
     pub fn new(id_source: &str) -> Self {
         let id = egui::Id::new(id_source);
 
@@ -418,12 +419,15 @@ impl<T: AnnotationCollection> ColumnPickerOne<T> {
         }
     }
 
-    pub fn update_columns(&mut self, records: &T) {
+    pub fn update_columns<C>(&mut self, records: &C)
+    where
+        C: AnnotationCollection<ColumnKey = T>,
+    {
         self.chosen_column = None;
         self.columns = records.all_columns();
     }
 
-    pub fn chosen_column(&self) -> Option<&T::ColumnKey> {
+    pub fn chosen_column(&self) -> Option<&T> {
         let ix = self.chosen_column?;
         self.columns.get(ix)
     }
@@ -462,15 +466,15 @@ impl<T: AnnotationCollection> ColumnPickerOne<T> {
     }
 }
 
-pub struct ColumnPickerMany<T: AnnotationCollection> {
-    enabled_columns: HashMap<T::ColumnKey, bool>,
+pub struct ColumnPickerMany<T: ColumnKey> {
+    enabled_columns: HashMap<T, bool>,
 
-    hidden_columns: HashSet<T::ColumnKey>,
+    hidden_columns: HashSet<T>,
 
     id: egui::Id,
 }
 
-impl<T: AnnotationCollection> ColumnPickerMany<T> {
+impl<T: ColumnKey> ColumnPickerMany<T> {
     pub fn new(id_source: &str) -> Self {
         let id = egui::Id::new(id_source);
 
@@ -482,22 +486,25 @@ impl<T: AnnotationCollection> ColumnPickerMany<T> {
         }
     }
 
-    pub fn update_columns(&mut self, records: &T) {
+    pub fn update_columns<C>(&mut self, records: &C)
+    where
+        C: AnnotationCollection<ColumnKey = T>,
+    {
         let columns = records.all_columns();
         self.enabled_columns =
             columns.into_iter().map(|c| (c, false)).collect();
         self.hidden_columns.clear();
     }
 
-    pub fn get_column(&self, column: &T::ColumnKey) -> bool {
+    pub fn get_column(&self, column: &T) -> bool {
         self.enabled_columns.get(column).copied().unwrap_or(false)
     }
 
-    pub fn set_column(&mut self, column: &T::ColumnKey, to: bool) {
+    pub fn set_column(&mut self, column: &T, to: bool) {
         self.enabled_columns.insert(column.clone(), to);
     }
 
-    pub fn hide_column_from_gui(&mut self, column: &T::ColumnKey, hide: bool) {
+    pub fn hide_column_from_gui(&mut self, column: &T, hide: bool) {
         if hide {
             self.hidden_columns.insert(column.clone());
         } else {
@@ -587,8 +594,10 @@ pub struct OverlayLabelSetCreator {
     // new_overlay_tx: Sender<OverlayCreatorMsg>,
 
     // column_picker: ColumnPickerOne<T>,
-    column_picker_gff3: ColumnPickerOne<Gff3Records>,
-    column_picker_bed: ColumnPickerOne<BedRecords>,
+    // column_picker_gff3: ColumnPickerOne<Gff3Records>,
+    // column_picker_bed: ColumnPickerOne<BedRecords>,
+    column_picker_gff3: ColumnPickerOne<Gff3Column>,
+    column_picker_bed: ColumnPickerOne<BedColumn>,
     column_picker_open: bool,
     current_annotation_file: Option<String>,
     // current_annotation_type: Option<AnnotationFileType>,
@@ -670,7 +679,7 @@ impl OverlayLabelSetCreator {
             != Some(file_name)
         {
             self.current_annotation_file = Some(file_name.to_string());
-            self.column_picker_gff3.update_columns(&records);
+            self.column_picker_gff3.update_columns(records.as_ref());
         }
 
         {
@@ -929,7 +938,7 @@ impl OverlayLabelSetCreator {
             != Some(file_name)
         {
             self.current_annotation_file = Some(file_name.to_string());
-            self.column_picker_bed.update_columns(&records);
+            self.column_picker_bed.update_columns(records.as_ref());
         }
 
         {

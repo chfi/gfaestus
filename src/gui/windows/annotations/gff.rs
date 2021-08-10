@@ -51,7 +51,7 @@ pub struct Gff3RecordList {
     gff3_filters: HashMap<String, Gff3Filter>,
 
     column_picker_open: bool,
-    gff3_enabled_columns: HashMap<String, ColumnPickerMany<Gff3Records>>,
+    gff3_enabled_columns: HashMap<String, ColumnPickerMany<Gff3Column>>,
 
     path_picker_open: bool,
     path_picker: PathPicker,
@@ -275,10 +275,10 @@ impl Gff3RecordList {
             .map(|(_id, name)| name.to_owned());
 
         if !self.gff3_enabled_columns.contains_key(file_name) {
-            let mut enabled_columns: ColumnPickerMany<Gff3Records> =
+            let mut enabled_columns: ColumnPickerMany<Gff3Column> =
                 ColumnPickerMany::new(file_name);
 
-            enabled_columns.update_columns(records);
+            enabled_columns.update_columns(records.as_ref());
 
             use Gff3Column as Gff;
             for col in [Gff::Source, Gff::Type, Gff::Frame] {
@@ -319,7 +319,9 @@ impl Gff3RecordList {
             {
                 self.creator.current_annotation_file =
                     Some(file_name.to_string());
-                self.creator.column_picker_gff3.update_columns(records);
+                self.creator
+                    .column_picker_gff3
+                    .update_columns(records.as_ref());
             }
 
             self.creator.ui(
