@@ -1,5 +1,4 @@
 use std::collections::HashSet;
-use std::fs::DirEntry;
 use std::path::{Path, PathBuf};
 
 use std::str::FromStr;
@@ -159,7 +158,6 @@ impl FilePicker {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        // path_dst: Arc<AtomicCell<PathBuf>>,
     ) -> Option<egui::Response> {
         egui::Window::new("File picker")
             .id(self.id)

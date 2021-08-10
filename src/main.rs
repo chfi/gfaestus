@@ -101,8 +101,8 @@ fn main() {
 
     let num_cpus = num_cpus::get();
 
-    let mut futures_cpus;
-    let mut rayon_cpus;
+    let futures_cpus;
+    let rayon_cpus;
 
     // TODO this has to be done much more intelligently
     if num_cpus < 4 {
@@ -327,23 +327,6 @@ fn main() {
         gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
     }
 
-    // let mut edge_pipeline =
-    //     EdgeRenderer::new(&gfaestus, graph_query.edge_count()).unwrap();
-
-    // edge_pipeline
-    //     .upload_edges(
-    //         &gfaestus,
-    //         graph_query.graph().edges().map(|x| (x.0, x.1)),
-    //     )
-    //     .unwrap();
-
-    // edge_pipeline
-    //     .write_preprocess_descriptor_set(
-    //         gfaestus.vk_context().device(),
-    //         &main_view.node_draw_system.vertices,
-    //     )
-    //     .unwrap();
-
     /*
     let mut fence_id: Option<usize> = None;
     let mut translate_timer = std::time::Instant::now();
@@ -352,22 +335,6 @@ fn main() {
     let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
-
-    match gfaestus::script::overlay_colors(&rayon_pool, &graph_query, "") {
-        Ok(colors) => {
-            let overlay_data = OverlayData::RGB(colors);
-            gui.new_overlay_tx()
-                .send(OverlayCreatorMsg::NewOverlay {
-                    name: "rhai overlay".to_string(),
-                    data: overlay_data,
-                })
-                .unwrap();
-            println!("sent rhai overlay");
-        }
-        Err(err) => {
-            println!("rhai error: {:?}", err);
-        }
-    }
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -542,7 +509,6 @@ fn main() {
                                     .overlay_pipelines
                                     .overlay_names()
                                     .into_iter(),
-                                    // .map(|(id, _, name)| (id, name))
                             );
                         }
                     }

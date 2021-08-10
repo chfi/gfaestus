@@ -44,21 +44,12 @@ use crate::{
 
 use super::{file::FilePicker, overlays::OverlayCreatorMsg};
 
-pub struct AnnotationRecordList {
-    current_file: Option<String>,
-
-    file_type: AnnotationFileType,
-    offset: usize,
-    slot_count: usize,
-}
-
 pub struct LabelSetList {}
 
 impl LabelSetList {
     pub const ID: &'static str = "label_set_list";
 
     pub fn ui(
-        // &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
         annotations: &Annotations,
@@ -320,15 +311,6 @@ impl AnnotationFileList {
                     ui.label("Loading file");
                 }
 
-                // if ui
-                //     .selectable_label(self.creator_open, "Open creator")
-                //     .clicked()
-                // {
-                //     self.creator_open = !self.creator_open;
-                // }
-
-                // self.overlay_label_set_creator.ui
-
                 ui.separator();
 
                 egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
@@ -399,7 +381,7 @@ impl AnnotationFileList {
     }
 }
 
-// pub struct ColumnPickerOne<T: AnnotationCollection> {
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnPickerOne<T: ColumnKey> {
     columns: Vec<T>,
     chosen_column: Option<usize>,
@@ -466,6 +448,7 @@ impl<T: ColumnKey> ColumnPickerOne<T> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnPickerMany<T: ColumnKey> {
     enabled_columns: HashMap<T, bool>,
 
@@ -515,67 +498,70 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
-        pos: impl Into<egui::Pos2>,
+        pos: Option<egui::Pos2>,
         open: &mut bool,
         window_name: &str,
     ) -> Option<egui::Response> {
-        egui::Window::new(window_name)
-            .id(self.id)
-            .fixed_pos(pos)
-            .collapsible(false)
-            .open(open)
-            .show(ctx, |ui| {
-                let max_height = ui.input().screen_rect.height() - 250.0;
-                ui.set_max_height(max_height);
+        let window = egui::Window::new(window_name).id(self.id);
 
-                let hidden_columns = &self.hidden_columns;
+        let window = if let Some(pos) = pos {
+            window.fixed_pos(pos)
+        } else {
+            window
+        };
 
-                let mut columns = self
-                    .enabled_columns
-                    .iter_mut()
-                    .filter(|(c, _)| !hidden_columns.contains(c))
-                    .collect::<Vec<_>>();
+        window.collapsible(false).open(open).show(ctx, |ui| {
+            let max_height = ui.input().screen_rect.height() - 250.0;
+            ui.set_max_height(max_height);
 
-                columns.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+            let hidden_columns = &self.hidden_columns;
 
-                let (optional, mandatory): (Vec<_>, Vec<_>) = columns
-                    .into_iter()
-                    .partition(|(col, _en)| T::is_column_optional(col));
+            let mut columns = self
+                .enabled_columns
+                .iter_mut()
+                .filter(|(c, _)| !hidden_columns.contains(c))
+                .collect::<Vec<_>>();
 
-                let scroll_height = (max_height / 2.0) - 50.0;
+            columns.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
 
-                ui.collapsing("Mandatory fields", |mut ui| {
-                    egui::ScrollArea::from_max_height(scroll_height).show(
-                        &mut ui,
-                        |ui| {
-                            for (key, enabled) in mandatory.into_iter() {
-                                if ui
-                                    .selectable_label(*enabled, key.to_string())
-                                    .clicked()
-                                {
-                                    *enabled = !*enabled;
-                                }
+            let (optional, mandatory): (Vec<_>, Vec<_>) = columns
+                .into_iter()
+                .partition(|(col, _en)| T::is_column_optional(col));
+
+            let scroll_height = (max_height / 2.0) - 50.0;
+
+            ui.collapsing("Mandatory fields", |mut ui| {
+                egui::ScrollArea::from_max_height(scroll_height).show(
+                    &mut ui,
+                    |ui| {
+                        for (key, enabled) in mandatory.into_iter() {
+                            if ui
+                                .selectable_label(*enabled, key.to_string())
+                                .clicked()
+                            {
+                                *enabled = !*enabled;
                             }
-                        },
-                    );
-                });
+                        }
+                    },
+                );
+            });
 
-                ui.collapsing("Optional fields", |mut ui| {
-                    egui::ScrollArea::from_max_height(scroll_height).show(
-                        &mut ui,
-                        |ui| {
-                            for (key, enabled) in optional.into_iter() {
-                                if ui
-                                    .selectable_label(*enabled, key.to_string())
-                                    .clicked()
-                                {
-                                    *enabled = !*enabled;
-                                }
+            ui.collapsing("Optional fields", |mut ui| {
+                egui::ScrollArea::from_max_height(scroll_height).show(
+                    &mut ui,
+                    |ui| {
+                        for (key, enabled) in optional.into_iter() {
+                            if ui
+                                .selectable_label(*enabled, key.to_string())
+                                .clicked()
+                            {
+                                *enabled = !*enabled;
                             }
-                        },
-                    );
-                });
-            })
+                        }
+                    },
+                );
+            });
+        })
     }
 }
 

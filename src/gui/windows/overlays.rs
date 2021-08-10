@@ -262,7 +262,7 @@ impl OverlayCreator {
 
                 let path_str = &mut self.script_path_input;
 
-                let path_box = ui.horizontal(|ui| {
+                let _path_box = ui.horizontal(|ui| {
                     ui.label("Script path");
                     ui.separator();
                     ui.text_edit_singleline(path_str)

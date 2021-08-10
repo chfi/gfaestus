@@ -16,28 +16,20 @@ use std::{collections::HashMap, sync::Arc};
 
 use bstr::ByteSlice;
 
-use rustc_hash::{FxHashMap, FxHashSet};
-
-use anyhow::Result;
+use rustc_hash::FxHashSet;
 
 use crate::{
-    annotations::{AnnotationLabelSet, Gff3Column},
+    annotations::Gff3Column,
     app::AppMsg,
-    asynchronous::AsyncResult,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::{util::grid_row_label, windows::overlays::OverlayCreatorMsg, GuiMsg},
-    overlays::OverlayData,
+    gui::{util::grid_row_label, windows::overlays::OverlayCreatorMsg},
 };
 
-use crate::annotations::{
-    AnnotationCollection, AnnotationRecord, Gff3Record, Gff3Records,
-};
+use crate::annotations::{AnnotationRecord, Gff3Record, Gff3Records};
 
-use super::{ColumnPickerMany, ColumnPickerOne, OverlayLabelSetCreator};
+use super::{ColumnPickerMany, OverlayLabelSetCreator};
 
-use crate::gui::windows::{
-    file::FilePicker, filters::*, graph_picker::PathPicker,
-};
+use crate::gui::windows::{filters::*, graph_picker::PathPicker};
 
 pub struct Gff3RecordList {
     current_file: Option<String>,
@@ -536,7 +528,7 @@ impl Gff3RecordList {
                 self.gff3_enabled_columns.get_mut(file_name).unwrap();
             enabled_columns.ui(
                 ctx,
-                pos,
+                Some(pos.into()),
                 &mut self.column_picker_open,
                 "Gff3 Columns",
             );
@@ -657,15 +649,6 @@ impl Gff3Filter {
                         }
                     });
                 });
-
-                if ui.button("debug print").clicked() {
-                    eprintln!("seq_id: {:?}", self.seq_id);
-                    eprintln!("source: {:?}", self.source);
-                    eprintln!("type:   {:?}", self.type_);
-
-                    eprintln!("start: {:?}", self.start);
-                    eprintln!("end: {:?}", self.end);
-                }
             })
     }
 

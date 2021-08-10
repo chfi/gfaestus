@@ -16,27 +16,21 @@ use std::{collections::HashMap, sync::Arc};
 
 use bstr::ByteSlice;
 
-use rustc_hash::{FxHashMap, FxHashSet};
-
-use anyhow::Result;
+use rustc_hash::FxHashSet;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationLabelSet, AnnotationRecord, BedColumn,
-        BedRecord, BedRecords, Gff3Column,
+        AnnotationCollection, AnnotationRecord, BedColumn, BedRecord,
+        BedRecords,
     },
     app::AppMsg,
-    asynchronous::AsyncResult,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::{util::grid_row_label, windows::overlays::OverlayCreatorMsg, GuiMsg},
-    overlays::OverlayData,
+    gui::{util::grid_row_label, windows::overlays::OverlayCreatorMsg},
 };
 
-use super::{ColumnPickerMany, ColumnPickerOne, OverlayLabelSetCreator};
+use super::{ColumnPickerMany, OverlayLabelSetCreator};
 
-use crate::gui::windows::{
-    file::FilePicker, filters::*, graph_picker::PathPicker,
-};
+use crate::gui::windows::{filters::*, graph_picker::PathPicker};
 
 pub struct BedRecordList {
     current_file: Option<String>,
@@ -318,7 +312,6 @@ impl BedRecordList {
             .default_pos(egui::Pos2::new(600.0, 200.0))
             .collapsible(true)
             .open(open)
-            // .resizable(true)
             .show(ctx, |mut ui| {
                 ui.set_min_height(200.0);
                 ui.set_max_height(ui.input().screen_rect.height() - 100.0);
@@ -402,8 +395,6 @@ impl BedRecordList {
                         }
                     }
                 });
-
-                use BedColumn as Bed;
 
                 let enabled_columns =
                     self.enabled_columns.get(file_name).unwrap();
@@ -499,7 +490,7 @@ impl BedRecordList {
                 self.enabled_columns.get_mut(file_name).unwrap();
             enabled_columns.ui(
                 ctx,
-                pos,
+                Some(pos.into()),
                 &mut self.column_picker_open,
                 "Gff3 Columns",
             );
@@ -518,11 +509,6 @@ pub struct BedFilter {
 
     rest: Vec<FilterString>,
     headers: Option<Vec<Vec<u8>>>,
-    // score: FilterNum<f64>,
-
-    // frame: FilterString,
-
-    // attributes: HashMap<Vec<u8>, FilterString>,
 }
 
 impl BedFilter {

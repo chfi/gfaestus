@@ -255,13 +255,6 @@ impl PathList {
                 let page_count = self.page_count;
                 let update_slots = &mut self.update_slots;
 
-                /*
-                if ui.selectable_label(filter, "Filter by node selection").clicked() {
-                    apply_filter.store(!filter);
-                    *update_slots = true;
-                }
-                */
-
                 ui.label(format!("Page {}/{}", *page + 1, page_count + 1));
 
                 ui.horizontal(|ui| {
@@ -332,8 +325,6 @@ impl PathList {
                                         path_id_cell.store(Some(path_id));
                                         *open_path_details = true;
                                     }
-
-                                    // ui.end_row();
                                 }
                             }
                         },
