@@ -27,7 +27,7 @@ use crate::{
 
 use crate::annotations::{AnnotationRecord, Gff3Record, Gff3Records};
 
-use super::{ColumnPickerMany, OverlayLabelSetCreator};
+use super::{filter::QuickFilter, ColumnPickerMany, OverlayLabelSetCreator};
 
 use crate::gui::windows::{filters::*, graph_picker::PathPicker};
 
@@ -342,6 +342,13 @@ impl Gff3RecordList {
                 ui.label(file_name);
                 ui.separator();
 
+                let apply_filter = {
+                    let filters = self.gff3_filters.get_mut(file_name).unwrap();
+                    filters.add_quick_filter(&mut ui)
+                };
+
+                ui.separator();
+
                 ui.horizontal(|ui| {
                     let filter_config_open = self.filter_open;
                     if ui
@@ -365,7 +372,7 @@ impl Gff3RecordList {
                 });
 
                 ui.horizontal(|ui| {
-                    if ui.button("Apply filter").clicked() {
+                    if ui.button("Apply filter").clicked() || apply_filter {
                         self.apply_filter(file_name, records);
                     }
 
@@ -538,7 +545,7 @@ impl Gff3RecordList {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Gff3Filter {
     seq_id: FilterString,
     source: FilterString,
@@ -552,6 +559,8 @@ pub struct Gff3Filter {
     frame: FilterString,
 
     attributes: HashMap<Vec<u8>, FilterString>,
+
+    quick_filter: QuickFilter<Gff3Column>,
 }
 
 impl Gff3Filter {
@@ -564,9 +573,24 @@ impl Gff3Filter {
             .map(|k| (k.to_owned(), FilterString::default()))
             .collect::<HashMap<_, _>>();
 
+        let mut quick_filter = QuickFilter::new("gff_quick_filter");
+
+        quick_filter.column_picker_mut().update_columns(records);
+
         Self {
             attributes,
-            ..Gff3Filter::default()
+            quick_filter,
+
+            seq_id: FilterString::default(),
+            source: FilterString::default(),
+            type_: FilterString::default(),
+
+            start: FilterNum::default(),
+            end: FilterNum::default(),
+
+            score: FilterNum::default(),
+
+            frame: FilterString::default(),
         }
     }
 
@@ -590,6 +614,10 @@ impl Gff3Filter {
             self.seq_id.arg = seq_id;
         }
         self.range_filter(start, end);
+    }
+
+    pub fn add_quick_filter(&mut self, ui: &mut egui::Ui) -> bool {
+        self.quick_filter.ui(ui)
     }
 
     pub fn ui(
@@ -667,14 +695,15 @@ impl Gff3Filter {
     }
 
     fn filter_record(&self, record: &Gff3Record) -> bool {
-        self.seq_id.filter_bytes(record.seq_id())
+        self.quick_filter.filter_record(record)
+            || (self.seq_id.filter_bytes(record.seq_id())
             && self.source.filter_bytes(record.source())
             && self.type_.filter_bytes(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
             // && self.score.filter(record.score())
             && self.frame.filter_bytes(record.frame())
-            && self.attr_filter(record)
+            && self.attr_filter(record))
     }
 }
 

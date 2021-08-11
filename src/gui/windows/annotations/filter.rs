@@ -41,7 +41,7 @@ impl<T: ColumnKey> QuickFilter<T> {
 
     pub fn ui(&mut self, ui: &mut egui::Ui) -> bool {
         ui.horizontal(|ui| {
-            ui.label("Quick filter");
+            ui.heading("Quick filter");
             if ui
                 .selectable_label(self.column_picker_open, "Choose columns")
                 .clicked()
@@ -59,7 +59,7 @@ impl<T: ColumnKey> QuickFilter<T> {
         column_picker.ui(ctx, None, open, "Quick filter columns");
 
         if let Some(resp) = filter_resp {
-            resp.has_focus() && ctx.input().key_down(egui::Key::Enter)
+            resp.has_focus() && ctx.input().key_pressed(egui::Key::Enter)
         } else {
             false
         }
