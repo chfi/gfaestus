@@ -100,7 +100,6 @@ impl NodeDetails {
 
         let paths_fwd =
             graph_query.handle_positions(Handle::pack(node_id, false));
-        // let paths_rev = graph_query.handle_positions(Handle::pack(node_id, true));
 
         if let Some(p) = paths_fwd {
             self.paths.extend_from_slice(&p);
@@ -110,9 +109,6 @@ impl NodeDetails {
             self.unique_paths.sort();
             self.unique_paths.dedup();
         }
-        // if let Some(p) = paths_rev {
-        //     self.paths.extend_from_slice(&p);
-        // }
 
         self.fetched_node = Some(node_id);
 
@@ -292,7 +288,6 @@ pub struct NodeList {
     // probably not needed as I can assume compact node IDs
     all_nodes: Vec<NodeId>,
 
-    // filtered_nodes: Option<Vec<NodeId>>,
     filtered_nodes: Vec<NodeId>,
 
     page: usize,
@@ -477,7 +472,6 @@ impl NodeList {
         }
 
         egui::Window::new("Nodes")
-            // .enabled(*show)
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(200.0, 200.0))
             .show(ctx, |mut ui| {

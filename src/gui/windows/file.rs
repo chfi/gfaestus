@@ -169,8 +169,14 @@ impl FilePicker {
                 ui.set_max_height(max_height);
 
                 ui.horizontal(|ui| {
-                    ui.text_edit_singleline(&mut self.current_dir_text);
-                    if ui.button("Goto").clicked() {
+                    let text_box =
+                        ui.text_edit_singleline(&mut self.current_dir_text);
+
+                    if ui.button("Goto").clicked()
+                        || (text_box.has_focus()
+                            && ui.input().key_pressed(egui::Key::Enter))
+                    {
+                        println!("has focus & enter");
                         self.goto_path_in_text_box().unwrap();
                     }
                 });
