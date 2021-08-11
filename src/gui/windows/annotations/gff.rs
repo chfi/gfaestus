@@ -363,7 +363,7 @@ impl Gff3RecordList {
 
                     let button = &button_inner.response;
 
-                    egui::popup::popup_below_widget(
+                    crate::gui::windows::util::popup_below_widget(
                         ui,
                         popup_id,
                         &button,

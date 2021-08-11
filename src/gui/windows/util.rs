@@ -49,3 +49,44 @@ impl<T> SlotList<T> {
         res
     }
 }
+
+/// Creates a popup that, unlike the built-in egui one, doesn't
+/// disappear when the user clicks inside the popup
+pub fn popup_below_widget(
+    ui: &egui::Ui,
+    popup_id: egui::Id,
+    widget_response: &egui::Response,
+    add_contents: impl FnOnce(&mut egui::Ui),
+) {
+    if ui.memory().is_popup_open(popup_id) {
+        let parent_clip_rect = ui.clip_rect();
+
+        let popup_response = egui::Area::new(popup_id)
+            .order(egui::Order::Foreground)
+            .fixed_pos(widget_response.rect.left_bottom())
+            .show(ui.ctx(), |ui| {
+                ui.set_clip_rect(parent_clip_rect); // for when the combo-box is in a scroll area.
+                let frame = egui::Frame::popup(ui.style());
+                let frame_margin = frame.margin;
+                frame.show(ui, |ui| {
+                    ui.with_layout(
+                        egui::Layout::top_down_justified(egui::Align::LEFT),
+                        |ui| {
+                            ui.set_width(
+                                widget_response.rect.width()
+                                    - 2.0 * frame_margin.x,
+                            );
+                            add_contents(ui)
+                        },
+                    );
+                });
+            });
+
+        if ui.input().key_pressed(egui::Key::Escape)
+            || (popup_response.clicked_elsewhere()
+                && widget_response.clicked_elsewhere())
+        {
+            ui.memory().close_popup();
+        }
+    }
+}
