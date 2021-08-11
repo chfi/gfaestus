@@ -117,6 +117,9 @@ impl<T: ColumnKey> RecordFilter<T> {
             columns.insert(column.to_owned(), FilterString::default());
         }
 
+        let mut quick_filter = QuickFilter::new(&quick_filter_id_src);
+        quick_filter.column_picker_mut().update_columns(records);
+
         Self {
             seq_id: FilterString::default(),
             start: FilterNum::default(),
@@ -124,7 +127,7 @@ impl<T: ColumnKey> RecordFilter<T> {
 
             columns,
 
-            quick_filter: QuickFilter::new(&quick_filter_id_src),
+            quick_filter,
         }
     }
 

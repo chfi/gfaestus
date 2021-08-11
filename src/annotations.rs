@@ -190,7 +190,7 @@ impl Annotations {
 }
 
 pub trait ColumnKey:
-    Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
+    Clone + Eq + Ord + std::hash::Hash + std::fmt::Display + Send + Sync
 {
     fn is_column_optional(key: &Self) -> bool;
 
@@ -712,4 +712,30 @@ pub fn cluster_annotations(
             (mid_handle.id(), (offset, labels))
         })
         .collect()
+}
+
+pub fn record_column_hash_color<R, K>(
+    record: &R,
+    column: &K,
+) -> Option<rgb::RGBA<f32>>
+where
+    R: AnnotationRecord<ColumnKey = K>,
+    K: ColumnKey,
+{
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::default();
+
+    if column == &K::start() {
+        record.start().hash(&mut hasher);
+    } else if column == &K::end() {
+        record.end().hash(&mut hasher);
+    } else {
+        record.get_all(column).hash(&mut hasher);
+    }
+
+    let (r, g, b) = crate::overlays::hash_node_color(hasher.finish());
+
+    Some(rgb::RGBA::new(r, g, b, 1.0))
 }

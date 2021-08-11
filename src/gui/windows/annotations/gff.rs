@@ -49,7 +49,7 @@ pub struct Gff3RecordList {
     path_picker: PathPicker,
 
     creator_open: bool,
-    creator: OverlayLabelSetCreator,
+    creator: OverlayLabelSetCreator<Gff3Column>,
     overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
@@ -318,9 +318,7 @@ impl Gff3RecordList {
             {
                 self.creator.current_annotation_file =
                     Some(file_name.to_string());
-                self.creator
-                    .column_picker_gff3
-                    .update_columns(records.as_ref());
+                self.creator.column_picker.update_columns(records.as_ref());
             }
 
             self.creator.ui(

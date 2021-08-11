@@ -50,7 +50,7 @@ pub struct BedRecordList {
     path_picker: PathPicker,
 
     creator_open: bool,
-    creator: OverlayLabelSetCreator,
+    creator: OverlayLabelSetCreator<BedColumn>,
     overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
@@ -289,12 +289,10 @@ impl BedRecordList {
             {
                 self.creator.current_annotation_file =
                     Some(file_name.to_string());
-                self.creator
-                    .column_picker_bed
-                    .update_columns(records.as_ref());
+                self.creator.column_picker.update_columns(records.as_ref());
             }
 
-            self.creator.ui_bed(
+            self.creator.ui(
                 ctx,
                 &self.overlay_tx,
                 app_msg_tx,

@@ -37,7 +37,7 @@ pub struct RecordList<T: ColumnKey> {
     path_picker: PathPicker,
 
     creator_open: bool,
-    creator: OverlayLabelSetCreator,
+    creator: OverlayLabelSetCreator<T>,
     overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
