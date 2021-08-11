@@ -726,8 +726,6 @@ impl OverlayLabelSetCreator {
             .show(ctx, |ui| {
                 ui.label(file_name);
 
-                ui.label(&label);
-
                 let column_picker_open = &mut self.column_picker_open;
 
                 let column_picker_btn =
@@ -741,20 +739,31 @@ impl OverlayLabelSetCreator {
 
                 let name = &mut self.overlay_name;
 
-                let _name_box = ui.horizontal(|ui| {
+                let mut create_overlay = false;
+
+                ui.horizontal(|ui| {
                     ui.label("Overlay name");
                     ui.separator();
-                    ui.text_edit_singleline(name)
+                    let text_edit = ui.text_edit_singleline(name);
+
+                    if text_edit.has_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        create_overlay = true;
+                    }
                 });
+
                 let column_picker = &self.column_picker_gff3;
                 let column = column_picker.chosen_column();
 
-                let create_overlay = ui.add(
+                let create_overlay_btn = ui.add(
                     egui::Button::new("Create overlay")
                         .enabled(column.is_some()),
                 );
 
-                if create_overlay.clicked() && self.overlay_query.is_none() {
+                create_overlay |= create_overlay_btn.clicked();
+
+                if create_overlay && self.overlay_query.is_none() {
                     println!("creating overlay");
                     if let Some(column) = column {
                         let indices = filtered_records
@@ -876,25 +885,38 @@ impl OverlayLabelSetCreator {
 
                 ui.separator();
 
+                let mut create_label_set = false;
+
                 {
                     let name = &mut self.label_set_name;
 
-                    let _name_box = ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
                         ui.label("Label set name");
                         ui.separator();
-                        ui.text_edit_singleline(name)
+                        let text_edit = ui.text_edit_singleline(name);
+
+                        if text_edit.has_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                        {
+                            create_label_set = true;
+                        }
                     });
                 }
 
                 let column_picker = &self.column_picker_gff3;
                 let column = column_picker.chosen_column();
 
-                let create_label_set = ui.add(
+                let create_label_set_btn = ui.add(
                     egui::Button::new("Create label set")
                         .enabled(column.is_some()),
                 );
 
-                if create_label_set.clicked() {
+                create_label_set |= create_label_set_btn.clicked();
+                // let create_label_set = create_label_set_btn.clicked()
+                //     || (ui.input().key_pressed(egui::Key::Enter)
+                //         && name_box.response.has_focus());
+
+                if create_label_set {
                     if let Some(label_set) = Self::calculate_annotation_set(
                         graph.graph(),
                         records.as_ref(),
@@ -985,8 +1007,6 @@ impl OverlayLabelSetCreator {
             .show(ctx, |ui| {
                 ui.label(file_name);
 
-                ui.label(&label);
-
                 let column_picker_open = &mut self.column_picker_open;
 
                 let column_picker_btn =
@@ -1000,20 +1020,31 @@ impl OverlayLabelSetCreator {
 
                 let name = &mut self.overlay_name;
 
-                let _name_box = ui.horizontal(|ui| {
+                let mut create_overlay = false;
+
+                ui.horizontal(|ui| {
                     ui.label("Overlay name");
                     ui.separator();
-                    ui.text_edit_singleline(name)
+                    let text_edit = ui.text_edit_singleline(name);
+
+                    if text_edit.has_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        create_overlay = true;
+                    }
                 });
+
                 let column_picker = &self.column_picker_bed;
                 let column = column_picker.chosen_column();
 
-                let create_overlay = ui.add(
+                let create_overlay_btn = ui.add(
                     egui::Button::new("Create overlay")
                         .enabled(column.is_some()),
                 );
 
-                if create_overlay.clicked() && self.overlay_query.is_none() {
+                create_overlay |= create_overlay_btn.clicked();
+
+                if create_overlay && self.overlay_query.is_none() {
                     println!("creating overlay");
                     if let Some(column) = column {
                         let indices = filtered_records
@@ -1135,25 +1166,35 @@ impl OverlayLabelSetCreator {
 
                 ui.separator();
 
+                let mut create_label_set = false;
+
                 {
                     let name = &mut self.label_set_name;
 
-                    let _name_box = ui.horizontal(|ui| {
+                    ui.horizontal(|ui| {
                         ui.label("Label set name");
                         ui.separator();
-                        ui.text_edit_singleline(name)
+                        let text_edit = ui.text_edit_singleline(name);
+
+                        if text_edit.has_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                        {
+                            create_label_set = true;
+                        }
                     });
                 }
 
                 let column_picker = &self.column_picker_bed;
                 let column = column_picker.chosen_column();
 
-                let create_label_set = ui.add(
+                let create_label_set_btn = ui.add(
                     egui::Button::new("Create label set")
                         .enabled(column.is_some()),
                 );
 
-                if create_label_set.clicked() {
+                create_label_set |= create_label_set_btn.clicked();
+
+                if create_label_set {
                     if let Some(label_set) = Self::calculate_annotation_set(
                         graph.graph(),
                         records.as_ref(),

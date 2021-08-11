@@ -722,14 +722,14 @@ impl Gff3Filter {
 
     fn filter_record(&self, record: &Gff3Record) -> bool {
         self.quick_filter.filter_record(record)
-            || (self.seq_id.filter_bytes(record.seq_id())
+            && self.seq_id.filter_bytes(record.seq_id())
             && self.source.filter_bytes(record.source())
             && self.type_.filter_bytes(record.type_())
             && self.start.filter(record.start())
             && self.end.filter(record.end())
             // && self.score.filter(record.score())
             && self.frame.filter_bytes(record.frame())
-            && self.attr_filter(record))
+            && self.attr_filter(record)
     }
 }
 
