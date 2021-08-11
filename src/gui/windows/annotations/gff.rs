@@ -27,9 +27,9 @@ use crate::{
 
 use crate::annotations::{AnnotationRecord, Gff3Record, Gff3Records};
 
-use super::{filter::QuickFilter, ColumnPickerMany, OverlayLabelSetCreator};
+use super::{filter::RecordFilter, ColumnPickerMany, OverlayLabelSetCreator};
 
-use crate::gui::windows::{filters::*, graph_picker::PathPicker};
+use crate::gui::windows::graph_picker::PathPicker;
 
 pub struct Gff3RecordList {
     current_file: Option<String>,
@@ -40,7 +40,7 @@ pub struct Gff3RecordList {
     slot_count: usize,
 
     filter_open: bool,
-    gff3_filters: HashMap<String, Gff3Filter>,
+    gff3_filters: HashMap<String, RecordFilter<Gff3Column>>,
 
     column_picker_open: bool,
     gff3_enabled_columns: HashMap<String, ColumnPickerMany<Gff3Column>>,
@@ -289,9 +289,16 @@ impl Gff3RecordList {
             let filter = self
                 .gff3_filters
                 .entry(file_name.to_string())
-                .or_insert(Gff3Filter::new(records));
+                .or_insert(RecordFilter::new("gff3_filter", records.as_ref()));
 
-            filter.ui(ctx, &mut self.filter_open);
+            egui::Window::new("GFF3 Filter")
+                .id(egui::Id::new(Self::ID))
+                .default_pos(egui::Pos2::new(600.0, 200.0))
+                .open(&mut self.filter_open)
+                .show(ctx, |ui| {
+                    ui.set_max_width(400.0);
+                    filter.ui(ui);
+                });
         }
 
         if self.current_file.as_ref().map(|s| s.as_str()) != Some(file_name) {
@@ -568,168 +575,6 @@ impl Gff3RecordList {
         }
 
         resp
-    }
-}
-
-#[derive(Debug)]
-pub struct Gff3Filter {
-    seq_id: FilterString,
-    source: FilterString,
-    type_: FilterString,
-
-    start: FilterNum<usize>,
-    end: FilterNum<usize>,
-
-    score: FilterNum<f64>,
-
-    frame: FilterString,
-
-    attributes: HashMap<Vec<u8>, FilterString>,
-
-    quick_filter: QuickFilter<Gff3Column>,
-}
-
-impl Gff3Filter {
-    pub const ID: &'static str = "gff_filter_window";
-
-    fn new(records: &Gff3Records) -> Self {
-        let attributes = records
-            .attribute_keys
-            .iter()
-            .map(|k| (k.to_owned(), FilterString::default()))
-            .collect::<HashMap<_, _>>();
-
-        let mut quick_filter = QuickFilter::new("gff_quick_filter");
-
-        quick_filter.column_picker_mut().update_columns(records);
-
-        Self {
-            attributes,
-            quick_filter,
-
-            seq_id: FilterString::default(),
-            source: FilterString::default(),
-            type_: FilterString::default(),
-
-            start: FilterNum::default(),
-            end: FilterNum::default(),
-
-            score: FilterNum::default(),
-
-            frame: FilterString::default(),
-        }
-    }
-
-    fn range_filter(&mut self, mut start: usize, mut end: usize) {
-        if start > 0 {
-            start -= 1;
-        }
-
-        end += 1;
-
-        self.start.op = FilterNumOp::MoreThan;
-        self.start.arg1 = start;
-
-        self.end.op = FilterNumOp::LessThan;
-        self.end.arg1 = end;
-    }
-
-    fn chr_range_filter(&mut self, seq_id: &[u8], start: usize, end: usize) {
-        if let Ok(seq_id) = seq_id.to_str().map(String::from) {
-            self.seq_id.op = FilterStringOp::ContainedIn;
-            self.seq_id.arg = seq_id;
-        }
-        self.range_filter(start, end);
-    }
-
-    pub fn add_quick_filter(&mut self, ui: &mut egui::Ui) -> bool {
-        self.quick_filter.ui_compact(ui)
-    }
-
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        open: &mut bool,
-    ) -> Option<egui::Response> {
-        egui::Window::new("GFF3 Filter")
-            .id(egui::Id::new(Self::ID))
-            .default_pos(egui::Pos2::new(600.0, 200.0))
-            .open(open)
-            .show(ctx, |ui| {
-                ui.set_max_width(400.0);
-
-                ui.collapsing("Mandatory fields", |ui| {
-                    ui.label("seq_id");
-                    self.seq_id.ui(ui);
-                    ui.separator();
-
-                    ui.label("source");
-                    self.source.ui(ui);
-                    ui.separator();
-
-                    ui.label("type");
-                    self.type_.ui(ui);
-                    ui.separator();
-
-                    ui.label("start");
-                    self.start.ui(ui);
-                    ui.separator();
-
-                    ui.label("end");
-                    self.end.ui(ui);
-                    ui.separator();
-
-                    ui.label("frame");
-                    self.frame.ui(ui);
-                    ui.separator();
-                });
-
-                ui.collapsing("Attributes", |mut ui| {
-                    egui::ScrollArea::from_max_height(
-                        ui.input().screen_rect.height() - 250.0,
-                    )
-                    .show(&mut ui, |ui| {
-                        let mut attr_filters =
-                            self.attributes.iter_mut().collect::<Vec<_>>();
-
-                        attr_filters.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
-
-                        for (_count, (key, filter)) in
-                            attr_filters.into_iter().enumerate()
-                        {
-                            ui.label(key.to_str().unwrap());
-                            filter.ui(ui);
-                            ui.separator();
-                        }
-                    });
-                });
-            })
-    }
-
-    fn attr_filter(&self, record: &Gff3Record) -> bool {
-        self.attributes.iter().all(|(key, filter)| {
-            if matches!(filter.op, FilterStringOp::None) {
-                return true;
-            }
-
-            if let Some(values) = record.attributes().get(key) {
-                values.iter().any(|v| filter.filter_bytes(v))
-            } else {
-                false
-            }
-        })
-    }
-
-    fn filter_record(&self, record: &Gff3Record) -> bool {
-        self.quick_filter.filter_record(record)
-            && self.seq_id.filter_bytes(record.seq_id())
-            && self.source.filter_bytes(record.source())
-            && self.type_.filter_bytes(record.type_())
-            && self.start.filter(record.start())
-            && self.end.filter(record.end())
-            // && self.score.filter(record.score())
-            && self.frame.filter_bytes(record.frame())
-            && self.attr_filter(record)
     }
 }
 

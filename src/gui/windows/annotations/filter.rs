@@ -95,7 +95,7 @@ pub struct RecordFilter<T: ColumnKey> {
 
     columns: HashMap<T, FilterString>,
 
-    quick_filter: QuickFilter<T>,
+    pub quick_filter: QuickFilter<T>,
 }
 
 impl<T: ColumnKey> RecordFilter<T> {
@@ -164,5 +164,33 @@ impl<T: ColumnKey> RecordFilter<T> {
                 let values = record.get_all(column);
                 values.into_iter().any(|value| filter.filter_bytes(value))
             })
+    }
+
+    // TODO: Returns `true` if the filter has been updated and should be applied
+    // pub fn ui(&mut self, ui: &mut egui::Ui) -> bool {
+    pub fn ui(&mut self, ui: &mut egui::Ui) {
+        let (optional, mandatory): (Vec<_>, Vec<_>) = self
+            .columns
+            .iter_mut()
+            .partition(|(col, _filter)| T::is_column_optional(col));
+
+        ui.collapsing("Mandatory fields", |ui| {
+            for (column, filter) in mandatory.into_iter() {
+                ui.label(column.to_string());
+                filter.ui(ui);
+                ui.separator();
+            }
+        });
+        ui.collapsing("Optional fields", |ui| {
+            for (column, filter) in optional.into_iter() {
+                ui.label(column.to_string());
+                filter.ui(ui);
+                ui.separator();
+            }
+        });
+    }
+
+    pub fn add_quick_filter(&mut self, ui: &mut egui::Ui) -> bool {
+        self.quick_filter.ui_compact(ui)
     }
 }
