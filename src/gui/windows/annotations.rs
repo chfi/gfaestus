@@ -10,10 +10,12 @@ use futures::executor::ThreadPool;
 pub mod bed;
 pub mod filter;
 pub mod gff;
+pub mod records_list;
 
 pub use bed::*;
 pub use filter::*;
 pub use gff::*;
+pub use records_list::*;
 
 #[allow(unused_imports)]
 use handlegraph::{
