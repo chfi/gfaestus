@@ -1,6 +1,12 @@
+use std::collections::HashMap;
+
+use bstr::ByteSlice;
+
 use crate::{
-    annotations::{AnnotationRecord, ColumnKey},
-    gui::windows::filters::FilterString,
+    annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
+    gui::windows::filters::{
+        FilterNum, FilterNumOp, FilterString, FilterStringOp,
+    },
 };
 
 use super::ColumnPickerMany;
@@ -79,5 +85,84 @@ impl<T: ColumnKey> QuickFilter<T> {
         } else {
             false
         }
+    }
+}
+
+pub struct RecordFilter<T: ColumnKey> {
+    seq_id: FilterString,
+    start: FilterNum<usize>,
+    end: FilterNum<usize>,
+
+    columns: HashMap<T, FilterString>,
+
+    quick_filter: QuickFilter<T>,
+}
+
+impl<T: ColumnKey> RecordFilter<T> {
+    pub fn new<C>(id_source: &str, records: &C) -> Self
+    where
+        C: AnnotationCollection<ColumnKey = T>,
+    {
+        let mut quick_filter_id_src = id_source.to_string();
+        quick_filter_id_src.push_str("_quick_filter");
+
+        let mut columns: HashMap<T, FilterString> = HashMap::new();
+
+        let to_remove = [T::seq_id(), T::start(), T::end()];
+
+        let mut to_add = records.all_columns();
+        to_add.retain(|c| !to_remove.contains(c));
+
+        for column in to_add {
+            columns.insert(column.to_owned(), FilterString::default());
+        }
+
+        Self {
+            seq_id: FilterString::default(),
+            start: FilterNum::default(),
+            end: FilterNum::default(),
+
+            columns,
+
+            quick_filter: QuickFilter::new(&quick_filter_id_src),
+        }
+    }
+
+    pub fn range_filter(&mut self, mut start: usize, mut end: usize) {
+        if start > 0 {
+            start -= 1;
+        }
+
+        end += 1;
+
+        self.start.op = FilterNumOp::MoreThan;
+        self.start.arg1 = start;
+
+        self.end.op = FilterNumOp::LessThan;
+        self.end.arg1 = end;
+    }
+
+    pub fn chr_range_filter(
+        &mut self,
+        seq_id: &[u8],
+        start: usize,
+        end: usize,
+    ) {
+        if let Ok(seq_id) = seq_id.to_str().map(String::from) {
+            self.seq_id.op = FilterStringOp::ContainedIn;
+            self.seq_id.arg = seq_id;
+        }
+        self.range_filter(start, end);
+    }
+
+    pub fn filter_record<R>(&self, record: &R) -> bool
+    where
+        R: AnnotationRecord<ColumnKey = T>,
+    {
+        self.quick_filter.filter_record(record)
+            && self.columns.iter().any(|(column, filter)| {
+                let values = record.get_all(column);
+                values.into_iter().any(|value| filter.filter_bytes(value))
+            })
     }
 }

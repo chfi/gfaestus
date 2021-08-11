@@ -206,6 +206,18 @@ impl ColumnKey for Gff3Column {
             _ => false,
         }
     }
+
+    fn seq_id() -> Self {
+        Self::SeqId
+    }
+
+    fn start() -> Self {
+        Self::Start
+    }
+
+    fn end() -> Self {
+        Self::End
+    }
 }
 
 impl Gff3Column {

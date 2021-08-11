@@ -193,6 +193,12 @@ pub trait ColumnKey:
     Clone + Eq + Ord + std::hash::Hash + std::fmt::Display
 {
     fn is_column_optional(key: &Self) -> bool;
+
+    fn seq_id() -> Self;
+
+    fn start() -> Self;
+
+    fn end() -> Self;
 }
 
 pub trait AnnotationRecord {

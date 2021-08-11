@@ -49,6 +49,18 @@ impl ColumnKey for BedColumn {
             _ => true,
         }
     }
+
+    fn seq_id() -> Self {
+        Self::Chr
+    }
+
+    fn start() -> Self {
+        Self::Start
+    }
+
+    fn end() -> Self {
+        Self::End
+    }
 }
 
 impl BedRecords {
