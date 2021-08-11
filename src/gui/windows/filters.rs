@@ -65,7 +65,7 @@ impl FilterString {
         }
     }
 
-    pub fn ui(&mut self, ui: &mut egui::Ui) {
+    pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<egui::Response> {
         let op = &mut self.op;
         let arg = &mut self.arg;
 
@@ -79,8 +79,11 @@ impl FilterString {
         });
 
         if *op != FilterStringOp::None {
-            let _arg_edit = ui.text_edit_singleline(arg);
+            let arg_edit = ui.text_edit_singleline(arg);
+            return Some(arg_edit);
         }
+
+        None
     }
 }
 

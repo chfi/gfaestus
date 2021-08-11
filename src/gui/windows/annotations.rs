@@ -8,9 +8,11 @@ use crossbeam::channel::Sender;
 use futures::executor::ThreadPool;
 
 pub mod bed;
+pub mod filter;
 pub mod gff;
 
 pub use bed::*;
+pub use filter::*;
 pub use gff::*;
 
 #[allow(unused_imports)]
