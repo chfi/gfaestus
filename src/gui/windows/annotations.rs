@@ -497,6 +497,38 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
         }
     }
 
+    pub fn compact_widget(&mut self, ui: &mut egui::Ui) {
+        let hidden_columns = &self.hidden_columns;
+
+        let mut columns = self
+            .enabled_columns
+            .iter_mut()
+            .filter(|(c, _)| !hidden_columns.contains(c))
+            .collect::<Vec<_>>();
+
+        columns.sort_by(|(k1, _), (k2, _)| k1.cmp(k2));
+
+        let (optional, mandatory): (Vec<_>, Vec<_>) = columns
+            .into_iter()
+            .partition(|(col, _en)| T::is_column_optional(col));
+
+        ui.horizontal_wrapped(|ui| {
+            for (key, enabled) in mandatory.into_iter() {
+                if ui.selectable_label(*enabled, key.to_string()).clicked() {
+                    *enabled = !*enabled;
+                }
+            }
+        });
+
+        ui.horizontal_wrapped(|ui| {
+            for (key, enabled) in optional.into_iter() {
+                if ui.selectable_label(*enabled, key.to_string()).clicked() {
+                    *enabled = !*enabled;
+                }
+            }
+        });
+    }
+
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,

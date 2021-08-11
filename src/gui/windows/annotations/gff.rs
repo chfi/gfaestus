@@ -344,6 +344,32 @@ impl Gff3RecordList {
 
                 let apply_filter = {
                     let filters = self.gff3_filters.get_mut(file_name).unwrap();
+                    let qf_cols = filters.quick_filter.column_picker_mut();
+
+                    let popup_id = ui
+                        .make_persistent_id("gff3_quick_filter_columns_popup");
+
+                    let button_inner = ui.horizontal(|ui| {
+                        ui.heading("Quick filter");
+                        let btn = ui.button("Choose columns");
+
+                        if btn.clicked() {
+                            println!("popup clicked");
+                            ui.memory().toggle_popup(popup_id);
+                        }
+
+                        btn
+                    });
+
+                    let button = &button_inner.response;
+
+                    egui::popup::popup_below_widget(
+                        ui,
+                        popup_id,
+                        &button,
+                        |ui| qf_cols.compact_widget(ui),
+                    );
+
                     filters.add_quick_filter(&mut ui)
                 };
 
@@ -617,7 +643,7 @@ impl Gff3Filter {
     }
 
     pub fn add_quick_filter(&mut self, ui: &mut egui::Ui) -> bool {
-        self.quick_filter.ui(ui)
+        self.quick_filter.ui_compact(ui)
     }
 
     pub fn ui(

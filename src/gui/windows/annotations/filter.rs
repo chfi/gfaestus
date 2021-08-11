@@ -39,6 +39,22 @@ impl<T: ColumnKey> QuickFilter<T> {
             })
     }
 
+    pub fn ui_compact(&mut self, ui: &mut egui::Ui) -> bool {
+        let filter_resp = self.filter.ui(ui);
+
+        let open = &mut self.column_picker_open;
+        let column_picker = &mut self.columns;
+
+        let ctx = ui.ctx();
+        column_picker.ui(ctx, None, open, "Quick filter columns");
+
+        if let Some(resp) = filter_resp {
+            resp.has_focus() && ctx.input().key_pressed(egui::Key::Enter)
+        } else {
+            false
+        }
+    }
+
     pub fn ui(&mut self, ui: &mut egui::Ui) -> bool {
         ui.horizontal(|ui| {
             ui.heading("Quick filter");
