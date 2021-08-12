@@ -81,9 +81,9 @@ impl BedRecordList {
             path_picker,
 
             creator_open: false,
-            creator: OverlayLabelSetCreator::new(
+            creator: OverlayLabelSetCreator::new(egui::Id::new(
                 "bed_overlay_label_set_creator",
-            ),
+            )),
             overlay_tx: new_overlay_tx,
         }
     }
@@ -249,7 +249,7 @@ impl BedRecordList {
 
         if !self.enabled_columns.contains_key(file_name) {
             let mut enabled_columns: ColumnPickerMany<BedColumn> =
-                ColumnPickerMany::new(file_name);
+                ColumnPickerMany::new(egui::Id::new(file_name));
 
             enabled_columns.update_columns(records.as_ref());
 

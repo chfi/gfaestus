@@ -80,7 +80,9 @@ impl Gff3RecordList {
             path_picker,
 
             creator_open: false,
-            creator: OverlayLabelSetCreator::new("overlay_label_set_creator"),
+            creator: OverlayLabelSetCreator::new(egui::Id::new(
+                "overlay_label_set_creator",
+            )),
             overlay_tx: new_overlay_tx,
         }
     }
@@ -268,7 +270,7 @@ impl Gff3RecordList {
 
         if !self.gff3_enabled_columns.contains_key(file_name) {
             let mut enabled_columns: ColumnPickerMany<Gff3Column> =
-                ColumnPickerMany::new(file_name);
+                ColumnPickerMany::new(egui::Id::new(file_name));
 
             enabled_columns.update_columns(records.as_ref());
 
@@ -289,7 +291,10 @@ impl Gff3RecordList {
             let filter = self
                 .gff3_filters
                 .entry(file_name.to_string())
-                .or_insert(RecordFilter::new("gff3_filter", records.as_ref()));
+                .or_insert(RecordFilter::new(
+                    egui::Id::new("gff3_filter"),
+                    records.as_ref(),
+                ));
 
             egui::Window::new("GFF3 Filter")
                 .id(egui::Id::new(Self::ID))

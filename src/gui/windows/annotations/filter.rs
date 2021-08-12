@@ -19,10 +19,11 @@ pub struct QuickFilter<T: ColumnKey> {
 }
 
 impl<T: ColumnKey> QuickFilter<T> {
-    pub fn new(id_source: &str) -> Self {
+    pub fn new(id: egui::Id) -> Self {
+        let column_picker_id = id.with("column_picker");
         Self {
             filter: Default::default(),
-            columns: ColumnPickerMany::new(id_source),
+            columns: ColumnPickerMany::new(column_picker_id),
             column_picker_open: false,
         }
     }
@@ -96,16 +97,16 @@ pub struct RecordFilter<T: ColumnKey> {
     columns: HashMap<T, FilterString>,
 
     pub quick_filter: QuickFilter<T>,
+
+    id: egui::Id,
 }
 
 impl<T: ColumnKey> RecordFilter<T> {
-    pub fn new<C>(id_source: &str, records: &C) -> Self
+    pub fn new<C>(id: egui::Id, records: &C) -> Self
     where
         C: AnnotationCollection<ColumnKey = T>,
     {
-        let mut quick_filter_id_src = id_source.to_string();
-        quick_filter_id_src.push_str("_quick_filter");
-
+        let id = id.with("record_filter");
         let mut columns: HashMap<T, FilterString> = HashMap::new();
 
         let to_remove = [T::seq_id(), T::start(), T::end()];
@@ -117,7 +118,7 @@ impl<T: ColumnKey> RecordFilter<T> {
             columns.insert(column.to_owned(), FilterString::default());
         }
 
-        let mut quick_filter = QuickFilter::new(&quick_filter_id_src);
+        let mut quick_filter = QuickFilter::new(id);
         quick_filter.column_picker_mut().update_columns(records);
 
         Self {
@@ -128,6 +129,8 @@ impl<T: ColumnKey> RecordFilter<T> {
             columns,
 
             quick_filter,
+
+            id,
         }
     }
 

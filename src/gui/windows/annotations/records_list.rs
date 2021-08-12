@@ -68,7 +68,9 @@ impl<T: ColumnKey> RecordList<T> {
             path_picker,
 
             creator_open: false,
-            creator: OverlayLabelSetCreator::new("overlay_label_set_creator"),
+            creator: OverlayLabelSetCreator::new(egui::Id::new(
+                "overlay_label_set_creator",
+            )),
             overlay_tx: new_overlay_tx,
         }
     }

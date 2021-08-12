@@ -394,9 +394,7 @@ pub struct ColumnPickerOne<T: ColumnKey> {
 }
 
 impl<T: ColumnKey> ColumnPickerOne<T> {
-    pub fn new(id_source: &str) -> Self {
-        let id = egui::Id::new(id_source);
-
+    pub fn new(id: egui::Id) -> Self {
         Self {
             columns: Vec::new(),
             chosen_column: None,
@@ -462,9 +460,7 @@ pub struct ColumnPickerMany<T: ColumnKey> {
 }
 
 impl<T: ColumnKey> ColumnPickerMany<T> {
-    pub fn new(id_source: &str) -> Self {
-        let id = egui::Id::new(id_source);
-
+    pub fn new(id: egui::Id) -> Self {
         Self {
             enabled_columns: Default::default(),
             hidden_columns: Default::default(),
@@ -625,9 +621,7 @@ pub struct OverlayLabelSetCreator<T: ColumnKey> {
 }
 
 impl<T: ColumnKey> OverlayLabelSetCreator<T> {
-    pub fn new(id_source: &str) -> Self {
-        let id = egui::Id::new(id_source);
-
+    pub fn new(id: egui::Id) -> Self {
         Self {
             path_id: None,
             path_name: String::new(),
@@ -639,9 +633,7 @@ impl<T: ColumnKey> OverlayLabelSetCreator<T> {
 
             label_set_name: String::new(),
 
-            column_picker: ColumnPickerOne::new(
-                "label_set_overlay_creator_columns",
-            ),
+            column_picker: ColumnPickerOne::new(id.with("column_picker_one")),
             column_picker_open: false,
             current_annotation_file: None,
 
