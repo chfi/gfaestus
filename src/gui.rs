@@ -19,11 +19,10 @@ use crossbeam::atomic::AtomicCell;
 
 use crate::{
     annotations::{
-        AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
-        Gff3Records,
+        AnnotationFileType, Annotations, BedColumn, BedRecords, ColumnKey,
+        Gff3Column, Gff3Records,
     },
     app::{AppChannels, AppMsg, AppSettings, SharedState},
-    // gluon::repl::GluonRepl,
     graph_query::GraphQueryWorker,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
@@ -83,6 +82,7 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
+    gff3_list_new: RecordList<Gff3Column>,
     gff3_list: Gff3RecordList,
     bed_list: BedRecordList,
 
@@ -444,6 +444,11 @@ impl Gui {
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
 
+        let gff3_list_new = RecordList::new(
+            egui::Id::new("new_gff3_records_list"),
+            path_picker_source.create_picker(),
+            overlay_tx.clone(),
+        );
         let gff3_list = Gff3RecordList::new(
             path_picker_source.create_picker(),
             overlay_tx.clone(),
@@ -480,6 +485,7 @@ impl Gui {
 
             clipboard_ctx,
 
+            gff3_list_new,
             gff3_list,
             bed_list,
 
@@ -529,6 +535,8 @@ impl Gui {
         column: &Gff3Column,
         value: &[u8],
     ) {
+        self.gff3_list_new
+            .scroll_to_label_record(records, column, value);
         self.gff3_list
             .scroll_to_label_record(records, column, value);
     }
@@ -644,14 +652,25 @@ impl Gui {
             match annot_type {
                 AnnotationFileType::Gff3 => {
                     if let Some(records) = annotations.get_gff3(annot_name) {
-                        self.gff3_list.ui(
-                            &self.ctx,
-                            &mut self.open_windows.annotation_records,
-                            graph_query_worker,
-                            &self.app_msg_tx,
-                            annot_name,
-                            records,
-                        );
+                        let ctx = &self.ctx;
+                        let open = &mut self.open_windows.annotation_records;
+                        let app_msg_tx = &self.app_msg_tx;
+
+                        let gff3_list = &mut self.gff3_list_new;
+
+                        let resp = egui::Window::new("GFF3")
+                            .default_pos(egui::Pos2::new(600.0, 200.0))
+                            .collapsible(true)
+                            .open(open)
+                            .show(ctx, |ui| {
+                                gff3_list.ui(
+                                    ui,
+                                    graph_query_worker,
+                                    app_msg_tx,
+                                    annot_name,
+                                    records,
+                                )
+                            });
                     }
                 }
                 AnnotationFileType::Bed => {
