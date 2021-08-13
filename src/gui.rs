@@ -443,16 +443,36 @@ impl Gui {
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
 
-        let gff3_list = RecordList::new(
-            egui::Id::new("gff3_records_list"),
-            path_picker_source.create_picker(),
-            overlay_tx.clone(),
-        );
-        let bed_list = RecordList::new(
-            egui::Id::new("bed_records_list"),
-            path_picker_source.create_picker(),
-            overlay_tx.clone(),
-        );
+        let gff3_list = {
+            let mut list = RecordList::new(
+                egui::Id::new("gff3_records_list"),
+                path_picker_source.create_picker(),
+                overlay_tx.clone(),
+            );
+
+            use Gff3Column as Gff;
+
+            list.set_default_columns(
+                [Gff::Source, Gff::Type, Gff::Frame],
+                [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand],
+            );
+
+            list
+        };
+
+        let bed_list = {
+            let mut list = RecordList::new(
+                egui::Id::new("bed_records_list"),
+                path_picker_source.create_picker(),
+                overlay_tx.clone(),
+            );
+
+            use BedColumn as Bed;
+
+            list.set_default_columns([], [Bed::Chr, Bed::Start, Bed::End]);
+
+            list
+        };
 
         let gui = Self {
             ctx,

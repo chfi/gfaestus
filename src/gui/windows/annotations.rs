@@ -459,6 +459,10 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
         }
     }
 
+    pub fn clone_with_id(&self, id: egui::Id) -> Self {
+        Self { id, ..self.clone() }
+    }
+
     pub fn update_columns<C>(&mut self, records: &C)
     where
         C: AnnotationCollection<ColumnKey = T>,

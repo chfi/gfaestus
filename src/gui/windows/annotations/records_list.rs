@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bstr::ByteSlice;
@@ -32,6 +32,8 @@ pub struct RecordList<T: ColumnKey> {
 
     column_picker_open: bool,
     enabled_columns: HashMap<String, ColumnPickerMany<T>>,
+    default_enabled_columns: HashSet<T>,
+    default_hidden_columns: HashSet<T>,
 
     path_picker_open: bool,
     path_picker: PathPicker,
@@ -63,6 +65,8 @@ impl<T: ColumnKey> RecordList<T> {
 
             column_picker_open: false,
             enabled_columns: HashMap::default(),
+            default_enabled_columns: Default::default(),
+            default_hidden_columns: Default::default(),
 
             path_picker_open: false,
             path_picker,
@@ -73,6 +77,18 @@ impl<T: ColumnKey> RecordList<T> {
             )),
             overlay_tx: new_overlay_tx,
         }
+    }
+
+    pub fn set_default_columns(
+        &mut self,
+        enabled_columns: impl IntoIterator<Item = T>,
+        hidden_columns: impl IntoIterator<Item = T>,
+    ) {
+        self.default_enabled_columns.clear();
+        self.default_enabled_columns.extend(enabled_columns);
+
+        self.default_hidden_columns.clear();
+        self.default_hidden_columns.extend(hidden_columns);
     }
 
     pub fn scroll_to_label_record<C>(
@@ -259,27 +275,16 @@ impl<T: ColumnKey + 'static> RecordList<T> {
 
             enabled_columns.update_columns(records.as_ref());
 
-            for col in [T::seq_id(), T::start(), T::end()] {
-                // enabled_columns.set_column(&col, true);
-                enabled_columns.hide_column_from_gui(&col, true);
+            for col in self.default_enabled_columns.iter() {
+                enabled_columns.set_column(col, true);
+            }
+
+            for col in self.default_hidden_columns.iter() {
+                enabled_columns.hide_column_from_gui(col, true);
             }
 
             self.enabled_columns
                 .insert(file_name.to_string(), enabled_columns);
-
-            /*
-            use Gff3Column as Gff;
-            for col in [Gff::Source, Gff::Type, Gff::Frame] {
-                enabled_columns.set_column(&col, true);
-            }
-
-            for col in [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand] {
-                enabled_columns.hide_column_from_gui(&col, true);
-            }
-
-            self.gff3_enabled_columns
-                .insert(file_name.to_string(), enabled_columns);
-            */
         }
 
         {
@@ -333,16 +338,6 @@ impl<T: ColumnKey + 'static> RecordList<T> {
             );
         }
 
-        // TODO configurable window title
-        /*
-        let resp = egui::Window::new("GFF3")
-            .id(Self::list_id())
-            .default_pos(egui::Pos2::new(600.0, 200.0))
-            .collapsible(true)
-            .open(open)
-            // .resizable(true)
-            .show(ctx, |mut ui| {
-                */
         ui.set_min_height(200.0);
         ui.set_max_height(ui.input().screen_rect.height() - 100.0);
 
