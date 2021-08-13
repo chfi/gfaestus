@@ -82,9 +82,8 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
-    gff3_list_new: RecordList<Gff3Column>,
-    gff3_list: Gff3RecordList,
-    bed_list: BedRecordList,
+    gff3_list: RecordList<Gff3Column>,
+    bed_list: RecordList<BedColumn>,
 
     path_picker_source: PathPickerSource,
 
@@ -444,17 +443,16 @@ impl Gui {
         let overlay_tx =
             view_state.overlay_creator.state.new_overlay_tx().to_owned();
 
-        let gff3_list_new = RecordList::new(
-            egui::Id::new("new_gff3_records_list"),
+        let gff3_list = RecordList::new(
+            egui::Id::new("gff3_records_list"),
             path_picker_source.create_picker(),
             overlay_tx.clone(),
         );
-        let gff3_list = Gff3RecordList::new(
+        let bed_list = RecordList::new(
+            egui::Id::new("bed_records_list"),
             path_picker_source.create_picker(),
             overlay_tx.clone(),
         );
-        let bed_list =
-            BedRecordList::new(path_picker_source.create_picker(), overlay_tx);
 
         let gui = Self {
             ctx,
@@ -485,7 +483,6 @@ impl Gui {
 
             clipboard_ctx,
 
-            gff3_list_new,
             gff3_list,
             bed_list,
 
@@ -535,8 +532,6 @@ impl Gui {
         column: &Gff3Column,
         value: &[u8],
     ) {
-        self.gff3_list_new
-            .scroll_to_label_record(records, column, value);
         self.gff3_list
             .scroll_to_label_record(records, column, value);
     }
@@ -656,9 +651,9 @@ impl Gui {
                         let open = &mut self.open_windows.annotation_records;
                         let app_msg_tx = &self.app_msg_tx;
 
-                        let gff3_list = &mut self.gff3_list_new;
+                        let gff3_list = &mut self.gff3_list;
 
-                        let resp = egui::Window::new("GFF3")
+                        let _resp = egui::Window::new("GFF3")
                             .default_pos(egui::Pos2::new(600.0, 200.0))
                             .collapsible(true)
                             .open(open)
@@ -675,14 +670,25 @@ impl Gui {
                 }
                 AnnotationFileType::Bed => {
                     if let Some(records) = annotations.get_bed(annot_name) {
-                        self.bed_list.ui(
-                            &self.ctx,
-                            &mut self.open_windows.annotation_records,
-                            graph_query_worker,
-                            &self.app_msg_tx,
-                            annot_name,
-                            records,
-                        );
+                        let ctx = &self.ctx;
+                        let open = &mut self.open_windows.annotation_records;
+                        let app_msg_tx = &self.app_msg_tx;
+
+                        let bed_list = &mut self.bed_list;
+
+                        let _resp = egui::Window::new("BED")
+                            .default_pos(egui::Pos2::new(600.0, 200.0))
+                            .collapsible(true)
+                            .open(open)
+                            .show(ctx, |ui| {
+                                bed_list.ui(
+                                    ui,
+                                    graph_query_worker,
+                                    app_msg_tx,
+                                    annot_name,
+                                    records,
+                                )
+                            });
                     }
                 }
             }

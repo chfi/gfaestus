@@ -7,14 +7,10 @@ use bstr::ByteSlice;
 use crossbeam::channel::Sender;
 use futures::executor::ThreadPool;
 
-pub mod bed;
 pub mod filter;
-pub mod gff;
 pub mod records_list;
 
-pub use bed::*;
 pub use filter::*;
-pub use gff::*;
 pub use records_list::*;
 
 #[allow(unused_imports)]
@@ -35,8 +31,8 @@ use rustc_hash::FxHashMap;
 use crate::{
     annotations::{
         record_column_hash_color, AnnotationCollection, AnnotationFileType,
-        AnnotationLabelSet, AnnotationRecord, Annotations, BedColumn,
-        BedRecords, ColumnKey, Gff3Column, Gff3Records,
+        AnnotationLabelSet, AnnotationRecord, Annotations, BedRecords,
+        ColumnKey, Gff3Records,
     },
     app::AppMsg,
     asynchronous::AsyncResult,
@@ -134,8 +130,6 @@ pub struct AnnotationFileList {
 
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
     bed_load_result: Option<AsyncResult<Result<BedRecords>>>,
-    // overlay_label_set_creator: OverlayLabelSetCreator,
-    // creator_open: bool,
 }
 
 impl std::default::Default for AnnotationFileList {
@@ -159,10 +153,6 @@ impl std::default::Default for AnnotationFileList {
 
             gff3_load_result: None,
             bed_load_result: None,
-            // overlay_label_set_creator: OverlayLabelSetCreator::new(
-            //     "overlay_label_set_creator",
-            // ),
-            // creator_open: false,
         }
     }
 }
@@ -608,15 +598,10 @@ pub struct OverlayLabelSetCreator<T: ColumnKey> {
 
     label_set_name: String,
 
-    // new_overlay_tx: Sender<OverlayCreatorMsg>,
-
-    // column_picker: ColumnPickerOne<T>,
-    // column_picker_gff3: ColumnPickerOne<Gff3Records>,
-    // column_picker_bed: ColumnPickerOne<BedRecords>,
     column_picker: ColumnPickerOne<T>,
     column_picker_open: bool,
     current_annotation_file: Option<String>,
-    // current_annotation_type: Option<AnnotationFileType>,
+
     id: egui::Id,
 }
 
@@ -710,8 +695,6 @@ impl<T: ColumnKey> OverlayLabelSetCreator<T> {
 }
 
 impl<T: ColumnKey + 'static> OverlayLabelSetCreator<T> {
-    // for now it's hardcoded to use Gff3Records, but that should be
-    // replaced with an enum or something similar later
     pub fn ui<C>(
         &mut self,
         ctx: &egui::CtxRef,
@@ -970,9 +953,6 @@ impl<T: ColumnKey + 'static> OverlayLabelSetCreator<T> {
                 );
 
                 create_label_set |= create_label_set_btn.clicked();
-                // let create_label_set = create_label_set_btn.clicked()
-                //     || (ui.input().key_pressed(egui::Key::Enter)
-                //         && name_box.response.has_focus());
 
                 if create_label_set {
                     if let Some(label_set) = Self::calculate_annotation_set(
