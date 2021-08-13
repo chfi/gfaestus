@@ -132,32 +132,30 @@ impl<T: ColumnKey> RecordList<T> {
             format!("{}", record.start()),
             format!("{}", record.end()),
         ];
+
         let enabled_columns = self.enabled_columns.get(file_name).unwrap();
 
-        let mut enabled = enabled_columns.enabled_columns.iter().filter_map(
-            |(col, enabled)| {
-                if *enabled {
-                    Some(col)
-                } else {
-                    None
+        let mut mandatory = records.mandatory_columns();
+        mandatory.retain(|c| {
+            c != &T::seq_id() && c != &T::start() && c != &T::end()
+        });
+
+        for column in mandatory.into_iter().chain(records.optional_columns()) {
+            if enabled_columns.get_column(&column) {
+                let values = record.get_all(&column);
+
+                let mut label = String::new();
+
+                for (count, value) in values.into_iter().enumerate() {
+                    if count != 0 {
+                        label.push_str(";");
+                    }
+                    let val_str = value.to_str().unwrap();
+                    label.push_str(val_str);
                 }
-            },
-        );
 
-        for column in enabled {
-            let values = record.get_all(column);
-
-            let mut label = String::new();
-
-            for (count, value) in values.into_iter().enumerate() {
-                if count != 0 {
-                    label.push_str(";");
-                }
-                let val_str = value.to_str().unwrap();
-                label.push_str(val_str);
+                fields.push(label);
             }
-
-            fields.push(label);
         }
 
         let fields_ref: Vec<&str> =
@@ -455,35 +453,26 @@ impl<T: ColumnKey + 'static> RecordList<T> {
             egui::Grid::new("record_list_grid")
                 .striped(true)
                 .show(ui, |ui| {
-                    ui.label("seq_id");
-                    ui.label("start");
-                    ui.label("end");
+                    ui.label(T::seq_id().to_string());
+                    ui.label(T::start().to_string());
+                    ui.label(T::end().to_string());
 
-                    // TODO fix header
+                    let mut mandatory = records.mandatory_columns();
+                    mandatory.retain(|c| {
+                        c != &T::seq_id() && c != &T::start() && c != &T::end()
+                    });
 
-                    /*
-                    if enabled_columns.get_column(&Gff::Source) {
-                        ui.label("source");
-                    }
-                    if enabled_columns.get_column(&Gff::Type) {
-                        ui.label("type");
-                    }
-                    if enabled_columns.get_column(&Gff::Frame) {
-                        ui.label("frame");
-                    }
-
-                    let mut keys =
-                        records.attribute_keys.iter().collect::<Vec<_>>();
-                    keys.sort_by(|k1, k2| k1.cmp(k2));
-
-                    for key in keys {
-                        if enabled_columns
-                            .get_column(&Gff::Attribute(key.to_owned()))
-                        {
-                            ui.label(format!("{}", key.as_bstr()));
+                    for col in mandatory {
+                        if enabled_columns.get_column(&col) {
+                            ui.label(col.to_string());
                         }
                     }
-                    */
+
+                    for col in records.optional_columns() {
+                        if enabled_columns.get_column(&col) {
+                            ui.label(col.to_string());
+                        }
+                    }
 
                     ui.end_row();
 
@@ -558,16 +547,12 @@ impl<T: ColumnKey + 'static> RecordList<T> {
             }
         }
 
-        // if let Some(resp) = &resp {
-        //     let pos = resp.rect.right_top();
         let enabled_columns = self.enabled_columns.get_mut(file_name).unwrap();
         enabled_columns.ui(
             ui.ctx(),
             None,
-            // Some(pos.into()),
             &mut self.column_picker_open,
-            "Gff3 Columns",
+            "Enabled Columns",
         );
-        // }
     }
 }
