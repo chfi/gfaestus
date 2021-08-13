@@ -58,8 +58,8 @@ impl<T: ColumnKey> RecordList<T> {
             filtered_records,
 
             offset: 0,
-            slot_count: 20,
-
+            slot_count: 15,
+            // slot_count: 20,
             filter_open: false,
             filters: HashMap::default(),
 
@@ -449,85 +449,96 @@ impl<T: ColumnKey + 'static> RecordList<T> {
 
         let enabled_columns = self.enabled_columns.get(file_name).unwrap();
 
-        let grid =
-            egui::Grid::new("record_list_grid")
-                .striped(true)
-                .show(ui, |ui| {
-                    ui.label(T::seq_id().to_string());
-                    ui.label(T::start().to_string());
-                    ui.label(T::end().to_string());
+        let mut spacing = ui.spacing().item_spacing;
+        spacing.y = 3.0;
 
-                    let mut mandatory = records.mandatory_columns();
-                    mandatory.retain(|c| {
-                        c != &T::seq_id() && c != &T::start() && c != &T::end()
-                    });
+        self.slot_count = {
+            // top part is around 250px, round up to 300px to be on the safe side
+            let usable_height = ui.input().screen_rect.height() - 300.0;
 
-                    for col in mandatory {
-                        if enabled_columns.get_column(&col) {
-                            ui.label(col.to_string());
-                        }
-                    }
+            // again, roughly 30px
+            let row_height = 30.0;
 
-                    for col in records.optional_columns() {
-                        if enabled_columns.get_column(&col) {
-                            ui.label(col.to_string());
-                        }
-                    }
+            (usable_height / row_height) as usize
+        };
 
-                    ui.end_row();
+        let grid = egui::Grid::new("record_list_grid")
+            .striped(true)
+            .spacing(spacing)
+            .show(ui, |ui| {
+                ui.label(T::seq_id().to_string());
+                ui.label(T::start().to_string());
+                ui.label(T::end().to_string());
 
-                    for i in 0..self.slot_count {
-                        let row_record = if self.filtered_records.is_empty() {
-                            records.records().get(self.offset + i).map(
-                                |record| {
-                                    (
-                                        self.ui_row(
-                                            ui,
-                                            file_name,
-                                            records.as_ref(),
-                                            record,
-                                            i,
-                                        ),
-                                        record,
-                                    )
-                                },
-                            )
-                        } else {
-                            self.filtered_records.get(self.offset + i).and_then(
-                                |&ix| {
-                                    let record = records.records().get(ix)?;
-                                    let row = self.ui_row(
-                                        ui,
-                                        file_name,
-                                        records.as_ref(),
-                                        record,
-                                        i,
-                                    );
-                                    Some((row, record))
-                                },
-                            )
-                        };
-
-                        if let Some((row, record)) = row_record {
-                            let row_interact = ui.interact(
-                                row.rect,
-                                egui::Id::new(ui.id().with(i)),
-                                egui::Sense::click(),
-                            );
-
-                            if row_interact.clicked() {
-                                self.select_record(
-                                    app_msg_tx,
-                                    graph_query.graph(),
-                                    record,
-                                );
-                            }
-                            if row_interact.double_clicked() {
-                                app_msg_tx.send(AppMsg::GotoSelection).unwrap();
-                            }
-                        }
-                    }
+                let mut mandatory = records.mandatory_columns();
+                mandatory.retain(|c| {
+                    c != &T::seq_id() && c != &T::start() && c != &T::end()
                 });
+
+                for col in mandatory {
+                    if enabled_columns.get_column(&col) {
+                        ui.label(col.to_string());
+                    }
+                }
+
+                for col in records.optional_columns() {
+                    if enabled_columns.get_column(&col) {
+                        ui.label(col.to_string());
+                    }
+                }
+
+                ui.end_row();
+
+                for i in 0..self.slot_count {
+                    let row_record = if self.filtered_records.is_empty() {
+                        records.records().get(self.offset + i).map(|record| {
+                            (
+                                self.ui_row(
+                                    ui,
+                                    file_name,
+                                    records.as_ref(),
+                                    record,
+                                    i,
+                                ),
+                                record,
+                            )
+                        })
+                    } else {
+                        self.filtered_records.get(self.offset + i).and_then(
+                            |&ix| {
+                                let record = records.records().get(ix)?;
+                                let row = self.ui_row(
+                                    ui,
+                                    file_name,
+                                    records.as_ref(),
+                                    record,
+                                    i,
+                                );
+                                Some((row, record))
+                            },
+                        )
+                    };
+
+                    if let Some((row, record)) = row_record {
+                        let row_interact = ui.interact(
+                            row.rect,
+                            egui::Id::new(ui.id().with(i)),
+                            egui::Sense::click(),
+                        );
+
+                        if row_interact.clicked() {
+                            self.select_record(
+                                app_msg_tx,
+                                graph_query.graph(),
+                                record,
+                            );
+                        }
+                        if row_interact.double_clicked() {
+                            app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                        }
+                    }
+                }
+            });
 
         if grid.response.hover_pos().is_some() {
             let scroll = ui.input().scroll_delta;
