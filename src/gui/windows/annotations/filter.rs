@@ -180,19 +180,38 @@ impl<T: ColumnKey> RecordFilter<T> {
             .iter_mut()
             .partition(|(col, _filter)| T::is_column_optional(col));
 
+        ui.label(T::seq_id().to_string());
+        self.seq_id.ui(ui);
+        ui.separator();
+
+        ui.label(T::start().to_string());
+        self.start.ui(ui);
+        ui.separator();
+
+        ui.label(T::end().to_string());
+        self.end.ui(ui);
+        ui.separator();
+
+        let max_height = ui.input().screen_rect.height() - 250.0;
+        let scroll_height = (max_height / 2.0) - 50.0;
+
         ui.collapsing("Mandatory fields", |ui| {
-            for (column, filter) in mandatory.into_iter() {
-                ui.label(column.to_string());
-                filter.ui(ui);
-                ui.separator();
-            }
+            egui::ScrollArea::from_max_height(scroll_height).show(ui, |ui| {
+                for (column, filter) in mandatory.into_iter() {
+                    ui.label(column.to_string());
+                    filter.ui(ui);
+                    ui.separator();
+                }
+            });
         });
         ui.collapsing("Optional fields", |ui| {
-            for (column, filter) in optional.into_iter() {
-                ui.label(column.to_string());
-                filter.ui(ui);
-                ui.separator();
-            }
+            egui::ScrollArea::from_max_height(scroll_height).show(ui, |ui| {
+                for (column, filter) in optional.into_iter() {
+                    ui.label(column.to_string());
+                    filter.ui(ui);
+                    ui.separator();
+                }
+            });
         });
     }
 

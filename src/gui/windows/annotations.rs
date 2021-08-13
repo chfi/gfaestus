@@ -554,7 +554,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
                 .into_iter()
                 .partition(|(col, _en)| T::is_column_optional(col));
 
-            let scroll_height = (max_height / 2.0) - 50.0;
+            let scroll_height = max_height - 50.0;
 
             ui.collapsing("Mandatory fields", |mut ui| {
                 egui::ScrollArea::from_max_height(scroll_height).show(

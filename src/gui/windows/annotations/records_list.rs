@@ -462,6 +462,34 @@ impl<T: ColumnKey + 'static> RecordList<T> {
             (usable_height / row_height) as usize
         };
 
+        let record_count = if self.filtered_records.is_empty() {
+            records.records().len()
+        } else {
+            self.filtered_records.len()
+        };
+
+        let end = {
+            let end = self.offset + self.slot_count;
+
+            if end > record_count {
+                if record_count > self.slot_count {
+                    self.offset = record_count - self.slot_count;
+                } else {
+                    self.offset = 0;
+                }
+            }
+
+            end
+        };
+
+        let label_str = format!(
+            "Rows {} - {} out of {}",
+            self.offset + 1,
+            end + 1,
+            record_count
+        );
+        ui.label(label_str);
+
         let grid = egui::Grid::new("record_list_grid")
             .striped(true)
             .spacing(spacing)
@@ -550,10 +578,13 @@ impl<T: ColumnKey + 'static> RecordList<T> {
 
                 offset += delta;
 
-                offset = offset.clamp(
-                    0,
-                    (records.records().len() - self.slot_count) as isize,
-                );
+                let end = records
+                    .records()
+                    .len()
+                    .checked_sub(self.slot_count)
+                    .unwrap_or(records.records().len().min(self.slot_count));
+
+                offset = offset.clamp(0, end as isize);
                 self.offset = offset as usize;
             }
         }
