@@ -99,6 +99,22 @@ fn main() {
         std::process::exit(1);
     };
 
+    // let event_loop = EventLoop::new();
+    let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
+    let window = WindowBuilder::new()
+        .with_title("Gfaestus")
+        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+        .build(&event_loop)
+        .unwrap();
+
+    let gfaestus = GfaestusVk::new(&window);
+
+    if let Err(err) = &gfaestus {
+        println!("{:?}", err.root_cause());
+    }
+
+    let mut gfaestus = gfaestus.unwrap();
+
     let num_cpus = num_cpus::get();
 
     let futures_cpus;
@@ -170,22 +186,6 @@ fn main() {
         universe.layout().nodes().len() * 2
     );
 
-    // let event_loop = EventLoop::new();
-    let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
-    let window = WindowBuilder::new()
-        .with_title("Gfaestus")
-        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
-        .build(&event_loop)
-        .unwrap();
-
-    let gfaestus = GfaestusVk::new(&window);
-
-    if let Err(err) = &gfaestus {
-        println!("{:?}", err.root_cause());
-    }
-
-    let mut gfaestus = gfaestus.unwrap();
-
     let mut compute_manager = ComputeManager::new(
         gfaestus.vk_context().device().clone(),
         gfaestus.graphics_family_index,
@@ -256,6 +256,7 @@ fn main() {
     let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,
         &graph_query.graph_arc(),
+        universe.layout(),
         gfaestus.msaa_samples,
         gfaestus.render_passes.edges,
     )

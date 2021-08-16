@@ -12,6 +12,7 @@ use handlegraph::{
 use handlegraph::packedgraph::PackedGraph;
 
 use anyhow::Result;
+use rustc_hash::FxHashSet;
 
 use crate::vulkan::{draw_system::Vertex, GfaestusVk};
 use crate::{geometry::*, vulkan::draw_system::nodes::NodeVertices};
@@ -184,6 +185,8 @@ impl Node {
 pub struct FlatLayout {
     node_ids: Vec<NodeId>,
     nodes: Vec<Node>,
+    // pub components: Vec<(usize, usize)>,
+    pub component_offsets: Vec<usize>,
     top_left: Point,
     bottom_right: Point,
 }
@@ -203,6 +206,20 @@ impl GraphLayout for FlatLayout {
 }
 
 impl FlatLayout {
+    pub fn node_component(&self, node_id: NodeId) -> usize {
+        let offset =
+            self.component_offsets.iter().enumerate().find(|(_, o)| {
+                let id = (node_id.0) as usize;
+                id >= **o
+            });
+
+        if let Some((ix, _)) = offset {
+            ix
+        } else {
+            self.component_offsets.len()
+        }
+    }
+
     fn from_laid_out_graph(
         graph: &PackedGraph,
         layout_path: &str,
@@ -224,7 +241,15 @@ impl FlatLayout {
         let mut layout_map: FxHashMap<NodeId, (Point, Point)> =
             FxHashMap::default();
 
+        let mut component_map: FxHashMap<NodeId, usize> = FxHashMap::default();
+
+        let mut components: Vec<usize> = Vec::new();
+
+        let mut cur_comp = 0;
+
         let mut prev_point = None;
+
+        let mut line_count = 0;
 
         for line in lines {
             let line: String = line?;
@@ -239,7 +264,14 @@ impl FlatLayout {
             let x = fields.next().unwrap().parse::<f32>()?;
             let y = fields.next().unwrap().parse::<f32>()?;
 
-            let _component = if let Some(c) = fields.next() {
+            let component = if let Some(c) = fields.next() {
+                let val = c.parse::<usize>()?;
+                if val != cur_comp {
+                    let id = (line_count / 2) + 1;
+                    components.push(id);
+                    cur_comp = val;
+                }
+
                 Some(c.parse::<usize>()?)
             } else {
                 None
@@ -250,8 +282,13 @@ impl FlatLayout {
             let node_ix = (ix / 2) + 1;
             let node_id = NodeId::from(node_ix);
 
+            line_count += 1;
+
             if let Some(prev_p) = prev_point {
                 layout_map.insert(node_id, (prev_p, this_p));
+                if let Some(comp) = component {
+                    component_map.insert(node_id, comp);
+                }
                 prev_point = None;
             } else {
                 prev_point = Some(this_p);
@@ -278,6 +315,14 @@ impl FlatLayout {
 
             let (p0, p1) = *layout_map.get(&id).unwrap();
 
+            let comp = component_map.get(&id).copied().unwrap_or(0);
+
+            let delta = Point::new(0.0, (comp as f32) * 10_000.0);
+            // let delta = Point::new(0.0, 0.0);
+
+            let p0 = p0 + delta;
+            let p1 = p1 + delta;
+
             min_x = min_x.min(p0.x).min(p1.x);
             max_x = max_x.max(p0.x).max(p1.x);
 
@@ -294,6 +339,7 @@ impl FlatLayout {
         Ok(FlatLayout {
             node_ids,
             nodes,
+            component_offsets: components,
             top_left,
             bottom_right,
         })

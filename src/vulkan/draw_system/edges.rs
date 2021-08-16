@@ -1,9 +1,13 @@
 use crate::{
     geometry::{Point, Rect},
+    universe::FlatLayout,
     view::{ScreenDims, View},
 };
 
-use handlegraph::{handle::Edge, handlegraph::*};
+use handlegraph::{
+    handle::{Edge, NodeId},
+    handlegraph::*,
+};
 
 use handlegraph::packedgraph::PackedGraph;
 
@@ -266,6 +270,7 @@ impl EdgeRenderer {
     pub fn new(
         app: &GfaestusVk,
         graph: &PackedGraph,
+        layout: &FlatLayout,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
@@ -334,7 +339,8 @@ impl EdgeRenderer {
             Self::create_pipeline(device, msaa_samples, render_pass, &layouts);
 
         dbg!();
-        let edge_index_buffer = EdgeIndices::new(app, graph)?;
+        let edge_index_buffer =
+            EdgeIndices::new_with_components(app, graph, layout)?;
 
         Ok(Self {
             descriptor_pool,
@@ -502,6 +508,63 @@ pub struct EdgeIndices {
 }
 
 impl EdgeIndices {
+    fn new_with_components(
+        app: &GfaestusVk,
+        graph: &PackedGraph,
+        layout: &FlatLayout,
+    ) -> Result<Self> {
+        let mut edge_count = 0;
+        let mut edges: Vec<u32> = Vec::with_capacity(graph.edge_count() * 2);
+
+        for Edge(left, right) in graph.edges() {
+            let left_comp = layout.node_component(left.id());
+            let right_comp = layout.node_component(right.id());
+
+            if left_comp != right_comp {
+                continue;
+            }
+
+            let left_l = (left.id().0 - 1) * 2;
+            let left_r = left_l + 1;
+
+            let right_l = (right.id().0 - 1) * 2;
+            let right_r = right_l + 1;
+
+            let (left_ix, right_ix) =
+                match (left.is_reverse(), right.is_reverse()) {
+                    (false, false) => (left_r, right_l),
+                    (true, false) => (left_l, right_l),
+                    (false, true) => (left_r, right_r),
+                    (true, true) => (left_l, right_r),
+                };
+
+            edges.push(left_ix as u32);
+            edges.push(right_ix as u32);
+            edge_count += 1;
+        }
+
+        let usage = vk::BufferUsageFlags::TRANSFER_DST
+            | vk::BufferUsageFlags::INDEX_BUFFER;
+
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (buffer, allocation, allocation_info) = app
+            .create_buffer_with_data::<u32, _>(
+                usage,
+                memory_usage,
+                false,
+                &edges,
+            )?;
+
+        Ok(Self {
+            buffer,
+            allocation,
+            allocation_info,
+
+            edge_count,
+        })
+    }
+
     fn new(app: &GfaestusVk, graph: &PackedGraph) -> Result<Self> {
         let edge_count = graph.edge_count();
 
