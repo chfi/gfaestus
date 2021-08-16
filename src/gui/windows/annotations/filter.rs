@@ -36,14 +36,25 @@ impl<T: ColumnKey> QuickFilter<T> {
     where
         R: AnnotationRecord<ColumnKey = T>,
     {
-        self.columns
+        if self.filter.op == FilterStringOp::None {
+            return true;
+        }
+
+        let enabled_cols = self
+            .columns
             .enabled_columns
             .iter()
             .filter_map(|(c, enabled)| if *enabled { Some(c) } else { None })
-            .any(|column| {
-                let values = record.get_all(column);
-                values.iter().any(|v| self.filter.filter_bytes(v))
-            })
+            .collect::<Vec<_>>();
+
+        if enabled_cols.is_empty() {
+            return true;
+        }
+
+        enabled_cols.into_iter().any(|column| {
+            let values = record.get_all(column);
+            values.iter().any(|v| self.filter.filter_bytes(v))
+        })
     }
 
     pub fn ui_compact(&mut self, ui: &mut egui::Ui) -> bool {
@@ -165,11 +176,30 @@ impl<T: ColumnKey> RecordFilter<T> {
     where
         R: AnnotationRecord<ColumnKey = T>,
     {
-        self.quick_filter.filter_record(record)
-            && self.columns.iter().any(|(column, filter)| {
-                let values = record.get_all(column);
-                values.into_iter().any(|value| filter.filter_bytes(value))
-            })
+        let in_range = self.seq_id.filter_bytes(record.seq_id())
+            && self.start.filter(record.start())
+            && self.end.filter(record.end());
+
+        in_range && self.quick_filter.filter_record(record)
+
+        /*
+        in_range
+            && (quick
+                || columns.into_iter().all(|col| {
+                    let values = record.get_all(&col);
+                    let filter = self.columns.get(&col);
+                    if let Some(filter) = filter {
+                        values.into_iter().any(|v| filter.filter_bytes(v))
+                    } else {
+                        true
+                    }
+                }))
+            */
+        // && self.quick_filter.filter_record(record)
+        // && self.columns.iter().all(|(column, filter)| {
+        //     let values = record.get_all(column);
+        //     values.into_iter().any(|value| filter.filter_bytes(value))
+        // })
     }
 
     // TODO: Returns `true` if the filter has been updated and should be applied
