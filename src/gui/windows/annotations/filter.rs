@@ -180,26 +180,15 @@ impl<T: ColumnKey> RecordFilter<T> {
             && self.start.filter(record.start())
             && self.end.filter(record.end());
 
-        in_range && self.quick_filter.filter_record(record)
-
-        /*
         in_range
-            && (quick
-                || columns.into_iter().all(|col| {
-                    let values = record.get_all(&col);
-                    let filter = self.columns.get(&col);
-                    if let Some(filter) = filter {
-                        values.into_iter().any(|v| filter.filter_bytes(v))
-                    } else {
-                        true
-                    }
-                }))
-            */
-        // && self.quick_filter.filter_record(record)
-        // && self.columns.iter().all(|(column, filter)| {
-        //     let values = record.get_all(column);
-        //     values.into_iter().any(|value| filter.filter_bytes(value))
-        // })
+            && self.quick_filter.filter_record(record)
+            && self.columns.iter().all(|(column, filter)| {
+                if filter.op == FilterStringOp::None {
+                    return true;
+                }
+                let values = record.get_all(column);
+                values.into_iter().any(|value| filter.filter_bytes(value))
+            })
     }
 
     // TODO: Returns `true` if the filter has been updated and should be applied
