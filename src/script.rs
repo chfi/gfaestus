@@ -49,34 +49,6 @@ pub fn create_engine() -> Engine {
     engine.register_global_module(graph.into());
     engine.register_global_module(colors.into());
 
-    /*
-    engine.register_fn("node_id", |id: i64| NodeId::from(id as u64));
-
-    engine.register_fn("hash_bytes", |bytes: &mut Vec<u8>| {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-        let mut hasher = DefaultHasher::default();
-        bytes.hash(&mut hasher);
-        let hash = hasher.finish();
-        let result: i64 = bytemuck::cast(hash);
-        result
-    });
-
-    engine.register_fn("hash_color", |hash: i64| {
-        let hash: u64 = bytemuck::cast(hash);
-
-        let r_u16 = ((hash >> 32) & 0xFFFFFFFF) as u16;
-        let g_u16 = ((hash >> 16) & 0xFFFFFFFF) as u16;
-        let b_u16 = (hash & 0xFFFFFFFF) as u16;
-
-        let max = r_u16.max(g_u16).max(b_u16) as f32;
-        let r = (r_u16 as f32) / max;
-        let g = (g_u16 as f32) / max;
-        let b = (b_u16 as f32) / max;
-        rgb::RGBA::new(r, g, b, 1.0)
-    });
-    */
-
     engine
 }
 

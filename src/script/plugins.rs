@@ -35,9 +35,14 @@ use crate::overlays::{OverlayData, OverlayKind};
 
 #[export_module]
 pub mod handle_plugin {
-
-    pub fn handle(id: i64, reverse: bool) -> Handle {
+    #[rhai_fn(name = "handle")]
+    pub fn handle_from_i64(id: i64, reverse: bool) -> Handle {
         Handle::pack(id as u64, reverse)
+    }
+
+    #[rhai_fn(name = "handle")]
+    pub fn handle_from_node_id(id: NodeId, reverse: bool) -> Handle {
+        Handle::pack(id.0, reverse)
     }
 
     #[rhai_fn(pure)]
