@@ -47,6 +47,37 @@ pub fn create_engine() -> Engine {
     let graph_iters = exported_module!(plugins::graph_iters);
     let colors = exported_module!(plugins::colors);
 
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    engine.register_fn("create_hasher", || DefaultHasher::default());
+
+    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: PathId| {
+        val.hash(hasher);
+    });
+
+    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: u8| {
+        val.hash(hasher);
+    });
+
+    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: NodeId| {
+        use std::hash::{Hash, Hasher};
+        val.hash(hasher);
+    });
+
+    engine.register_fn("finish", |hasher: &mut DefaultHasher| hasher.finish());
+
+    engine.register_fn("hash_array", |a: rhai::Array| {
+        let mut hasher = DefaultHasher::default();
+        Hash::hash_slice(a.as_slice(), &mut hasher);
+        hasher.finish()
+    });
+    engine.register_fn("hash_dynamic", |d: rhai::Dynamic| {
+        let mut hasher = DefaultHasher::default();
+        d.hash(&mut hasher);
+        hasher.finish()
+    });
+
     engine.register_global_module(handle.into());
     engine.register_global_module(graph.into());
     engine.register_global_module(paths.into());

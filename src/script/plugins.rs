@@ -193,6 +193,10 @@ pub mod graph_iters {
     pub fn occur_step_ix(occur: &mut Step) -> StepPtr {
         occur.1
     }
+
+    pub fn unwrap_path_id(path: PathId) -> i64 {
+        path.0 as i64
+    }
 }
 
 #[export_module]
