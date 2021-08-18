@@ -43,10 +43,14 @@ pub fn create_engine() -> Engine {
 
     let handle = exported_module!(plugins::handle_plugin);
     let graph = exported_module!(plugins::graph_plugin);
+    let paths = exported_module!(plugins::paths_plugin);
+    let graph_iters = exported_module!(plugins::graph_iters);
     let colors = exported_module!(plugins::colors);
 
     engine.register_global_module(handle.into());
     engine.register_global_module(graph.into());
+    engine.register_global_module(paths.into());
+    engine.register_global_module(graph_iters.into());
     engine.register_global_module(colors.into());
 
     engine.register_iterator::<plugins::HandlesIter>();

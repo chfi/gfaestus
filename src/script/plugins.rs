@@ -131,6 +131,100 @@ pub mod handle_plugin {
     }
 }
 
+pub type Step = (PathId, StepPtr);
+
+#[export_module]
+pub mod graph_iters {
+    #[rhai_fn(pure)]
+    pub fn handles(graph: &mut Arc<PackedGraph>) -> HandlesIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        HandlesIter::new(graph_arc)
+    }
+
+    #[rhai_fn(pure)]
+    pub fn steps_on_handle(
+        graph: &mut Arc<PackedGraph>,
+        handle: Handle,
+    ) -> OccursIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        OccursIter::new(graph_arc, handle).unwrap()
+    }
+
+    #[rhai_fn(pure, get = "path_id")]
+    pub fn occur_path_id(occur: &mut Step) -> PathId {
+        let path = occur.0;
+        path
+    }
+
+    #[rhai_fn(pure, get = "step_ix")]
+    pub fn occur_step_ix(occur: &mut Step) -> StepPtr {
+        occur.1
+    }
+}
+
+#[export_module]
+pub mod paths_plugin {
+    #[rhai_fn(pure, name = "path_len")]
+    pub fn path_len(graph: &mut Arc<PackedGraph>, path: PathId) -> usize {
+        graph.path_len(path).unwrap_or(0)
+    }
+
+    #[rhai_fn(pure, name = "path_len")]
+    pub fn path_len_i32(graph: &mut Arc<PackedGraph>, path: i32) -> usize {
+        path_len(graph, PathId(path as u64))
+    }
+
+    #[rhai_fn(pure, name = "path_len")]
+    pub fn path_len_i64(graph: &mut Arc<PackedGraph>, path: i64) -> usize {
+        path_len(graph, PathId(path as u64))
+    }
+
+    #[rhai_fn(pure)]
+    pub fn path_handle_at_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+        step: StepPtr,
+    ) -> Handle {
+        graph.path_handle_at_step(path, step).unwrap()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn has_next_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+        step: StepPtr,
+    ) -> bool {
+        graph.path_next_step(path, step).is_some()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn has_prev_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+        step: StepPtr,
+    ) -> bool {
+        graph.path_prev_step(path, step).is_some()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn next_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+        step: StepPtr,
+    ) -> StepPtr {
+        graph.path_next_step(path, step).unwrap()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn prev_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+        step: StepPtr,
+    ) -> StepPtr {
+        graph.path_prev_step(path, step).unwrap()
+    }
+}
+
 #[export_module]
 pub mod graph_plugin {
     #[rhai_fn(pure)]
@@ -166,21 +260,6 @@ pub mod graph_plugin {
     #[rhai_fn(pure)]
     pub fn sequence(graph: &mut Arc<PackedGraph>, handle: Handle) -> Vec<u8> {
         graph.sequence_vec(handle)
-    }
-
-    #[rhai_fn(pure)]
-    pub fn handles(graph: &mut Arc<PackedGraph>) -> HandlesIter {
-        let graph_arc: Arc<PackedGraph> = graph.clone();
-        HandlesIter::new(graph_arc)
-    }
-
-    #[rhai_fn(pure)]
-    pub fn steps_on_handle(
-        graph: &mut Arc<PackedGraph>,
-        handle: Handle,
-    ) -> OccursIter {
-        let graph_arc: Arc<PackedGraph> = graph.clone();
-        OccursIter::new(graph_arc, handle).unwrap()
     }
 
     #[rhai_fn(pure)]
