@@ -50,6 +50,30 @@ pub fn create_engine() -> Engine {
     engine.register_global_module(colors.into());
 
     engine.register_iterator::<plugins::HandlesIter>();
+    engine.register_iterator::<plugins::OccursIter>();
+
+    macro_rules! unwrap_opt {
+        ($type:ty, $default:expr) => {
+            |opt: Option<$type>| opt.unwrap_or($default)
+        };
+    }
+
+    macro_rules! unwrap_opt_with {
+        ($type:ty) => {
+            |opt: Option<$type>, or: $type| opt.unwrap_or(or)
+        };
+    }
+
+    engine.register_fn("unwrap_opt", unwrap_opt!(i32, 0));
+    engine.register_fn("unwrap_opt", unwrap_opt!(i64, 0));
+    engine.register_fn("unwrap_opt", unwrap_opt!(f32, 0.0));
+    engine.register_fn("unwrap_opt", unwrap_opt!(f64, 0.0));
+
+    engine.register_fn("unwrap_opt_with", unwrap_opt_with!(i32));
+    engine.register_fn("unwrap_opt_with", unwrap_opt_with!(i64));
+    engine.register_fn("unwrap_opt_with", unwrap_opt_with!(f32));
+    engine.register_fn("unwrap_opt_with", unwrap_opt_with!(f64));
+    engine.register_fn("unwrap_opt_with", unwrap_opt_with!(rhai::Dynamic));
 
     engine.register_fn("print_handle", |h: Handle| {
         let suffix = if h.is_reverse() { "-" } else { "+" };
@@ -93,11 +117,27 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
 
         return Some(OverlayData::RGB(data));
     } else if let Some(_val) = first.try_cast::<f32>() {
-        let data = data
+        let mut min = std::f32::MAX;
+        let mut max = std::f32::MIN;
+
+        let mut data = data
             .into_iter()
             // .filter_map(|v| v.try_cast::<f32>())
-            .map(|v| v.try_cast::<f32>().unwrap())
+            .map(|v| {
+                let x = v.try_cast::<f32>().unwrap();
+                min = min.min(x);
+                max = max.max(x);
+                x
+            })
             .collect::<Vec<_>>();
+
+        let range = max - min;
+
+        for val in data.iter_mut() {
+            *val = (*val - min) / range;
+        }
+
+        println!("min: {}, max: {}", min, max);
 
         return Some(OverlayData::Value(data));
     }
@@ -352,35 +392,6 @@ pub fn overlay_colors_tgt(
     }
 }
 */
-
-pub fn testing(
-    graph: &GraphQuery,
-) -> std::result::Result<(), Box<EvalAltResult>> {
-    use rhai::{Func, Scope};
-
-    let mut scope = Scope::new();
-    scope
-        .push("graph", graph.graph.clone())
-        .push("path_pos", graph.path_positions.clone());
-
-    let engine = create_engine();
-
-    let script_src = "
-for h in graph.handles() {
-  print_handle(h);
-}
-";
-
-    let ast = engine.compile(script_src)?;
-
-    let result = engine.eval_ast_with_scope::<rhai::Dynamic>(&mut scope, &ast);
-
-    if let Err(err) = result {
-        println!("script error: {:?}", err);
-    }
-
-    Ok(())
-}
 
 pub fn overlay_colors(
     rayon_pool: &rayon::ThreadPool,

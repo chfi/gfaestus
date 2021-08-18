@@ -337,8 +337,6 @@ fn main() {
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
 
-    gfaestus::script::testing(&graph_query);
-
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 

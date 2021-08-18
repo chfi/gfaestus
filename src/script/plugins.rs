@@ -1,4 +1,5 @@
 use handlegraph::packedgraph::nodes::IndexMapIter;
+use handlegraph::packedgraph::paths::StepList;
 use rhai::plugin::*;
 
 use rhai::{Engine, EvalAltResult, INT};
@@ -63,6 +64,36 @@ impl Iterator for HandlesIter {
 
     #[inline]
     fn next(&mut self) -> Option<Handle> {
+        self.iter.next()
+    }
+}
+
+use handlegraph::packedgraph::occurrences::OccurrencesIter;
+
+#[derive(Clone)]
+pub struct OccursIter {
+    graph: Arc<PackedGraph>,
+    iter: OccurrencesIter<'static>,
+}
+
+impl OccursIter {
+    pub fn new(graph: Arc<PackedGraph>, handle: Handle) -> Option<Self> {
+        let iter_ = graph.steps_on_handle(handle)?;
+
+        let iter = unsafe {
+            std::mem::transmute::<OccurrencesIter<'_>, OccurrencesIter<'static>>(
+                iter_,
+            )
+        };
+
+        Some(Self { graph, iter })
+    }
+}
+
+impl Iterator for OccursIter {
+    type Item = (PathId, StepPtr);
+
+    fn next(&mut self) -> Option<Self::Item> {
         self.iter.next()
     }
 }
@@ -143,7 +174,14 @@ pub mod graph_plugin {
         HandlesIter::new(graph_arc)
     }
 
-    // pub fn handles(graph: &mut Arc<PackedGraph>) ->
+    #[rhai_fn(pure)]
+    pub fn steps_on_handle(
+        graph: &mut Arc<PackedGraph>,
+        handle: Handle,
+    ) -> OccursIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        OccursIter::new(graph_arc, handle).unwrap()
+    }
 
     #[rhai_fn(pure)]
     pub fn get_path_id(
