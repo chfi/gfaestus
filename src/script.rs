@@ -31,34 +31,25 @@ use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 use crate::graph_query::GraphQuery;
 use crate::overlays::{OverlayData, OverlayKind};
 
+use rhai::plugin::*;
+
+pub mod plugins;
+
 pub fn create_engine() -> Engine {
     let mut engine = Engine::new();
 
     engine.register_type::<NodeId>();
     engine.register_type::<Handle>();
 
-    engine.register_fn("node_count", |g: &mut Arc<PackedGraph>| {
-        g.node_count() as i64
-    });
+    let handle = exported_module!(plugins::handle_plugin);
+    let graph = exported_module!(plugins::graph_plugin);
+    let colors = exported_module!(plugins::colors);
 
-    engine.register_fn("edge_count", |g: &mut Arc<PackedGraph>| {
-        g.edge_count() as i64
-    });
+    engine.register_global_module(handle.into());
+    engine.register_global_module(graph.into());
+    engine.register_global_module(colors.into());
 
-    engine.register_fn(
-        "get_path_id",
-        |g: &mut Arc<PackedGraph>, path_name: &str| {
-            g.get_path_id(path_name.as_bytes())
-        },
-    );
-
-    engine.register_fn(
-        "sequence",
-        |g: &mut Arc<PackedGraph>, node_id: NodeId| {
-            g.sequence_vec(Handle::new(node_id, gfa::gfa::Orientation::Forward))
-        },
-    );
-
+    /*
     engine.register_fn("node_id", |id: i64| NodeId::from(id as u64));
 
     engine.register_fn("hash_bytes", |bytes: &mut Vec<u8>| {
@@ -84,6 +75,7 @@ pub fn create_engine() -> Engine {
         let b = (b_u16 as f32) / max;
         rgb::RGBA::new(r, g, b, 1.0)
     });
+    */
 
     engine
 }
@@ -398,7 +390,8 @@ pub fn overlay_colors(
 
     let node_color_script = "
 fn node_color(id) {
-  let seq = graph.sequence(id);
+  let h = handle(id, false);
+  let seq = graph.sequence(h);
   let hash = hash_bytes(seq);
   let color = hash_color(hash);
   color
