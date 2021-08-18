@@ -1,3 +1,4 @@
+use handlegraph::packedgraph::nodes::IndexMapIter;
 use rhai::plugin::*;
 
 use rhai::{Engine, EvalAltResult, INT};
@@ -32,6 +33,39 @@ use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
 use crate::graph_query::GraphQuery;
 use crate::overlays::{OverlayData, OverlayKind};
+
+#[derive(Clone)]
+pub struct HandlesIter {
+    graph: Arc<PackedGraph>,
+    iter: NodeIdHandles<IndexMapIter<'static>>,
+}
+
+impl HandlesIter {
+    pub fn new(graph: Arc<PackedGraph>) -> Self {
+        let iter: NodeIdHandles<IndexMapIter<'_>> = graph.handles();
+
+        let ridiculous = unsafe {
+            std::mem::transmute::<
+                NodeIdHandles<IndexMapIter<'_>>,
+                NodeIdHandles<IndexMapIter<'static>>,
+            >(iter)
+        };
+
+        Self {
+            graph,
+            iter: ridiculous,
+        }
+    }
+}
+
+impl Iterator for HandlesIter {
+    type Item = Handle;
+
+    #[inline]
+    fn next(&mut self) -> Option<Handle> {
+        self.iter.next()
+    }
+}
 
 #[export_module]
 pub mod handle_plugin {
@@ -84,9 +118,32 @@ pub mod graph_plugin {
     }
 
     #[rhai_fn(pure)]
+    pub fn total_length(graph: &mut Arc<PackedGraph>) -> usize {
+        graph.total_length()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn min_node_id(graph: &mut Arc<PackedGraph>) -> NodeId {
+        graph.min_node_id()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn max_node_id(graph: &mut Arc<PackedGraph>) -> NodeId {
+        graph.max_node_id()
+    }
+
+    #[rhai_fn(pure)]
     pub fn sequence(graph: &mut Arc<PackedGraph>, handle: Handle) -> Vec<u8> {
         graph.sequence_vec(handle)
     }
+
+    #[rhai_fn(pure)]
+    pub fn handles(graph: &mut Arc<PackedGraph>) -> HandlesIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        HandlesIter::new(graph_arc)
+    }
+
+    // pub fn handles(graph: &mut Arc<PackedGraph>) ->
 
     #[rhai_fn(pure)]
     pub fn get_path_id(

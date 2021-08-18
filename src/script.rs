@@ -49,6 +49,13 @@ pub fn create_engine() -> Engine {
     engine.register_global_module(graph.into());
     engine.register_global_module(colors.into());
 
+    engine.register_iterator::<plugins::HandlesIter>();
+
+    engine.register_fn("print_handle", |h: Handle| {
+        let suffix = if h.is_reverse() { "-" } else { "+" };
+        println!("Handle {}{}", h.id().0, suffix);
+    });
+
     engine
 }
 
@@ -345,6 +352,35 @@ pub fn overlay_colors_tgt(
     }
 }
 */
+
+pub fn testing(
+    graph: &GraphQuery,
+) -> std::result::Result<(), Box<EvalAltResult>> {
+    use rhai::{Func, Scope};
+
+    let mut scope = Scope::new();
+    scope
+        .push("graph", graph.graph.clone())
+        .push("path_pos", graph.path_positions.clone());
+
+    let engine = create_engine();
+
+    let script_src = "
+for h in graph.handles() {
+  print_handle(h);
+}
+";
+
+    let ast = engine.compile(script_src)?;
+
+    let result = engine.eval_ast_with_scope::<rhai::Dynamic>(&mut scope, &ast);
+
+    if let Err(err) = result {
+        println!("script error: {:?}", err);
+    }
+
+    Ok(())
+}
 
 pub fn overlay_colors(
     rayon_pool: &rayon::ThreadPool,
