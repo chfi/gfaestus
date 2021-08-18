@@ -55,6 +55,7 @@ pub fn create_engine() -> Engine {
 
     engine.register_iterator::<plugins::HandlesIter>();
     engine.register_iterator::<plugins::OccursIter>();
+    engine.register_iterator::<plugins::NeighborsIter>();
 
     macro_rules! unwrap_opt {
         ($type:ty, $default:expr) => {

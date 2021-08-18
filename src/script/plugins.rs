@@ -1,8 +1,5 @@
-use handlegraph::packedgraph::nodes::IndexMapIter;
-use handlegraph::packedgraph::paths::StepList;
+use handlegraph::packedgraph::{iter::EdgeListHandleIter, nodes::IndexMapIter};
 use rhai::plugin::*;
-
-use rhai::{Engine, EvalAltResult, INT};
 
 use anyhow::Result;
 
@@ -11,29 +8,13 @@ use rayon::prelude::*;
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
     handlegraph::*,
-    mutablehandlegraph::*,
     packed::*,
-    packedgraph::index::OneBasedIndex,
     pathhandlegraph::*,
 };
 
-use handlegraph::{
-    packedgraph::{paths::StepPtr, PackedGraph},
-    path_position::PathPositionMap,
-};
-use rustc_hash::FxHashMap;
+use handlegraph::packedgraph::{paths::StepPtr, PackedGraph};
 
-use std::{path::Path, sync::Arc};
-
-use bstr::ByteVec;
-use futures::Future;
-
-use bytemuck::{Contiguous, Pod, Zeroable};
-
-use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
-
-use crate::graph_query::GraphQuery;
-use crate::overlays::{OverlayData, OverlayKind};
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct HandlesIter {
@@ -98,6 +79,40 @@ impl Iterator for OccursIter {
     }
 }
 
+#[derive(Clone)]
+pub struct NeighborsIter {
+    graph: Arc<PackedGraph>,
+    iter: EdgeListHandleIter<'static>,
+}
+
+impl NeighborsIter {
+    pub fn new(
+        graph: Arc<PackedGraph>,
+        handle: Handle,
+        dir: Direction,
+    ) -> Self {
+        let iter_ = graph.neighbors(handle, dir);
+
+        let iter = unsafe {
+            std::mem::transmute::<
+                EdgeListHandleIter<'_>,
+                EdgeListHandleIter<'static>,
+            >(iter_)
+        };
+
+        Self { graph, iter }
+    }
+}
+
+impl Iterator for NeighborsIter {
+    type Item = Handle;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
+    }
+}
+
 #[export_module]
 pub mod handle_plugin {
     #[rhai_fn(name = "handle")]
@@ -148,6 +163,24 @@ pub mod graph_iters {
     ) -> OccursIter {
         let graph_arc: Arc<PackedGraph> = graph.clone();
         OccursIter::new(graph_arc, handle).unwrap()
+    }
+
+    #[rhai_fn(pure)]
+    pub fn neighbors_forward(
+        graph: &mut Arc<PackedGraph>,
+        handle: Handle,
+    ) -> NeighborsIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        NeighborsIter::new(graph_arc, handle, Direction::Right)
+    }
+
+    #[rhai_fn(pure)]
+    pub fn neighbors_backward(
+        graph: &mut Arc<PackedGraph>,
+        handle: Handle,
+    ) -> NeighborsIter {
+        let graph_arc: Arc<PackedGraph> = graph.clone();
+        NeighborsIter::new(graph_arc, handle, Direction::Left)
     }
 
     #[rhai_fn(pure, get = "path_id")]
