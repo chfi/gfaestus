@@ -284,6 +284,7 @@ impl OverlayCreator {
 
                     let config = ScriptConfig {
                         default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+                        target,
                     };
 
                     dbg!();
@@ -296,8 +297,7 @@ impl OverlayCreator {
 
                         let overlay_data = crate::script::overlay_colors_tgt(
                             &rayon_pool,
-                            config,
-                            &target,
+                            &config,
                             &graph,
                             &script,
                         );

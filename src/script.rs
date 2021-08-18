@@ -61,7 +61,6 @@ pub fn create_engine() -> Engine {
     });
 
     engine.register_fn("hash", |hasher: &mut DefaultHasher, val: NodeId| {
-        use std::hash::{Hash, Hasher};
         val.hash(hasher);
     });
 
@@ -125,9 +124,10 @@ pub enum ScriptTarget {
     Path { name: String },
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ScriptConfig {
     pub default_color: rgb::RGBA<f32>,
+    pub target: ScriptTarget,
 }
 
 pub fn check_overlay_kind(data: rhai::Dynamic) -> Option<OverlayKind> {
@@ -183,8 +183,7 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
 
 pub fn overlay_colors_tgt(
     rayon_pool: &rayon::ThreadPool,
-    config: ScriptConfig,
-    target: &ScriptTarget,
+    config: &ScriptConfig,
     graph: &GraphQuery,
     script: &str,
 ) -> std::result::Result<OverlayData, Box<EvalAltResult>> {
@@ -199,7 +198,7 @@ pub fn overlay_colors_tgt(
 
     let node_color_ast = engine.compile(script)?;
 
-    match target {
+    match config.target.clone() {
         ScriptTarget::Nodes => {
             let mut node_ids =
                 graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
@@ -277,6 +276,8 @@ pub fn overlay_colors_tgt(
                 graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
             node_ids.sort();
 
+            let default_color = config.default_color;
+
             match data {
                 OverlayData::RGB(rgb) => {
                     let node_rgb_map: FxHashMap<NodeId, rgb::RGBA<f32>> = nodes
@@ -290,7 +291,7 @@ pub fn overlay_colors_tgt(
                             node_rgb_map
                                 .get(&node_id)
                                 .copied()
-                                .unwrap_or(config.default_color)
+                                .unwrap_or(default_color)
                         })
                         .collect();
 

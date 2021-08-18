@@ -1,5 +1,6 @@
 pub mod app;
 pub mod geometry;
+pub mod reactor;
 pub mod vulkan;
 
 pub mod annotations;
