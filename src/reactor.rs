@@ -9,6 +9,10 @@ use crossbeam::channel::{Receiver, Sender, TryRecvError};
 use handlegraph::packedgraph::PackedGraph;
 use rustc_hash::FxHashMap;
 
+mod paired;
+
+pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
+
 pub struct ReactorOutput {
     sender: Box<dyn std::any::Any>, // should always be a sender, but this part won't be exposed in the API,
     output_type: TypeId,
