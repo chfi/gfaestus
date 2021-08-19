@@ -59,18 +59,39 @@ where
     }
 }
 
+/*
 impl<I, T> Processor<I, T>
 where
     I: Send + Sync + 'static,
 {
     pub fn process(&self) -> anyhow::Result<()> {
-        while let input = self.input_recv.recv()? {
+        loop {
+            let input = self.input_recv.recv()?;
             let func = &self.func;
             let output = func(input);
             self.outbox.insert_blocking(output);
         }
+    }
+}
+*/
 
-        Ok(())
+pub trait ProcTrait {
+    fn process(&self) -> anyhow::Result<()>;
+    // fn run(&self);
+}
+
+impl<I, T> ProcTrait for Processor<I, T>
+where
+    I: Send + Sync + 'static,
+{
+    fn process(&self) -> anyhow::Result<()> {
+        // self.process()
+        loop {
+            let input = self.input_recv.recv()?;
+            let func = &self.func;
+            let output = func(input);
+            self.outbox.insert_blocking(output);
+        }
     }
 }
 

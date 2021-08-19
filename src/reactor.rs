@@ -13,6 +13,41 @@ mod paired;
 
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
+use paired::*;
+
+pub struct Reactor {
+    thread_pool: futures::executor::ThreadPool,
+
+    processors: Vec<Box<dyn ProcTrait>>,
+}
+
+impl Reactor {
+    pub fn init(thread_pool: futures::executor::ThreadPool) -> Self {
+        Self {
+            thread_pool,
+            processors: Vec::new(),
+        }
+    }
+
+    pub fn create_host<F, I, T>(&mut self, func: F) -> Host<I, T>
+    where
+        T: 'static,
+        I: Send + Sync + 'static,
+        F: Fn(I) -> T + 'static,
+    {
+        let boxed_func = Box::new(func) as Box<dyn Fn(I) -> T>;
+
+        let (host, proc) = create_host_pair(boxed_func);
+
+        let processor = Box::new(proc) as Box<dyn ProcTrait>;
+
+        self.processors.push(processor);
+
+        host
+    }
+}
+
+/*
 pub struct ReactorOutput {
     sender: Box<dyn std::any::Any>, // should always be a sender, but this part won't be exposed in the API,
     output_type: TypeId,
@@ -170,3 +205,5 @@ impl OverlayMsg {
 }
 
 pub trait Package: Send + Sync {}
+
+*/
