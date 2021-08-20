@@ -77,7 +77,7 @@ pub struct Gui {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    thread_pool: Arc<ThreadPool>,
+    thread_pool: ThreadPool,
     rayon_pool: Arc<rayon::ThreadPool>,
 
     clipboard_ctx: ClipboardContext,
@@ -381,7 +381,7 @@ impl Gui {
         channels: &AppChannels,
         settings: AppSettings,
         graph_query: &GraphQuery,
-        thread_pool: Arc<ThreadPool>,
+        thread_pool: ThreadPool,
         rayon_pool: Arc<rayon::ThreadPool>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;

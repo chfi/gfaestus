@@ -26,14 +26,11 @@ use crate::asynchronous::AsyncResult;
 
 pub struct GraphQueryWorker {
     graph_query: Arc<GraphQuery>,
-    thread_pool: Arc<ThreadPool>,
+    thread_pool: ThreadPool,
 }
 
 impl GraphQueryWorker {
-    pub fn new(
-        graph_query: Arc<GraphQuery>,
-        thread_pool: Arc<ThreadPool>,
-    ) -> Self {
+    pub fn new(graph_query: Arc<GraphQuery>, thread_pool: ThreadPool) -> Self {
         Self {
             graph_query,
             thread_pool,

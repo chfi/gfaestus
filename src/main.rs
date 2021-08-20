@@ -136,12 +136,11 @@ fn main() {
     }
 
     // TODO make sure to set thread pool size to less than number of CPUs
-    let thread_pool = Arc::new(
-        ThreadPoolBuilder::new()
-            .pool_size(futures_cpus)
-            .create()
-            .unwrap(),
-    );
+    let thread_pool = ThreadPoolBuilder::new()
+        .pool_size(futures_cpus)
+        .create()
+        .unwrap();
+
 
     let rayon_pool = rayon::ThreadPoolBuilder::new()
         .num_threads(rayon_cpus)
