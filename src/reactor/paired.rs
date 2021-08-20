@@ -1,18 +1,13 @@
-use futures::{prelude::*, Future, FutureExt};
-
-use futures::executor;
-use futures::task::{LocalSpawn, LocalSpawnExt, Spawn, SpawnExt};
-
-use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::Mutex;
 use std::sync::Arc;
 
 pub fn create_host_pair<I, T>(
-    func: Box<dyn Fn(I) -> T>,
+    func: Box<dyn Fn(I) -> T + Send + Sync + 'static>,
 ) -> (Host<I, T>, Processor<I, T>)
 where
     I: Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     let (input_send, input_recv) = channel::unbounded();
 
@@ -31,6 +26,7 @@ where
 pub struct Host<I, T>
 where
     I: Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     inbox: Inbox<T>,
     input_send: channel::Sender<I>,
@@ -39,15 +35,17 @@ where
 pub struct Processor<I, T>
 where
     I: Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     outbox: Outbox<T>,
     input_recv: channel::Receiver<I>,
-    func: Box<dyn Fn(I) -> T>,
+    func: Box<dyn Fn(I) -> T + Send + Sync + 'static>,
 }
 
 impl<I, T> Host<I, T>
 where
     I: Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     pub fn call(&self, input: I) -> anyhow::Result<()> {
         self.input_send.send(input)?;
@@ -59,30 +57,14 @@ where
     }
 }
 
-/*
-impl<I, T> Processor<I, T>
-where
-    I: Send + Sync + 'static,
-{
-    pub fn process(&self) -> anyhow::Result<()> {
-        loop {
-            let input = self.input_recv.recv()?;
-            let func = &self.func;
-            let output = func(input);
-            self.outbox.insert_blocking(output);
-        }
-    }
-}
-*/
-
 pub trait ProcTrait {
     fn process(&self) -> anyhow::Result<()>;
-    // fn run(&self);
 }
 
 impl<I, T> ProcTrait for Processor<I, T>
 where
     I: Send + Sync + 'static,
+    T: Send + Sync + 'static,
 {
     fn process(&self) -> anyhow::Result<()> {
         // self.process()
