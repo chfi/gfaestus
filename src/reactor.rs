@@ -46,14 +46,13 @@ impl Reactor {
     where
         T: Send + Sync + 'static,
         I: Send + Sync + 'static,
-        F: Fn(I) -> T + Send + Sync + 'static,
+        F: Fn(&Outbox<T>, I) -> T + Send + Sync + 'static,
     {
         let boxed_func = Box::new(func) as Box<_>;
 
         let (host, proc) = create_host_pair(boxed_func);
 
-        let processor =
-            Box::new(proc) as Box<dyn ProcTrait + Send + Sync + 'static>;
+        let processor = Box::new(proc) as Box<dyn ProcTrait>;
 
         self.thread_pool
             .spawn(async move {

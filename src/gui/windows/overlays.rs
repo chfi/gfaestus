@@ -159,6 +159,7 @@ pub struct ScriptInput {
 pub enum ScriptMsg {
     IOError(String),
     ScriptError(String),
+    Running(String),
 }
 
 impl ScriptMsg {
@@ -168,6 +169,10 @@ impl ScriptMsg {
 
     fn script_error(err: &str) -> Self {
         ScriptMsg::ScriptError(err.to_string())
+    }
+
+    fn running(msg: &str) -> Self {
+        ScriptMsg::Running(msg.to_string())
     }
 }
 
@@ -211,40 +216,49 @@ impl OverlayCreator {
             let rayon_pool = reactor.rayon_pool.clone();
             let graph = reactor.graph_query.clone();
 
-            reactor.create_host(move |input: ScriptInput| {
-                let mut file =
-                    std::fs::File::open(input.path).map_err(|_| {
+            reactor.create_host(
+                move |outbox: &Outbox<ScriptResult>, input: ScriptInput| {
+                    let running_msg = |msg: &str| {
+                        outbox.insert_blocking(Err(ScriptMsg::running(msg)));
+                    };
+
+                    running_msg("Loading script");
+
+                    let mut file =
+                        std::fs::File::open(input.path).map_err(|_| {
+                            ScriptMsg::io_error("error loading script file")
+                        })?;
+
+                    let mut script = String::new();
+                    file.read_to_string(&mut script).map_err(|_| {
                         ScriptMsg::io_error("error loading script file")
                     })?;
 
-                let mut script = String::new();
-                file.read_to_string(&mut script).map_err(|_| {
-                    ScriptMsg::io_error("error loading script file")
-                })?;
+                    running_msg("Evaluating script");
+                    let overlay_data = crate::script::overlay_colors_tgt(
+                        &rayon_pool,
+                        &input.config,
+                        &graph,
+                        &script,
+                    );
 
-                let overlay_data = crate::script::overlay_colors_tgt(
-                    &rayon_pool,
-                    &input.config,
-                    &graph,
-                    &script,
-                );
+                    let feedback = match overlay_data {
+                        Ok(data) => {
+                            let msg = OverlayCreatorMsg::NewOverlay {
+                                name: input.name,
+                                data,
+                            };
+                            tx.send(msg).unwrap();
+                            Ok(())
+                        }
+                        Err(err) => {
+                            Err(ScriptMsg::ScriptError(format!("{:?}", err)))
+                        }
+                    };
 
-                let feedback = match overlay_data {
-                    Ok(data) => {
-                        let msg = OverlayCreatorMsg::NewOverlay {
-                            name: input.name,
-                            data,
-                        };
-                        tx.send(msg).unwrap();
-                        Ok(())
-                    }
-                    Err(err) => {
-                        Err(ScriptMsg::ScriptError(format!("{:?}", err)))
-                    }
-                };
-
-                feedback
-            })
+                    feedback
+                },
+            )
         };
 
         let extensions: [&str; 1] = ["rhai"];
@@ -313,7 +327,12 @@ impl OverlayCreator {
             .open(open)
             .default_pos(pos)
             .show(ctx, |ui| {
-                if self.latest_result.is_none() {
+                if self.latest_result.is_none()
+                    || !matches!(
+                        self.latest_result,
+                        Some(Err(ScriptMsg::Running(_)))
+                    )
+                {
                     if ui.button("Choose script file").clicked() {
                         self.file_picker.reset_selection();
                         self.file_picker_open = true;

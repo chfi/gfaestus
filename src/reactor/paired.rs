@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::sync::Arc;
 
 pub fn create_host_pair<I, T>(
-    func: Box<dyn Fn(I) -> T + Send + Sync + 'static>,
+    func: Box<dyn Fn(&Outbox<T>, I) -> T + Send + Sync + 'static>,
 ) -> (Host<I, T>, Processor<I, T>)
 where
     I: Send + Sync + 'static,
@@ -39,7 +39,7 @@ where
 {
     outbox: Outbox<T>,
     input_recv: channel::Receiver<I>,
-    func: Box<dyn Fn(I) -> T + Send + Sync + 'static>,
+    func: Box<dyn Fn(&Outbox<T>, I) -> T + Send + Sync + 'static>,
 }
 
 impl<I, T> Host<I, T>
@@ -57,7 +57,7 @@ where
     }
 }
 
-pub trait ProcTrait {
+pub trait ProcTrait: Send + Sync + 'static {
     fn process(&self) -> anyhow::Result<()>;
 }
 
@@ -67,11 +67,10 @@ where
     T: Send + Sync + 'static,
 {
     fn process(&self) -> anyhow::Result<()> {
-        // self.process()
         loop {
             let input = self.input_recv.recv()?;
             let func = &self.func;
-            let output = func(input);
+            let output = func(&self.outbox, input);
             self.outbox.insert_blocking(output);
         }
     }
