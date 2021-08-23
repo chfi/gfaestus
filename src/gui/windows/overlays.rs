@@ -12,7 +12,7 @@ use anyhow::Result;
 use futures::executor::ThreadPool;
 
 use crate::graph_query::GraphQuery;
-use crate::reactor::{Host, Reactor};
+use crate::reactor::{Host, Outbox, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
     asynchronous::AsyncResult,
@@ -156,7 +156,22 @@ pub struct ScriptInput {
     config: ScriptConfig,
 }
 
-pub type ScriptResult = Result<(), String>;
+pub enum ScriptMsg {
+    IOError(String),
+    ScriptError(String),
+}
+
+impl ScriptMsg {
+    fn io_error(err: &str) -> Self {
+        ScriptMsg::IOError(err.to_string())
+    }
+
+    fn script_error(err: &str) -> Self {
+        ScriptMsg::ScriptError(err.to_string())
+    }
+}
+
+pub type ScriptResult = Result<(), ScriptMsg>;
 
 pub struct OverlayCreator {
     name: String,
@@ -169,10 +184,9 @@ pub struct OverlayCreator {
     file_picker: FilePicker,
     file_picker_open: bool,
 
-    script_query: Option<
-        AsyncResult<std::result::Result<OverlayData, Box<EvalAltResult>>>,
-    >,
     script_results: Host<ScriptInput, ScriptResult>,
+
+    latest_result: Option<ScriptResult>,
 }
 
 impl OverlayCreator {
@@ -198,11 +212,15 @@ impl OverlayCreator {
             let graph = reactor.graph_query.clone();
 
             reactor.create_host(move |input: ScriptInput| {
-                let mut file = std::fs::File::open(input.path)
-                    .map_err(|_| "error loading script file")?;
+                let mut file =
+                    std::fs::File::open(input.path).map_err(|_| {
+                        ScriptMsg::io_error("error loading script file")
+                    })?;
+
                 let mut script = String::new();
-                file.read_to_string(&mut script)
-                    .map_err(|_| "error loading script file")?;
+                file.read_to_string(&mut script).map_err(|_| {
+                    ScriptMsg::io_error("error loading script file")
+                })?;
 
                 let overlay_data = crate::script::overlay_colors_tgt(
                     &rayon_pool,
@@ -220,7 +238,9 @@ impl OverlayCreator {
                         tx.send(msg).unwrap();
                         Ok(())
                     }
-                    Err(err) => Err(format!("{:?}", err)),
+                    Err(err) => {
+                        Err(ScriptMsg::ScriptError(format!("{:?}", err)))
+                    }
                 };
 
                 feedback
@@ -241,9 +261,8 @@ impl OverlayCreator {
             file_picker,
             file_picker_open: false,
 
-            script_query: None,
-
             script_results,
+            latest_result: None,
         })
     }
 
@@ -266,6 +285,16 @@ impl OverlayCreator {
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
+        if let Some(result) = self.script_results.take() {
+            if result.is_ok() {
+                self.latest_result = None;
+                self.script_path_input.clear();
+                self.name.clear();
+            } else {
+                self.latest_result = Some(result);
+            }
+        }
+
         let pos = egui::pos2(scr.center().x - 150.0, scr.center().y - 60.0);
 
         if self.file_picker.selected_path().is_some() {
@@ -284,7 +313,7 @@ impl OverlayCreator {
             .open(open)
             .default_pos(pos)
             .show(ctx, |ui| {
-                if self.script_query.is_none() {
+                if self.latest_result.is_none() {
                     if ui.button("Choose script file").clicked() {
                         self.file_picker.reset_selection();
                         self.file_picker_open = true;
@@ -299,6 +328,25 @@ impl OverlayCreator {
                     } else {
                         ui.label("No file selected")
                     };
+                }
+
+                if let Some(Err(error)) = &self.latest_result {
+                    match error {
+                        ScriptMsg::IOError(err) => {
+                            eprintln!("Overlay script IO error: {:?}", err);
+                            ui.label(format!("IO Error: {:?}", err));
+                        }
+                        ScriptMsg::ScriptError(err) => {
+                            eprintln!(
+                                "Overlay script execution error: {:?}",
+                                err
+                            );
+                            ui.label(format!("Script Error: {:?}", err));
+                        }
+                        ScriptMsg::Running(msg) => {
+                            ui.label(msg);
+                        }
+                    }
                 }
 
                 let name = &mut self.name;
@@ -321,7 +369,10 @@ impl OverlayCreator {
 
                 let _script_error_msg = ui.label(&self.script_error);
 
-                if run_script.clicked() && self.script_query.is_none() {
+                if run_script.clicked()
+                    && (self.latest_result.is_none()
+                        || matches!(self.latest_result, Some(Err(_))))
+                {
                     self.file_picker.reset_selection();
                     let path = PathBuf::from(path_str.as_str());
                     println!(
@@ -336,56 +387,13 @@ impl OverlayCreator {
                         target,
                     };
 
-                    dbg!();
-                    let query = AsyncResult::new(thread_pool, async move {
-                        let mut file = std::fs::File::open(path)
-                            .map_err(|_| "error loading script file")?;
-                        let mut script = String::new();
-                        file.read_to_string(&mut script)
-                            .map_err(|_| "error loading script file")?;
+                    let script_input = ScriptInput {
+                        name: name.to_string(),
+                        path,
+                        config,
+                    };
 
-                        let overlay_data = crate::script::overlay_colors_tgt(
-                            &rayon_pool,
-                            &config,
-                            &graph,
-                            &script,
-                        );
-                        overlay_data
-                    });
-
-                    self.script_query = Some(query);
-                }
-
-                if let Some(query) = self.script_query.as_mut() {
-                    query.move_result_if_ready();
-                }
-
-                if let Some(script_result) = self
-                    .script_query
-                    .as_mut()
-                    .and_then(|r| r.take_result_if_ready())
-                {
-                    match script_result {
-                        Ok(data) => {
-                            let msg = OverlayCreatorMsg::NewOverlay {
-                                name: name.to_owned(),
-                                data,
-                            };
-                            self.script_path_input.clear();
-                            self.name.clear();
-
-                            self.script_error = "Success".to_string();
-
-                            self.new_overlay_tx.send(msg).unwrap();
-                        }
-                        Err(err) => {
-                            self.script_error = err.to_string();
-
-                            eprintln!("Script error:\n{:?}", err);
-                        }
-                    }
-
-                    self.script_query = None;
+                    self.script_results.call(script_input).unwrap();
                 }
             })
     }
