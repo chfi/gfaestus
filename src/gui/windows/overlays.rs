@@ -12,6 +12,7 @@ use anyhow::Result;
 use futures::executor::ThreadPool;
 
 use crate::graph_query::GraphQuery;
+use crate::reactor::{Host, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
     asynchronous::AsyncResult,
@@ -147,6 +148,14 @@ pub enum OverlayListMsg {
     RemoveOverlay { overlay_id: usize },
 }
 
+#[derive(Debug, Clone)]
+pub struct ScriptInput {
+    name: String,
+    path: PathBuf,
+}
+
+pub type ScriptResult = Result<(), String>;
+
 pub struct OverlayCreator {
     name: String,
     script_path_input: String,
@@ -154,22 +163,24 @@ pub struct OverlayCreator {
     script_error: String,
 
     new_overlay_tx: Sender<OverlayCreatorMsg>,
-    new_overlay_rx: Receiver<OverlayCreatorMsg>,
-
+    // new_overlay_rx: Receiver<OverlayCreatorMsg>,
     file_picker: FilePicker,
     file_picker_open: bool,
 
     script_query: Option<
         AsyncResult<std::result::Result<OverlayData, Box<EvalAltResult>>>,
     >,
+    // script_results: Host<ScriptInput, ScriptResult>,
 }
 
 impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
-    pub fn new() -> Result<Self> {
-        let (new_overlay_tx, new_overlay_rx) =
-            crossbeam::channel::unbounded::<OverlayCreatorMsg>();
+    pub fn new(reactor: &mut Reactor) -> Result<Self> {
+        // let (new_overlay_tx, new_overlay_rx) =
+        //     crossbeam::channel::unbounded::<OverlayCreatorMsg>();
+
+        let new_overlay_tx = reactor.overlay_create_tx.clone();
 
         let pwd = std::fs::canonicalize("./").unwrap();
 
@@ -178,6 +189,24 @@ impl OverlayCreator {
             pwd,
         )
         .unwrap();
+
+        /*
+        let script_results = reactor.create_host(|input| {
+            let mut file = std::fs::File::open(path)
+                .map_err(|_| "error loading script file")?;
+            let mut script = String::new();
+            file.read_to_string(&mut script)
+                .map_err(|_| "error loading script file")?;
+
+            let overlay_data = crate::script::overlay_colors_tgt(
+                &rayon_pool,
+                &config,
+                &graph,
+                &script,
+            );
+
+        });
+        */
 
         let extensions: [&str; 1] = ["rhai"];
         file_picker.set_visible_extensions(&extensions).unwrap();
@@ -189,8 +218,7 @@ impl OverlayCreator {
             script_error: String::new(),
 
             new_overlay_tx,
-            new_overlay_rx,
-
+            // new_overlay_rx,
             file_picker,
             file_picker_open: false,
 
@@ -202,9 +230,9 @@ impl OverlayCreator {
         &self.new_overlay_tx
     }
 
-    pub fn new_overlay_rx(&self) -> &Receiver<OverlayCreatorMsg> {
-        &self.new_overlay_rx
-    }
+    // pub fn new_overlay_rx(&self) -> &Receiver<OverlayCreatorMsg> {
+    //     &self.new_overlay_rx
+    // }
 
     pub fn ui(
         &mut self,

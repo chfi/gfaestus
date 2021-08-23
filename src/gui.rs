@@ -24,6 +24,7 @@ use crate::{
     },
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     graph_query::GraphQueryWorker,
+    reactor::Reactor,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
 use crate::{app::OverlayState, geometry::*};
@@ -180,13 +181,12 @@ pub struct AppViewState {
 
 impl AppViewState {
     pub fn new(
+        reactor: &mut Reactor,
         graph_query: &GraphQuery,
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
         _dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-        thread_pool: &ThreadPool,
-        // repl: GluonRepl,
     ) -> Self {
         let graph = graph_query.graph();
 
@@ -225,7 +225,7 @@ impl AppViewState {
             overlay_list_state,
         );
 
-        let overlay_creator_state = OverlayCreator::new().unwrap();
+        let overlay_creator_state = OverlayCreator::new(reactor).unwrap();
         let overlay_creator = ViewStateChannel::<
             OverlayCreator,
             OverlayCreatorMsg,
@@ -377,6 +377,7 @@ impl GuiFocusState {
 impl Gui {
     pub fn new(
         app: &GfaestusVk,
+        reactor: &mut Reactor,
         shared_state: SharedState,
         channels: &AppChannels,
         settings: AppSettings,
@@ -426,12 +427,12 @@ impl Gui {
         let dropped_file = Arc::new(std::sync::Mutex::new(None));
 
         let view_state = AppViewState::new(
+            reactor,
             graph_query,
             &settings,
             &shared_state,
             shared_state.overlay_state().clone(),
             dropped_file.clone(),
-            &thread_pool,
         );
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
@@ -532,12 +533,6 @@ impl Gui {
         names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
         self.view_state.overlay_list.state.populate_names(names);
-    }
-
-    pub fn new_overlay_rx(
-        &self,
-    ) -> &crossbeam::channel::Receiver<OverlayCreatorMsg> {
-        &self.view_state.overlay_creator.state.new_overlay_rx()
     }
 
     pub fn new_overlay_tx(

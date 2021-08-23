@@ -274,6 +274,7 @@ fn main() {
 
     let mut gui = Gui::new(
         &gfaestus,
+        &mut reactor,
         app.shared_state().clone(),
         app.channels(),
         app.settings.clone(),
@@ -286,7 +287,7 @@ fn main() {
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
-    let new_overlay_rx = gui.new_overlay_rx().clone();
+    let new_overlay_rx = reactor.overlay_create_rx.clone();
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
@@ -386,6 +387,7 @@ fn main() {
         FxHashMap::default();
 
     event_loop.run(move |event, _, control_flow| {
+
         *control_flow = ControlFlow::Poll;
 
         let event = if let Some(ev) = event.to_static() {
@@ -502,64 +504,19 @@ fn main() {
                 }
 
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {
-                    match new_overlay {
-                        OverlayCreatorMsg::NewOverlay { name, data } => {
-                            println!("Received new overlay");
-
-                            match data {
-                                OverlayData::RGB(colors) => {
-                                    let mut overlay =
-                                        NodeOverlay::new_empty_rgb(&name, &gfaestus, graph_query.node_count())
-                                        .unwrap();
-
-                                    overlay
-                                        .update_overlay(
-                                            gfaestus.vk_context().device(),
-                                            colors
-                                                .iter()
-                                                .enumerate()
-                                                .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
-                                        )
-                                        .unwrap();
-
-                                    let _overlay_id = main_view
-                                        .node_draw_system
-                                        .overlay_pipelines
-                                        .create_overlay(Overlay::RGB(overlay));
-
-                                }
-                                OverlayData::Value(values) => {
-
-                                    let mut overlay =
-                                        NodeOverlayValue::new_empty_value(&name, &gfaestus, graph_query.node_count())
-                                        .unwrap();
-
-                                    overlay
-                                        .update_overlay(
-                                            gfaestus.vk_context().device(),
-                                            values
-                                                .iter()
-                                                .enumerate()
-                                                .map(|(ix, v)| (NodeId::from((ix as u64) + 1), *v)),
-                                        )
-                                        .unwrap();
-
-
-                                    main_view
-                                        .node_draw_system
-                                        .overlay_pipelines
-                                        .create_overlay(Overlay::Value(overlay));
-                                }
-                            }
-
-                            gui.populate_overlay_list(
-                                main_view
-                                    .node_draw_system
-                                    .overlay_pipelines
-                                    .overlay_names()
-                                    .into_iter(),
-                            );
-                        }
+                    if let Ok(_) = handle_new_overlay(
+                        &gfaestus,
+                        &mut main_view,
+                        graph_query.node_count(),
+                        new_overlay
+                    ) {
+                        gui.populate_overlay_list(
+                            main_view
+                                .node_draw_system
+                                .overlay_pipelines
+                                .overlay_names()
+                                .into_iter(),
+                        );
                     }
                 }
             }
@@ -1194,4 +1151,54 @@ fn main() {
             _ => (),
         }
     });
+}
+
+fn handle_new_overlay(
+    app: &GfaestusVk,
+    main_view: &mut MainView,
+    node_count: usize,
+    msg: OverlayCreatorMsg,
+) -> Result<()> {
+    let OverlayCreatorMsg::NewOverlay { name, data } = msg;
+
+    let overlay = match data {
+        OverlayData::RGB(data) => {
+            let mut overlay =
+                NodeOverlay::new_empty_rgb(&name, app, node_count).unwrap();
+
+            overlay
+                .update_overlay(
+                    app.vk_context().device(),
+                    data.iter()
+                        .enumerate()
+                        .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
+                )
+                .unwrap();
+
+            Overlay::RGB(overlay)
+        }
+        OverlayData::Value(data) => {
+            let mut overlay =
+                NodeOverlayValue::new_empty_value(&name, &app, node_count)
+                    .unwrap();
+
+            overlay
+                .update_overlay(
+                    app.vk_context().device(),
+                    data.iter()
+                        .enumerate()
+                        .map(|(ix, v)| (NodeId::from((ix as u64) + 1), *v)),
+                )
+                .unwrap();
+
+            Overlay::Value(overlay)
+        }
+    };
+
+    main_view
+        .node_draw_system
+        .overlay_pipelines
+        .create_overlay(overlay);
+
+    Ok(())
 }

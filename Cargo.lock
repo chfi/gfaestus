@@ -713,7 +713,7 @@ dependencies = [
 
 [[package]]
 name = "handlegraph"
-version = "0.7.0-alpha.7"
+version = "0.7.0-alpha.9"
 dependencies = [
  "anyhow",
  "boomphf",
@@ -1457,9 +1457,9 @@ dependencies = [
 
 [[package]]
 name = "rhai"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37515c01bf9aa516d84240740bd5d02f19b04a112e537ae43807042c84ef8ed2"
+checksum = "5106130d91d833d3409dc3b1f8433dcc15262d006514552dce2038819b5d3c03"
 dependencies = [
  "ahash",
  "instant",
