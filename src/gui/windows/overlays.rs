@@ -152,6 +152,8 @@ pub enum OverlayListMsg {
 pub struct ScriptInput {
     name: String,
     path: PathBuf,
+
+    config: ScriptConfig,
 }
 
 pub type ScriptResult = Result<(), String>;
@@ -170,7 +172,7 @@ pub struct OverlayCreator {
     script_query: Option<
         AsyncResult<std::result::Result<OverlayData, Box<EvalAltResult>>>,
     >,
-    // script_results: Host<ScriptInput, ScriptResult>,
+    script_results: Host<ScriptInput, ScriptResult>,
 }
 
 impl OverlayCreator {
@@ -190,23 +192,40 @@ impl OverlayCreator {
         )
         .unwrap();
 
-        /*
-        let script_results = reactor.create_host(|input| {
-            let mut file = std::fs::File::open(path)
-                .map_err(|_| "error loading script file")?;
-            let mut script = String::new();
-            file.read_to_string(&mut script)
-                .map_err(|_| "error loading script file")?;
+        let script_results = {
+            let tx = new_overlay_tx.clone();
+            let rayon_pool = reactor.rayon_pool.clone();
+            let graph = reactor.graph_query.clone();
 
-            let overlay_data = crate::script::overlay_colors_tgt(
-                &rayon_pool,
-                &config,
-                &graph,
-                &script,
-            );
+            reactor.create_host(move |input: ScriptInput| {
+                let mut file = std::fs::File::open(input.path)
+                    .map_err(|_| "error loading script file")?;
+                let mut script = String::new();
+                file.read_to_string(&mut script)
+                    .map_err(|_| "error loading script file")?;
 
-        });
-        */
+                let overlay_data = crate::script::overlay_colors_tgt(
+                    &rayon_pool,
+                    &input.config,
+                    &graph,
+                    &script,
+                );
+
+                let feedback = match overlay_data {
+                    Ok(data) => {
+                        let msg = OverlayCreatorMsg::NewOverlay {
+                            name: input.name,
+                            data,
+                        };
+                        tx.send(msg).unwrap();
+                        Ok(())
+                    }
+                    Err(err) => Err(format!("{:?}", err)),
+                };
+
+                feedback
+            })
+        };
 
         let extensions: [&str; 1] = ["rhai"];
         file_picker.set_visible_extensions(&extensions).unwrap();
@@ -223,6 +242,8 @@ impl OverlayCreator {
             file_picker_open: false,
 
             script_query: None,
+
+            script_results,
         })
     }
 

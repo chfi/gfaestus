@@ -142,66 +142,23 @@ fn main() {
         .create()
         .unwrap();
 
-    let mut reactor = gfaestus::reactor::Reactor::init(thread_pool.clone());
-
-    // a simple String -> usize function
-    let mut host_0 = reactor.create_host(move |string: String| string.len());
-
-    let counter = Arc::new(AtomicCell::new(0usize));
-    // use thread::sleep to emulate long computation
-    let mut host_1 = reactor.create_host(move |millis: u64| {
-        let counter = counter.clone();
-
-        println!(
-            "in host_1 for the {}th time, with {} millis",
-            counter.load(),
-            millis
-        );
-        std::thread::sleep(std::time::Duration::from_millis(millis));
-        println!("sleep over");
-
-        counter.store(counter.load() + 1);
-        println!("host_1 now: {}", counter.load());
-
-        counter.load()
-    });
-
-    host_0.call("Hello world".to_string());
-
-    match host_0.take() {
-        Some(len) => println!("host_0 len: {}", len),
-        None => println!("too fast for host_0!"),
-    }
-
-    println!("Calling host 1 with a 1000ms delay");
-    host_1.call(1000);
-
-    match host_1.take() {
-        Some(c) => println!("host_1 complete: {}", c),
-        None => println!("too fast for host_1!"),
-    }
-
-    println!("sleeping to let host_1 catch up");
-    std::thread::sleep(std::time::Duration::from_millis(1200));
-    match host_1.take() {
-        Some(c) => println!("host_1 complete: {}", c),
-        None => println!("too fast for host_1!"),
-    }
-    println!("-----------------------");
-
-    // let mut host_1 = reactor.create_host(move |
-
     let rayon_pool = rayon::ThreadPoolBuilder::new()
         .num_threads(rayon_cpus)
         .build()
         .unwrap();
 
-    let rayon_pool = Arc::new(rayon_pool);
+    // let rayon_pool = Arc::new(rayon_pool);
 
     eprintln!("loading GFA");
     let t = std::time::Instant::now();
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+
+    let mut reactor = gfaestus::reactor::Reactor::init(
+        thread_pool.clone(),
+        rayon_pool,
+        graph_query.clone(),
+    );
 
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
@@ -280,7 +237,6 @@ fn main() {
         app.settings.clone(),
         &graph_query,
         thread_pool.clone(),
-        rayon_pool.clone(),
     )
     .unwrap();
 

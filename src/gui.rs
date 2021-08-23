@@ -383,7 +383,6 @@ impl Gui {
         settings: AppSettings,
         graph_query: &GraphQuery,
         thread_pool: ThreadPool,
-        rayon_pool: Arc<rayon::ThreadPool>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -500,7 +499,7 @@ impl Gui {
             dropped_file,
 
             thread_pool,
-            rayon_pool,
+            rayon_pool: reactor.rayon_pool.clone(),
 
             clipboard_ctx,
 
