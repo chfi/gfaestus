@@ -182,10 +182,6 @@ pub struct OverlayCreator {
     name: String,
     script_path_input: String,
 
-    script_error: String,
-
-    new_overlay_tx: Sender<OverlayCreatorMsg>,
-    // new_overlay_rx: Receiver<OverlayCreatorMsg>,
     file_picker: FilePicker,
     file_picker_open: bool,
 
@@ -198,11 +194,6 @@ impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
     pub fn new(reactor: &mut Reactor) -> Result<Self> {
-        // let (new_overlay_tx, new_overlay_rx) =
-        //     crossbeam::channel::unbounded::<OverlayCreatorMsg>();
-
-        let new_overlay_tx = reactor.overlay_create_tx.clone();
-
         let pwd = std::fs::canonicalize("./").unwrap();
 
         let mut file_picker = FilePicker::new(
@@ -212,7 +203,7 @@ impl OverlayCreator {
         .unwrap();
 
         let script_results = {
-            let tx = new_overlay_tx.clone();
+            let tx = reactor.overlay_create_tx.clone();
             let rayon_pool = reactor.rayon_pool.clone();
             let graph = reactor.graph_query.clone();
 
@@ -268,10 +259,6 @@ impl OverlayCreator {
             name: String::new(),
             script_path_input: String::new(),
 
-            script_error: String::new(),
-
-            new_overlay_tx,
-            // new_overlay_rx,
             file_picker,
             file_picker_open: false,
 
@@ -280,33 +267,19 @@ impl OverlayCreator {
         })
     }
 
-    pub fn new_overlay_tx(&self) -> &Sender<OverlayCreatorMsg> {
-        &self.new_overlay_tx
-    }
-
-    // pub fn new_overlay_rx(&self) -> &Receiver<OverlayCreatorMsg> {
-    //     &self.new_overlay_rx
-    // }
-
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        graph: Arc<GraphQuery>,
-        // graph: &GraphHandle,
-        thread_pool: &ThreadPool,
-        rayon_pool: Arc<rayon::ThreadPool>,
     ) -> Option<egui::Response> {
         let scr = ctx.input().screen_rect();
 
         if let Some(result) = self.script_results.take() {
             if result.is_ok() {
-                self.latest_result = None;
                 self.script_path_input.clear();
                 self.name.clear();
-            } else {
-                self.latest_result = Some(result);
             }
+            self.latest_result = Some(result);
         }
 
         let pos = egui::pos2(scr.center().x - 150.0, scr.center().y - 60.0);
@@ -327,53 +300,24 @@ impl OverlayCreator {
             .open(open)
             .default_pos(pos)
             .show(ctx, |ui| {
-                if self.latest_result.is_none()
-                    || !matches!(
-                        self.latest_result,
-                        Some(Err(ScriptMsg::Running(_)))
-                    )
-                {
-                    if ui.button("Choose script file").clicked() {
-                        self.file_picker.reset_selection();
-                        self.file_picker_open = true;
-                    }
-
-                    let _label = if let Some(path) = self
-                        .file_picker
-                        .selected_path()
-                        .and_then(|p| p.to_str())
-                    {
-                        ui.label(path)
-                    } else {
-                        ui.label("No file selected")
-                    };
-                }
-
-                if let Some(Err(error)) = &self.latest_result {
-                    match error {
-                        ScriptMsg::IOError(err) => {
-                            eprintln!("Overlay script IO error: {:?}", err);
-                            ui.label(format!("IO Error: {:?}", err));
-                        }
-                        ScriptMsg::ScriptError(err) => {
-                            eprintln!(
-                                "Overlay script execution error: {:?}",
-                                err
-                            );
-                            ui.label(format!("Script Error: {:?}", err));
-                        }
-                        ScriptMsg::Running(msg) => {
-                            ui.label(msg);
-                        }
-                    }
-                }
+                let is_running = matches!(
+                    self.latest_result,
+                    Some(Err(ScriptMsg::Running(_)))
+                );
 
                 let name = &mut self.name;
+                let file_picker = &mut self.file_picker;
+                let file_picker_open = &mut self.file_picker_open;
+                let latest_result = &self.latest_result;
+
+                let script_results = &self.script_results;
 
                 let _name_box = ui.horizontal(|ui| {
                     ui.label("Overlay name");
                     ui.separator();
-                    ui.text_edit_singleline(name)
+                    let text_edit =
+                        egui::TextEdit::singleline(name).enabled(!is_running);
+                    ui.add(text_edit);
                 });
 
                 let path_str = &mut self.script_path_input;
@@ -381,38 +325,66 @@ impl OverlayCreator {
                 let _path_box = ui.horizontal(|ui| {
                     ui.label("Script path");
                     ui.separator();
-                    ui.text_edit_singleline(path_str)
+                    let text_edit = egui::TextEdit::singleline(path_str)
+                        .enabled(!is_running);
+                    ui.add(text_edit);
                 });
 
-                let run_script = ui.button("Load and execute");
+                ui.horizontal(|ui| {
+                    let file_btn =
+                        egui::Button::new("Choose file").enabled(!is_running);
 
-                let _script_error_msg = ui.label(&self.script_error);
+                    if ui.add(file_btn).clicked() {
+                        file_picker.reset_selection();
+                        *file_picker_open = true;
+                    }
 
-                if run_script.clicked()
-                    && (self.latest_result.is_none()
-                        || matches!(self.latest_result, Some(Err(_))))
-                {
-                    self.file_picker.reset_selection();
-                    let path = PathBuf::from(path_str.as_str());
-                    println!(
-                        "loading gluon script from path {:?}",
-                        path.to_str()
+                    ui.separator();
+
+                    let run_script = ui.add(
+                        egui::Button::new("Run script").enabled(!is_running),
                     );
 
-                    let target = ScriptTarget::Nodes;
+                    if run_script.clicked()
+                        && (latest_result.is_none()
+                            || matches!(latest_result, Some(Err(_))))
+                    {
+                        file_picker.reset_selection();
+                        let path = PathBuf::from(path_str.as_str());
 
-                    let config = ScriptConfig {
-                        default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
-                        target,
-                    };
+                        let target = ScriptTarget::Nodes;
 
-                    let script_input = ScriptInput {
-                        name: name.to_string(),
-                        path,
-                        config,
-                    };
+                        let config = ScriptConfig {
+                            default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+                            target,
+                        };
 
-                    self.script_results.call(script_input).unwrap();
+                        let script_input = ScriptInput {
+                            name: name.to_string(),
+                            path,
+                            config,
+                        };
+
+                        script_results.call(script_input).unwrap();
+                    }
+                });
+
+                match &self.latest_result {
+                    Some(Err(ScriptMsg::IOError(err))) => {
+                        eprintln!("Overlay script IO error: {:?}", err);
+                        ui.label(format!("IO Error: {:?}", err));
+                    }
+                    Some(Err(ScriptMsg::ScriptError(err))) => {
+                        eprintln!("Overlay script execution error: {:?}", err);
+                        ui.label(format!("Script Error: {:?}", err));
+                    }
+                    Some(Err(ScriptMsg::Running(msg))) => {
+                        ui.label(msg);
+                    }
+                    Some(Ok(_)) => {
+                        ui.label("Created new overlay");
+                    }
+                    _ => (),
                 }
             })
     }

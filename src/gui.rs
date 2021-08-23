@@ -439,9 +439,7 @@ impl Gui {
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
-
-        let overlay_tx =
-            view_state.overlay_creator.state.new_overlay_tx().to_owned();
+        let overlay_tx = reactor.overlay_create_tx.clone();
 
         let gff3_list = {
             let mut list = RecordList::new(
@@ -534,12 +532,6 @@ impl Gui {
         self.view_state.overlay_list.state.populate_names(names);
     }
 
-    pub fn new_overlay_tx(
-        &self,
-    ) -> &crossbeam::channel::Sender<OverlayCreatorMsg> {
-        &self.view_state.overlay_creator.state.new_overlay_tx()
-    }
-
     pub fn scroll_to_gff_record(
         &mut self,
         records: &Gff3Records,
@@ -616,13 +608,10 @@ impl Gui {
                 overlay_creator,
             );
 
-            view_state.overlay_creator.state.ui(
-                &self.ctx,
-                overlay_creator,
-                graph_query.clone(),
-                &self.thread_pool,
-                self.rayon_pool.clone(),
-            );
+            view_state
+                .overlay_creator
+                .state
+                .ui(&self.ctx, overlay_creator);
 
             view_state.overlay_list.state.gradient_picker_ui(&self.ctx);
         }
