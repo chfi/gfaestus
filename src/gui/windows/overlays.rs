@@ -2,20 +2,15 @@ use std::io::Read;
 use std::{path::PathBuf, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
-use crossbeam::channel::{Receiver, Sender};
 
 use rhai::EvalAltResult;
 use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
-use futures::executor::ThreadPool;
-
-use crate::graph_query::GraphQuery;
 use crate::reactor::{Host, Outbox, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
-    asynchronous::AsyncResult,
     geometry::Point,
     vulkan::texture::{GradientName, Gradients},
 };

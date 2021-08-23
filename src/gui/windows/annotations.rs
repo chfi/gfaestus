@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    path::PathBuf,
     sync::Arc,
 };
 
@@ -40,6 +41,7 @@ use crate::{
     graph_query::{GraphQuery, GraphQueryWorker},
     gui::{util::grid_row_label, GuiMsg, Windows},
     overlays::OverlayData,
+    reactor::{Host, Outbox, Reactor},
 };
 
 use super::{file::FilePicker, overlays::OverlayCreatorMsg};
@@ -122,18 +124,49 @@ impl LabelSetList {
     }
 }
 
+pub enum AnnotMsg {
+    IOError(String),
+    ParseError(String),
+    Running(String),
+}
+
+impl AnnotMsg {
+    fn io_error(err: &str) -> Self {
+        AnnotMsg::IOError(err.to_string())
+    }
+
+    fn parse_error(err: &str) -> Self {
+        AnnotMsg::ParseError(err.to_string())
+    }
+
+    fn running(msg: &str) -> Self {
+        AnnotMsg::Running(msg.to_string())
+    }
+}
+
+pub type AnnotResult =
+    std::result::Result<(AnnotationFileType, String), AnnotMsg>;
+
 pub struct AnnotationFileList {
     current_annotation: Option<(AnnotationFileType, String)>,
 
     file_picker: FilePicker,
     file_picker_open: bool,
 
+    load_host: Host<PathBuf, AnnotResult>,
+
     gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
     bed_load_result: Option<AsyncResult<Result<BedRecords>>>,
 }
 
-impl std::default::Default for AnnotationFileList {
-    fn default() -> Self {
+impl AnnotationFileList {
+    pub const ID: &'static str = "annotation_file_list";
+
+    pub fn new(
+        reactor: &mut Reactor,
+        app_msg_tx: Sender<AppMsg>,
+        gui_msg_tx: Sender<GuiMsg>,
+    ) -> Result<Self> {
         let pwd = std::fs::canonicalize("./").unwrap();
 
         let mut file_picker = FilePicker::new(
@@ -145,20 +178,99 @@ impl std::default::Default for AnnotationFileList {
         let extensions: [&str; 2] = ["gff3", "bed"];
         file_picker.set_visible_extensions(&extensions).unwrap();
 
-        Self {
+        let load_host = reactor.create_host(
+            move |outbox: &Outbox<AnnotResult>, file: PathBuf| {
+                let running_msg = |msg: &str| {
+                    outbox.insert_blocking(Err(AnnotMsg::running(msg)));
+                };
+
+                let ext =
+                    file.extension().and_then(|ext| ext.to_str()).map_or(
+                        Err(AnnotMsg::IOError(format!(
+                            "Missing file extension in: {:?}",
+                            file
+                        ))),
+                        |ext| Ok(ext),
+                    )?;
+
+                if ext == "gff3" {
+                    running_msg("Loading GFF3");
+
+                    let records = Gff3Records::parse_gff3_file(&file);
+                    match records {
+                        Ok(records) => {
+                            app_msg_tx
+                                .send(AppMsg::AddGff3Records(records))
+                                .unwrap();
+                            gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::AnnotationRecords,
+                                    open: Some(true),
+                                })
+                                .unwrap();
+
+                            return Ok((
+                                AnnotationFileType::Gff3,
+                                records.file_name().to_string(),
+                            ));
+                        }
+                        Err(err) => {
+                            return Err(AnnotMsg::ParseError(format!(
+                                "Error parsing GFF3 file: {:?}",
+                                err
+                            )));
+                        }
+                    }
+                } else if ext == "bed" {
+                    running_msg("Loading BED");
+
+                    let records = BedRecords::parse_bed_file(&file);
+
+                    match records {
+                        Ok(records) => {
+                            app_msg_tx
+                                .send(AppMsg::AddBedRecords(records))
+                                .unwrap();
+                            gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::AnnotationRecords,
+                                    open: Some(true),
+                                })
+                                .unwrap();
+
+                            return Ok((
+                                AnnotationFileType::Bed,
+                                records.file_name().to_string(),
+                            ));
+                        }
+                        Err(err) => {
+                            return Err(AnnotMsg::ParseError(format!(
+                                "Error parsing BED file: {:?}",
+                                err
+                            )));
+                        }
+                    }
+                }
+
+                Err(AnnotMsg::ParseError(format!(
+                    "Incompatible file type: {:?}",
+                    file
+                )))
+            },
+        );
+
+        Ok(Self {
             current_annotation: None,
 
             file_picker,
             file_picker_open: false,
 
+            load_host,
+
             gff3_load_result: None,
             bed_load_result: None,
-        }
+        })
     }
-}
-
-impl AnnotationFileList {
-    pub const ID: &'static str = "annotation_file_list";
 
     pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
         self.current_annotation
