@@ -6,6 +6,7 @@ use crossbeam::channel::Sender;
 use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::FxHashSet;
 
+use crate::reactor::Reactor;
 use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
     app::AppMsg,
@@ -18,7 +19,10 @@ use crate::{
 
 use super::{filter::RecordFilter, ColumnPickerMany, OverlayLabelSetCreator};
 
-pub struct RecordList<T: ColumnKey> {
+pub struct RecordList<C>
+where
+    C: AnnotationCollection + Send + Sync + 'static,
+{
     id: egui::Id,
     current_file: Option<String>,
 
@@ -28,23 +32,27 @@ pub struct RecordList<T: ColumnKey> {
     slot_count: usize,
 
     filter_open: bool,
-    filters: HashMap<String, RecordFilter<T>>,
+    filters: HashMap<String, RecordFilter<C::ColumnKey>>,
 
     column_picker_open: bool,
-    enabled_columns: HashMap<String, ColumnPickerMany<T>>,
-    default_enabled_columns: HashSet<T>,
-    default_hidden_columns: HashSet<T>,
+    enabled_columns: HashMap<String, ColumnPickerMany<C::ColumnKey>>,
+    default_enabled_columns: HashSet<C::ColumnKey>,
+    default_hidden_columns: HashSet<C::ColumnKey>,
 
     path_picker_open: bool,
     path_picker: PathPicker,
 
     creator_open: bool,
-    creator: OverlayLabelSetCreator<T>,
+    creator: OverlayLabelSetCreator<C>,
     overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
-impl<T: ColumnKey> RecordList<T> {
+impl<C> RecordList<C>
+where
+    C: AnnotationCollection + Send + Sync + 'static,
+{
     pub fn new(
+        reactor: &mut Reactor,
         id: egui::Id,
         path_picker: PathPicker,
         new_overlay_tx: Sender<OverlayCreatorMsg>,
@@ -72,17 +80,18 @@ impl<T: ColumnKey> RecordList<T> {
             path_picker,
 
             creator_open: false,
-            creator: OverlayLabelSetCreator::new(egui::Id::new(
-                "overlay_label_set_creator",
-            )),
+            creator: OverlayLabelSetCreator::new(
+                reactor,
+                egui::Id::new("overlay_label_set_creator"),
+            ),
             overlay_tx: new_overlay_tx,
         }
     }
 
     pub fn set_default_columns(
         &mut self,
-        enabled_columns: impl IntoIterator<Item = T>,
-        hidden_columns: impl IntoIterator<Item = T>,
+        enabled_columns: impl IntoIterator<Item = C::ColumnKey>,
+        hidden_columns: impl IntoIterator<Item = C::ColumnKey>,
     ) {
         self.default_enabled_columns.clear();
         self.default_enabled_columns.extend(enabled_columns);
@@ -91,14 +100,12 @@ impl<T: ColumnKey> RecordList<T> {
         self.default_hidden_columns.extend(hidden_columns);
     }
 
-    pub fn scroll_to_label_record<C>(
+    pub fn scroll_to_label_record(
         &mut self,
         records: &C,
-        column: &T,
+        column: &C::ColumnKey,
         value: &[u8],
-    ) where
-        C: AnnotationCollection<ColumnKey = T>,
-    {
+    ) {
         let ix = self
             .filtered_records
             .iter()
@@ -115,18 +122,14 @@ impl<T: ColumnKey> RecordList<T> {
         }
     }
 
-    fn ui_row<C, R>(
+    fn ui_row(
         &self,
         ui: &mut egui::Ui,
         file_name: &str,
         records: &C,
-        record: &R,
+        record: &C::Record,
         index: usize,
-    ) -> egui::Response
-    where
-        C: AnnotationCollection<ColumnKey = T, Record = R>,
-        R: AnnotationRecord<ColumnKey = T>,
-    {
+    ) -> egui::Response {
         let mut fields: Vec<String> = vec![
             format!("{}", record.seq_id().as_bstr()),
             format!("{}", record.start()),
@@ -137,7 +140,9 @@ impl<T: ColumnKey> RecordList<T> {
 
         let mut mandatory = records.mandatory_columns();
         mandatory.retain(|c| {
-            c != &T::seq_id() && c != &T::start() && c != &T::end()
+            c != &C::ColumnKey::seq_id()
+                && c != &C::ColumnKey::start()
+                && c != &C::ColumnKey::end()
         });
 
         for column in mandatory.into_iter().chain(records.optional_columns()) {
@@ -172,14 +177,12 @@ impl<T: ColumnKey> RecordList<T> {
         resp
     }
 
-    fn select_record<R>(
+    fn select_record(
         &self,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         graph_query: &GraphQuery,
-        record: &R,
-    ) where
-        R: AnnotationRecord<ColumnKey = T>,
-    {
+        record: &C::Record,
+    ) {
         let active_path = self.path_picker.active_path();
 
         if let Some((path_id, name)) = active_path {
@@ -210,10 +213,7 @@ impl<T: ColumnKey> RecordList<T> {
         }
     }
 
-    fn apply_filter<C>(&mut self, file_name: &str, records: &C)
-    where
-        C: AnnotationCollection<ColumnKey = T>,
-    {
+    fn apply_filter(&mut self, file_name: &str, records: &C) {
         self.filtered_records.clear();
 
         eprintln!("applying filter");
@@ -249,26 +249,22 @@ impl<T: ColumnKey> RecordList<T> {
         let (path, _) = self.path_picker.active_path()?;
         Some(path)
     }
-}
 
-impl<T: ColumnKey + 'static> RecordList<T> {
-    pub fn ui<C>(
+    pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
         graph_query: &GraphQueryWorker,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         file_name: &str,
         records: &Arc<C>,
-    ) where
-        C: AnnotationCollection<ColumnKey = T> + Send + Sync + 'static,
-    {
+    ) {
         let active_path_name = self
             .path_picker
             .active_path()
             .map(|(_id, name)| name.to_owned());
 
         if !self.enabled_columns.contains_key(file_name) {
-            let mut enabled_columns: ColumnPickerMany<T> =
+            let mut enabled_columns: ColumnPickerMany<C::ColumnKey> =
                 ColumnPickerMany::new(egui::Id::new(file_name));
 
             enabled_columns.update_columns(records.as_ref());
@@ -494,13 +490,15 @@ impl<T: ColumnKey + 'static> RecordList<T> {
             .striped(true)
             .spacing(spacing)
             .show(ui, |ui| {
-                ui.label(T::seq_id().to_string());
-                ui.label(T::start().to_string());
-                ui.label(T::end().to_string());
+                ui.label(C::ColumnKey::seq_id().to_string());
+                ui.label(C::ColumnKey::start().to_string());
+                ui.label(C::ColumnKey::end().to_string());
 
                 let mut mandatory = records.mandatory_columns();
                 mandatory.retain(|c| {
-                    c != &T::seq_id() && c != &T::start() && c != &T::end()
+                    c != &C::ColumnKey::seq_id()
+                        && c != &C::ColumnKey::start()
+                        && c != &C::ColumnKey::end()
                 });
 
                 for col in mandatory {

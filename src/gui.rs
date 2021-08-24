@@ -83,8 +83,8 @@ pub struct Gui {
 
     clipboard_ctx: ClipboardContext,
 
-    gff3_list: RecordList<Gff3Column>,
-    bed_list: RecordList<BedColumn>,
+    gff3_list: RecordList<Gff3Records>,
+    bed_list: RecordList<BedRecords>,
 
     path_picker_source: PathPickerSource,
 
@@ -449,6 +449,7 @@ impl Gui {
 
         let gff3_list = {
             let mut list = RecordList::new(
+                reactor,
                 egui::Id::new("gff3_records_list"),
                 path_picker_source.create_picker(),
                 overlay_tx.clone(),
@@ -466,6 +467,7 @@ impl Gui {
 
         let bed_list = {
             let mut list = RecordList::new(
+                reactor,
                 egui::Id::new("bed_records_list"),
                 path_picker_source.create_picker(),
                 overlay_tx.clone(),

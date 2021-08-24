@@ -6,7 +6,6 @@ use std::{
 
 use bstr::ByteSlice;
 use crossbeam::channel::Sender;
-use futures::executor::ThreadPool;
 
 pub mod filter;
 pub mod records_list;
@@ -627,7 +626,10 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
     }
 }
 
-pub struct OverlayLabelSetCreator<T: ColumnKey> {
+pub struct OverlayLabelSetCreator<C>
+where
+    C: AnnotationCollection + Send + Sync + 'static,
+{
     path_id: Option<PathId>,
     path_name: String,
 
@@ -638,15 +640,18 @@ pub struct OverlayLabelSetCreator<T: ColumnKey> {
 
     label_set_name: String,
 
-    column_picker: ColumnPickerOne<T>,
+    column_picker: ColumnPickerOne<C::ColumnKey>,
     column_picker_open: bool,
     current_annotation_file: Option<String>,
 
     id: egui::Id,
 }
 
-impl<T: ColumnKey> OverlayLabelSetCreator<T> {
-    pub fn new(id: egui::Id) -> Self {
+impl<C> OverlayLabelSetCreator<C>
+where
+    C: AnnotationCollection + Send + Sync + 'static,
+{
+    pub fn new(reactor: &mut Reactor, id: egui::Id) -> Self {
         Self {
             path_id: None,
             path_name: String::new(),
@@ -666,20 +671,15 @@ impl<T: ColumnKey> OverlayLabelSetCreator<T> {
         }
     }
 
-    fn calculate_annotation_set<C, R, K>(
+    fn calculate_annotation_set(
         graph: &GraphQuery,
         records: &C,
         record_indices: &[usize],
         path_id: PathId,
         path_name: &str,
-        column: &K,
+        column: &C::ColumnKey,
         label_set_name: &str,
-    ) -> Option<AnnotationLabelSet>
-    where
-        C: AnnotationCollection<ColumnKey = K, Record = R>,
-        R: AnnotationRecord<ColumnKey = K>,
-        K: ColumnKey,
-    {
+    ) -> Option<AnnotationLabelSet> {
         if record_indices.is_empty() {
             return None;
         }
@@ -732,10 +732,8 @@ impl<T: ColumnKey> OverlayLabelSetCreator<T> {
             label_indices,
         ))
     }
-}
 
-impl<T: ColumnKey + 'static> OverlayLabelSetCreator<T> {
-    pub fn ui<C>(
+    pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
         overlay_tx: &Sender<OverlayCreatorMsg>,
@@ -746,10 +744,7 @@ impl<T: ColumnKey + 'static> OverlayLabelSetCreator<T> {
         path_id: PathId,
         records: Arc<C>,
         filtered_records: &[usize],
-    ) -> Option<egui::Response>
-    where
-        C: AnnotationCollection<ColumnKey = T> + Send + Sync + 'static,
-    {
+    ) -> Option<egui::Response> {
         if let Some(query) = self.overlay_query.as_mut() {
             query.move_result_if_ready();
         }
@@ -852,6 +847,13 @@ impl<T: ColumnKey + 'static> OverlayLabelSetCreator<T> {
                             .iter()
                             .copied()
                             .collect::<Vec<_>>();
+
+                        let input: OverlayInput<C> = OverlayInput {
+                            column: column.to_owned(),
+                            indices: indices.clone(),
+                            path: path_id,
+                            records: records.clone(),
+                        };
 
                         let column = column.to_owned();
 
