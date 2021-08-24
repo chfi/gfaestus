@@ -44,7 +44,6 @@ where
 
     creator_open: bool,
     creator: OverlayLabelSetCreator<C>,
-    overlay_tx: Sender<OverlayCreatorMsg>,
 }
 
 impl<C> RecordList<C>
@@ -55,7 +54,6 @@ where
         reactor: &mut Reactor,
         id: egui::Id,
         path_picker: PathPicker,
-        new_overlay_tx: Sender<OverlayCreatorMsg>,
     ) -> Self {
         let filtered_records = Vec::new();
 
@@ -84,7 +82,6 @@ where
                 reactor,
                 egui::Id::new("overlay_label_set_creator"),
             ),
-            overlay_tx: new_overlay_tx,
         }
     }
 
@@ -321,7 +318,6 @@ where
 
             self.creator.ui(
                 ui.ctx(),
-                &self.overlay_tx,
                 app_msg_tx,
                 graph_query,
                 &mut self.creator_open,

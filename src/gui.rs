@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
-use futures::executor::ThreadPool;
+
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -19,8 +19,8 @@ use crossbeam::atomic::AtomicCell;
 
 use crate::{
     annotations::{
-        AnnotationFileType, Annotations, BedColumn, BedRecords, ColumnKey,
-        Gff3Column, Gff3Records,
+        AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
+        Gff3Records,
     },
     app::{AppChannels, AppMsg, AppSettings, SharedState},
     graph_query::GraphQueryWorker,
@@ -29,7 +29,6 @@ use crate::{
 };
 use crate::{app::OverlayState, geometry::*};
 
-// use crate::gluon::GraphHandle;
 use crate::overlays::OverlayKind;
 
 use crate::graph_query::GraphQuery;
@@ -77,9 +76,6 @@ pub struct Gui {
     menu_bar: MenuBar,
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-
-    thread_pool: ThreadPool,
-    rayon_pool: Arc<rayon::ThreadPool>,
 
     clipboard_ctx: ClipboardContext,
 
@@ -382,7 +378,6 @@ impl Gui {
         channels: &AppChannels,
         settings: AppSettings,
         graph_query: &GraphQuery,
-        thread_pool: ThreadPool,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -439,7 +434,6 @@ impl Gui {
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
-        let overlay_tx = reactor.overlay_create_tx.clone();
 
         let annotation_file_list = AnnotationFileList::new(
             reactor,
@@ -452,7 +446,6 @@ impl Gui {
                 reactor,
                 egui::Id::new("gff3_records_list"),
                 path_picker_source.create_picker(),
-                overlay_tx.clone(),
             );
 
             use Gff3Column as Gff;
@@ -470,7 +463,6 @@ impl Gui {
                 reactor,
                 egui::Id::new("bed_records_list"),
                 path_picker_source.create_picker(),
-                overlay_tx.clone(),
             );
 
             use BedColumn as Bed;
@@ -503,9 +495,6 @@ impl Gui {
             menu_bar,
 
             dropped_file,
-
-            thread_pool,
-            rayon_pool: reactor.rayon_pool.clone(),
 
             clipboard_ctx,
 

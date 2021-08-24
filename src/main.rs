@@ -236,7 +236,6 @@ fn main() {
         app.channels(),
         app.settings.clone(),
         &graph_query,
-        thread_pool.clone(),
     )
     .unwrap();
 
