@@ -626,6 +626,24 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
     }
 }
 
+// struct OverlayInput<C: ColumnKey> {
+struct OverlayInput<C: AnnotationCollection + Send + Sync + 'static> {
+    name: String,
+    column: C::ColumnKey,
+    indices: Vec<usize>,
+    path: PathId,
+    records: Arc<C>,
+}
+
+enum OverlayFeedback {
+    Error(String),
+    Running(String),
+}
+
+type OverlayResult = std::result::Result<(), OverlayFeedback>;
+
+// pub struct OverlayLabelSetCreator<T: ColumnKey + 'static> {
+// pub struct OverlayLabelSetCreator<T: ColumnKey> {
 pub struct OverlayLabelSetCreator<C>
 where
     C: AnnotationCollection + Send + Sync + 'static,
@@ -635,6 +653,9 @@ where
 
     overlay_name: String,
     overlay_description: String,
+
+    host_data: Host<OverlayInput<C>, OverlayResult>,
+    latest_result: Option<OverlayResult>,
 
     overlay_query: Option<AsyncResult<OverlayData>>,
 
@@ -652,12 +673,105 @@ where
     C: AnnotationCollection + Send + Sync + 'static,
 {
     pub fn new(reactor: &mut Reactor, id: egui::Id) -> Self {
+        let graph = reactor.graph_query.clone();
+        let overlay_tx = reactor.overlay_create_tx.clone();
+
+        let rayon_pool = reactor.rayon_pool.clone();
+
+        let host_data = reactor.create_host(
+            move |outbox: &Outbox<_>, input: OverlayInput<C>| {
+                use rayon::prelude::*;
+
+                let steps =
+                    graph.path_pos_steps(input.path).ok_or_else(|| {
+                        OverlayFeedback::Error(format!(
+                            "Path {} does not exist",
+                            input.path.0
+                        ))
+                    })?;
+
+                let offset =
+                    graph.graph().get_path_name_vec(input.path).and_then(
+                        |name| crate::annotations::path_name_offset(&name),
+                    );
+
+                let t0 = std::time::Instant::now();
+
+                let indices = &input.indices;
+
+                running_msg("Retrieving path steps");
+
+                let colors_vec: Vec<(Vec<NodeId>, rgb::RGBA<f32>)> = rayon_pool
+                    .install(|| {
+                        indices
+                            .into_par_iter()
+                            .filter_map(|&ix| {
+                                let record = input.records.records().get(ix)?;
+
+                                let color = record_column_hash_color(
+                                    record,
+                                    &input.column,
+                                )?;
+
+                                let range =
+                                    crate::annotations::path_step_range(
+                                        &steps,
+                                        offset,
+                                        record.start(),
+                                        record.end(),
+                                    )?;
+
+                                let ids = range
+                                    .into_iter()
+                                    .map(|(h, _, _)| h.id())
+                                    .collect();
+
+                                Some((ids, color))
+                            })
+                            .collect::<Vec<_>>()
+                    });
+
+                let mut node_colors: FxHashMap<NodeId, rgb::RGBA<f32>> =
+                    FxHashMap::default();
+
+                for (ids, color) in colors_vec {
+                    for id in ids {
+                        node_colors.insert(id, color);
+                    }
+                }
+
+                let mut data = vec![
+                    rgb::RGBA::new(0.3, 0.3, 0.3, 0.3);
+                    graph.node_count()
+                ];
+
+                for (id, color) in node_colors {
+                    let ix = (id.0 - 1) as usize;
+                    data[ix] = color;
+                }
+
+                let overlay_data = OverlayData::RGB(data);
+
+                overlay_tx
+                    .send(OverlayCreatorMsg::NewOverlay {
+                        name: input.name,
+                        data: overlay_data,
+                    })
+                    .unwrap();
+
+                //
+                Ok(())
+            },
+        );
+
         Self {
             path_id: None,
             path_name: String::new(),
 
             overlay_name: String::new(),
-            overlay_description: String::new(),
+
+            host_data,
+            latest_result: None,
 
             overlay_query: None,
 
@@ -745,9 +859,18 @@ where
         records: Arc<C>,
         filtered_records: &[usize],
     ) -> Option<egui::Response> {
+        if let Some(result) = self.host_data.take() {
+            if result.is_ok() {
+                self.overlay_name.clear();
+            }
+            self.latest_result = Some(result);
+        }
+
+        /*
         if let Some(query) = self.overlay_query.as_mut() {
             query.move_result_if_ready();
         }
+        */
 
         if Some(path_id) != self.path_id {
             let path_name =
@@ -757,6 +880,7 @@ where
             self.path_name = path_name;
         }
 
+        /*
         if let Some(ov_data) = self
             .overlay_query
             .as_mut()
@@ -772,6 +896,7 @@ where
 
             self.overlay_query = None;
         }
+        */
 
         if self.current_annotation_file.as_ref().map(|s| s.as_str())
             != Some(file_name)
@@ -796,6 +921,11 @@ where
                 format!("Choose column")
             }
         };
+
+        let is_running = matches!(
+            self.latest_result,
+            Some(Err(OverlayFeedback::Running(_)))
+        );
 
         egui::Window::new("Create Annotation Labels & Overlays")
             .id(self.id)
@@ -835,11 +965,31 @@ where
 
                 let create_overlay_btn = ui.add(
                     egui::Button::new("Create overlay")
-                        .enabled(column.is_some()),
+                        .enabled(column.is_some() && !is_running),
                 );
 
                 create_overlay |= create_overlay_btn.clicked();
 
+                if create_overlay && !is_running {
+                    if let Some(column) = column {
+                        let indices = filtered_records
+                            .iter()
+                            .copied()
+                            .collect::<Vec<_>>();
+
+                        let input: OverlayInput<C> = OverlayInput {
+                            name: name.to_owned(),
+                            column: column.to_owned(),
+                            indices: indices.clone(),
+                            path: path_id,
+                            records: records.clone(),
+                        };
+
+                        self.host_data.call(input).unwrap();
+                    }
+                }
+
+                /*
                 if create_overlay && self.overlay_query.is_none() {
                     println!("creating overlay");
                     if let Some(column) = column {
@@ -849,6 +999,7 @@ where
                             .collect::<Vec<_>>();
 
                         let input: OverlayInput<C> = OverlayInput {
+                            name: name.to_owned(),
                             column: column.to_owned(),
                             indices: indices.clone(),
                             path: path_id,
@@ -965,6 +1116,7 @@ where
                         self.overlay_query = Some(query);
                     }
                 }
+                */
 
                 ui.separator();
 

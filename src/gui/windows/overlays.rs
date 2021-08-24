@@ -181,7 +181,6 @@ pub struct OverlayCreator {
     file_picker_open: bool,
 
     script_results: Host<ScriptInput, ScriptResult>,
-
     latest_result: Option<ScriptResult>,
 }
 
