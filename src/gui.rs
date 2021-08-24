@@ -441,6 +441,12 @@ impl Gui {
         let mut path_picker_source = PathPickerSource::new(graph_query)?;
         let overlay_tx = reactor.overlay_create_tx.clone();
 
+        let annotation_file_list = AnnotationFileList::new(
+            reactor,
+            app_msg_tx.clone(),
+            gui_msg_tx.clone(),
+        )?;
+
         let gff3_list = {
             let mut list = RecordList::new(
                 egui::Id::new("gff3_records_list"),
@@ -506,7 +512,7 @@ impl Gui {
 
             path_picker_source,
 
-            annotation_file_list: Default::default(),
+            annotation_file_list,
         };
 
         Ok(gui)
@@ -637,9 +643,7 @@ impl Gui {
 
         self.annotation_file_list.ui(
             &self.ctx,
-            &self.thread_pool,
             &mut self.open_windows.annotation_files,
-            &self.app_msg_tx,
             &self.gui_msg_tx,
             annotations,
         );

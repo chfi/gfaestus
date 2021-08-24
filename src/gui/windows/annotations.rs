@@ -155,8 +155,7 @@ pub struct AnnotationFileList {
 
     load_host: Host<PathBuf, AnnotResult>,
 
-    gff3_load_result: Option<AsyncResult<Result<Gff3Records>>>,
-    bed_load_result: Option<AsyncResult<Result<BedRecords>>>,
+    latest_result: Option<AnnotResult>,
 }
 
 impl AnnotationFileList {
@@ -199,6 +198,8 @@ impl AnnotationFileList {
                     let records = Gff3Records::parse_gff3_file(&file);
                     match records {
                         Ok(records) => {
+                            let file_name = records.file_name().to_string();
+
                             app_msg_tx
                                 .send(AppMsg::AddGff3Records(records))
                                 .unwrap();
@@ -209,10 +210,7 @@ impl AnnotationFileList {
                                 })
                                 .unwrap();
 
-                            return Ok((
-                                AnnotationFileType::Gff3,
-                                records.file_name().to_string(),
-                            ));
+                            return Ok((AnnotationFileType::Gff3, file_name));
                         }
                         Err(err) => {
                             return Err(AnnotMsg::ParseError(format!(
@@ -228,6 +226,8 @@ impl AnnotationFileList {
 
                     match records {
                         Ok(records) => {
+                            let file_name = records.file_name().to_string();
+
                             app_msg_tx
                                 .send(AppMsg::AddBedRecords(records))
                                 .unwrap();
@@ -238,10 +238,7 @@ impl AnnotationFileList {
                                 })
                                 .unwrap();
 
-                            return Ok((
-                                AnnotationFileType::Bed,
-                                records.file_name().to_string(),
-                            ));
+                            return Ok((AnnotationFileType::Bed, file_name));
                         }
                         Err(err) => {
                             return Err(AnnotMsg::ParseError(format!(
@@ -250,7 +247,7 @@ impl AnnotationFileList {
                             )));
                         }
                     }
-                }
+                };
 
                 Err(AnnotMsg::ParseError(format!(
                     "Incompatible file type: {:?}",
@@ -266,9 +263,7 @@ impl AnnotationFileList {
             file_picker_open: false,
 
             load_host,
-
-            gff3_load_result: None,
-            bed_load_result: None,
+            latest_result: None,
         })
     }
 
@@ -281,71 +276,20 @@ impl AnnotationFileList {
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
-        thread_pool: &ThreadPool,
         open: &mut bool,
-        app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         annotations: &Annotations,
     ) -> Option<egui::Response> {
-        if let Some(query) = self.gff3_load_result.as_mut() {
-            query.move_result_if_ready();
-        }
-
-        if let Some(gff3_result) = self
-            .gff3_load_result
-            .as_mut()
-            .and_then(|r| r.take_result_if_ready())
-        {
-            match gff3_result {
-                Ok(records) => {
-                    let name = records.file_name().to_string();
-                    app_msg_tx.send(AppMsg::AddGff3Records(records)).unwrap();
-                    gui_msg_tx
-                        .send(GuiMsg::SetWindowOpen {
-                            window: Windows::AnnotationRecords,
-                            open: Some(true),
-                        })
-                        .unwrap();
-
-                    self.current_annotation =
-                        Some((AnnotationFileType::Gff3, name));
-                }
-                Err(err) => {
-                    eprintln!("error loading GFF3 file: {}", err);
-                }
+        if let Some(result) = self.load_host.take() {
+            if let Ok((file_type, name)) = &result {
+                self.current_annotation = Some((*file_type, name.to_owned()));
             }
-            self.gff3_load_result = None;
+
+            self.latest_result = Some(result);
         }
 
-        if let Some(query) = self.bed_load_result.as_mut() {
-            query.move_result_if_ready();
-        }
-
-        if let Some(bed_result) = self
-            .bed_load_result
-            .as_mut()
-            .and_then(|r| r.take_result_if_ready())
-        {
-            match bed_result {
-                Ok(records) => {
-                    let name = records.file_name().to_string();
-                    app_msg_tx.send(AppMsg::AddBedRecords(records)).unwrap();
-                    gui_msg_tx
-                        .send(GuiMsg::SetWindowOpen {
-                            window: Windows::AnnotationRecords,
-                            open: Some(true),
-                        })
-                        .unwrap();
-
-                    self.current_annotation =
-                        Some((AnnotationFileType::Bed, name));
-                }
-                Err(err) => {
-                    eprintln!("error loading BED file: {}", err);
-                }
-            }
-            self.bed_load_result = None;
-        }
+        let is_running =
+            matches!(self.latest_result, Some(Err(AnnotMsg::Running(_))));
 
         if self.file_picker.selected_path().is_some() {
             self.file_picker_open = false;
@@ -357,63 +301,43 @@ impl AnnotationFileList {
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |mut ui| {
-                if self.gff3_load_result.is_none() {
-                    if ui.button("Choose annotation file").clicked() {
-                        self.file_picker.reset_selection();
-                        self.file_picker_open = true;
-                    }
+                if ui
+                    .add(
+                        egui::Button::new("Choose annotation file")
+                            .enabled(!is_running),
+                    )
+                    .clicked()
+                {
+                    self.file_picker.reset_selection();
+                    self.file_picker_open = true;
+                }
 
-                    let _label = if let Some(path) = self
-                        .file_picker
-                        .selected_path()
-                        .and_then(|p| p.to_str())
-                    {
-                        ui.label(path)
-                    } else {
-                        ui.label("No file selected")
-                    };
-
-                    if ui.button("Load").clicked() {
-                        if let Some((path, ext)) =
-                            self.file_picker.selected_path().and_then(|path| {
-                                let ext = path.extension()?;
-                                let ext_str = ext.to_str()?;
-                                Some((path, ext_str))
-                            })
-                        {
-                            let path_str = path.to_str();
-
-                            let ext = ext.to_ascii_lowercase();
-                            if ext == "gff3" {
-                                eprintln!("Loading GFF3 file {:?}", path_str);
-                                let path = path.to_owned();
-                                let query =
-                                    AsyncResult::new(thread_pool, async move {
-                                        println!("parsing gff3 file");
-                                        let records =
-                                            Gff3Records::parse_gff3_file(path);
-                                        println!("parsing complete");
-                                        records
-                                    });
-                                self.gff3_load_result = Some(query);
-                                self.file_picker.reset_selection();
-                            } else if ext == "bed" {
-                                eprintln!("Loading BED file {:?}", path_str);
-                                let path = path.to_owned();
-                                let query =
-                                    AsyncResult::new(thread_pool, async move {
-                                        println!("parsing bed file");
-                                        let records =
-                                            BedRecords::parse_bed_file(path);
-                                        println!("parsing complete");
-                                        records
-                                    });
-                                self.bed_load_result = Some(query);
-                                self.file_picker.reset_selection();
-                            }
-                        }
-                    }
+                let _label = if let Some(path) =
+                    self.file_picker.selected_path().and_then(|p| p.to_str())
+                {
+                    ui.label(path)
                 } else {
+                    ui.label("No file selected")
+                };
+
+                let selected_path = self.file_picker.selected_path();
+
+                // if ui
+                //     .add(
+                //         egui::Button("Load")
+                //             .enabled(!is_running && selected_path.is_some()),
+                //     )
+                //     .clicked()
+                if ui
+                    .add(egui::Button::new("Load").enabled(!is_running))
+                    .clicked()
+                {
+                    if let Some(path) = selected_path {
+                        self.load_host.call(path.to_owned()).unwrap();
+                    }
+                }
+
+                if is_running {
                     ui.label("Loading file");
                 }
 
