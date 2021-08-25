@@ -325,7 +325,6 @@ fn main() {
             .into_iter(),
     );
 
-    dbg!();
     const FRAME_HISTORY_LEN: usize = 10;
     let mut frame_time_history = [0.0f32; FRAME_HISTORY_LEN];
     let mut frame = 0;

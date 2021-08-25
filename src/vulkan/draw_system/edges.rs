@@ -275,7 +275,6 @@ impl EdgeRenderer {
         render_pass: vk::RenderPass,
     ) -> Result<Self> {
         let device = app.vk_context().device();
-        dbg!();
 
         let ubo = EdgesUBOBuffer::new(app)?;
 
@@ -334,11 +333,9 @@ impl EdgeRenderer {
 
         let layouts = [desc_set_layout];
 
-        dbg!();
         let (pipeline, pipeline_layout) =
             Self::create_pipeline(device, msaa_samples, render_pass, &layouts);
 
-        dbg!();
         let edge_index_buffer =
             EdgeIndices::new_with_components(app, graph, layout)?;
 

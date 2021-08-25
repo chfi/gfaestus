@@ -273,9 +273,18 @@ impl OverlayCreator {
 
         if let Some(result) = self.script_results.take() {
             if result.is_ok() {
+                info!("Created new overlay from Rhai script");
                 self.script_path_input.clear();
                 self.name.clear();
             }
+
+            if let Err(ScriptMsg::IOError(err)) = &result {
+                error!("Overlay script IO error: {:?}", err);
+            }
+            if let Err(ScriptMsg::ScriptError(err)) = &result {
+                error!("Overlay script execution error: {:?}", err);
+            }
+
             self.latest_result = Some(result);
         }
 
@@ -368,18 +377,15 @@ impl OverlayCreator {
 
                 match &self.latest_result {
                     Some(Err(ScriptMsg::IOError(err))) => {
-                        error!("Overlay script IO error: {:?}", err);
                         ui.label(format!("IO Error: {:?}", err));
                     }
                     Some(Err(ScriptMsg::ScriptError(err))) => {
-                        error!("Overlay script execution error: {:?}", err);
                         ui.label(format!("Script Error: {:?}", err));
                     }
                     Some(Err(ScriptMsg::Running(msg))) => {
                         ui.label(msg);
                     }
                     Some(Ok(_)) => {
-                        info!("Created new overlay from Rhai script");
                         ui.label("Created new overlay");
                     }
                     _ => (),

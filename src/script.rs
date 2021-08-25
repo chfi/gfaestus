@@ -1,4 +1,4 @@
-use rhai::{Engine, EvalAltResult, INT};
+use rhai::{Engine, EvalAltResult};
 
 use anyhow::Result;
 
@@ -13,20 +13,7 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use handlegraph::{
-    packedgraph::{paths::StepPtr, PackedGraph},
-    path_position::PathPositionMap,
-};
 use rustc_hash::FxHashMap;
-
-use std::{path::Path, sync::Arc};
-
-use bstr::ByteVec;
-use futures::Future;
-
-use bytemuck::{Contiguous, Pod, Zeroable};
-
-use crate::vulkan::draw_system::nodes::overlay::NodeOverlay;
 
 use crate::graph_query::GraphQuery;
 use crate::overlays::{OverlayData, OverlayKind};

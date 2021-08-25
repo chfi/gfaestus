@@ -154,7 +154,7 @@ pub fn draw_text_at_aligned_world_point_offset(
             align,
             text,
             egui::TextStyle::Body,
-            egui::Color32::BLACK,
+            ctx.style().visuals.text_color(),
         );
 
         return Some(rect.into());
