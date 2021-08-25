@@ -1,11 +1,8 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
-use crossbeam::atomic::AtomicCell;
-use gfaestus::annotations::{
-    AnnotationLabelSet, BedRecords, ClusterCache, Gff3Records,
-};
+use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashMap;
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -83,24 +80,37 @@ fn universe_from_gfa_layout(
 
 use gfaestus::vulkan::*;
 
+use flexi_logger::{Duplicate, FileSpec, Logger, LoggerHandle};
+use log::{debug, error, info, trace, warn};
+
+fn set_up_logger() -> Result<LoggerHandle> {
+    let logger = Logger::try_with_env_or_str("info")?
+        .log_to_file(FileSpec::default())
+        .duplicate_to_stderr(Duplicate::All)
+        .start()?;
+
+    Ok(logger)
+}
+
 fn main() {
     let args = std::env::args().collect::<Vec<_>>();
+
+    let _logger = set_up_logger().unwrap();
 
     let gfa_file = if let Some(name) = args.get(1) {
         name
     } else {
-        eprintln!("must provide path to a GFA file");
+        error!("Must provide path to a GFA file");
         std::process::exit(1);
     };
 
     let layout_file = if let Some(name) = args.get(2) {
         name
     } else {
-        eprintln!("must provide path to a layout file");
+        error!("Must provide path to a layout file");
         std::process::exit(1);
     };
 
-    // let event_loop = EventLoop::new();
     let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
@@ -108,13 +118,14 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let gfaestus = GfaestusVk::new(&window);
-
-    if let Err(err) = &gfaestus {
-        println!("{:?}", err.root_cause());
-    }
-
-    let mut gfaestus = gfaestus.unwrap();
+    let mut gfaestus = match GfaestusVk::new(&window) {
+        Ok(app) => app,
+        Err(err) => {
+            error!("Error initializing Gfaestus");
+            error!("{:?}", err.root_cause());
+            std::process::exit(1);
+        }
+    };
 
     let num_cpus = num_cpus::get();
 
@@ -147,9 +158,7 @@ fn main() {
         .build()
         .unwrap();
 
-    // let rayon_pool = Arc::new(rayon_pool);
-
-    eprintln!("loading GFA");
+    info!("Loading GFA");
     let t = std::time::Instant::now();
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
@@ -173,19 +182,19 @@ fn main() {
         y: top_left.y + (bottom_right.y - top_left.y) / 2.0,
     };
 
-    eprintln!(
+    info!(
         "layout bounding box\t({:.2}, {:.2})\t({:.2}, {:.2})",
         top_left.x, top_left.y, bottom_right.x, bottom_right.y
     );
-    eprintln!(
+    info!(
         "layout width: {:.2}\theight: {:.2}",
         bottom_right.x - top_left.x,
         bottom_right.y - top_left.y
     );
 
-    eprintln!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
+    info!("GFA loaded in {:.3} sec", t.elapsed().as_secs_f64());
 
-    eprintln!(
+    info!(
         "Loaded {} nodes\t{} points",
         universe.layout().nodes().len(),
         universe.layout().nodes().len() * 2
@@ -509,7 +518,7 @@ fn main() {
                         let t = std::time::Instant::now();
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
-                        println!("block & free took {} ns", t.elapsed().as_nanos());
+                        trace!("block & free took {} ns", t.elapsed().as_nanos());
 
                         let t = std::time::Instant::now();
                         GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
@@ -518,7 +527,7 @@ fn main() {
                                                 gpu_selection.selection_buffer.buffer,
                                                 main_view.selection_buffer.buffer,
                                                 main_view.selection_buffer.size);
-                        println!("buffer copy took {} ns", t.elapsed().as_nanos());
+                        trace!("buffer copy took {} ns", t.elapsed().as_nanos());
 
 
                         let t = std::time::Instant::now();
@@ -528,7 +537,7 @@ fn main() {
                                                 .vk_context()
                                                 .device())
                             .unwrap();
-                        println!("fill_selection_set took {} ns", t.elapsed().as_nanos());
+                        trace!("fill_selection_set took {} ns", t.elapsed().as_nanos());
 
                         use gfaestus::app::Select;
 
@@ -541,7 +550,7 @@ fn main() {
                                 .clone(),
                             clear: true }))
                             .unwrap();
-                        println!("send took {} ns", t.elapsed().as_nanos());
+                        trace!("send took {} ns", t.elapsed().as_nanos());
 
 
                         select_fence_id = None;
@@ -736,89 +745,6 @@ fn main() {
                             }
                         }
                     }
-
-                    /*
-                    let clustered = gfaestus::annotations::cluster_annotations(
-                        &steps,
-                        universe.layout().nodes(),
-                        app.shared_state().view(),
-                        label_set.labels(),
-                        label_radius,
-                    );
-
-                    for (node, (offset, labels)) in clustered.iter() {
-
-                        let mut y_offset = 20.0;
-                        let mut count = 0;
-
-
-                        for label in labels {
-
-                            let anchor_dir = Point::new(-offset.x, -offset.y);
-                            let offset = *offset * 20.0;
-
-                            let rect = gfaestus::gui::text::draw_text_at_node_anchor(
-                                &gui.ctx,
-                                universe.layout().nodes(),
-                                app.shared_state().view(),
-                                *node,
-                                offset + Point::new(0.0, y_offset),
-                                anchor_dir,
-                                label
-                            );
-
-                            if let Some(rect) = rect {
-                                let rect = rect.resize(0.98);
-                                if rect.contains(app.mouse_pos()) {
-                                    gfaestus::gui::text::draw_rect(&gui.ctx, rect);
-
-                                    // hacky way to check for a click
-                                    // for now, because i can't figure
-                                    // egui out
-                                    if gui.ctx.input().pointer.any_click() {
-                                        match column {
-                                            AnnotationColumn::Gff3(col) => {
-                                                if let Some(gff) = records.downcast_ref::<Gff3Records>() {
-                                                    gui.scroll_to_gff_record(gff, col, label.as_bytes());
-                                                }
-                                            }
-                                            AnnotationColumn::Bed(col) => {
-                                                if let Some(bed) = records.downcast_ref::<BedRecords>() {
-                                                    gui.scroll_to_bed_record(bed, col, label.as_bytes());
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            y_offset += 15.0;
-                            count += 1;
-
-                            if count > 10 {
-                                let count = count.min(labels.len());
-                                let rem = labels.len() - count;
-
-                                if rem > 0 {
-                                    let more_label = format!("and {} more", rem);
-
-                                    gfaestus::gui::text::draw_text_at_node_anchor(
-                                        &gui.ctx,
-                                        universe.layout().nodes(),
-                                        app.shared_state().view(),
-                                        *node,
-                                        offset + Point::new(0.0, y_offset),
-                                        anchor_dir,
-                                        &more_label
-                                    );
-                                }
-                                break;
-                            }
-                        }
-
-                    }
-                    */
-
                 }
 
 

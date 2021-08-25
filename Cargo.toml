@@ -45,5 +45,8 @@ bytemuck = { version = "1.7", features = ["derive"] }
 
 num_cpus = "1.13.0"
 
+log = "0.4"
+flexi_logger = { version = "0.18", features = ["async"] }
+
 [profile.dev]
 opt-level = 2
