@@ -6,6 +6,9 @@ use crossbeam::channel::Sender;
 use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::FxHashSet;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::reactor::Reactor;
 use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
@@ -213,7 +216,7 @@ where
     fn apply_filter(&mut self, file_name: &str, records: &C) {
         self.filtered_records.clear();
 
-        eprintln!("applying filter");
+        debug!("applying filter");
         let total = records.records().len();
 
         let records = &records.records();
@@ -230,7 +233,7 @@ where
             },
         ));
         let filtered = self.filtered_records.len();
-        eprintln!(
+        debug!(
             "filter complete, showing {} out of {} records",
             filtered, total
         );
@@ -346,7 +349,7 @@ where
                 let btn = ui.button("Choose columns");
 
                 if btn.clicked() {
-                    println!("popup clicked");
+                    trace!("popup clicked");
                     ui.memory().toggle_popup(popup_id);
                 }
 

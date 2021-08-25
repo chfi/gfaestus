@@ -11,6 +11,9 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use anyhow::Result;
 use rustc_hash::FxHashSet;
 
@@ -230,7 +233,7 @@ impl FlatLayout {
 
         use rustc_hash::FxHashMap;
 
-        eprintln!("loading layout");
+        info!("loading layout");
         let layout_file = File::open(layout_path)?;
         let reader = BufReader::new(layout_file);
 
@@ -343,69 +346,5 @@ impl FlatLayout {
             top_left,
             bottom_right,
         })
-    }
-
-    pub fn apply_layout_tsv(&mut self, path: &str) -> Result<()> {
-        use std::fs::File;
-        use std::io::prelude::*;
-        use std::io::BufReader;
-
-        let layout_file = File::open(path)?;
-        let reader = BufReader::new(layout_file);
-
-        let mut lines = reader.lines();
-        // throw away header
-        lines.next().unwrap()?;
-
-        let mut min_x = std::f32::MAX;
-        let mut max_x = std::f32::MIN;
-        let mut min_y = std::f32::MAX;
-        let mut max_y = std::f32::MIN;
-
-        for line in lines {
-            let line: String = line?;
-
-            println!("reading line: {}", line);
-
-            let trimmed = line.trim();
-            if trimmed.is_empty() {
-                continue;
-            }
-            let mut fields = trimmed.split_whitespace();
-
-            let ix = fields.next().unwrap();
-            let ix = ix.parse::<usize>()?;
-
-            let x = fields.next().unwrap();
-            let x = x.parse::<f32>()?;
-
-            let y = fields.next().unwrap();
-            let y = y.parse::<f32>()?;
-
-            min_x = min_x.min(x);
-            max_x = max_x.max(x);
-
-            min_y = min_y.min(y);
-            max_y = max_y.max(y);
-
-            let new_p = Point { x, y };
-
-            let node_ix = (ix / 2) + 1;
-
-            let node = self.nodes.get_mut(node_ix).unwrap();
-
-            if ix % 2 == 0 {
-                // node start
-                node.p0 = new_p;
-            } else {
-                // node end
-                node.p1 = new_p;
-            }
-        }
-
-        self.top_left = Point::new(min_x, min_y);
-        self.bottom_right = Point::new(max_x, max_y);
-
-        Ok(())
     }
 }

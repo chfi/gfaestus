@@ -5,6 +5,9 @@ use std::{
     os::raw::{c_char, c_void},
 };
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 #[cfg(debug_assertions)]
 pub const ENABLE_VALIDATION_LAYERS: bool = true;
 #[cfg(not(debug_assertions))]
@@ -23,15 +26,15 @@ unsafe extern "system" fn vulkan_debug_callback(
     _: *mut c_void,
 ) -> u32 {
     if flag == vk::DebugReportFlagsEXT::DEBUG {
-        eprintln!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+        debug!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        eprintln!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+        info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        eprintln!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+        warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        eprintln!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+        warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     } else {
-        eprintln!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
+        info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
     }
     vk::FALSE
 }

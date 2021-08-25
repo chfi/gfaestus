@@ -63,7 +63,6 @@ fn universe_from_gfa_layout(
     graph_query: &GraphQuery,
     layout_path: &str,
 ) -> Result<(Universe<FlatLayout>, GraphStats)> {
-    eprintln!("creating universe");
     let graph = graph_query.graph();
 
     let universe = Universe::from_laid_out_graph(&graph, layout_path)?;
@@ -81,12 +80,14 @@ fn universe_from_gfa_layout(
 use gfaestus::vulkan::*;
 
 use flexi_logger::{Duplicate, FileSpec, Logger, LoggerHandle};
+
+#[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 fn set_up_logger() -> Result<LoggerHandle> {
     let logger = Logger::try_with_env_or_str("info")?
         .log_to_file(FileSpec::default())
-        .duplicate_to_stderr(Duplicate::All)
+        .duplicate_to_stderr(Duplicate::Debug)
         .start()?;
 
     Ok(logger)

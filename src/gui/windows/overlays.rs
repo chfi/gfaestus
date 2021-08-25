@@ -7,6 +7,9 @@ use rustc_hash::FxHashMap;
 
 use anyhow::Result;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::reactor::{Host, Outbox, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
@@ -365,17 +368,18 @@ impl OverlayCreator {
 
                 match &self.latest_result {
                     Some(Err(ScriptMsg::IOError(err))) => {
-                        eprintln!("Overlay script IO error: {:?}", err);
+                        error!("Overlay script IO error: {:?}", err);
                         ui.label(format!("IO Error: {:?}", err));
                     }
                     Some(Err(ScriptMsg::ScriptError(err))) => {
-                        eprintln!("Overlay script execution error: {:?}", err);
+                        error!("Overlay script execution error: {:?}", err);
                         ui.label(format!("Script Error: {:?}", err));
                     }
                     Some(Err(ScriptMsg::Running(msg))) => {
                         ui.label(msg);
                     }
                     Some(Ok(_)) => {
+                        info!("Created new overlay from Rhai script");
                         ui.label("Created new overlay");
                     }
                     _ => (),

@@ -14,6 +14,9 @@ use anyhow::Result;
 
 use rustc_hash::FxHashMap;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     let indices = mmap_gfa.build_index()?;
 
@@ -23,7 +26,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     let mut graph = PackedGraph::default();
     // eprintln!("empty space usage: {} bytes", graph.total_bytes());
 
-    eprintln!(
+    info!(
         "loading GFA with {} nodes, {} edges",
         indices.segments.len(),
         indices.links.len()
@@ -44,7 +47,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
 
     let id_offset = if min_id == 0 { 1 } else { 0 };
 
-    eprintln!("adding nodes");
+    info!("adding nodes");
     for &offset in indices.segments.iter() {
         let _line = mmap_gfa.read_line_at(offset.0)?;
         let segment = mmap_gfa.parse_current_line()?;
@@ -59,7 +62,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     //     graph.total_bytes()
     // );
 
-    eprintln!("adding edges");
+    info!("adding edges");
 
     let edges_iter = indices.links.iter().filter_map(|&offset| {
         let _line = mmap_gfa.read_line_at(offset).ok()?;
@@ -88,7 +91,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
     let mut path_ids: FxHashMap<PathId, (usize, usize)> = FxHashMap::default();
     path_ids.reserve(indices.paths.len());
 
-    eprintln!("adding paths");
+    info!("adding paths");
     for &offset in indices.paths.iter() {
         let line = mmap_gfa.read_line_at(offset)?;
         let length = line.len();
@@ -98,7 +101,7 @@ pub fn packed_graph_from_mmap(mmap_gfa: &mut MmapGFA) -> Result<PackedGraph> {
         }
     }
 
-    eprintln!("created path handles");
+    info!("created path handles");
 
     let mmap_gfa_bytes = mmap_gfa.get_ref();
 

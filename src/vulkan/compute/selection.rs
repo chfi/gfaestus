@@ -5,6 +5,9 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::app::node_flags::SelectionBuffer;
 
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
@@ -23,8 +26,6 @@ pub struct GpuSelection {
 
 impl GpuSelection {
     pub fn new(app: &GfaestusVk, node_count: usize) -> Result<Self> {
-        println!("node count {}", node_count);
-
         let device = app.vk_context().device();
 
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
@@ -157,10 +158,12 @@ impl GpuSelection {
             count as u32
         };
 
-        println!("dispatch with x_group_count {}", x_group_count);
+        trace!(
+            "Node selection dispatch with x_group_count {}",
+            x_group_count
+        );
 
         unsafe { device.cmd_dispatch(cmd_buf, x_group_count, 1, 1) };
-        // unsafe { device.cmd_dispatch(cmd_buf, 64, 1, 1) };
 
         Ok(())
     }

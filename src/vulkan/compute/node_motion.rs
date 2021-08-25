@@ -4,6 +4,9 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::app::node_flags::SelectionBuffer;
 
 use crate::vulkan::{
@@ -165,7 +168,7 @@ impl NodeTranslation {
             );
         };
 
-        println!("translating selection with {}, {}", delta.x, delta.y);
+        trace!("Translating selected nodes by {}, {}", delta.x, delta.y);
 
         let push_constants = DeltaPushConstants::new(delta);
         let pc_bytes = push_constants.bytes();
@@ -192,10 +195,12 @@ impl NodeTranslation {
             count as u32
         };
 
-        println!("dispatch with x_group_count {}", x_group_count);
+        trace!(
+            "Dispatching node translation with x_group_count {}",
+            x_group_count
+        );
 
         unsafe { device.cmd_dispatch(cmd_buf, x_group_count, 1, 1) };
-        // unsafe { device.cmd_dispatch(cmd_buf, 64, 1, 1) };
 
         Ok(())
     }

@@ -4,6 +4,8 @@ use bstr::ByteSlice;
 
 use anyhow::Result;
 
+use log::error;
+
 use super::{
     AnnotationCollection, AnnotationColumn, AnnotationRecord, ColumnKey, Strand,
 };
@@ -293,14 +295,9 @@ impl Gff3Records {
 
                 records.push(record);
             } else {
-                eprintln!("failed to parse row:");
-                eprintln!("\"{}\"", line.as_bstr());
-
                 std::process::exit(1);
             }
         }
-
-        eprintln!("parsed {} attribute keys", attribute_keys.len());
 
         Ok(Self {
             file_name,
@@ -453,9 +450,8 @@ impl Gff3Record {
             if let Some(record) = Self::parse_row(fields) {
                 result.push(record);
             } else {
-                eprintln!("failed to parse row:");
-                eprintln!("\"{}\"", line.as_bstr());
-
+                error!("failed to parse row:");
+                error!("\"{}\"", line.as_bstr());
                 std::process::exit(1);
             }
         }

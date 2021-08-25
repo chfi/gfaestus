@@ -42,6 +42,9 @@ use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
 use ash::{extensions::khr::PushDescriptor, vk};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 pub mod debug;
 pub mod text;
 pub mod util;
@@ -930,10 +933,7 @@ impl Gui {
                 }
                 GuiMsg::FileDropped { path } => {
                     if let Ok(mut guard) = self.dropped_file.lock() {
-                        println!(
-                            "Updated dropped file with {:?}",
-                            path.to_str()
-                        );
+                        trace!("Updated dropped file with {:?}", path.to_str());
                         *guard = Some(path);
                     }
                 }

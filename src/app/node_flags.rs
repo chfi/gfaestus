@@ -51,8 +51,6 @@ impl SelectionBuffer {
     /// fill `latest_selection` by reading from the buffer
     pub fn fill_selection_set(&mut self, device: &Device) -> Result<()> {
         let node_count = (self.size / 4) as usize;
-        println!("selection buffer node_count {}", node_count);
-
         self.latest_selection.clear();
         self.latest_selection.reserve(node_count);
 

@@ -173,7 +173,7 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
             *val = (*val - min) / range;
         }
 
-        println!("min: {}, max: {}", min, max);
+        log::debug!("Overlay values, min: {}, max: {}", min, max);
 
         return Some(OverlayData::Value(data));
     }

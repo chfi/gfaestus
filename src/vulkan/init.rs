@@ -18,6 +18,9 @@ use super::{
     context::*, debug::*, SwapchainProperties, SwapchainSupportDetails,
 };
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 pub(super) fn create_instance(
     entry: &Entry,
     window: &Window,
@@ -184,12 +187,18 @@ pub(super) fn choose_physical_device(
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
 ) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
+    info!("Enumerating physical devices");
+
     let device = {
         let devices = unsafe { instance.enumerate_physical_devices() }?;
 
         devices
             .into_iter()
             .find(|&dev| {
+                unsafe {
+                    let props = instance.get_physical_device_properties(dev);
+                    info!("{:?}", CStr::from_ptr(props.device_name.as_ptr()));
+                }
                 device_is_suitable(instance, surface, surface_khr, dev).unwrap()
             })
             .unwrap()
@@ -198,7 +207,7 @@ pub(super) fn choose_physical_device(
     let properties = unsafe { instance.get_physical_device_properties(device) };
 
     unsafe {
-        eprintln!(
+        info!(
             "Selected physical device: {:?}",
             CStr::from_ptr(properties.device_name.as_ptr())
         );
@@ -244,7 +253,7 @@ pub(super) fn create_swapchain_and_images(
     };
 
     if super::debug::ENABLE_VALIDATION_LAYERS {
-        eprintln!(
+        trace!(
             "Creating swapchain.\n\tFormat: {:?}\n\tColorSpace: {:?}\n\tPresentMode: {:?}\n\tExtent: {:?}\n\tImageCount: {:?}",
             props.format.format,
             props.format.color_space,

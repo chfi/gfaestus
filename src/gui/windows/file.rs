@@ -176,7 +176,6 @@ impl FilePicker {
                         || (text_box.has_focus()
                             && ui.input().key_pressed(egui::Key::Enter))
                     {
-                        println!("has focus & enter");
                         self.goto_path_in_text_box().unwrap();
                     }
                 });

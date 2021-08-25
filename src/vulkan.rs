@@ -29,6 +29,9 @@ use anyhow::Result;
 
 use render_pass::Framebuffers;
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 #[derive(Clone)]
 pub struct Queues {
     graphics_queue: Arc<Mutex<vk::Queue>>,
@@ -172,13 +175,13 @@ impl GfaestusVk {
 
         let allocator = vk_mem::Allocator::new(&allocator_create_info)?;
 
-        println!("graphics_ix: {}", graphics_ix);
-        println!("present_ix: {}", present_ix);
-        println!("compute_ix: {}", compute_ix);
+        trace!("graphics_ix: {}", graphics_ix);
+        trace!("present_ix: {}", present_ix);
+        trace!("compute_ix: {}", compute_ix);
 
-        println!("graphics_queue: {:?}", graphics_queue);
-        println!("present_queue: {:?}", present_queue);
-        println!("compute_queue: {:?}", compute_queue);
+        trace!("graphics_queue: {:?}", graphics_queue);
+        trace!("present_queue: {:?}", present_queue);
+        trace!("compute_queue: {:?}", compute_queue);
 
         let vk_context = VkContext::new(
             entry,
@@ -1197,7 +1200,6 @@ impl GfaestusVk {
         dimensions: Option<[u32; 2]>,
     ) -> Result<()> {
         self.wait_gpu_idle()?;
-        // eprintln!("recreating swapchain");
 
         self.cleanup_swapchain();
 
