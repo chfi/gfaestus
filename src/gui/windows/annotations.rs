@@ -128,6 +128,7 @@ pub enum AnnotMsg {
     Running(String),
 }
 
+#[allow(dead_code)]
 impl AnnotMsg {
     fn io_error(err: &str) -> Self {
         AnnotMsg::IOError(err.to_string())
@@ -320,14 +321,11 @@ impl AnnotationFileList {
 
                 let selected_path = self.file_picker.selected_path();
 
-                // if ui
-                //     .add(
-                //         egui::Button("Load")
-                //             .enabled(!is_running && selected_path.is_some()),
-                //     )
-                //     .clicked()
                 if ui
-                    .add(egui::Button::new("Load").enabled(!is_running))
+                    .add(
+                        egui::Button::new("Load")
+                            .enabled(!is_running && selected_path.is_some()),
+                    )
                     .clicked()
                 {
                     if let Some(path) = selected_path {
@@ -625,7 +623,6 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
     }
 }
 
-// struct OverlayInput<C: ColumnKey> {
 struct OverlayInput<C: AnnotationCollection + Send + Sync + 'static> {
     name: String,
     column: C::ColumnKey,
@@ -641,8 +638,6 @@ enum OverlayFeedback {
 
 type OverlayResult = std::result::Result<(), OverlayFeedback>;
 
-// pub struct OverlayLabelSetCreator<T: ColumnKey + 'static> {
-// pub struct OverlayLabelSetCreator<T: ColumnKey> {
 pub struct OverlayLabelSetCreator<C>
 where
     C: AnnotationCollection + Send + Sync + 'static,

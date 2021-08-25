@@ -206,7 +206,7 @@ impl AppViewState {
         let node_list =
             ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
-        let path_details_state = PathDetails::default();
+        let path_details_state = PathDetails::new(reactor);
         let path_id_cell =
             path_details_state.path_details.path_id_cell().clone();
         let path_details =
@@ -956,7 +956,7 @@ impl Gui {
 
     pub fn apply_input(
         &mut self,
-        app_msg_tx: &crossbeam::channel::Sender<crate::app::AppMsg>,
+        _app_msg_tx: &crossbeam::channel::Sender<crate::app::AppMsg>,
         input: SystemInput<GuiInput>,
     ) {
         use GuiInput as In;

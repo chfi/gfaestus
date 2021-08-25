@@ -1,9 +1,8 @@
 use std::io::Read;
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use crossbeam::atomic::AtomicCell;
 
-use rhai::EvalAltResult;
 use rustc_hash::FxHashMap;
 
 use anyhow::Result;
@@ -157,6 +156,7 @@ pub enum ScriptMsg {
     Running(String),
 }
 
+#[allow(dead_code)]
 impl ScriptMsg {
     fn io_error(err: &str) -> Self {
         ScriptMsg::IOError(err.to_string())

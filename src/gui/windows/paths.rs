@@ -18,7 +18,11 @@ use bstr::ByteSlice;
 
 use rustc_hash::FxHashSet;
 
-use crate::{asynchronous::AsyncResult, gui::util::grid_row_label};
+use crate::{
+    asynchronous::AsyncResult,
+    gui::util::grid_row_label,
+    reactor::{Host, Outbox, Reactor},
+};
 
 use crate::graph_query::{GraphQuery, GraphQueryWorker};
 use crate::{
@@ -114,22 +118,18 @@ impl PathListSlot {
 
 pub struct PathDetails {
     pub(crate) path_details: PathListSlot,
-
     pub(crate) step_list: StepList,
-}
-
-impl std::default::Default for PathDetails {
-    fn default() -> Self {
-        Self {
-            path_details: Default::default(),
-
-            step_list: StepList::new(15),
-        }
-    }
 }
 
 impl PathDetails {
     const ID: &'static str = "path_details_window";
+
+    pub fn new(reactor: &mut Reactor) -> Self {
+        Self {
+            path_details: Default::default(),
+            step_list: StepList::new(reactor, 15),
+        }
+    }
 
     pub fn ui(
         &mut self,
@@ -145,9 +145,15 @@ impl PathDetails {
 
         if let Some(path) = self.path_details.path_id.load() {
             if self.step_list.fetched_path_id != Some(path) {
+                self.step_list.steps_host.call(path).unwrap();
+                self.step_list.fetched_path_id = Some(path);
+                self.step_list.update_filter = true;
+
+                /*
                 self.step_list.async_path_update(graph_query_worker, path);
                 self.step_list.fetched_path_id = Some(path);
                 self.step_list.update_filter = true;
+                */
             }
         }
 
@@ -457,12 +463,25 @@ impl StepRange {
     }
 }
 
+enum StepsMsg {
+    Running,
+    Error(String),
+}
+
+type StepsResult = std::result::Result<
+    (PathId, usize, Vec<(Handle, StepPtr, usize)>),
+    StepsMsg,
+>;
+
 pub struct StepList {
     fetched_path_id: Option<PathId>,
 
     page: usize,
     page_size: usize,
     page_count: usize,
+
+    steps_host: Host<PathId, StepsResult>,
+    latest_result: Option<StepsResult>,
 
     step_query:
         Option<AsyncResult<(PathId, usize, Vec<(Handle, StepPtr, usize)>)>>,
@@ -473,14 +492,47 @@ pub struct StepList {
 }
 
 impl StepList {
-    fn new(page_size: usize) -> Self {
+    fn new(reactor: &mut Reactor, page_size: usize) -> Self {
+        let graph_query = reactor.graph_query.clone();
+
+        let steps_host = reactor.create_host(
+            move |outbox: &Outbox<StepsResult>, path: PathId| {
+                println!("in steps_host");
+                dbg!();
+                let graph = graph_query.graph();
+                let path_pos = graph_query.path_positions();
+
+                if let Some(steps) = graph.path_steps(path) {
+                    dbg!();
+                    let base_len = path_pos.path_base_len(path).unwrap();
+
+                    let steps_vec = steps
+                        .filter_map(|step| {
+                            let handle = step.handle();
+                            let (step_ptr, _) = step;
+                            let base =
+                                path_pos.path_step_position(path, step_ptr)?;
+                            Some((handle, step_ptr, base))
+                        })
+                        .collect::<Vec<_>>();
+
+                    Ok((path, base_len, steps_vec))
+                } else {
+                    dbg!();
+                    Err(StepsMsg::Error("Path not found".to_string()))
+                }
+            },
+        );
+
         Self {
             fetched_path_id: None,
 
-            // steps: Vec::new(),
             page: 0,
             page_size,
             page_count: 0,
+
+            steps_host,
+            latest_result: None,
 
             step_query: None,
 
@@ -530,6 +582,26 @@ impl StepList {
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
     ) -> egui::InnerResponse<()> {
+        if let Some(result) = self.steps_host.take() {
+            println!("steps_host.take()");
+            match &result {
+                Ok((path, path_base_len, steps)) => {
+                    if self.update_filter {
+                        self.range_filter =
+                            StepRange::from_steps(*path_base_len, steps);
+
+                        self.update_filter = false;
+                    }
+                }
+                Err(err) => {
+                    //
+                }
+            }
+
+            self.latest_result = Some(result);
+        }
+
+        /*
         if let Some(query) = self.step_query.as_mut() {
             query.move_result_if_ready();
         }
@@ -548,6 +620,19 @@ impl StepList {
         } else {
             self.range_filter = StepRange::default();
 
+            &[]
+        };
+        */
+
+        let steps = if let Some(Ok((_, len, steps))) = &self.latest_result {
+            if self.update_filter {
+                self.range_filter = StepRange::from_steps(*len, steps);
+
+                self.update_filter = false;
+            }
+            steps.as_slice()
+        } else {
+            self.range_filter = StepRange::default();
             &[]
         };
 
@@ -636,6 +721,9 @@ impl StepList {
         let steps = {
             let from = self.range_filter.from_ix;
             let to = self.range_filter.to_ix;
+
+            let from = from.min(to);
+            let to = to.min(steps.len());
 
             &steps[from..to]
         };
