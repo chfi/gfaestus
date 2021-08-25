@@ -48,7 +48,16 @@ where
     T: Send + Sync + 'static,
 {
     pub fn call(&self, input: I) -> anyhow::Result<()> {
-        self.input_send.send(input)?;
+        println!("Calling host");
+        println!("input_send.is_full: {}", self.input_send.is_full());
+        println!("input_send.is_empty: {}", self.input_send.is_empty());
+        let result = self.input_send.send(input);
+
+        match result {
+            Ok(_) => println!("call succeeded"),
+            Err(err) => println!("call error: {:?}", err),
+        }
+
         Ok(())
     }
 
@@ -68,9 +77,12 @@ where
 {
     fn process(&self) -> anyhow::Result<()> {
         loop {
+            log::warn!("in process, before recv()");
             let input = self.input_recv.recv()?;
             let func = &self.func;
+            log::warn!("in process, calling func()");
             let output = func(&self.outbox, input);
+            log::warn!("in process, setting output");
             self.outbox.insert_blocking(output);
         }
     }
@@ -106,8 +118,10 @@ impl<T> Inbox<T> {
 impl<T> Outbox<T> {
     /// Block the thread and replace the value with
     pub fn insert_blocking(&self, value: T) {
+        // log::warn!("enter guard");
         let mut guard = self.value.lock();
         *guard = Some(value);
+        // log::warn!("leave guard");
     }
 
     pub fn try_insert(&self, value: T) -> Result<(), T> {

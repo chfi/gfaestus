@@ -56,7 +56,16 @@ impl Reactor {
 
         self.thread_pool
             .spawn(async move {
-                processor.process().unwrap();
+                eprintln!("spawning reactor task");
+                log::debug!("spawning reactor task");
+                let result = processor.process();
+
+                match &result {
+                    Ok(_) => println!("  - success"),
+                    Err(err) => println!("  - error: {:?}", err),
+                }
+
+                result.unwrap()
             })
             .expect("Error when spawning reactor task");
 
