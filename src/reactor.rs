@@ -52,20 +52,16 @@ impl Reactor {
 
         let (host, proc) = create_host_pair(boxed_func);
 
-        let processor = Box::new(proc) as Box<dyn ProcTrait>;
+        let mut processor = Box::new(proc) as Box<dyn ProcTrait>;
 
         self.thread_pool
             .spawn(async move {
                 eprintln!("spawning reactor task");
                 log::debug!("spawning reactor task");
-                let result = processor.process();
 
-                match &result {
-                    Ok(_) => println!("  - success"),
-                    Err(err) => println!("  - error: {:?}", err),
+                loop {
+                    let _result = processor.process().await;
                 }
-
-                result.unwrap()
             })
             .expect("Error when spawning reactor task");
 

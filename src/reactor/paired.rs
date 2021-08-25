@@ -1,6 +1,9 @@
-use crossbeam::channel;
+use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use std::sync::Arc;
+
+use futures::channel::mpsc;
+use futures::prelude::*;
 
 pub fn create_host_pair<I, T>(
     func: Box<dyn Fn(&Outbox<T>, I) -> T + Send + Sync + 'static>,
@@ -9,7 +12,7 @@ where
     I: Send + Sync + 'static,
     T: Send + Sync + 'static,
 {
-    let (input_send, input_recv) = channel::unbounded();
+    let (input_send, input_recv) = mpsc::channel(8);
 
     let (outbox, inbox) = create_box_pair::<T>();
 
@@ -29,7 +32,7 @@ where
     T: Send + Sync + 'static,
 {
     inbox: Inbox<T>,
-    input_send: channel::Sender<I>,
+    input_send: mpsc::Sender<I>,
 }
 
 pub struct Processor<I, T>
@@ -38,7 +41,7 @@ where
     T: Send + Sync + 'static,
 {
     outbox: Outbox<T>,
-    input_recv: channel::Receiver<I>,
+    input_recv: mpsc::Receiver<I>,
     func: Box<dyn Fn(&Outbox<T>, I) -> T + Send + Sync + 'static>,
 }
 
@@ -47,16 +50,10 @@ where
     I: Send + Sync + 'static,
     T: Send + Sync + 'static,
 {
-    pub fn call(&self, input: I) -> anyhow::Result<()> {
-        println!("Calling host");
-        println!("input_send.is_full: {}", self.input_send.is_full());
-        println!("input_send.is_empty: {}", self.input_send.is_empty());
-        let result = self.input_send.send(input);
-
-        match result {
-            Ok(_) => println!("call succeeded"),
-            Err(err) => println!("call error: {:?}", err),
-        }
+    pub fn call(&mut self, input: I) -> anyhow::Result<()> {
+        futures::executor::block_on(async {
+            self.input_send.send(input).await
+        })?;
 
         Ok(())
     }
@@ -67,7 +64,7 @@ where
 }
 
 pub trait ProcTrait: Send + Sync + 'static {
-    fn process(&self) -> anyhow::Result<()>;
+    fn process(&mut self) -> BoxFuture<()>;
 }
 
 impl<I, T> ProcTrait for Processor<I, T>
@@ -75,16 +72,15 @@ where
     I: Send + Sync + 'static,
     T: Send + Sync + 'static,
 {
-    fn process(&self) -> anyhow::Result<()> {
-        loop {
-            log::warn!("in process, before recv()");
-            let input = self.input_recv.recv()?;
+    fn process(&mut self) -> BoxFuture<()> {
+        let future = async move {
+            let input = self.input_recv.next().await.unwrap();
             let func = &self.func;
-            log::warn!("in process, calling func()");
             let output = func(&self.outbox, input);
-            log::warn!("in process, setting output");
             self.outbox.insert_blocking(output);
-        }
+        };
+
+        future.boxed()
     }
 }
 

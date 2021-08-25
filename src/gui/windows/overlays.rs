@@ -320,7 +320,7 @@ impl OverlayCreator {
                 let file_picker_open = &mut self.file_picker_open;
                 let latest_result = &self.latest_result;
 
-                let script_results = &self.script_results;
+                let script_results = &mut self.script_results;
 
                 let _name_box = ui.horizontal(|ui| {
                     ui.label("Overlay name");
@@ -355,10 +355,7 @@ impl OverlayCreator {
                         egui::Button::new("Run script").enabled(!is_running),
                     );
 
-                    if run_script.clicked()
-                        && (latest_result.is_none()
-                            || matches!(latest_result, Some(Err(_))))
-                    {
+                    if run_script.clicked() && !is_running {
                         file_picker.reset_selection();
                         let path = PathBuf::from(path_str.as_str());
 
