@@ -66,6 +66,7 @@ impl NodePipelines {
         )?;
 
         let overlay_pipelines = OverlayPipelines::new(
+            app,
             device,
             msaa_samples,
             render_pass,
@@ -697,6 +698,8 @@ impl NodeIdBuffer {
         let (buffer, memory, size) =
             app.create_buffer(img_size, usage, mem_props)?;
 
+        app.set_debug_object_name(buffer, "Node ID Buffer")?;
+
         Ok(Self {
             buffer,
             memory,
@@ -742,6 +745,8 @@ impl NodeIdBuffer {
 
         let (buffer, memory, size) =
             app.create_buffer(img_size, usage, mem_props)?;
+
+        app.set_debug_object_name(buffer, "Node ID Buffer")?;
 
         self.buffer = buffer;
         self.memory = memory;
@@ -823,6 +828,8 @@ impl NodeVertices {
                 &vertices,
             )?;
 
+        app.set_debug_object_name(buffer, "Node Vertex Buffer")?;
+
         self.vertex_count = vertices.len();
 
         self.vertex_buffer = buffer;
@@ -861,6 +868,11 @@ impl NodeVertices {
         let (staging_buf, staging_alloc, staging_alloc_info) = app
             .allocator
             .create_buffer(&staging_buffer_info, &staging_create_info)?;
+
+        app.set_debug_object_name(
+            staging_buf,
+            "Node Position Download Staging Buffer",
+        )?;
 
         GfaestusVk::copy_buffer(
             app.vk_context().device(),

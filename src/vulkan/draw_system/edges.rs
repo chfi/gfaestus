@@ -553,53 +553,7 @@ impl EdgeIndices {
                 &edges,
             )?;
 
-        Ok(Self {
-            buffer,
-            allocation,
-            allocation_info,
-
-            edge_count,
-        })
-    }
-
-    fn new(app: &GfaestusVk, graph: &PackedGraph) -> Result<Self> {
-        let edge_count = graph.edge_count();
-
-        let mut edges: Vec<u32> = Vec::with_capacity(edge_count * 2);
-
-        for Edge(left, right) in graph.edges() {
-            let left_l = (left.id().0 - 1) * 2;
-            let left_r = left_l + 1;
-
-            let right_l = (right.id().0 - 1) * 2;
-            let right_r = right_l + 1;
-
-            let (left_ix, right_ix) =
-                match (left.is_reverse(), right.is_reverse()) {
-                    (false, false) => (left_r, right_l),
-                    (true, false) => (left_l, right_l),
-                    (false, true) => (left_r, right_r),
-                    (true, true) => (left_l, right_r),
-                };
-
-            edges.push(left_ix as u32);
-            edges.push(right_ix as u32);
-        }
-
-        println!("added {} edges", edges.len());
-
-        let usage = vk::BufferUsageFlags::TRANSFER_DST
-            | vk::BufferUsageFlags::INDEX_BUFFER;
-
-        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
-
-        let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<u32, _>(
-                usage,
-                memory_usage,
-                false,
-                &edges,
-            )?;
+        app.set_debug_object_name(buffer, "Edge Indices Buffer")?;
 
         Ok(Self {
             buffer,
@@ -710,6 +664,8 @@ impl EdgesUBOBuffer {
                 true,
                 &data,
             )?;
+
+        app.set_debug_object_name(buffer, "Edges UBO")?;
 
         let result = Self {
             ubo,

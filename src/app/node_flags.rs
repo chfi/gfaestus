@@ -33,6 +33,8 @@ impl SelectionBuffer {
         let (buffer, memory, size) =
             app.create_buffer(size, usage, mem_props)?;
 
+        app.set_debug_object_name(buffer, "Node Selection Flag Buffer")?;
+
         let latest_selection = FxHashSet::default();
 
         Ok(Self {

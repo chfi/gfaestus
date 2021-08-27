@@ -21,18 +21,21 @@ pub struct OverlayPipelines {
 
 impl OverlayPipelines {
     pub(super) fn new(
+        app: &GfaestusVk,
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let pipeline_rgb = OverlayPipelineRGB::new(
+            app,
             device,
             msaa_samples,
             render_pass,
             selection_set_layout,
         )?;
         let pipeline_value = OverlayPipelineValue::new(
+            app,
             device,
             msaa_samples,
             render_pass,
@@ -293,6 +296,7 @@ impl OverlayPipelineValue {
     }
 
     pub(super) fn new(
+        app: &GfaestusVk,
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
@@ -343,6 +347,18 @@ impl OverlayPipelineValue {
         }?;
 
         let sampler = GradientTexture::create_sampler(device)?;
+
+        app.set_debug_object_name(pipeline, "Node Overlay Value Pipeline")?;
+        app.set_debug_object_name(
+            descriptor_pool,
+            "Node Overlay Value - Descriptor Pool",
+        )?;
+        app.set_debug_object_name(
+            descriptor_sets[0],
+            "Node Overlay Value - Descriptor Set",
+        )?;
+
+        app.set_debug_object_name(sampler, "Node Overlay Value - Sampler")?;
 
         Ok(Self {
             descriptor_pool,
@@ -431,6 +447,7 @@ impl OverlayPipelineRGB {
     }
 
     pub(super) fn new(
+        app: &GfaestusVk,
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
@@ -474,6 +491,16 @@ impl OverlayPipelineRGB {
 
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
+
+        app.set_debug_object_name(pipeline, "Node Overlay RGB Pipeline")?;
+        app.set_debug_object_name(
+            descriptor_pool,
+            "Node Overlay RGB - Descriptor Pool",
+        )?;
+        app.set_debug_object_name(
+            descriptor_sets[0],
+            "Node Overlay RGB - Descriptor Set",
+        )?;
 
         Ok(Self {
             descriptor_pool,
@@ -718,6 +745,9 @@ impl NodeOverlayValue {
         let (buffer, memory, size) =
             app.create_buffer(size, usage, mem_props)?;
 
+        let obj_name = format!("Overlay (Value) - {}", name);
+        app.set_debug_object_name(buffer, &obj_name)?;
+
         Ok(Self {
             name: name.into(),
 
@@ -901,6 +931,9 @@ impl NodeOverlay {
 
         let (buffer, memory, size) =
             app.create_buffer(size, usage, mem_props)?;
+
+        let obj_name = format!("Overlay (RGB) - {}", name);
+        app.set_debug_object_name(buffer, &obj_name)?;
 
         let bufview_info = vk::BufferViewCreateInfo::builder()
             .buffer(buffer)

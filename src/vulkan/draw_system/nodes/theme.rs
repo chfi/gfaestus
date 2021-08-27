@@ -151,6 +151,16 @@ impl NodeThemePipeline {
 
         let themes = FxHashMap::default();
 
+        app.set_debug_object_name(pipeline, "Node Theme Pipeline")?;
+        app.set_debug_object_name(
+            descriptor_pool,
+            "Node Theme - Descriptor Pool",
+        )?;
+        app.set_debug_object_name(
+            descriptor_sets[0],
+            "Node Theme - Descriptor Set",
+        )?;
+
         Ok(Self {
             descriptor_pool,
             descriptor_set_layout: desc_set_layout,
@@ -207,6 +217,11 @@ impl NodeThemePipeline {
         if let Some(old_theme) = self.themes.get_mut(&theme_id) {
             old_theme.destroy(app.vk_context().device());
         }
+
+        app.set_debug_object_name(
+            theme.texture.image,
+            &format!("Theme {} - Image", theme_id),
+        )?;
 
         self.themes.insert(theme_id, theme);
 

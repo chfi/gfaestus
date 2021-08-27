@@ -661,6 +661,9 @@ impl GuiVertices {
                 &indices,
             )?;
 
+        app.set_debug_object_name(vx_buf, "GUI Vertex Buffer")?;
+        app.set_debug_object_name(ix_buf, "GUI Index Buffer")?;
+
         self.vertex_buffer = vx_buf;
         self.vertex_alloc = vx_alloc;
         self.vertex_alloc_info = Some(vx_alloc_info);
