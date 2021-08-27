@@ -5,6 +5,8 @@ use std::{
     os::raw::{c_char, c_void},
 };
 
+use ash::extensions::ext::DebugUtils;
+
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -14,6 +16,77 @@ pub const ENABLE_VALIDATION_LAYERS: bool = true;
 pub const ENABLE_VALIDATION_LAYERS: bool = false;
 
 const REQUIRED_LAYERS: [&str; 1] = ["VK_LAYER_KHRONOS_validation"];
+
+unsafe extern "system" fn vulkan_debug_utils_callback(
+    msg_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
+    user_data: *mut c_void,
+) -> u32 {
+    use vk::DebugUtilsMessageSeverityFlagsEXT as MsgSeverity;
+    use vk::DebugUtilsMessageTypeFlagsEXT as MsgType;
+
+    // might be better to use the ordering like this, but i'll fix
+    // that later if it's worthwhile
+
+    // if msg_severity <= MsgSeverity::VERBOSE {
+    // } else if msg_severity <= MsgSeverity::INFO {
+    // } else if msg_severity <= MsgSeverity::WARNING {
+    // } else if msg_severity <= MsgSeverity::ERROR {
+    // }
+
+    let p_message_id = (*callback_data).p_message_id_name as *const c_char;
+    let p_message = (*callback_data).p_message as *const c_char;
+
+    match msg_severity {
+        MsgSeverity::VERBOSE => {
+            debug!(
+                "{:?} - {:?} - {:?}",
+                CStr::from_ptr(p_message_id),
+                msg_type,
+                CStr::from_ptr(p_message)
+            );
+        }
+        MsgSeverity::INFO => {
+            info!(
+                "{:?} - {:?} - {:?}",
+                CStr::from_ptr(p_message_id),
+                msg_type,
+                CStr::from_ptr(p_message)
+            );
+        }
+        MsgSeverity::WARNING => {
+            warn!(
+                "{:?} - {:?} - {:?}",
+                CStr::from_ptr(p_message_id),
+                msg_type,
+                CStr::from_ptr(p_message)
+            );
+        }
+        MsgSeverity::ERROR => {
+            error!(
+                "{:?} - {:?} - {:?}",
+                CStr::from_ptr(p_message_id),
+                msg_type,
+                CStr::from_ptr(p_message)
+            );
+        }
+        _ => {
+            error!(
+                "{:?} - {:?} - {:?}",
+                CStr::from_ptr(p_message_id),
+                msg_type,
+                CStr::from_ptr(p_message)
+            );
+        }
+    }
+
+    //
+    // match msg_severity {
+    // }
+
+    vk::FALSE
+}
 
 unsafe extern "system" fn vulkan_debug_callback(
     flag: vk::DebugReportFlagsEXT,
