@@ -206,10 +206,6 @@ impl OverlayCreator {
 
             reactor.create_host(
                 move |outbox: &Outbox<ScriptResult>, input: ScriptInput| {
-                    dbg!();
-                    log::warn!("in script host");
-                    dbg!();
-
                     let running_msg = |msg: &str| {
                         outbox.insert_blocking(Err(ScriptMsg::running(msg)));
                     };
