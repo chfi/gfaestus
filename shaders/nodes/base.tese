@@ -18,7 +18,26 @@ void main() {
   float u = gl_TessCoord.x;
   float v = gl_TessCoord.y;
 
-  gl_Position = (u * gl_in[0].gl_Position) + (1.0 - u) * gl_in[1].gl_Position;
+  vec2 p = gl_in[0].gl_Position;
+  vec2 q = gl_in[1].gl_Position;
+
+  vec2 diff = q - p;
+
+  vec2 n_diff = normalize(diff);
+  vec2 rn_diff = vec2(-n_diff.y, n_diff.x);
+
+  vec2 len = (u * p) + (1.0 - u) * q;
+
+  float v_ = mix(-1.0, 1.0, v);
+
+  vec2 offset = rn_diff * v_ * 10.0;
+
+  vec2 pos = len + vec2(0.0, 0.1 * (v - 0.5));
+
+  gl_Position = pos;
+  // gl_Position = len * offset;
+
+  // gl_Position = (u * gl_in[0].gl_Position) + (1.0 - u) * gl_in[1].gl_Position;
 
   node_id = in_node_id[0];
 }
