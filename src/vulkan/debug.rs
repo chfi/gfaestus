@@ -40,21 +40,18 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
 
     let _queue_labels = {
         let queue_label_count = (*callback_data).queue_label_count as usize;
-        dbg!(queue_label_count);
         let ptr = (*callback_data).p_queue_labels;
         std::slice::from_raw_parts(ptr, queue_label_count)
     };
 
     let cmd_buf_labels = {
         let cmd_buf_label_count = (*callback_data).cmd_buf_label_count as usize;
-        dbg!(cmd_buf_label_count);
         let ptr = (*callback_data).p_cmd_buf_labels;
         std::slice::from_raw_parts(ptr, cmd_buf_label_count)
     };
 
     let objects = {
         let object_count = (*callback_data).object_count as usize;
-        dbg!(object_count);
         let ptr = (*callback_data).p_objects;
         std::slice::from_raw_parts(ptr, object_count)
     };
@@ -74,7 +71,6 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     let mut message_string =
         format!("{} - {:?} - {}", p_msg_id_str, msg_type, p_msg_str,);
 
-    dbg!();
     if !cmd_buf_labels.is_empty() {
         message_string.push_str("\n  Command buffers: ");
         for cmd_buf in cmd_buf_labels {
@@ -89,7 +85,6 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         message_string.push_str("\n");
     }
 
-    dbg!();
     if !objects.is_empty() {
         message_string.push_str("\n  Objects: ");
         for obj in objects {
@@ -108,49 +103,21 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         }
     }
 
-    dbg!();
-
     match msg_severity {
         MsgSeverity::VERBOSE => {
             debug!("{}", message_string);
-            // debug!(
-            //     "{:?} - {:?} - {:?}",
-            //     CStr::from_ptr(p_message_id),
-            //     msg_type,
-            //     CStr::from_ptr(p_message)
-            // );
         }
         MsgSeverity::INFO => {
             info!("{}", message_string);
-            //     "{:?} - {:?} - {:?}",
-            //     CStr::from_ptr(p_message_id),
-            //     msg_type,
-            //     CStr::from_ptr(p_message)
-            // );
         }
         MsgSeverity::WARNING => {
             warn!("{}", message_string);
-            //     "{:?} - {:?} - {:?}",
-            //     CStr::from_ptr(p_message_id),
-            //     msg_type,
-            //     CStr::from_ptr(p_message)
-            // );
         }
         MsgSeverity::ERROR => {
             error!("{}", message_string);
-            //     "{:?} - {:?} - {:?}",
-            //     CStr::from_ptr(p_message_id),
-            //     msg_type,
-            //     CStr::from_ptr(p_message)
-            // );
         }
         _ => {
             error!("{}", message_string);
-            //     "{:?} - {:?} - {:?}",
-            //     CStr::from_ptr(p_message_id),
-            //     msg_type,
-            //     CStr::from_ptr(p_message)
-            // );
         }
     }
 

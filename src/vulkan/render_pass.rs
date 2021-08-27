@@ -2,8 +2,8 @@ use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
 use super::context::VkContext;
-use super::texture::*;
 use super::SwapchainProperties;
+use super::{texture::*, GfaestusVk};
 
 use anyhow::Result;
 
@@ -24,6 +24,22 @@ pub struct Framebuffers {
 }
 
 impl Framebuffers {
+    pub fn set_vk_debug_names(&self, app: &GfaestusVk) -> Result<()> {
+        app.set_debug_object_name(self.nodes, "Node Framebuffer")?;
+        app.set_debug_object_name(self.edges, "Edge Framebuffer")?;
+        app.set_debug_object_name(
+            self.selection_edge_detect,
+            "Selection Border Edge Framebuffer",
+        )?;
+        app.set_debug_object_name(
+            self.selection_blur,
+            "Selection Border Blur Framebuffer",
+        )?;
+        app.set_debug_object_name(self.gui, "GUI Framebuffer")?;
+
+        Ok(())
+    }
+
     pub fn destroy(&self, device: &Device) {
         unsafe {
             device.destroy_framebuffer(self.nodes, None);
@@ -237,6 +253,28 @@ impl NodeAttachments {
             command_pool,
             queue,
             swapchain_props,
+        )?;
+
+        Ok(())
+    }
+
+    pub fn set_vk_debug_names(&self, app: &GfaestusVk) -> Result<()> {
+        app.set_debug_object_name(self.color.image, "Node Attch. Color")?;
+        app.set_debug_object_name(
+            self.resolve.image,
+            "Node Attch. Color Resolve",
+        )?;
+
+        app.set_debug_object_name(self.id_color.image, "Node Attch. ID Image")?;
+        app.set_debug_object_name(
+            self.id_resolve.image,
+            "Node Attch. ID Resolve",
+        )?;
+
+        app.set_debug_object_name(self.mask.image, "Node Attch. Mask Color")?;
+        app.set_debug_object_name(
+            self.mask_resolve.image,
+            "Node Attch. Mask Resolve",
         )?;
 
         Ok(())
@@ -551,6 +589,22 @@ impl RenderPasses {
             selection_blur,
             gui,
         })
+    }
+
+    pub fn set_vk_debug_names(&self, app: &GfaestusVk) -> Result<()> {
+        app.set_debug_object_name(self.nodes, "Node Render Pass")?;
+        app.set_debug_object_name(self.edges, "Edge Render Pass")?;
+        app.set_debug_object_name(
+            self.selection_edge_detect,
+            "Selection Border Edge Detect Render Pass",
+        )?;
+        app.set_debug_object_name(
+            self.selection_blur,
+            "Selection Border Blur Render Pass",
+        )?;
+        app.set_debug_object_name(self.gui, "GUI Render Pass")?;
+
+        Ok(())
     }
 
     pub fn recreate(

@@ -260,7 +260,7 @@ impl GfaestusVk {
             })
             .collect::<Vec<_>>();
 
-        Ok(Self {
+        let result = Self {
             vk_context,
 
             allocator,
@@ -289,7 +289,22 @@ impl GfaestusVk {
             transient_command_pool,
 
             in_flight_frames,
-        })
+        };
+
+        result.render_passes.set_vk_debug_names(&result)?;
+
+        for fb in result.framebuffers.iter() {
+            fb.set_vk_debug_names(&result)?;
+        }
+
+        result.node_attachments.set_vk_debug_names(&result)?;
+
+        result.set_debug_object_name(
+            result.offscreen_attachment.color.image,
+            "Offscreen Color Attachment",
+        )?;
+
+        Ok(result)
     }
 
     pub fn vk_context(&self) -> &VkContext {
@@ -1223,6 +1238,8 @@ impl GfaestusVk {
         let render_passes =
             RenderPasses::create(device, swapchain_props, self.msaa_samples)?;
 
+        render_passes.set_vk_debug_names(self)?;
+
         let node_attachments = NodeAttachments::new(
             self.vk_context(),
             self.transient_command_pool,
@@ -1231,11 +1248,18 @@ impl GfaestusVk {
             self.msaa_samples,
         )?;
 
+        node_attachments.set_vk_debug_names(self)?;
+
         let offscreen_attachment = OffscreenAttachment::new(
             self.vk_context(),
             self.transient_command_pool,
             self.graphics_queue,
             swapchain_props,
+        )?;
+
+        self.set_debug_object_name(
+            offscreen_attachment.color.image,
+            "Offscreen Color Attachment",
         )?;
 
         let framebuffers = swapchain_image_views
@@ -1252,6 +1276,10 @@ impl GfaestusVk {
                     .unwrap()
             })
             .collect::<Vec<_>>();
+
+        for fb in framebuffers.iter() {
+            fb.set_vk_debug_names(self)?;
+        }
 
         // TODO recreate render pass, framebuffers, etc.
 
