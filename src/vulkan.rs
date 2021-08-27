@@ -135,7 +135,7 @@ pub struct GfaestusVk {
     pub transient_command_pool: vk::CommandPool,
     in_flight_frames: InFlightFrames,
 
-    vk_context: VkContext,
+    pub vk_context: VkContext,
 }
 
 impl GfaestusVk {

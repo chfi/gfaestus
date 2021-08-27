@@ -780,14 +780,25 @@ fn main() {
 
                 let current_view = app.shared_state().view();
 
-
                 let edges_enabled = app.shared_state().edges_enabled();
+
+                let debug_utils = gfaestus.vk_context().debug_utils().map(|u| u.to_owned());
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
 
 
+                        if let Some(utils) = &debug_utils {
+                            use std::ffi::CString;
+                            let name = CString::new(&b"Image transitions"[..]).unwrap();
+                            let label = vk::DebugUtilsLabelEXT::builder()
+                                .label_name(&name)
+                                .build();
+                            unsafe {
+                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+                            }
+                        }
 
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
@@ -821,6 +832,24 @@ fn main() {
                             );
                         }
 
+
+                        if let Some(utils) = &debug_utils {
+                            unsafe {
+                                utils.cmd_end_debug_utils_label(cmd_buf);
+                            }
+                        }
+
+                        if let Some(utils) = &debug_utils {
+                            use std::ffi::CString;
+                            let name = CString::new(&b"Nodes"[..]).unwrap();
+                            let label = vk::DebugUtilsLabelEXT::builder()
+                                .label_name(&name)
+                                .build();
+                            unsafe {
+                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+                            }
+                        }
+
                         if let Some(overlay) = overlay {
 
                             let gradient_name = app.shared_state().overlay_state().gradient();
@@ -850,7 +879,24 @@ fn main() {
                                 .unwrap();
                         }
 
+                        if let Some(utils) = &debug_utils {
+                            unsafe {
+                                utils.cmd_end_debug_utils_label(cmd_buf);
+                            }
+                        }
+
                         if edges_enabled {
+
+                            if let Some(utils) = &debug_utils {
+                                use std::ffi::CString;
+                                let name = CString::new(&b"Edges"[..]).unwrap();
+                                let label = vk::DebugUtilsLabelEXT::builder()
+                                    .label_name(&name)
+                                    .build();
+                                unsafe {
+                                    utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+                                }
+                            }
 
                             /*
                             edge_pipeline.preprocess_cmd(
@@ -873,6 +919,13 @@ fn main() {
                                 current_view,
                                 Point::ZERO,
                             ).unwrap();
+
+
+                            if let Some(utils) = &debug_utils {
+                                unsafe {
+                                    utils.cmd_end_debug_utils_label(cmd_buf);
+                                }
+                            }
                         }
 
 
@@ -906,6 +959,17 @@ fn main() {
                                 &buffer_memory_barriers,
                                 &image_memory_barriers,
                             );
+                        }
+
+                        if let Some(utils) = &debug_utils {
+                            use std::ffi::CString;
+                            let name = CString::new(&b"Node selection border"[..]).unwrap();
+                            let label = vk::DebugUtilsLabelEXT::builder()
+                                .label_name(&name)
+                                .build();
+                            unsafe {
+                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+                            }
                         }
 
                         selection_edge
@@ -961,6 +1025,23 @@ fn main() {
                             )
                             .unwrap();
 
+                        if let Some(utils) = &debug_utils {
+                            unsafe {
+                                utils.cmd_end_debug_utils_label(cmd_buf);
+                            }
+                        }
+
+                        if let Some(utils) = &debug_utils {
+                            use std::ffi::CString;
+                            let name = CString::new(&b"GUI"[..]).unwrap();
+                            let label = vk::DebugUtilsLabelEXT::builder()
+                                .label_name(&name)
+                                .build();
+                            unsafe {
+                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+                            }
+                        }
+
                         gui.draw(
                             cmd_buf,
                             gui_pass,
@@ -970,6 +1051,13 @@ fn main() {
                             &gradients,
                         )
                         .unwrap();
+
+                        if let Some(utils) = &debug_utils {
+                            unsafe {
+                                utils.cmd_end_debug_utils_label(cmd_buf);
+                            }
+                        }
+
                     };
 
                 dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
