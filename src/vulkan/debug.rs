@@ -21,7 +21,7 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     msg_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
     msg_type: vk::DebugUtilsMessageTypeFlagsEXT,
     callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
-    user_data: *mut c_void,
+    _user_data: *mut c_void,
 ) -> u32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as MsgSeverity;
     use vk::DebugUtilsMessageTypeFlagsEXT as MsgType;
@@ -38,46 +38,110 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     let p_message_id = (*callback_data).p_message_id_name as *const c_char;
     let p_message = (*callback_data).p_message as *const c_char;
 
+    let queue_labels = {
+        let queue_label_count = (*callback_data).queue_label_count as usize;
+        dbg!(queue_label_count);
+        let ptr = (*callback_data).p_queue_labels;
+        std::slice::from_raw_parts(ptr, queue_label_count)
+    };
+
+    let cmd_buf_labels = {
+        let cmd_buf_label_count = (*callback_data).cmd_buf_label_count as usize;
+        dbg!(cmd_buf_label_count);
+        let ptr = (*callback_data).p_cmd_buf_labels;
+        std::slice::from_raw_parts(ptr, cmd_buf_label_count)
+    };
+
+    let objects = {
+        let object_count = (*callback_data).object_count as usize;
+        dbg!(object_count);
+        let ptr = (*callback_data).p_objects;
+        std::slice::from_raw_parts(ptr, object_count)
+    };
+
+    let mut message_string = format!(
+        "{:?} - {:?} - {:?}",
+        CStr::from_ptr(p_message_id),
+        msg_type,
+        CStr::from_ptr(p_message)
+    );
+
+    if !cmd_buf_labels.is_empty() {
+        message_string.push_str("\n  Command buffers: ");
+        for cmd_buf in cmd_buf_labels {
+            if !cmd_buf.p_label_name.is_null() {
+                message_string.push_str(&format!(
+                    "{:?}",
+                    CStr::from_ptr(cmd_buf.p_label_name)
+                ));
+            }
+        }
+
+        message_string.push_str("\n");
+    }
+
+    dbg!();
+    if !objects.is_empty() {
+        message_string.push_str("\n  Objects: ");
+        for obj in objects {
+            if obj.p_object_name.is_null() {
+                message_string.push_str(&format!(
+                    "   {:?} - no name\n",
+                    obj.object_handle,
+                ));
+            } else {
+                message_string.push_str(&format!(
+                    "   {:?} - {:?}\n",
+                    obj.object_handle,
+                    CStr::from_ptr(obj.p_object_name),
+                ));
+            }
+        }
+    }
+
+    dbg!();
+
     match msg_severity {
         MsgSeverity::VERBOSE => {
-            debug!(
-                "{:?} - {:?} - {:?}",
-                CStr::from_ptr(p_message_id),
-                msg_type,
-                CStr::from_ptr(p_message)
-            );
+            debug!("{}", message_string);
+            // debug!(
+            //     "{:?} - {:?} - {:?}",
+            //     CStr::from_ptr(p_message_id),
+            //     msg_type,
+            //     CStr::from_ptr(p_message)
+            // );
         }
         MsgSeverity::INFO => {
-            info!(
-                "{:?} - {:?} - {:?}",
-                CStr::from_ptr(p_message_id),
-                msg_type,
-                CStr::from_ptr(p_message)
-            );
+            info!("{}", message_string);
+            //     "{:?} - {:?} - {:?}",
+            //     CStr::from_ptr(p_message_id),
+            //     msg_type,
+            //     CStr::from_ptr(p_message)
+            // );
         }
         MsgSeverity::WARNING => {
-            warn!(
-                "{:?} - {:?} - {:?}",
-                CStr::from_ptr(p_message_id),
-                msg_type,
-                CStr::from_ptr(p_message)
-            );
+            warn!("{}", message_string);
+            //     "{:?} - {:?} - {:?}",
+            //     CStr::from_ptr(p_message_id),
+            //     msg_type,
+            //     CStr::from_ptr(p_message)
+            // );
         }
         MsgSeverity::ERROR => {
-            error!(
-                "{:?} - {:?} - {:?}",
-                CStr::from_ptr(p_message_id),
-                msg_type,
-                CStr::from_ptr(p_message)
-            );
+            error!("{}", message_string);
+            //     "{:?} - {:?} - {:?}",
+            //     CStr::from_ptr(p_message_id),
+            //     msg_type,
+            //     CStr::from_ptr(p_message)
+            // );
         }
         _ => {
-            error!(
-                "{:?} - {:?} - {:?}",
-                CStr::from_ptr(p_message_id),
-                msg_type,
-                CStr::from_ptr(p_message)
-            );
+            error!("{}", message_string);
+            //     "{:?} - {:?} - {:?}",
+            //     CStr::from_ptr(p_message_id),
+            //     msg_type,
+            //     CStr::from_ptr(p_message)
+            // );
         }
     }
 
@@ -134,21 +198,15 @@ pub fn setup_debug_utils(
 
     let severity = {
         use vk::DebugUtilsMessageSeverityFlagsEXT as Severity;
-
         // TODO use the flexi_logger configuration here
-
         Severity::all()
     };
 
     let types = {
         use vk::DebugUtilsMessageTypeFlagsEXT as Type;
-
         // TODO maybe some customization here too
-
         Type::all()
     };
-
-    // let flags = vk::
 
     let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
         .message_severity(severity)
