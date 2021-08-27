@@ -1,4 +1,4 @@
-use ash::{extensions::ext::DebugReport, version::EntryV1_0};
+use ash::version::EntryV1_0;
 use ash::{vk, Entry, Instance};
 use std::{
     ffi::{CStr, CString},
@@ -81,34 +81,6 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         }
     }
 
-    //
-    // match msg_severity {
-    // }
-
-    vk::FALSE
-}
-
-unsafe extern "system" fn vulkan_debug_callback(
-    flag: vk::DebugReportFlagsEXT,
-    typ: vk::DebugReportObjectTypeEXT,
-    _: u64,
-    _: usize,
-    _: i32,
-    _: *const c_char,
-    p_message: *const c_char,
-    _: *mut c_void,
-) -> u32 {
-    if flag == vk::DebugReportFlagsEXT::DEBUG {
-        debug!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::INFORMATION {
-        info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::WARNING {
-        warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else if flag == vk::DebugReportFlagsEXT::PERFORMANCE_WARNING {
-        warn!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    } else {
-        info!("{:?} - {:?}", typ, CStr::from_ptr(p_message));
-    }
     vk::FALSE
 }
 
@@ -151,23 +123,48 @@ pub fn check_validation_layer_support(entry: &Entry) {
     }
 }
 
-/// Setup the debug message if validation layers are enabled.
-pub fn setup_debug_messenger(
+/// Setup the DebugUtils messenger if validation layers are enabled.
+pub fn setup_debug_utils(
     entry: &Entry,
     instance: &Instance,
-) -> Option<(DebugReport, vk::DebugReportCallbackEXT)> {
+) -> Option<(DebugUtils, vk::DebugUtilsMessengerEXT)> {
     if !ENABLE_VALIDATION_LAYERS {
         return None;
     }
-    let create_info = vk::DebugReportCallbackCreateInfoEXT::builder()
-        .flags(vk::DebugReportFlagsEXT::all())
-        .pfn_callback(Some(vulkan_debug_callback))
-        .build();
-    let debug_report = DebugReport::new(entry, instance);
-    let debug_report_callback = unsafe {
-        debug_report
-            .create_debug_report_callback(&create_info, None)
-            .unwrap()
+
+    let severity = {
+        use vk::DebugUtilsMessageSeverityFlagsEXT as Severity;
+
+        // TODO use the flexi_logger configuration here
+
+        Severity::all()
     };
-    Some((debug_report, debug_report_callback))
+
+    let types = {
+        use vk::DebugUtilsMessageTypeFlagsEXT as Type;
+
+        // TODO maybe some customization here too
+
+        Type::all()
+    };
+
+    // let flags = vk::
+
+    let create_info = vk::DebugUtilsMessengerCreateInfoEXT::builder()
+        .message_severity(severity)
+        .message_type(types)
+        .pfn_user_callback(Some(vulkan_debug_utils_callback))
+        .build();
+
+    let debug_utils = DebugUtils::new(entry, instance);
+
+    // TODO this should probably return Result, but i need to handle
+    // the return at the top of this function first
+    let messenger = unsafe {
+        debug_utils
+            .create_debug_utils_messenger(&create_info, None)
+            .ok()
+    }?;
+
+    Some((debug_utils, messenger))
 }

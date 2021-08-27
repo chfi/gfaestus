@@ -1,6 +1,6 @@
 use ash::{
     extensions::{
-        ext::DebugReport,
+        ext::DebugUtils,
         khr::{PushDescriptor, Surface, Swapchain},
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
@@ -43,7 +43,7 @@ pub(super) fn create_instance(
         .collect::<Vec<_>>();
 
     if super::debug::ENABLE_VALIDATION_LAYERS {
-        extension_names.push(DebugReport::name().as_ptr());
+        extension_names.push(DebugUtils::name().as_ptr());
     }
 
     let phys_device_properties2 =
@@ -55,6 +55,7 @@ pub(super) fn create_instance(
     let mut instance_create_info = vk::InstanceCreateInfo::builder()
         .application_info(&app_info)
         .enabled_extension_names(&extension_names);
+
     if super::debug::ENABLE_VALIDATION_LAYERS {
         check_validation_layer_support(&entry);
         instance_create_info =

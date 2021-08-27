@@ -148,8 +148,7 @@ impl GfaestusVk {
             ash_window::create_surface(&entry, &instance, window, None)
         }?;
 
-        let debug_report_callback =
-            debug::setup_debug_messenger(&entry, &instance);
+        let debug_utils = debug::setup_debug_utils(&entry, &instance);
 
         let (physical_device, graphics_ix, present_ix, compute_ix) =
             choose_physical_device(&instance, &surface, surface_khr)?;
@@ -186,7 +185,7 @@ impl GfaestusVk {
         let vk_context = VkContext::new(
             entry,
             instance,
-            debug_report_callback,
+            debug_utils,
             surface,
             surface_khr,
             physical_device,

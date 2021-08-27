@@ -197,7 +197,6 @@ impl NodePipelines {
                     | Flags::TESSELLATION_CONTROL
                     | Flags::TESSELLATION_EVALUATION
                     | Flags::FRAGMENT,
-                // Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
                 0,
                 &pc_bytes,
             )
