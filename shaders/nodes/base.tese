@@ -18,8 +18,8 @@ void main() {
   float u = gl_TessCoord.x;
   float v = gl_TessCoord.y;
 
-  vec2 p = gl_in[0].gl_Position;
-  vec2 q = gl_in[1].gl_Position;
+  vec2 p = gl_in[0].gl_Position.xy;
+  vec2 q = gl_in[1].gl_Position.xy;
 
   vec2 diff = q - p;
 
@@ -34,7 +34,15 @@ void main() {
 
   vec2 pos = len + vec2(0.0, 0.1 * (v - 0.5));
 
-  gl_Position = pos;
+  gl_Position = vec4(pos.xy, 0.0, 1.0);
+
+  // vec4 pos_ = vec4(pos.xy, 0.0, 1.0);
+
+  // gl_Position = vec4(u, v, 0.0, 1.0);
+
+  // gl_Position = vec4(0.0, 0.0, 0.0, 1.0) +
+
+
   // gl_Position = len * offset;
 
   // gl_Position = (u * gl_in[0].gl_Position) + (1.0 - u) * gl_in[1].gl_Position;

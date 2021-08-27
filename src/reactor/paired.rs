@@ -74,10 +74,11 @@ where
 {
     fn process(&mut self) -> BoxFuture<()> {
         let future = async move {
-            let input = self.input_recv.next().await.unwrap();
-            let func = &self.func;
-            let output = func(&self.outbox, input);
-            self.outbox.insert_blocking(output);
+            if let Some(input) = self.input_recv.next().await {
+                let func = &self.func;
+                let output = func(&self.outbox, input);
+                self.outbox.insert_blocking(output);
+            }
         };
 
         future.boxed()
