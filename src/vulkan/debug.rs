@@ -86,16 +86,16 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     }
 
     if !objects.is_empty() {
-        message_string.push_str("\n  Objects: ");
+        message_string.push_str("\n  Objects: \n");
         for obj in objects {
             if obj.p_object_name.is_null() {
                 message_string.push_str(&format!(
-                    "   {:?} - no name\n",
+                    "       {:#x} - no name\n",
                     obj.object_handle,
                 ));
             } else {
                 message_string.push_str(&format!(
-                    "   {:?} - {:?}\n",
+                    "       {:#x} - {:?}\n",
                     obj.object_handle,
                     CStr::from_ptr(obj.p_object_name),
                 ));
