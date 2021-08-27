@@ -38,7 +38,7 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     let p_message_id = (*callback_data).p_message_id_name as *const c_char;
     let p_message = (*callback_data).p_message as *const c_char;
 
-    let queue_labels = {
+    let _queue_labels = {
         let queue_label_count = (*callback_data).queue_label_count as usize;
         dbg!(queue_label_count);
         let ptr = (*callback_data).p_queue_labels;
@@ -59,13 +59,22 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
         std::slice::from_raw_parts(ptr, object_count)
     };
 
-    let mut message_string = format!(
-        "{:?} - {:?} - {:?}",
-        CStr::from_ptr(p_message_id),
-        msg_type,
-        CStr::from_ptr(p_message)
-    );
+    let p_msg_id_str = if p_message_id.is_null() {
+        "0".to_string()
+    } else {
+        format!("{:?}", CStr::from_ptr(p_message_id))
+    };
 
+    let p_msg_str = if p_message.is_null() {
+        "-".to_string()
+    } else {
+        format!("{:?}", CStr::from_ptr(p_message))
+    };
+
+    let mut message_string =
+        format!("{} - {:?} - {}", p_msg_id_str, msg_type, p_msg_str,);
+
+    dbg!();
     if !cmd_buf_labels.is_empty() {
         message_string.push_str("\n  Command buffers: ");
         for cmd_buf in cmd_buf_labels {

@@ -45,6 +45,10 @@ impl VkContext {
     pub fn device(&self) -> &Device {
         &self.device
     }
+
+    pub fn debug_utils(&self) -> Option<&DebugUtils> {
+        self.debug_utils.as_ref().map(|(utils, _)| utils)
+    }
 }
 
 impl VkContext {
