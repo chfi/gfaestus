@@ -1,3 +1,4 @@
+use ash::extensions::ext::DebugUtils;
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
@@ -21,6 +22,8 @@ use gfaestus::view::View;
 use gfaestus::vulkan::render_pass::Framebuffers;
 
 use gfaestus::gui::{widgets::*, windows::*, *};
+
+use gfaestus::vulkan::debug;
 
 #[allow(unused_imports)]
 use gfaestus::vulkan::draw_system::{
@@ -59,6 +62,13 @@ use handlegraph::{
 #[allow(unused_imports)]
 use handlegraph::packedgraph::PackedGraph;
 
+use gfaestus::vulkan::*;
+
+use flexi_logger::{Duplicate, FileSpec, Logger, LoggerHandle};
+
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 fn universe_from_gfa_layout(
     graph_query: &GraphQuery,
     layout_path: &str,
@@ -76,13 +86,6 @@ fn universe_from_gfa_layout(
 
     Ok((universe, stats))
 }
-
-use gfaestus::vulkan::*;
-
-use flexi_logger::{Duplicate, FileSpec, Logger, LoggerHandle};
-
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
 
 fn set_up_logger() -> Result<LoggerHandle> {
     let logger = Logger::try_with_env_or_str("info")?
@@ -784,21 +787,17 @@ fn main() {
 
                 let debug_utils = gfaestus.vk_context().debug_utils().map(|u| u.to_owned());
 
+                let debug_utils = debug_utils.as_ref();
+
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
 
-
-                        if let Some(utils) = &debug_utils {
-                            use std::ffi::CString;
-                            let name = CString::new(&b"Image transitions"[..]).unwrap();
-                            let label = vk::DebugUtilsLabelEXT::builder()
-                                .label_name(&name)
-                                .build();
-                            unsafe {
-                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
-                            }
-                        }
+                        debug::begin_cmd_buf_label(
+                            debug_utils,
+                            cmd_buf,
+                            "Image transitions"
+                        );
 
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
@@ -832,23 +831,13 @@ fn main() {
                             );
                         }
 
+                        debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
-                        if let Some(utils) = &debug_utils {
-                            unsafe {
-                                utils.cmd_end_debug_utils_label(cmd_buf);
-                            }
-                        }
-
-                        if let Some(utils) = &debug_utils {
-                            use std::ffi::CString;
-                            let name = CString::new(&b"Nodes"[..]).unwrap();
-                            let label = vk::DebugUtilsLabelEXT::builder()
-                                .label_name(&name)
-                                .build();
-                            unsafe {
-                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
-                            }
-                        }
+                        debug::begin_cmd_buf_label(
+                            debug_utils,
+                            cmd_buf,
+                            "Nodes",
+                        );
 
                         if let Some(overlay) = overlay {
 
@@ -879,24 +868,15 @@ fn main() {
                                 .unwrap();
                         }
 
-                        if let Some(utils) = &debug_utils {
-                            unsafe {
-                                utils.cmd_end_debug_utils_label(cmd_buf);
-                            }
-                        }
+                        debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
                         if edges_enabled {
 
-                            if let Some(utils) = &debug_utils {
-                                use std::ffi::CString;
-                                let name = CString::new(&b"Edges"[..]).unwrap();
-                                let label = vk::DebugUtilsLabelEXT::builder()
-                                    .label_name(&name)
-                                    .build();
-                                unsafe {
-                                    utils.cmd_begin_debug_utils_label(cmd_buf, &label);
-                                }
-                            }
+                            debug::begin_cmd_buf_label(
+                                debug_utils,
+                                cmd_buf,
+                                "Edges",
+                            );
 
                             /*
                             edge_pipeline.preprocess_cmd(
@@ -920,12 +900,7 @@ fn main() {
                                 Point::ZERO,
                             ).unwrap();
 
-
-                            if let Some(utils) = &debug_utils {
-                                unsafe {
-                                    utils.cmd_end_debug_utils_label(cmd_buf);
-                                }
-                            }
+                            debug::end_cmd_buf_label(debug_utils, cmd_buf);
                         }
 
 
@@ -961,16 +936,11 @@ fn main() {
                             );
                         }
 
-                        if let Some(utils) = &debug_utils {
-                            use std::ffi::CString;
-                            let name = CString::new(&b"Node selection border"[..]).unwrap();
-                            let label = vk::DebugUtilsLabelEXT::builder()
-                                .label_name(&name)
-                                .build();
-                            unsafe {
-                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
-                            }
-                        }
+                        debug::begin_cmd_buf_label(
+                            debug_utils,
+                            cmd_buf,
+                            "Node selection border",
+                        );
 
                         selection_edge
                             .draw(
@@ -1025,22 +995,13 @@ fn main() {
                             )
                             .unwrap();
 
-                        if let Some(utils) = &debug_utils {
-                            unsafe {
-                                utils.cmd_end_debug_utils_label(cmd_buf);
-                            }
-                        }
+                        debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
-                        if let Some(utils) = &debug_utils {
-                            use std::ffi::CString;
-                            let name = CString::new(&b"GUI"[..]).unwrap();
-                            let label = vk::DebugUtilsLabelEXT::builder()
-                                .label_name(&name)
-                                .build();
-                            unsafe {
-                                utils.cmd_begin_debug_utils_label(cmd_buf, &label);
-                            }
-                        }
+                        debug::begin_cmd_buf_label(
+                            debug_utils,
+                            cmd_buf,
+                            "GUI",
+                        );
 
                         gui.draw(
                             cmd_buf,
@@ -1052,11 +1013,7 @@ fn main() {
                         )
                         .unwrap();
 
-                        if let Some(utils) = &debug_utils {
-                            unsafe {
-                                utils.cmd_end_debug_utils_label(cmd_buf);
-                            }
-                        }
+                        debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
                     };
 

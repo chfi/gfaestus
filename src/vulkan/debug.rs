@@ -235,3 +235,29 @@ pub fn setup_debug_utils(
 
     Some((debug_utils, messenger))
 }
+
+pub fn begin_cmd_buf_label(
+    utils: Option<&DebugUtils>,
+    cmd_buf: vk::CommandBuffer,
+    label: &str,
+) {
+    if let Some(utils) = utils {
+        use std::ffi::CString;
+        let name = CString::new(label.as_bytes()).unwrap();
+        let label = vk::DebugUtilsLabelEXT::builder().label_name(&name).build();
+        unsafe {
+            utils.cmd_begin_debug_utils_label(cmd_buf, &label);
+        }
+    }
+}
+
+pub fn end_cmd_buf_label(
+    utils: Option<&DebugUtils>,
+    cmd_buf: vk::CommandBuffer,
+) {
+    if let Some(utils) = utils {
+        unsafe {
+            utils.cmd_end_debug_utils_label(cmd_buf);
+        }
+    }
+}
