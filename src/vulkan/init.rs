@@ -164,6 +164,7 @@ pub(super) fn device_is_suitable(
         find_queue_families(instance, surface, surface_khr, device)?;
 
     if graphics_ix.is_none() || present_ix.is_none() || compute_ix.is_none() {
+        error!("Device is missing a queue family");
         return Ok(false);
     }
 
@@ -178,6 +179,7 @@ pub(super) fn device_is_suitable(
     };
 
     if !swapchain_adequate {
+        error!("Swapchain inadequate");
         return Ok(false);
     }
 
@@ -418,6 +420,7 @@ fn device_supports_features(
     device: vk::PhysicalDevice,
 ) -> Result<bool> {
     let features = unsafe { instance.get_physical_device_features(device) };
+
 
     let mut result = true;
 

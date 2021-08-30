@@ -1,11 +1,17 @@
-use ash::{
-    extensions::{
-        ext::DebugUtils,
-        khr::{PushDescriptor, Surface},
-    },
-    version::{DeviceV1_0, InstanceV1_0},
-    vk, Device, Entry, Instance,
+use std::ffi::c_void;
+
+use ash::{Device, Entry, Instance};
+
+use ash::extensions::{
+    ext::DebugUtils,
+    khr::{PushDescriptor, Surface},
 };
+
+use ash::version::{DeviceV1_0, InstanceV1_0, EntryV1_0};
+
+use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, StructureType};
+
+use ash::vk;
 
 pub struct VkContext {
     _entry: Entry,
@@ -19,6 +25,8 @@ pub struct VkContext {
     device: Device,
 
     push_descriptor: PushDescriptor,
+
+    get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 }
 
 impl VkContext {
@@ -49,6 +57,18 @@ impl VkContext {
     pub fn debug_utils(&self) -> Option<&DebugUtils> {
         self.debug_utils.as_ref().map(|(utils, _)| utils)
     }
+
+    pub fn portability_features(&self) -> anyhow::Result<()> {
+        let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
+            .features(vk::PhysicalDeviceFeatures::default());
+
+        let mut subset_features = PortabilitySubsetFeaturesKhr::default();
+        let subset_ptr: *mut _ =  &mut subset_features;
+        let subset_ptr = subset_ptr as *mut c_void;
+        features_2.p_next = subset_ptr;
+
+        Ok(())
+    }
 }
 
 impl VkContext {
@@ -63,6 +83,12 @@ impl VkContext {
     ) -> Self {
         let push_descriptor = PushDescriptor::new(&instance, &device);
 
+        let get_physical_device_features2 = unsafe {
+            KhrGetPhysicalDeviceProperties2Fn::load(|name| {
+                std::mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
+            })
+        };
+
         VkContext {
             _entry: entry,
             instance,
@@ -73,6 +99,7 @@ impl VkContext {
             device,
 
             push_descriptor,
+            get_physical_device_features2,
         }
     }
 }
@@ -143,6 +170,46 @@ impl Drop for VkContext {
                 report.destroy_debug_utils_messenger(callback, None);
             }
             self.instance.destroy_instance(None);
+        }
+    }
+}
+
+
+#[repr(C)]
+#[derive(Copy, Clone, Default, Debug)]
+pub struct PortabilitySubsetFeatures {
+    pub constant_alpha_color_blend_factors: vk::Bool32,
+    pub events: vk::Bool32,
+    pub image_view_format_reinterpretation: vk::Bool32,
+    pub image_view_format_swizzle: vk::Bool32,
+    pub image_view_2d_on_3d_image: vk::Bool32,
+    pub multisample_array_image: vk::Bool32,
+    pub mutable_comparison_samplers: vk::Bool32,
+    pub point_polygons: vk::Bool32,
+    pub sampler_mip_lod_bias: vk::Bool32,
+    pub separate_stencil_mask_ref: vk::Bool32,
+    pub shader_sample_rate_interpolation_functions: vk::Bool32,
+    pub tessellation_isolines: vk::Bool32,
+    pub tessellation_point_mode: vk::Bool32,
+    pub triangle_fans: vk::Bool32,
+    pub vertex_attribute_access_beyond_stride: vk::Bool32,
+}
+
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub struct PortabilitySubsetFeaturesKhr {
+    pub s_type: StructureType,
+    pub p_next: *mut c_void,
+    pub features: PortabilitySubsetFeatures,
+}
+
+impl std::default::Default for PortabilitySubsetFeaturesKhr {
+    fn default() -> Self {
+        Self {
+            s_type: StructureType::PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR,
+            p_next: ::std::ptr::null_mut(),
+            features: PortabilitySubsetFeatures::default(),
         }
     }
 }
