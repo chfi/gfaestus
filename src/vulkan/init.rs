@@ -358,12 +358,18 @@ pub(super) fn create_logical_device(
 
     device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
 
-    let device_features = vk::PhysicalDeviceFeatures::builder()
+    let available_features = unsafe { instance.get_physical_device_features(device) };
+
+    let mut device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
         .tessellation_shader(true)
-        .independent_blend(true)
-        .wide_lines(true)
-        .build();
+        .independent_blend(true);
+
+    if available_features.wide_lines == vk::TRUE {
+        device_features = device_features.wide_lines(true);
+    }
+
+    let device_features = device_features.build();
 
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
@@ -441,10 +447,9 @@ fn device_supports_features(
     mandatory!(sampler_anisotropy);
     mandatory!(tessellation_shader);
     mandatory!(independent_blend);
-    mandatory!(wide_lines);
 
-    // optional features (TODO)
-    // optional!(wide_lines);
+    // optional features
+    optional!(wide_lines);
 
     Ok(result)
 }

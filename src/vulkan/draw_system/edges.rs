@@ -11,7 +11,7 @@ use handlegraph::{
 
 use handlegraph::packedgraph::PackedGraph;
 
-use ash::version::DeviceV1_0;
+use ash::version::{DeviceV1_0, InstanceV1_0};
 use ash::{vk, Device};
 
 use anyhow::Result;
@@ -41,6 +41,8 @@ pub struct EdgeRenderer {
 
     pub(crate) device: Device,
     pub(crate) edge_index_buffer: EdgeIndices,
+
+    wide_lines: bool,
 }
 
 impl EdgeRenderer {
@@ -81,6 +83,7 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
+        wide_lines: bool,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
@@ -333,8 +336,17 @@ impl EdgeRenderer {
 
         let layouts = [desc_set_layout];
 
+        let features = unsafe {
+            let instance = app.vk_context().instance();
+            let p_device = app.vk_context().physical_device();
+
+            instance.get_physical_device_features(p_device)
+        };
+
+        let wide_lines = features.wide_lines == vk::TRUE;
+
         let (pipeline, pipeline_layout) =
-            Self::create_pipeline(device, msaa_samples, render_pass, &layouts);
+            Self::create_pipeline(device, msaa_samples, render_pass, &layouts, wide_lines);
 
         let edge_index_buffer =
             EdgeIndices::new_with_components(app, graph, layout)?;
@@ -351,6 +363,8 @@ impl EdgeRenderer {
 
             edge_index_buffer,
             device: device.clone(),
+
+            wide_lines,
         })
     }
 
@@ -397,7 +411,11 @@ impl EdgeRenderer {
         let clear_values = [];
 
         unsafe {
-            device.cmd_set_line_width(cmd_buf, edge_width);
+            if self.wide_lines {
+                device.cmd_set_line_width(cmd_buf, edge_width);
+            } else {
+                device.cmd_set_line_width(cmd_buf, 1.0);
+            }
         }
 
         let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
