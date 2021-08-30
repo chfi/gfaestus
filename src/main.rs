@@ -133,6 +133,7 @@ fn main() {
 
     println!("testing");
     gfaestus.vk_context().portability_features().unwrap();
+    gfaestus.vk_context().testin().unwrap();
 
     let num_cpus = num_cpus::get();
 

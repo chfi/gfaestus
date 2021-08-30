@@ -7,7 +7,7 @@ use ash::extensions::{
     khr::{PushDescriptor, Surface},
 };
 
-use ash::version::{DeviceV1_0, InstanceV1_0, EntryV1_0};
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
 use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, StructureType};
 
@@ -63,7 +63,7 @@ impl VkContext {
             .features(vk::PhysicalDeviceFeatures::default());
 
         let mut subset_features = PortabilitySubsetFeaturesKhr::default();
-        let subset_ptr: *mut _ =  &mut subset_features;
+        let subset_ptr: *mut _ = &mut subset_features;
         let subset_ptr = subset_ptr as *mut c_void;
         features_2.p_next = subset_ptr;
 
@@ -73,19 +73,62 @@ impl VkContext {
 
         unsafe {
             self.get_physical_device_features2
-                .get_physical_device_features2_khr(self.physical_device, features_ptr);
+                .get_physical_device_features2_khr(
+                    self.physical_device,
+                    features_ptr,
+                );
         }
 
         let subset_features = {
             unsafe {
-                let subset: *mut PortabilitySubsetFeaturesKhr = std::mem::transmute(subset_ptr);
+                let subset: *mut PortabilitySubsetFeaturesKhr =
+                    std::mem::transmute(subset_ptr);
                 *subset
             }
         };
 
-        log::warn!("triangle_fans: {}", subset_features.features.triangle_fans == vk::TRUE);
+        log::warn!(
+            "triangle_fans: {}",
+            subset_features.features.triangle_fans == vk::TRUE
+        );
         log::warn!("portability features: {:?}", subset_features.features);
 
+        Ok(())
+    }
+
+    pub fn testin(&self) -> anyhow::Result<()> {
+        let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
+            .features(vk::PhysicalDeviceFeatures::default());
+
+        let mut atomic_features = ShaderAtomicFloatFeaturesEXT_::default();
+        let atomic_ptr: *mut _ = &mut atomic_features;
+        let atomic_ptr = atomic_ptr as *mut c_void;
+        features_2.p_next = atomic_ptr;
+
+        let mut features_2 = features_2.build();
+
+        let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
+
+        unsafe {
+            self.get_physical_device_features2
+                .get_physical_device_features2_khr(
+                    self.physical_device,
+                    features_ptr,
+                );
+        }
+
+        let atomic_features = {
+            unsafe {
+                let atomic: *mut ShaderAtomicFloatFeaturesEXT_ =
+                    std::mem::transmute(atomic_ptr);
+                *atomic
+            }
+        };
+
+        log::warn!(
+            "shader atomic float features: {:?}",
+            atomic_features.features
+        );
 
         Ok(())
     }
@@ -103,11 +146,15 @@ impl VkContext {
     ) -> Self {
         let push_descriptor = PushDescriptor::new(&instance, &device);
 
-        let get_physical_device_features2 = unsafe {
-            KhrGetPhysicalDeviceProperties2Fn::load(|name| {
-                std::mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
-            })
-        };
+        let get_physical_device_features2 =
+            unsafe {
+                KhrGetPhysicalDeviceProperties2Fn::load(|name| {
+                    std::mem::transmute(entry.get_instance_proc_addr(
+                        instance.handle(),
+                        name.as_ptr(),
+                    ))
+                })
+            };
 
         VkContext {
             _entry: entry,
@@ -194,7 +241,6 @@ impl Drop for VkContext {
     }
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone, Default, Debug)]
 pub struct PortabilitySubsetFeatures {
@@ -215,7 +261,6 @@ pub struct PortabilitySubsetFeatures {
     pub vertex_attribute_access_beyond_stride: vk::Bool32,
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub struct PortabilitySubsetFeaturesKhr {
@@ -227,9 +272,46 @@ pub struct PortabilitySubsetFeaturesKhr {
 impl std::default::Default for PortabilitySubsetFeaturesKhr {
     fn default() -> Self {
         Self {
-            s_type: StructureType::PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR,
+            s_type:
+                StructureType::PHYSICAL_DEVICE_PORTABILITY_SUBSET_FEATURES_KHR,
             p_next: ::std::ptr::null_mut(),
             features: PortabilitySubsetFeatures::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ShaderAtomicFloatFeaturesEXT {
+    pub shader_buffer_float_32_atomics: vk::Bool32,
+    pub shader_buffer_float_32_atomic_add: vk::Bool32,
+    pub shader_buffer_float_64_atomics: vk::Bool32,
+    pub shader_buffer_float_64_atomic_add: vk::Bool32,
+    pub shader_shared_float_32_atomics: vk::Bool32,
+    pub shader_shared_float_32_atomic_ad: vk::Bool32,
+    pub shader_shared_float_64_atomics: vk::Bool32,
+    pub shader_shared_float_64_atomic_add: vk::Bool32,
+    pub shader_image_float_32_atomics: vk::Bool32,
+    pub shader_image_float_32_atomic_add: vk::Bool32,
+    pub sparse_image_float_32_atomics: vk::Bool32,
+    pub sparse_image_float_32_atomic_add: vk::Bool32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ShaderAtomicFloatFeaturesEXT_ {
+    pub s_type: StructureType,
+    pub p_next: *mut c_void,
+    pub features: ShaderAtomicFloatFeaturesEXT,
+}
+
+impl std::default::Default for ShaderAtomicFloatFeaturesEXT_ {
+    fn default() -> Self {
+        Self {
+            s_type:
+                StructureType::PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_FEATURES_EXT,
+            p_next: ::std::ptr::null_mut(),
+            features: ShaderAtomicFloatFeaturesEXT::default(),
         }
     }
 }
