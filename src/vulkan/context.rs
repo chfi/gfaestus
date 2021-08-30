@@ -67,6 +67,26 @@ impl VkContext {
         let subset_ptr = subset_ptr as *mut c_void;
         features_2.p_next = subset_ptr;
 
+        let mut features_2 = features_2.build();
+
+        let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
+
+        unsafe {
+            self.get_physical_device_features2
+                .get_physical_device_features2_khr(self.physical_device, features_ptr);
+        }
+
+        let subset_features = {
+            unsafe {
+                let subset: *mut PortabilitySubsetFeaturesKhr = std::mem::transmute(subset_ptr);
+                *subset
+            }
+        };
+
+        log::warn!("triangle_fans: {}", subset_features.features.triangle_fans == vk::TRUE);
+        log::warn!("portability features: {:?}", subset_features.features);
+
+
         Ok(())
     }
 }

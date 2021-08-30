@@ -131,6 +131,9 @@ fn main() {
         }
     };
 
+    println!("testing");
+    gfaestus.vk_context().portability_features().unwrap();
+
     let num_cpus = num_cpus::get();
 
     let futures_cpus;
