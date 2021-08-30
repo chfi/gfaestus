@@ -131,18 +131,22 @@ pub(super) fn device_supports_extensions(
     let extension_props =
         unsafe { instance.enumerate_device_extension_properties(device) }?;
 
+    let mut result = true;
+
     for req in required_exts.iter() {
         let found = extension_props.iter().any(|ext| {
             let name = unsafe { CStr::from_ptr(ext.extension_name.as_ptr()) };
             req == &name
         });
 
+        result = found;
+
         if !found {
-            return Ok(false);
+            error!("Device does not support extension {:?}", req);
         }
     }
 
-    Ok(true)
+    Ok(result)
 }
 
 // may be expanded in the future
@@ -177,10 +181,7 @@ pub(super) fn device_is_suitable(
         return Ok(false);
     }
 
-    let features = unsafe { instance.get_physical_device_features(device) };
-
-    // TODO this should be tailored
-    Ok(features.sampler_anisotropy == vk::TRUE)
+    device_supports_features(instance, device)
 }
 
 pub(super) fn choose_physical_device(
@@ -359,7 +360,6 @@ pub(super) fn create_logical_device(
 
     let device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
-        .geometry_shader(true)
         .tessellation_shader(true)
         .independent_blend(true)
         .wide_lines(true)
@@ -405,4 +405,46 @@ pub(super) fn find_memory_type(
     }
 
     panic!("Failed to find suitable memory type");
+}
+
+fn device_supports_features(
+    instance: &Instance,
+    device: vk::PhysicalDevice,
+) -> Result<bool> {
+    let features = unsafe { instance.get_physical_device_features(device) };
+
+    let mut result = true;
+
+    macro_rules! mandatory {
+        ($path:tt) => {
+            if features.$path == vk::FALSE {
+                error!(
+                    "Device is missing the mandatory feature: {}",
+                    stringify!($path)
+                );
+                result = false;
+            }
+        };
+    }
+
+    macro_rules! optional {
+        ($path:tt) => {
+            if features.$path == vk::FALSE {
+                warn!(
+                    "Device is missing the optional feature: {}",
+                    stringify!($path)
+                );
+            }
+        };
+    }
+
+    mandatory!(sampler_anisotropy);
+    mandatory!(tessellation_shader);
+    mandatory!(independent_blend);
+    mandatory!(wide_lines);
+
+    // optional features (TODO)
+    // optional!(wide_lines);
+
+    Ok(result)
 }
