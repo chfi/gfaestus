@@ -308,7 +308,11 @@ impl NodePipelines {
             device.cmd_push_constants(
                 cmd_buf,
                 layout,
-                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                Flags::VERTEX
+                    | Flags::TESSELLATION_CONTROL
+                    | Flags::TESSELLATION_EVALUATION
+                    | Flags::FRAGMENT,
+                // Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
                 0,
                 &pc_bytes,
             )
@@ -424,7 +428,10 @@ impl NodePipelines {
             device.cmd_push_constants(
                 cmd_buf,
                 self.overlay_pipeline.pipeline_layout,
-                Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
+                Flags::VERTEX
+                    | Flags::TESSELLATION_CONTROL
+                    | Flags::TESSELLATION_EVALUATION
+                    | Flags::FRAGMENT,
                 0,
                 &pc_bytes,
             )

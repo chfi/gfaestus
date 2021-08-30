@@ -286,7 +286,7 @@ impl OverlayPipelineValue {
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_pipeline(
+        super::create_tess_pipeline(
             device,
             msaa_samples,
             render_pass,
@@ -437,7 +437,7 @@ impl OverlayPipelineRGB {
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_pipeline(
+        super::create_tess_pipeline(
             device,
             msaa_samples,
             render_pass,
@@ -620,7 +620,7 @@ impl NodeOverlayPipeline {
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_pipeline(
+        super::create_tess_pipeline(
             device,
             msaa_samples,
             render_pass,
