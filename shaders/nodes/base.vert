@@ -14,6 +14,13 @@ layout (push_constant) uniform NodePC {
 } node_uniform;
 
 void main() {
+
+  int id = 1 + (gl_VertexIndex / VERTICES_PER_NODE);
+  node_id = id;
+
+  gl_Position = vec4(position.xy, 0.0, 1.0);
+
+  /*
   vec4 pos = node_uniform.view_transform * vec4(position, 0.0, 1.0);
   // vec4 pos = vo.view * vec4(position, 0.0, 1.0);
   // gl_Position = vo.view * vec4(position, 0.0, 1.0);
@@ -25,4 +32,5 @@ void main() {
   // float z = float(node_id) / 1500.0;
   gl_Position = vec4(pos.x, pos.y, 0.0, pos.w);
   // gl_Position = vec4(pos.x, pos.y, 0.6, pos.w);
+  */
 }

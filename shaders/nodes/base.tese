@@ -25,43 +25,40 @@ void main() {
   vec2 q = gl_in[1].gl_Position.xy;
 
   vec2 diff = q - p;
-
   vec2 n_diff = normalize(diff);
 
-  vec4 rot_4diff = node_uniform.view_transform * vec4(n_diff.xy, 0.0, 1.0);
-
   vec2 rn_diff = vec2(-n_diff.y, n_diff.x);
-
   vec4 rot_diff = vec4(rn_diff.xy, 0.0, 0.0);
 
   vec2 len = (u * p) + (1.0 - u) * q;
 
-  rot_4diff.x = rot_4diff.x / node_uniform.viewport_dims.x;
-  rot_4diff.y = rot_4diff.y / node_uniform.viewport_dims.y;
-
   float scaling_ = node_uniform.node_width / node_uniform.scale;
-  float scaling = 1.0 / scaling_;
+  float scaling = scaling_;
+  // float scaling = 1.0 / scaling_;
 
+  rot_diff.x = rot_diff.x * node_uniform.viewport_dims.x;
+  rot_diff.y = rot_diff.y * node_uniform.viewport_dims.y;
 
-  vec4 tl = vec4(p.xy, 0.0, 1.0) + rot_4diff * scaling;
-  vec4 tr = vec4(q.xy, 0.0, 1.0) + rot_4diff * scaling;
+  vec4 tl = vec4(p.xy, 0.0, 1.0) + rot_diff * scaling;
+  vec4 tr = vec4(q.xy, 0.0, 1.0) + rot_diff * scaling;
 
-  vec4 bl = vec4(p.xy, 0.0, 1.0) - rot_4diff * scaling;
-  vec4 br = vec4(q.xy, 0.0, 1.0) - rot_4diff * scaling;
+  vec4 bl = vec4(p.xy, 0.0, 1.0) - rot_diff * scaling;
+  vec4 br = vec4(q.xy, 0.0, 1.0) - rot_diff * scaling;
 
-  /*
-  vec4 tl = vec4(p.x, p.y - 0.1, 0.0, 1.0);
-  vec4 tr = vec4(q.x, q.y - 0.1, 0.0, 1.0);
+  tl = node_uniform.view_transform * tl;
+  tr = node_uniform.view_transform * tr;
 
-  vec4 bl = vec4(p.x, p.y + 0.1, 0.0, 1.0);
-  vec4 br = vec4(q.x, q.y + 0.1, 0.0, 1.0);
-  */
+  bl = node_uniform.view_transform * bl;
+  br = node_uniform.view_transform * br;
+
 
   vec4 pos1 = mix(tl, tr, gl_TessCoord.x);
   vec4 pos2 = mix(bl, br, gl_TessCoord.x);
   vec4 pos = mix(pos1, pos2, gl_TessCoord.y);
 
   gl_Position = pos;
+
+  // gl_Position = node_uniform.view_transform * pos;
 
   node_id = in_node_id[0];
 }
