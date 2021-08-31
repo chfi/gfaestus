@@ -331,4 +331,8 @@ pub mod colors {
         let b = (b_u16 as f32) / max;
         rgb::RGBA::new(r, g, b, 1.0)
     }
+
+    pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> rgb::RGBA<f32> {
+        rgb::RGBA::new(r, g, b, a)
+    }
 }
