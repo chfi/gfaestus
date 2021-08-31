@@ -45,12 +45,14 @@ use ash::{extensions::khr::PushDescriptor, vk};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+pub mod console;
 pub mod debug;
 pub mod text;
 pub mod util;
 pub mod widgets;
 pub mod windows;
 
+use console::*;
 use debug::*;
 use util::*;
 use widgets::*;
