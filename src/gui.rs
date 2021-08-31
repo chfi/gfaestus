@@ -90,6 +90,9 @@ pub struct Gui {
     path_picker_source: PathPickerSource,
 
     annotation_file_list: AnnotationFileList,
+
+    console: Console<'static>,
+    console_down: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -177,7 +180,6 @@ pub struct AppViewState {
     // theme_list: ThemeList,
     overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
     overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
-    // repl_window: ViewStateChannel<ReplWindow, ()>,
 }
 
 impl AppViewState {
@@ -232,10 +234,6 @@ impl AppViewState {
             OverlayCreatorMsg,
         >::new(overlay_creator_state);
 
-        // let repl_window_state = ReplWindow::new(repl).unwrap();
-        // let repl_window =
-        //     ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
-
         Self {
             settings,
 
@@ -250,7 +248,6 @@ impl AppViewState {
 
             overlay_list,
             overlay_creator,
-            // repl_window,
         }
     }
 
@@ -312,8 +309,6 @@ pub struct OpenWindows {
     themes: bool,
     overlays: bool,
     overlay_creator: bool,
-
-    repl_window: bool,
 }
 
 impl std::default::Default for OpenWindows {
@@ -334,8 +329,6 @@ impl std::default::Default for OpenWindows {
             themes: false,
             overlays: false,
             overlay_creator: false,
-
-            repl_window: false,
         }
     }
 }
@@ -387,12 +380,6 @@ impl Gui {
         let render_pass = app.render_passes.gui;
 
         let draw_system = GuiPipeline::new(app, render_pass)?;
-
-        // let repl = GluonRepl::new(
-        //     channels.app_tx.clone(),
-        //     channels.main_view_tx.clone(),
-        // )
-        // .unwrap();
 
         let ctx = egui::CtxRef::default();
 
@@ -509,6 +496,9 @@ impl Gui {
             path_picker_source,
 
             annotation_file_list,
+
+            console_down: false,
+            console: Console::new(),
         };
 
         Ok(gui)
@@ -593,6 +583,8 @@ impl Gui {
 
         self.menu_bar
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
+
+        self.console.ui(&self.ctx, self.console_down);
 
         self.view_state.apply_received();
 
@@ -786,15 +778,6 @@ impl Gui {
                 );
             }
         }
-
-        // if self.open_windows.repl_window {
-        //     let repl_window = &mut self.open_windows.repl_window;
-        //     view_state.repl_window.state.ui(
-        //         repl_window,
-        //         &self.ctx,
-        //         &self.thread_pool,
-        //     );
-        // }
 
         {
             let debug = &mut view_state.settings.debug;
@@ -992,6 +975,14 @@ impl Gui {
                                 })
                                 .unwrap();
                         }
+                        GuiInput::KeyToggleConsole => {
+                            self.console_down = !self.console_down;
+                            if self.console_down {
+                                self.ctx.memory().request_focus(egui::Id::new(
+                                    console::Console::ID_TEXT,
+                                ));
+                            }
+                        }
                         _ => (),
                     }
                 }
@@ -1079,6 +1070,7 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
+    KeyToggleConsole,
 }
 
 impl BindableInput for GuiInput {
@@ -1091,6 +1083,9 @@ impl BindableInput for GuiInput {
             (Key::F1, Input::KeyEguiInspectionUi),
             (Key::F2, Input::KeyEguiSettingsUi),
             (Key::F3, Input::KeyEguiMemoryUi),
+            (Key::Grave, Input::KeyToggleConsole),
+            // (Key::, Input::KeyToggleConsole),
+            (Key::F4, Input::KeyToggleConsole),
         ]
         .iter()
         .copied()

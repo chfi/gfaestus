@@ -60,8 +60,6 @@ impl MenuBar {
         let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
 
-        let repl = &mut open_windows.repl_window;
-
         let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
             // ui.horizontal(|ui| {
 
@@ -127,16 +125,10 @@ impl MenuBar {
                 });
 
                 menu::menu(ui, "Tools", |ui| {
-                    if ui.button("REPL").clicked() {
-                        *repl = !*repl;
+                    if ui.selectable_label(*settings, "Settings").clicked() {
+                        *settings = !*settings;
                     }
                 });
-
-                // menu::menu(ui, "Settings", |ui| {
-                if ui.selectable_label(*settings, "Settings").clicked() {
-                    *settings = !*settings;
-                }
-                // });
             });
         });
 

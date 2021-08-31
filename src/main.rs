@@ -373,8 +373,6 @@ fn main() {
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
 
-    let mut console = Console::new();
-
     event_loop.run(move |event, _, control_flow| {
 
         *control_flow = ControlFlow::Poll;
@@ -630,8 +628,6 @@ fn main() {
                     &graph_query_worker,
                     app.annotations(),
                 );
-
-                console.ui(&gui.ctx, true);
 
                 let annotations = app.annotations();
 

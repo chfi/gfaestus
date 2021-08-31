@@ -13,22 +13,14 @@ use handlegraph::{
 
 use anyhow::Result;
 
-use rustc_hash::FxHashMap;
+use log::debug;
 
 use crossbeam::atomic::AtomicCell;
-
-use crate::{app::OverlayState, geometry::*};
-
-use crate::overlays::OverlayKind;
+use rustc_hash::FxHashMap;
 
 use crate::graph_query::GraphQuery;
-
-use crate::input::binds::{
-    BindableInput, KeyBind, MouseButtonBind, SystemInput, SystemInputBindings,
-    WheelBind,
-};
-
-use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
+use crate::overlays::OverlayKind;
+use crate::{app::OverlayState, geometry::*};
 
 pub struct Console<'a> {
     input_line: String,
@@ -43,6 +35,7 @@ pub struct Console<'a> {
 
 impl<'a> Console<'a> {
     pub const ID: &'static str = "quake_console";
+    pub const ID_TEXT: &'static str = "quake_console_input";
 
     pub fn new() -> Self {
         let scope = rhai::Scope::new();
@@ -57,6 +50,48 @@ impl<'a> Console<'a> {
 
             request_focus: false,
         }
+    }
+
+    fn create_engine() -> rhai::Engine {
+        use rhai::plugin::*;
+
+        let mut engine = rhai::Engine::new();
+
+        engine.register_type::<NodeId>();
+        engine.register_type::<Handle>();
+
+        let handle = exported_module!(crate::script::plugins::handle_plugin);
+
+        engine.register_global_module(handle.into());
+
+        engine.register_fn("print_test", || {
+            println!("hello world");
+        });
+
+        engine
+    }
+
+    pub fn eval(&mut self) -> Result<()> {
+        let engine = Self::create_engine();
+
+        debug!("evaluating: {}", &self.input_line);
+
+        let result = engine.eval_with_scope::<rhai::Dynamic>(
+            &mut self.scope,
+            &self.input_line,
+        );
+        match result {
+            Ok(result) => {
+                debug!("Eval success!");
+                self.output_history.push(format!("{:?}", result));
+            }
+            Err(err) => {
+                debug!("Eval error: {:?}", err);
+                self.output_history.push(format!("Error: {:?}", err));
+            }
+        }
+
+        Ok(())
     }
 
     pub fn ui(&mut self, ctx: &egui::CtxRef, is_down: bool) {
@@ -86,6 +121,7 @@ impl<'a> Console<'a> {
                 let input = ui.add_sized(
                     ui.available_size(),
                     egui::TextEdit::singleline(&mut self.input_line)
+                        .id(egui::Id::new(Self::ID_TEXT))
                         .code_editor()
                         .lock_focus(true),
                 );
@@ -102,13 +138,14 @@ impl<'a> Console<'a> {
                 if input.lost_focus()
                     && ui.input().key_pressed(egui::Key::Enter)
                 {
-                    // TODO: actually handle input
+                    self.input_history.push(self.input_line.clone());
+                    self.output_history.push(format!("> {}", self.input_line));
+
+                    self.eval().unwrap();
+
                     let mut line =
                         String::with_capacity(self.input_line.capacity());
                     std::mem::swap(&mut self.input_line, &mut line);
-
-                    self.input_history.push(line.clone());
-                    self.output_history.push(line);
 
                     self.input_line.clear();
 
