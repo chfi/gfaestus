@@ -797,7 +797,8 @@ fn main() {
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
-                        let size = window.inner_size();
+                        // let size = window.inner_size();
+                        let size = swapchain_dims;
 
                         // let dims: [u32; 2] = swapchain_dims.into();
 
@@ -862,7 +863,7 @@ fn main() {
                                 cmd_buf,
                                 node_pass,
                                 framebuffers,
-                                [size.width as f32, size.height as f32],
+                                size.into(),
                                 Point::ZERO,
                                 overlay,
                                 gradient,
@@ -874,7 +875,7 @@ fn main() {
                                     cmd_buf,
                                     node_pass,
                                     framebuffers,
-                                    [size.width as f32, size.height as f32],
+                                    size.into(),
                                     Point::ZERO,
                                     false,
                                 )
@@ -907,7 +908,7 @@ fn main() {
                                 &main_view.node_draw_system.vertices,
                                 edges_pass,
                                 framebuffers,
-                                [size.width as f32, size.height as f32],
+                                size.into(),
                                 2.0,
                                 current_view,
                                 Point::ZERO,
@@ -1020,7 +1021,8 @@ fn main() {
                             cmd_buf,
                             gui_pass,
                             framebuffers,
-                            [size.width as f32, size.height as f32],
+                            size.into(),
+                            // [size.width as f32, size.height as f32],
                             &push_descriptor,
                             &gradients,
                         )
