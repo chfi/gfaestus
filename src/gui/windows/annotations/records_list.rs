@@ -172,7 +172,6 @@ where
             &fields_ref,
             false,
         );
-        ui.end_row();
 
         resp
     }

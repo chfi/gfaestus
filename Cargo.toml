@@ -15,7 +15,7 @@ ash-window = "0.6"
 vk-mem = "0.2.2"
 
 winit = "0.24"
-egui = "0.13"
+egui = "0.14.2"
 clipboard = "0.5"
 
 crossbeam = "0.8"

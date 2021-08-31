@@ -62,7 +62,7 @@ impl OverlayList {
         ctx: &egui::CtxRef,
         open: &mut bool,
         open_creator: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Overlay List")
             .id(egui::Id::new(Self::ID))
             .open(open)
@@ -131,7 +131,7 @@ impl OverlayList {
     pub fn gradient_picker_ui(
         &self,
         ctx: &egui::CtxRef,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let mut open = self.gradient_picker_open.load();
         let resp = self.gradient_picker.ui(ctx, &mut open);
         self.gradient_picker_open.store(open);
@@ -268,7 +268,7 @@ impl OverlayCreator {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let scr = ctx.input().screen_rect();
 
         if let Some(result) = self.script_results.take() {
@@ -419,7 +419,7 @@ impl GradientPicker {
         &self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Gradients")
             .id(egui::Id::new(Self::ID))
             .open(open)

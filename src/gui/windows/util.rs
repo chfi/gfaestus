@@ -82,6 +82,8 @@ pub fn popup_below_widget(
                 });
             });
 
+        let popup_response = popup_response.response;
+
         if ui.input().key_pressed(egui::Key::Escape)
             || (popup_response.clicked_elsewhere()
                 && widget_response.clicked_elsewhere())

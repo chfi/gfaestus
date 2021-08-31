@@ -19,7 +19,7 @@ pub trait Widget {
         ctx: &egui::CtxRef,
         pos: Point,
         size: Option<Point>,
-    ) -> Option<egui::Response>;
+    ) -> Option<egui::InnerResponse<Option<()>>>;
 }
 
 pub struct MenuBar {
@@ -180,7 +180,7 @@ impl Widget for FrameRate {
         ctx: &egui::CtxRef,
         pos: Point,
         _size: Option<Point>,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let scr = ctx.input().screen_rect();
 
         let width = 100.0;
@@ -225,7 +225,7 @@ impl Widget for GraphStats {
         ctx: &egui::CtxRef,
         pos: Point,
         _size: Option<Point>,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new(Self::id())
             .title_bar(false)
             .collapsible(false)
