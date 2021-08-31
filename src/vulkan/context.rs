@@ -27,6 +27,8 @@ pub struct VkContext {
     push_descriptor: PushDescriptor,
 
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
+
+    pub portability_subset: bool,
 }
 
 impl VkContext {
@@ -58,7 +60,9 @@ impl VkContext {
         self.debug_utils.as_ref().map(|(utils, _)| utils)
     }
 
-    pub fn portability_features(&self) -> anyhow::Result<()> {
+    pub fn portability_features(
+        &self,
+    ) -> anyhow::Result<PortabilitySubsetFeatures> {
         let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
             .features(vk::PhysicalDeviceFeatures::default());
 
@@ -87,13 +91,7 @@ impl VkContext {
             }
         };
 
-        log::warn!(
-            "triangle_fans: {}",
-            subset_features.features.triangle_fans == vk::TRUE
-        );
-        log::warn!("portability features: {:?}", subset_features.features);
-
-        Ok(())
+        Ok(subset_features.features)
     }
 
     pub fn testin(&self) -> anyhow::Result<()> {
@@ -156,6 +154,26 @@ impl VkContext {
                 })
             };
 
+        let portability_subset = {
+            let extension_props = unsafe {
+                instance
+                    .enumerate_device_extension_properties(physical_device)
+                    .unwrap()
+            };
+
+            let portability =
+                std::ffi::CString::new("VK_KHR_portability_subset").unwrap();
+
+            extension_props.iter().any(|ext| {
+                let name = unsafe {
+                    std::ffi::CStr::from_ptr(ext.extension_name.as_ptr())
+                };
+                portability.as_ref() == name
+            })
+        };
+
+        // log::warn!("vk_context portability subset: {}", portability_subset);
+
         VkContext {
             _entry: entry,
             instance,
@@ -167,6 +185,7 @@ impl VkContext {
 
             push_descriptor,
             get_physical_device_features2,
+            portability_subset,
         }
     }
 }

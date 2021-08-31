@@ -131,10 +131,6 @@ fn main() {
         }
     };
 
-    println!("testing");
-    gfaestus.vk_context().portability_features().unwrap();
-    gfaestus.vk_context().testin().unwrap();
-
     let num_cpus = num_cpus::get();
 
     let futures_cpus;
@@ -185,7 +181,7 @@ fn main() {
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
-    let center = Point {
+    let _center = Point {
         x: top_left.x + (bottom_right.x - top_left.x) / 2.0,
         y: top_left.y + (bottom_right.y - top_left.y) / 2.0,
     };
@@ -274,7 +270,24 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
-    let use_quad_renderer = true;
+    let use_quad_renderer = {
+        let vk_ctx = gfaestus.vk_context();
+
+        if vk_ctx.portability_subset {
+            let subset_features =
+                gfaestus.vk_context().portability_features().unwrap();
+            println!("subset_features: {:?}", subset_features);
+            subset_features.tessellation_isolines == vk::FALSE
+        } else {
+            false
+        }
+    };
+
+    if use_quad_renderer {
+        warn!("using the quad edge renderer");
+    } else {
+        warn!("using the isoline edge renderer");
+    }
 
     let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,

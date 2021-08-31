@@ -8,9 +8,13 @@ use ash::{
 };
 use ash::{vk, Device, Entry, Instance};
 
+use bstr::ByteSlice;
 use winit::window::Window;
 
-use std::ffi::{CStr, CString};
+use std::{
+    ffi::{CStr, CString},
+    os::raw::c_char,
+};
 
 use anyhow::Result;
 
@@ -360,7 +364,8 @@ pub(super) fn create_logical_device(
 
     device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
 
-    let available_features = unsafe { instance.get_physical_device_features(device) };
+    let available_features =
+        unsafe { instance.get_physical_device_features(device) };
 
     let mut device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
@@ -420,7 +425,6 @@ fn device_supports_features(
     device: vk::PhysicalDevice,
 ) -> Result<bool> {
     let features = unsafe { instance.get_physical_device_features(device) };
-
 
     let mut result = true;
 
