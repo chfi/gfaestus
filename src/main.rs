@@ -274,12 +274,15 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
+    let use_quad_renderer = true;
+
     let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,
         &graph_query.graph_arc(),
         universe.layout(),
         gfaestus.msaa_samples,
         gfaestus.render_passes.edges,
+        use_quad_renderer,
     )
     .unwrap();
 
