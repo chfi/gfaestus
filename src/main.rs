@@ -793,9 +793,18 @@ fn main() {
 
                 let debug_utils = debug_utils.as_ref();
 
+                let swapchain_dims = gfaestus.swapchain_dims();
+
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         let size = window.inner_size();
+
+                        // let dims: [u32; 2] = swapchain_dims.into();
+
+                        // if [size.width, size.height] != dims {
+                        //     return;
+                        // }
+
 
                         debug::begin_cmd_buf_label(
                             debug_utils,
@@ -1021,7 +1030,8 @@ fn main() {
 
                     };
 
-                dirty_swapchain = gfaestus.draw_frame_from(draw).unwrap();
+                let size = window.inner_size();
+                dirty_swapchain = gfaestus.draw_frame_from([size.width, size.height], draw).unwrap();
 
                 if !dirty_swapchain {
                     let screen_dims = app.dims();

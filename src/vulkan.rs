@@ -32,6 +32,8 @@ use render_pass::Framebuffers;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+use crate::view::ScreenDims;
+
 #[derive(Clone)]
 pub struct Queues {
     graphics_queue: Arc<Mutex<vk::Queue>>,
@@ -136,6 +138,7 @@ pub struct GfaestusVk {
     in_flight_frames: InFlightFrames,
 
     pub vk_context: VkContext,
+    // dimensions: ScreenDims,
 }
 
 impl GfaestusVk {
@@ -307,14 +310,33 @@ impl GfaestusVk {
         Ok(result)
     }
 
+    pub fn swapchain_dims(&self) -> ScreenDims {
+        let extent = self.swapchain_props.extent;
+
+        ScreenDims {
+            width: extent.width as f32,
+            height: extent.height as f32,
+        }
+    }
+
     pub fn vk_context(&self) -> &VkContext {
         &self.vk_context
     }
 
-    pub fn draw_frame_from<F>(&mut self, commands: F) -> Result<bool>
+    pub fn draw_frame_from<F>(
+        &mut self,
+        window_size: [u32; 2],
+        commands: F,
+    ) -> Result<bool>
     where
         F: FnOnce(&Device, vk::CommandBuffer, &Framebuffers),
     {
+        let dims: [u32; 2] = self.swapchain_dims().into();
+
+        if window_size != dims {
+            return Ok(true);
+        }
+
         let sync_objects = self.in_flight_frames.next().unwrap();
 
         let img_available = sync_objects.image_available_semaphore;

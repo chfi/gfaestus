@@ -66,6 +66,20 @@ impl From<[u32; 2]> for ScreenDims {
     }
 }
 
+impl Into<[f32; 2]> for ScreenDims {
+    #[inline]
+    fn into(self) -> [f32; 2] {
+        [self.width, self.height]
+    }
+}
+
+impl Into<[u32; 2]> for ScreenDims {
+    #[inline]
+    fn into(self) -> [u32; 2] {
+        [self.width as u32, self.height as u32]
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 pub struct View {
     pub center: Point,

@@ -671,22 +671,16 @@ where
 
         let host_data = reactor.create_host(
             move |outbox: &Outbox<_>, input: OverlayInput<C>| {
-                dbg!();
-                log::warn!("in overlay host");
-                dbg!();
                 use rayon::prelude::*;
 
-                dbg!();
                 let running_msg = |msg: &str| {
                     outbox.insert_blocking(Err(OverlayFeedback::Running(
                         msg.to_string(),
                     )));
                 };
 
-                dbg!();
                 running_msg("Retrieving path steps");
 
-                dbg!();
                 let steps =
                     graph.path_pos_steps(input.path).ok_or_else(|| {
                         OverlayFeedback::Error(format!(
@@ -695,18 +689,15 @@ where
                         ))
                     })?;
 
-                dbg!();
                 let offset =
                     graph.graph().get_path_name_vec(input.path).and_then(
                         |name| crate::annotations::path_name_offset(&name),
                     );
 
-                dbg!();
                 let indices = &input.indices;
 
                 running_msg("Calculating node colors");
 
-                dbg!();
                 let colors_vec: Vec<(Vec<NodeId>, rgb::RGBA<f32>)> = rayon_pool
                     .install(|| {
                         indices
@@ -737,7 +728,6 @@ where
                             .collect::<Vec<_>>()
                     });
 
-                dbg!();
                 let mut node_colors: FxHashMap<NodeId, rgb::RGBA<f32>> =
                     FxHashMap::default();
 
@@ -752,7 +742,6 @@ where
                     graph.node_count()
                 ];
 
-                dbg!();
                 for (id, color) in node_colors {
                     let ix = (id.0 - 1) as usize;
                     data[ix] = color;
@@ -766,7 +755,6 @@ where
                         data: overlay_data,
                     })
                     .unwrap();
-                dbg!();
 
                 Ok(())
             },
