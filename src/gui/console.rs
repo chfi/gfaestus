@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 
@@ -18,8 +18,10 @@ use log::debug;
 use crossbeam::atomic::AtomicCell;
 use rustc_hash::FxHashMap;
 
-use crate::graph_query::GraphQuery;
+use rhai::plugin::*;
+
 use crate::overlays::OverlayKind;
+use crate::{app::AppSettings, graph_query::GraphQuery};
 use crate::{app::OverlayState, geometry::*};
 
 pub struct Console<'a> {
@@ -31,14 +33,27 @@ pub struct Console<'a> {
     scope: rhai::Scope<'a>,
 
     request_focus: bool,
+
+    settings: AppSettings,
+
+    get_set: Arc<GetSetTruth>,
 }
 
 impl<'a> Console<'a> {
     pub const ID: &'static str = "quake_console";
     pub const ID_TEXT: &'static str = "quake_console_input";
 
-    pub fn new() -> Self {
+    pub fn new(settings: AppSettings) -> Self {
         let scope = rhai::Scope::new();
+
+        let mut get_set = GetSetTruth::default();
+
+        get_set.add_arc_atomic_cell_get_set(
+            "label_radius",
+            settings.label_radius().clone(),
+            |rad| rad.into(),
+            |rad| rad.as_float().unwrap() as f32,
+        );
 
         Self {
             input_line: String::new(),
@@ -49,16 +64,42 @@ impl<'a> Console<'a> {
             scope,
 
             request_focus: false,
+            settings,
+
+            get_set: Arc::new(get_set),
         }
     }
 
-    fn create_engine() -> rhai::Engine {
+    fn create_engine(&self) -> rhai::Engine {
         use rhai::plugin::*;
 
         let mut engine = rhai::Engine::new();
 
         engine.register_type::<NodeId>();
         engine.register_type::<Handle>();
+
+        let rad1 = self.settings.label_radius().clone();
+        let rad2 = self.settings.label_radius().clone();
+
+        engine.register_fn("get_label_radius", move || rad1.load());
+
+        engine.register_fn("set_label_radius", move |x: f32| {
+            rad2.store(x);
+        });
+
+        let get_set = self.get_set.clone();
+
+        engine.register_fn("get", move |name: &str| {
+            let getter = get_set.getters.get(name).unwrap();
+            getter()
+        });
+
+        let get_set = self.get_set.clone();
+
+        engine.register_fn("set", move |name: &str, val: rhai::Dynamic| {
+            let setter = get_set.setters.get(name).unwrap();
+            setter(val);
+        });
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);
 
@@ -72,7 +113,7 @@ impl<'a> Console<'a> {
     }
 
     pub fn eval(&mut self) -> Result<()> {
-        let engine = Self::create_engine();
+        let engine = self.create_engine();
 
         debug!("evaluating: {}", &self.input_line);
 
@@ -157,5 +198,45 @@ impl<'a> Console<'a> {
                 }
             });
         // });
+    }
+}
+
+// #[export_module]
+// pub mod console_plugin {
+//     pub fn get_edge_width(
+
+// }
+
+#[derive(Default)]
+pub struct GetSetTruth {
+    getters:
+        HashMap<String, Box<dyn Fn() -> rhai::Dynamic + Send + Sync + 'static>>,
+    setters:
+        HashMap<String, Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>>,
+}
+
+impl GetSetTruth {
+    pub fn add_arc_atomic_cell_get_set<T>(
+        &mut self,
+        name: &str,
+        arc: Arc<AtomicCell<T>>,
+        to_dyn: impl Fn(T) -> rhai::Dynamic + Send + Sync + 'static,
+        from_dyn: impl Fn(rhai::Dynamic) -> T + Send + Sync + 'static,
+    ) where
+        T: Copy + Send + Sync + 'static,
+    {
+        let arc_ = arc.clone();
+        let getter = move || {
+            let t = arc_.load();
+            to_dyn(t)
+        };
+
+        let setter = move |v: rhai::Dynamic| {
+            let v = from_dyn(v);
+            arc.store(v);
+        };
+
+        self.getters.insert(name.to_string(), Box::new(getter) as _);
+        self.setters.insert(name.to_string(), Box::new(setter) as _);
     }
 }

@@ -469,7 +469,7 @@ impl Gui {
             frame_input,
 
             shared_state,
-            settings,
+            settings: settings.clone(),
 
             draw_system,
 
@@ -498,7 +498,7 @@ impl Gui {
             annotation_file_list,
 
             console_down: false,
-            console: Console::new(),
+            console: Console::new(settings.to_owned()),
         };
 
         Ok(gui)
