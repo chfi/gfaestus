@@ -23,12 +23,6 @@ void main() {
   vec2 p = gl_in[0].gl_Position.xy;
   vec2 q = gl_in[1].gl_Position.xy;
 
-  vec2 diff = q - p;
-  vec2 n_diff = normalize(diff);
-
-  vec2 rn_diff = vec2(-n_diff.y, n_diff.x);
-  vec4 rot_diff = vec4(rn_diff.xy, 0.0, 0.0);
-
   float node_width = node_uniform.node_width /
             (node_uniform.scale * max(node_uniform.viewport_dims.x,
                                       node_uniform.viewport_dims.y));
@@ -36,6 +30,11 @@ void main() {
   vec4 p_ = node_uniform.view_transform * gl_in[0].gl_Position;
   vec4 q_ = node_uniform.view_transform * gl_in[1].gl_Position;
 
+  vec2 diff = q_.xy - p_.xy;
+  vec2 n_diff = normalize(diff);
+
+  vec2 rn_diff = vec2(-n_diff.y, n_diff.x);
+  vec4 rot_diff = vec4(rn_diff.xy, 0.0, 0.0);
 
   vec4 tl = p_ + rot_diff * node_width;
   vec4 tr = p_ - rot_diff * node_width;

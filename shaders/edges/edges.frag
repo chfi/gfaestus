@@ -1,15 +1,7 @@
 #version 450
 
-// #include "ubo.glsl"
-
-// layout (early_fragment_tests) in;
-
-// flat layout (location = 0) in int node_id;
-
-
 layout (std140, set = 0, binding = 0) uniform UBO
 {
-  // UBO ubo;
   vec4 edge_color;
   float edge_width;
 
@@ -17,11 +9,6 @@ layout (std140, set = 0, binding = 0) uniform UBO
 
   float curve_offset;
 } ubo;
-
-// layout (set = 0, binding = 0) uniform UBOStruct
-// {
-//   UBO ubo;
-// } ubo;
 
 layout (location = 0) out vec4 f_color;
 
@@ -35,5 +22,4 @@ layout (push_constant) uniform NodePC {
 
 void main() {
   f_color = ubo.edge_color;
-  // f_color = vec4(0.0, 0.0, 0.0, 1.0);
 }
