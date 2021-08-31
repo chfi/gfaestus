@@ -85,11 +85,11 @@ impl NodeWidth {
 impl std::default::Default for NodeWidth {
     fn default() -> Self {
         Self {
-            min_node_width: AtomicCell::new(0.1),
-            max_node_width: AtomicCell::new(100.0),
+            min_node_width: AtomicCell::new(5.0),
+            max_node_width: AtomicCell::new(150.0),
 
-            min_scale: AtomicCell::new(0.1),
-            max_scale: AtomicCell::new(200.0),
+            min_scale: AtomicCell::new(1.0),
+            max_scale: AtomicCell::new(50.0),
         }
     }
 }

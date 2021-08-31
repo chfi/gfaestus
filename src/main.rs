@@ -869,9 +869,7 @@ fn main() {
                         );
 
                         if let Some(overlay) = overlay {
-
                             let gradient_name = app.shared_state().overlay_state().gradient();
-
                             let gradient = gradients.gradient(gradient_name).unwrap();
 
                             main_view.draw_nodes_new(

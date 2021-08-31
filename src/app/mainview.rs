@@ -281,13 +281,6 @@ impl MainView {
             let min_scale = self.node_width.min_scale();
             let max_scale = self.node_width.max_scale();
 
-            // let norm_scale =
-            //     1.0 - ((view.scale - min_scale) / (max_scale - min_scale));
-
-            // let easing_val =
-            //     EasingExpoIn::value_at_normalized_time(norm_scale as f64)
-            //         as f32;
-
             let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
 
             let easing_val =
