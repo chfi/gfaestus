@@ -66,7 +66,7 @@ impl<'a> Console<'a> {
                     $name,
                     $arc,
                     |x| rhai::Dynamic::from(x),
-                    |x: rhai::Dynamic| x.cast::<$type>(),
+                    |x: rhai::Dynamic| x.try_cast::<$type>(),
                 );
             };
         }
@@ -88,10 +88,10 @@ impl<'a> Console<'a> {
                     {
                         let ubo = $ubo.clone();
                         move |val: rhai::Dynamic| {
-                            let x = val.cast::<$type>();
+                            let x = val.try_cast::<$type>()?;
                             let mut ubo = ubo.load();
                             ubo.$field = x;
-                            ubo
+                            Some(ubo)
                         }
                     },
                 );
@@ -148,7 +148,7 @@ impl<'a> Console<'a> {
                     tess_vec
                         .get(ix)
                         .cloned()
-                        .map(|v: rhai::Dynamic| v.cast())
+                        .and_then(|v: rhai::Dynamic| v.try_cast())
                         .unwrap_or(0.0f32)
                 };
                 let arr = [get(0), get(1), get(2), get(3), get(4)];
@@ -218,6 +218,10 @@ impl<'a> Console<'a> {
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
             app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
+        });
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("toggle_overlay", move || {
+            app_msg_tx.send(crate::app::AppMsg::ToggleOverlay).unwrap();
         });
 
         engine.register_fn("get", move |name: &str| {
@@ -365,7 +369,7 @@ impl GetSetTruth {
         name: &str,
         arc: Arc<AtomicCell<T>>,
         to_dyn: impl Fn(T) -> rhai::Dynamic + Send + Sync + 'static,
-        from_dyn: impl Fn(rhai::Dynamic) -> T + Send + Sync + 'static,
+        from_dyn: impl Fn(rhai::Dynamic) -> Option<T> + Send + Sync + 'static,
     ) where
         T: Copy + Send + Sync + 'static,
     {
@@ -376,8 +380,9 @@ impl GetSetTruth {
         };
 
         let setter = move |v: rhai::Dynamic| {
-            let v = from_dyn(v);
-            arc.store(v);
+            if let Some(v) = from_dyn(v) {
+                arc.store(v);
+            }
         };
 
         self.getters.insert(name.to_string(), Box::new(getter) as _);
