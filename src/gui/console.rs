@@ -298,76 +298,76 @@ impl<'a> Console<'a> {
             return;
         }
 
-        egui::Area::new(Self::ID)
+        egui::Window::new(Self::ID)
+            .resizable(false)
+            .auto_sized()
+            .title_bar(false)
+            .collapsible(false)
             .enabled(is_down)
             .anchor(egui::Align2::CENTER_TOP, Point::new(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.set_width(ctx.input().screen_rect().width());
 
-                ui.group(|ui| {
-                    let skip_count =
-                        self.output_history.len().checked_sub(20).unwrap_or(0);
+                let skip_count =
+                    self.output_history.len().checked_sub(20).unwrap_or(0);
 
-                    for (ix, output_line) in self
-                        .output_history
-                        .iter()
-                        .skip(skip_count)
-                        .enumerate()
-                        .take(20)
-                    {
-                        ui.add(egui::Label::new(output_line).code());
+                for (_ix, output_line) in self
+                    .output_history
+                    .iter()
+                    .skip(skip_count)
+                    .enumerate()
+                    .take(20)
+                {
+                    let label = egui::Label::new(output_line).monospace();
+                    ui.add(label);
+                }
+
+                let input = ui.add(
+                    egui::TextEdit::singleline(&mut self.input_line)
+                        .id(egui::Id::new(Self::ID_TEXT))
+                        .code_editor()
+                        .lock_focus(true)
+                        .desired_width(ui.available_width()),
+                );
+
+                // hack to keep input
+                if self.request_focus {
+                    if input.has_focus() {
+                        self.request_focus = false;
                     }
+                    input.request_focus();
+                }
 
-                    let input = ui.add_sized(
-                        ui.available_size(),
-                        egui::TextEdit::singleline(&mut self.input_line)
-                            .id(egui::Id::new(Self::ID_TEXT))
-                            .code_editor()
-                            .lock_focus(true)
-                            .desired_width(ui.available_width()),
-                    );
+                if ui.input().key_pressed(egui::Key::ArrowUp) {
+                    self.step_history(true);
+                }
 
-                    // hack to keep input
-                    if self.request_focus {
-                        if input.has_focus() {
-                            self.request_focus = false;
-                        } else {
-                            input.request_focus();
-                        }
-                    }
+                if ui.input().key_pressed(egui::Key::ArrowDown) {
+                    self.step_history(false);
+                }
 
-                    if ui.input().key_pressed(egui::Key::ArrowUp) {
-                        self.step_history(true);
-                    }
+                if input.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    self.input_history.push(self.input_line.clone());
+                    self.output_history.push(format!("> {}", self.input_line));
 
-                    if ui.input().key_pressed(egui::Key::ArrowDown) {
-                        self.step_history(false);
-                    }
+                    self.eval().unwrap();
 
-                    if input.lost_focus()
-                        && ui.input().key_pressed(egui::Key::Enter)
-                    {
-                        self.input_history.push(self.input_line.clone());
-                        self.output_history
-                            .push(format!("> {}", self.input_line));
+                    let mut line =
+                        String::with_capacity(self.input_line.capacity());
+                    std::mem::swap(&mut self.input_line, &mut line);
 
-                        self.eval().unwrap();
+                    self.input_line.clear();
 
-                        let mut line =
-                            String::with_capacity(self.input_line.capacity());
-                        std::mem::swap(&mut self.input_line, &mut line);
+                    self.input_history_ix.take();
 
-                        self.input_line.clear();
-
-                        self.input_history_ix.take();
-
-                        // input.request_focus() has to be called the
-                        // frame *after* this piece of code is ran, hence
-                        // the bool etc.
-                        // input.request_focus();
-                        self.request_focus = true;
-                    }
-                });
+                    // input.request_focus() has to be called the
+                    // frame *after* this piece of code is ran, hence
+                    // the bool etc.
+                    // input.request_focus();
+                    self.request_focus = true;
+                }
             });
     }
 
@@ -384,11 +384,9 @@ impl<'a> Console<'a> {
                       .then(|| *ix += 1))
                 .map(|_| *ix);
 
-            if let Some(ix) = ix {
-                let line = &mut self.input_line;
-                if let Some(input) = self.input_history.get(ix) {
-                    line.clone_from(input);
-                }
+            let input_history = &self.input_history;
+            if let Some(ix) = ix.and_then(|ix| input_history.get(ix)) {
+                self.input_line.clone_from(ix);
             } else {
                 self.input_line.clear();
                 self.input_history_ix = None;
