@@ -30,8 +30,7 @@ nalgebra = "0.24"
 nalgebra-glm = "0.10"
 
 gfa = { version = "0.10" }
-handlegraph = { path = "../rs-handlegraph" }
-# handlegraph = "0.7.0-alpha.7"
+handlegraph = "0.7.0-alpha.7"
 
 anyhow = "1.0"
 
@@ -50,3 +49,7 @@ flexi_logger = { version = "0.18", features = ["async"] }
 
 [profile.dev]
 opt-level = 2
+
+
+[patch.crates-io]
+handlegraph = { git = "https://github.com/chfi/rs-handlegraph" }
