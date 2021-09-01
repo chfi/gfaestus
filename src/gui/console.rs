@@ -359,43 +359,35 @@ impl<'a> Console<'a> {
                     self.request_focus = true;
                 }
             });
-        // });
     }
 
-    fn step_history(&mut self, step_backward: bool) {
-        if let Some(ix) = self.input_history_ix.as_mut() {
-            let mut clear = false;
+    fn step_history(&mut self, backward: bool) {
+        if self.input_history.is_empty() {
+            return;
+        }
 
-            if step_backward {
-                if *ix > 0 {
-                    *ix -= 1;
-                    if let Some(line) = self.input_history.get(*ix) {
-                        self.input_line.clone_from(line);
-                    }
-                } else {
-                    clear = true;
+        if let Some(ix) = self.input_history_ix.as_mut() {
+            #[rustfmt::skip]
+            let ix = (backward && *ix > 0)
+                      .then(|| *ix -= 1)
+                .or((!backward && *ix < self.input_history.len())
+                      .then(|| *ix += 1))
+                .map(|_| *ix);
+
+            if let Some(ix) = ix {
+                let line = &mut self.input_line;
+                if let Some(input) = self.input_history.get(ix) {
+                    line.clone_from(input);
                 }
             } else {
-                if *ix < self.input_history.len() {
-                    *ix += 1;
-                    if let Some(line) = self.input_history.get(*ix) {
-                        self.input_line.clone_from(line);
-                    }
-                } else {
-                    clear = true;
-                }
-            }
-
-            if clear {
                 self.input_line.clear();
                 self.input_history_ix = None;
             }
         } else {
-            let ix = if step_backward {
-                self.input_history.len() - 1
-            } else {
-                0
-            };
+            let ix = backward
+                .then(|| self.input_history.len().checked_sub(1))
+                .flatten()
+                .unwrap_or(0);
 
             self.input_history_ix = Some(ix);
 
