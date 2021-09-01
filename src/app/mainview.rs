@@ -219,8 +219,8 @@ impl MainView {
             let min = self.node_width.min_node_width();
             let max = self.node_width.max_node_width();
 
-            let min_scale = self.node_width.min_scale();
-            let max_scale = self.node_width.max_scale();
+            let min_scale = self.node_width.min_node_scale();
+            let max_scale = self.node_width.max_node_scale();
 
             let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
 
@@ -278,8 +278,8 @@ impl MainView {
             let min = self.node_width.min_node_width();
             let max = self.node_width.max_node_width();
 
-            let min_scale = self.node_width.min_scale();
-            let max_scale = self.node_width.max_scale();
+            let min_scale = self.node_width.min_node_scale();
+            let max_scale = self.node_width.max_node_scale();
 
             let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
 

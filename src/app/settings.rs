@@ -45,8 +45,8 @@ pub struct NodeWidth {
     min_node_width: AtomicCell<f32>,
     max_node_width: AtomicCell<f32>,
 
-    min_scale: AtomicCell<f32>,
-    max_scale: AtomicCell<f32>,
+    min_node_scale: AtomicCell<f32>,
+    max_node_scale: AtomicCell<f32>,
 }
 
 impl NodeWidth {
@@ -57,12 +57,12 @@ impl NodeWidth {
     pub fn max_node_width(&self) -> f32 {
         self.max_node_width.load()
     }
-    pub fn min_scale(&self) -> f32 {
-        self.min_scale.load()
+    pub fn min_node_scale(&self) -> f32 {
+        self.min_node_scale.load()
     }
 
-    pub fn max_scale(&self) -> f32 {
-        self.max_scale.load()
+    pub fn max_node_scale(&self) -> f32 {
+        self.max_node_scale.load()
     }
 
     pub fn set_min_node_width(&self, width: f32) {
@@ -73,12 +73,12 @@ impl NodeWidth {
         self.max_node_width.store(width);
     }
 
-    pub fn set_min_scale(&self, width: f32) {
-        self.min_scale.store(width);
+    pub fn set_min_node_scale(&self, width: f32) {
+        self.min_node_scale.store(width);
     }
 
-    pub fn set_max_scale(&self, width: f32) {
-        self.max_scale.store(width);
+    pub fn set_max_node_scale(&self, width: f32) {
+        self.max_node_scale.store(width);
     }
 }
 
@@ -88,8 +88,8 @@ impl std::default::Default for NodeWidth {
             min_node_width: AtomicCell::new(5.0),
             max_node_width: AtomicCell::new(150.0),
 
-            min_scale: AtomicCell::new(1.0),
-            max_scale: AtomicCell::new(50.0),
+            min_node_scale: AtomicCell::new(1.0),
+            max_node_scale: AtomicCell::new(50.0),
         }
     }
 }

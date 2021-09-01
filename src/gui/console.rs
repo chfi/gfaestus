@@ -131,10 +131,6 @@ impl<'a> Console<'a> {
         add_nested_cast!(edge.clone(), edge_width, f32);
         add_nested_cast!(edge.clone(), curve_offset, f32);
 
-        let n_width = settings.node_width().clone();
-
-        // add_nested_cast!(n_width.clone(), min_node_width, f32);
-
         let e1 = edge.clone();
         let e2 = edge.clone();
 
@@ -160,15 +156,40 @@ impl<'a> Console<'a> {
             },
         );
 
-        let nw = settings.node_width().clone();
-        let nw_ = settings.node_width().clone();
+        macro_rules! add_nested___ {
+            ($obj:expr, $get:tt, $set:tt) => {
+                let nw = $obj.clone();
+                let nw_ = $obj.clone();
 
-        get_set.add_dynamic(
-            "min_node_width",
-            move || nw.min_node_width(),
-            move |v: f32| {
-                nw_.set_min_node_width(v);
-            },
+                get_set.add_dynamic(
+                    stringify!($get),
+                    move || nw.$get(),
+                    move |v| {
+                        nw_.$set(v);
+                    },
+                )
+            };
+        }
+
+        add_nested___!(
+            settings.node_width().clone(),
+            min_node_width,
+            set_min_node_width
+        );
+        add_nested___!(
+            settings.node_width().clone(),
+            max_node_width,
+            set_max_node_width
+        );
+        add_nested___!(
+            settings.node_width().clone(),
+            min_node_scale,
+            set_min_node_scale
+        );
+        add_nested___!(
+            settings.node_width().clone(),
+            max_node_scale,
+            set_max_node_scale
         );
 
         Self {
@@ -197,15 +218,6 @@ impl<'a> Console<'a> {
         engine.register_type::<Handle>();
 
         engine.register_global_module(colors.into());
-
-        let rad1 = self.settings.label_radius().clone();
-        let rad2 = self.settings.label_radius().clone();
-
-        engine.register_fn("get_label_radius", move || rad1.load());
-
-        engine.register_fn("set_label_radius", move |x: f32| {
-            rad2.store(x);
-        });
 
         let get_set = self.get_set.clone();
 
