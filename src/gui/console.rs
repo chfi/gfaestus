@@ -215,23 +215,10 @@ impl<'a> Console<'a> {
         engine.register_fn("ptx", |point: Point| point.x);
         engine.register_fn("pty", |point: Point| point.y);
 
-        {
-            let dark_mode = self.shared_state.dark_mode().clone();
-            let gui_msg_tx = self.channels.gui_tx.clone();
-
-            engine.register_fn("toggle_dark_mode", move || {
-                use crate::gui::GuiMsg;
-
-                let prev = dark_mode.fetch_xor(true);
-                let msg = if prev {
-                    GuiMsg::SetLightMode
-                } else {
-                    GuiMsg::SetDarkMode
-                };
-
-                gui_msg_tx.send(msg).unwrap();
-            });
-        }
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("toggle_dark_mode", move || {
+            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
+        });
 
         engine.register_fn("get", move |name: &str| {
             if let Some(getter) = get_set.getters.get(name) {

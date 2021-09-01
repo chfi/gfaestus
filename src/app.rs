@@ -102,6 +102,7 @@ pub enum AppMsg {
     HoverNode(Option<NodeId>),
 
     ToggleOverlay,
+    ToggleDarkMode,
 
     AddGff3Records(Gff3Records),
     AddBedRecords(BedRecords),
@@ -185,8 +186,9 @@ impl App {
     pub fn apply_app_msg(
         &mut self,
         main_view_msg_tx: &Sender<MainViewMsg>,
-        msg: AppMsg,
+        gui_msg: &Sender<GuiMsg>,
         node_positions: &[Node],
+        msg: AppMsg,
     ) {
         match msg {
             AppMsg::RectSelect(_rect) => {
@@ -328,9 +330,6 @@ impl App {
                         Some((top_left, bottom_right));
                 }
             },
-            AppMsg::ToggleOverlay => {
-                self.shared_state.overlay_state.toggle_overlay();
-            }
             AppMsg::AddGff3Records(records) => {
                 let file_name = records.file_name().to_string();
                 self.annotations.insert_gff3(&file_name, records);
@@ -342,7 +341,25 @@ impl App {
             AppMsg::NewNodeLabels { name, label_set } => {
                 self.annotations.insert_label_set(&name, label_set);
             }
+            AppMsg::ToggleDarkMode => {
+                self.toggle_dark_mode(gui_msg);
+            }
+            AppMsg::ToggleOverlay => {
+                self.shared_state.overlay_state.toggle_overlay();
+            }
         }
+    }
+
+    fn toggle_dark_mode(&self, gui_msg: &Sender<GuiMsg>) {
+        let prev = self.shared_state.dark_mode.fetch_xor(true);
+
+        let msg = if prev {
+            GuiMsg::SetLightMode
+        } else {
+            GuiMsg::SetDarkMode
+        };
+
+        gui_msg.send(msg).unwrap();
     }
 
     pub fn apply_input(
@@ -361,15 +378,7 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        let prev = self.shared_state.dark_mode.fetch_xor(true);
-
-                        let msg = if prev {
-                            GuiMsg::SetLightMode
-                        } else {
-                            GuiMsg::SetDarkMode
-                        };
-
-                        gui_msg.send(msg).unwrap();
+                        self.toggle_dark_mode(gui_msg);
                     }
                 }
                 AppInput::KeyToggleOverlay => {

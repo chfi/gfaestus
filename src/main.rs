@@ -480,8 +480,9 @@ fn main() {
 
                     app.apply_app_msg(
                         main_view.main_view_msg_tx(),
-                        app_msg,
+                        &gui_msg_tx,
                         universe.layout().nodes(),
+                        app_msg,
                     );
                 }
 
