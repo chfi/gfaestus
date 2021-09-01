@@ -290,6 +290,10 @@ impl<'a> Console<'a> {
         Ok(())
     }
 
+    // fn eval_file_interval(&mut self, print: bool, handle_name: &str, path: &str) -> Result<()> {
+
+    // }
+
     pub fn eval(&mut self, print: bool) -> Result<()> {
         let engine = self.create_engine();
 

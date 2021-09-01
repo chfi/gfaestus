@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
-use futures::task::SpawnExt;
+use futures::{future::RemoteHandle, task::SpawnExt};
 
 mod paired;
 
@@ -66,5 +66,36 @@ impl Reactor {
             .expect("Error when spawning reactor task");
 
         host
+    }
+
+    pub fn spawn_interval<F>(
+        &mut self,
+        func: F,
+        dur: std::time::Duration,
+    ) -> anyhow::Result<RemoteHandle<()>>
+    where
+        F: Fn(f64) + Send + Sync + 'static,
+    {
+        use futures_timer::Delay;
+        use std::time::{Duration, SystemTime};
+
+        let result = self.thread_pool.spawn_with_handle(async move {
+            let looper = || {
+                let delay = Delay::new(dur);
+                async {
+                    delay.await;
+                    let t = SystemTime::now()
+                        .duration_since(SystemTime::UNIX_EPOCH)
+                        .unwrap_or(Duration::from_secs_f64(0.0))
+                        .as_secs_f64();
+                    func(t);
+                }
+            };
+
+            loop {
+                looper().await;
+            }
+        })?;
+        Ok(result)
     }
 }

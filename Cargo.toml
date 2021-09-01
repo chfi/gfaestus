@@ -22,6 +22,7 @@ crossbeam = "0.8"
 parking_lot = "0.11.1"
 rayon = "1.5"
 futures = { version = "0.3", features = ["thread-pool"] }
+futures-timer = { version = "3.0.2" }
 
 rgb = "0.8.25"
 colorous = "1.0.5"
