@@ -68,6 +68,7 @@ impl Reactor {
         host
     }
 
+    /*
     pub fn spawn_interval<F>(
         &mut self,
         func: F,
@@ -94,6 +95,37 @@ impl Reactor {
 
             loop {
                 looper().await;
+            }
+        })?;
+        Ok(result)
+    }
+    */
+
+    pub fn spawn_interval<F>(
+        &mut self,
+        mut func: F,
+        dur: std::time::Duration,
+    ) -> anyhow::Result<RemoteHandle<()>>
+    where
+        F: FnMut() + Send + Sync + 'static,
+    {
+        use futures_timer::Delay;
+
+        let result = self.thread_pool.spawn_with_handle(async move {
+            /*
+            let looper = || {
+                let delay = Delay::new(dur);
+                async {
+                    delay.await;
+                    func();
+                }
+            };
+            */
+
+            loop {
+                let delay = Delay::new(dur);
+                delay.await;
+                func();
             }
         })?;
         Ok(result)

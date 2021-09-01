@@ -2,6 +2,7 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use clipboard::{ClipboardContext, ClipboardProvider};
 
+use futures::future::RemoteHandle;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -18,13 +19,14 @@ use log::debug;
 use crossbeam::atomic::AtomicCell;
 use rustc_hash::FxHashMap;
 
-use rhai::plugin::*;
+use rhai::{plugin::*, Func};
 
 use bstr::ByteSlice;
 
 use crate::{
     app::{AppChannels, OverlayState},
     geometry::*,
+    reactor::Reactor,
 };
 use crate::{
     app::{AppSettings, SharedState},
@@ -49,9 +51,11 @@ pub struct Console<'a> {
     channels: AppChannels,
 
     get_set: Arc<GetSetTruth>,
+
+    remote_handles: HashMap<String, RemoteHandle<()>>,
 }
 
-impl<'a> Console<'a> {
+impl Console<'static> {
     pub const ID: &'static str = "quake_console";
     pub const ID_TEXT: &'static str = "quake_console_input";
 
@@ -200,6 +204,8 @@ impl<'a> Console<'a> {
             shared_state,
 
             get_set: Arc::new(get_set),
+
+            remote_handles: Default::default(),
         }
     }
 
@@ -290,23 +296,53 @@ impl<'a> Console<'a> {
         Ok(())
     }
 
-    // fn eval_file_interval(&mut self, print: bool, handle_name: &str, path: &str) -> Result<()> {
+    fn eval_file_interval(
+        &mut self,
+        reactor: &mut Reactor,
+        handle_name: &str,
+        path: &str,
+    ) -> Result<()> {
+        let handle_name = handle_name.to_string();
 
-    // }
-
-    pub fn eval(&mut self, print: bool) -> Result<()> {
         let engine = self.create_engine();
+        let mut scope = self.scope.clone();
 
-        debug!("evaluating: {}", &self.input_line);
+        let start = std::time::Instant::now();
 
+        let path = PathBuf::from(path);
+        let ast = engine.compile_file(path)?;
+
+        let handle = reactor.spawn_interval(
+            move || {
+                scope.set_value(
+                    "time_since_start",
+                    start.elapsed().as_secs_f32(),
+                );
+
+                let _result: std::result::Result<(), _> =
+                    engine.eval_ast_with_scope(&mut scope, &ast);
+            },
+            std::time::Duration::from_millis(30),
+        )?;
+
+        self.remote_handles.insert(handle_name, handle);
+
+        Ok(())
+    }
+
+    fn stop_interval(&mut self, handle_name: &str) {
+        self.remote_handles.remove(handle_name);
+    }
+
+    fn exec_console_command(&mut self, reactor: &mut Reactor) -> Result<bool> {
         if self.input_line.starts_with(":clear") {
             self.input_line.clear();
             self.output_history.clear();
 
-            return Ok(());
+            return Ok(true);
         } else if self.input_line.starts_with(":exec ") {
             let file_path = &self.input_line[6..].to_string();
-            let result = self.eval_file(print, &file_path);
+            let result = self.eval_file(true, &file_path);
 
             if let Err(err) = result {
                 debug!(
@@ -316,8 +352,50 @@ impl<'a> Console<'a> {
             }
             self.input_line.clear();
 
+            return Ok(true);
+        } else if self.input_line.starts_with(":start_interval ") {
+            let mut fields = self.input_line.split_ascii_whitespace();
+
+            fields.next();
+            let file_name = fields.next();
+            let handle_name = fields.next();
+
+            if let (Some(file), Some(handle)) = (file_name, handle_name) {
+                let file = file.to_string();
+                let handle = handle.to_string();
+                self.eval_file_interval(reactor, &handle, &file)?;
+            }
+
+            return Ok(true);
+        } else if self.input_line.starts_with(":end_interval ") {
+            let handle = &self.input_line[":end_interval ".len()..].to_string();
+            self.stop_interval(&handle);
+
+            return Ok(true);
+        }
+
+        Ok(false)
+    }
+
+    pub fn eval_input(
+        &mut self,
+        reactor: &mut Reactor,
+        print: bool,
+    ) -> Result<()> {
+        debug!("evaluating: {}", &self.input_line);
+
+        let executed_command = self.exec_console_command(reactor)?;
+        if executed_command {
             return Ok(());
         }
+        self.eval(print)?;
+
+        Ok(())
+    }
+
+    pub fn eval(&mut self, print: bool) -> Result<()> {
+        debug!("evaluating: {}", &self.input_line);
+        let engine = self.create_engine();
 
         let result = engine.eval_with_scope::<rhai::Dynamic>(
             &mut self.scope,
@@ -351,7 +429,12 @@ impl<'a> Console<'a> {
         Ok(())
     }
 
-    pub fn ui(&mut self, ctx: &egui::CtxRef, is_down: bool) {
+    pub fn ui(
+        &mut self,
+        ctx: &egui::CtxRef,
+        is_down: bool,
+        reactor: &mut Reactor,
+    ) {
         if !is_down {
             return;
         }
@@ -410,7 +493,7 @@ impl<'a> Console<'a> {
                     self.input_history.push(self.input_line.clone());
                     self.output_history.push(format!("> {}", self.input_line));
 
-                    self.eval(true).unwrap();
+                    self.eval_input(reactor, true).unwrap();
 
                     let mut line =
                         String::with_capacity(self.input_line.capacity());

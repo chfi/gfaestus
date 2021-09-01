@@ -625,6 +625,7 @@ fn main() {
                 }
 
                 gui.begin_frame(
+                    &mut reactor,
                     Some(app.dims().into()),
                     &graph_query,
                     &graph_query_worker,

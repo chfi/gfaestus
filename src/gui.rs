@@ -551,6 +551,7 @@ impl Gui {
 
     pub fn begin_frame(
         &mut self,
+        reactor: &mut Reactor,
         screen_rect: Option<Point>,
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
@@ -590,7 +591,7 @@ impl Gui {
         self.menu_bar
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
 
-        self.console.ui(&self.ctx, self.console_down);
+        self.console.ui(&self.ctx, self.console_down, reactor);
 
         self.view_state.apply_received();
 
