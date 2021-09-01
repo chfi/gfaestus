@@ -62,31 +62,9 @@ impl<'a> Console<'a> {
         add_f32!("label_radius", settings.label_radius().clone());
 
         macro_rules! add_nested_t {
-            ($into:expr, $from:expr, $ubo:expr, $field:tt) => {
-                get_set.add_arc_atomic_cell_get_set(
-                    stringify!($field),
-                    $ubo,
-                    $into,
-                    $from,
-                );
+            ($into:expr, $from:expr, $ubo:expr, $name:tt, $field:tt) => {
+                get_set.add_arc_atomic_cell_get_set($name, $ubo, $into, $from);
             };
-        }
-
-        macro_rules! add_nested_t_ {
-            ($into:expr, $from:expr, $ubo:expr, $field:tt) => {{
-                let ubo = $ubo.clone();
-                get_set.add_arc_atomic_cell_get_set(
-                    stringify!($field),
-                    $ubo,
-                    $into,
-                    move |val| {
-                        let x = $from(val);
-                        let mut ubo = ubo.load();
-                        ubo.$field = x;
-                        ubo
-                    },
-                );
-            }};
         }
 
         macro_rules! add_nested_f32 {
@@ -103,6 +81,7 @@ impl<'a> Console<'a> {
                         }
                     },
                     $ubo,
+                    stringify!($field),
                     $field
                 );
             };
@@ -110,24 +89,86 @@ impl<'a> Console<'a> {
 
         let edge = settings.edge_renderer().clone();
 
-        add_nested_f32!(edge.clone(), edge_width);
-        add_nested_f32!(edge.clone(), curve_offset);
-        add_nested_f32!(edge.clone(), curve_offset);
+        macro_rules! add_nested_cast {
+            ($ubo:expr, $field:tt, $type:ty, $name:tt) => {
+                add_nested_t!(
+                    move |cont| { rhai::Dynamic::from(cont.$field) },
+                    {
+                        let ubo = $ubo.clone();
+                        move |val: rhai::Dynamic| {
+                            let x = val.cast::<$type>();
+                            let mut ubo = ubo.load();
+                            ubo.$field = x;
+                            ubo
+                        }
+                    },
+                    $ubo,
+                    $name,
+                    $field
+                );
+            };
+            ($ubo:expr, $field:tt, $type:ty) => {{
+                let name = stringify!($field);
+                add_nested_t!(
+                    move |cont| { rhai::Dynamic::from(cont.$field) },
+                    {
+                        let ubo = $ubo.clone();
+                        move |val: rhai::Dynamic| {
+                            let x = val.cast::<$type>();
+                            let mut ubo = ubo.load();
+                            ubo.$field = x;
+                            ubo
+                        }
+                    },
+                    $ubo,
+                    name,
+                    $field
+                );
+            }};
+        }
 
-        add_nested_t!(
-            move |edge_ubo| { rhai::Dynamic::from(edge_ubo.edge_color) },
-            {
-                let ubo = edge.clone();
+        add_nested_cast!(edge.clone(), edge_color, rgb::RGB<f32>);
+        add_nested_cast!(edge.clone(), edge_width, f32);
+        add_nested_cast!(edge.clone(), curve_offset, f32);
 
-                move |val| {
-                    let x = val.cast::<rgb::RGB<f32>>();
-                    let mut ubo = ubo.load();
-                    ubo.edge_color = x;
-                    ubo
-                }
+        let n_width = settings.node_width().clone();
+
+        // add_nested_cast!(n_width.clone(), min_node_width, f32);
+
+        let e1 = edge.clone();
+        let e2 = edge.clone();
+
+        get_set.add_dynamic(
+            "tess_levels",
+            move || {
+                let tl = e1.load().tess_levels;
+                let get = |ix| rhai::Dynamic::from(tl[ix]);
+                vec![get(0), get(1), get(2), get(3), get(4)]
             },
-            edge.clone(),
-            edge_color
+            move |tess_vec: Vec<rhai::Dynamic>| {
+                let get = |ix| {
+                    tess_vec
+                        .get(ix)
+                        .cloned()
+                        .map(|v: rhai::Dynamic| v.cast())
+                        .unwrap_or(0.0f32)
+                };
+                let arr = [get(0), get(1), get(2), get(3), get(4)];
+                let mut ubo = e2.load();
+                ubo.tess_levels = arr;
+                e2.store(ubo);
+            },
+        );
+
+        let nw = settings.node_width().clone();
+        let nw_ = settings.node_width().clone();
+
+        get_set.add_dynamic(
+            "min_node_width",
+            move || nw.min_node_width(),
+            move |v: f32| {
+                nw_.set_min_node_width(v);
+            },
         );
 
         Self {
@@ -322,6 +363,28 @@ impl GetSetTruth {
         let setter = move |v: rhai::Dynamic| {
             let v = from_dyn(v);
             arc.store(v);
+        };
+
+        self.getters.insert(name.to_string(), Box::new(getter) as _);
+        self.setters.insert(name.to_string(), Box::new(setter) as _);
+    }
+
+    pub fn add_dynamic<T>(
+        &mut self,
+        name: &str,
+        get: impl Fn() -> T + Send + Sync + 'static,
+        set: impl Fn(T) + Send + Sync + 'static,
+    ) where
+        T: Clone + Send + Sync + 'static,
+    {
+        let getter = move || {
+            let v = get();
+            rhai::Dynamic::from(v)
+        };
+
+        let setter = move |val: rhai::Dynamic| {
+            let val: T = val.cast();
+            set(val);
         };
 
         self.getters.insert(name.to_string(), Box::new(getter) as _);
