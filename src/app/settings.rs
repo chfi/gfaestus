@@ -10,6 +10,9 @@ pub struct AppSettings {
     edge_renderer: Arc<AtomicCell<EdgesUBO>>,
 
     label_radius: Arc<AtomicCell<f32>>,
+
+    background_color_light: Arc<AtomicCell<rgb::RGB<f32>>>,
+    background_color_dark: Arc<AtomicCell<rgb::RGB<f32>>>,
 }
 
 impl std::default::Default for AppSettings {
@@ -18,6 +21,13 @@ impl std::default::Default for AppSettings {
             node_width: Default::default(),
             edge_renderer: Default::default(),
             label_radius: Arc::new(50.0.into()),
+
+            background_color_light: Arc::new(
+                rgb::RGB::new(1.0, 1.0, 1.0).into(),
+            ),
+            background_color_dark: Arc::new(
+                rgb::RGB::new(0.1, 0.1, 0.2).into(),
+            ),
         }
     }
 }
@@ -37,6 +47,14 @@ impl AppSettings {
 
     pub fn label_radius(&self) -> &Arc<AtomicCell<f32>> {
         &self.label_radius
+    }
+
+    pub fn background_color_light(&self) -> &Arc<AtomicCell<rgb::RGB<f32>>> {
+        &self.background_color_light
+    }
+
+    pub fn background_color_dark(&self) -> &Arc<AtomicCell<rgb::RGB<f32>>> {
+        &self.background_color_dark
     }
 }
 

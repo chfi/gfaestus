@@ -5,10 +5,14 @@ use rustc_hash::FxHashSet;
 
 use std::{ffi::CString, ops::RangeInclusive};
 
+use crossbeam::atomic::AtomicCell;
+use std::sync::Arc;
+
 use nalgebra_glm as glm;
 
 use anyhow::Result;
 
+use crate::app::AppSettings;
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
 use crate::{
@@ -103,11 +107,12 @@ impl NodePipelines {
         node_width: f32,
         view: View,
         offset: Point,
+        background_color: rgb::RGB<f32>,
     ) -> Result<()> {
         let device = &self.theme_pipeline.device;
 
         let clear_values = {
-            let bg = self.theme_pipeline.active_background_color();
+            let bg = background_color;
             [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -222,6 +227,7 @@ impl NodePipelines {
         node_width: f32,
         view: View,
         offset: Point,
+        background_color: rgb::RGB<f32>,
         overlay: (usize, OverlayKind),
         color_scheme: &GradientTexture,
     ) -> Result<()> {
@@ -231,7 +237,7 @@ impl NodePipelines {
         let device = &self.overlay_pipeline.device;
 
         let clear_values = {
-            let bg = self.theme_pipeline.active_background_color();
+            let bg = background_color;
             [
                 vk::ClearValue {
                     color: vk::ClearColorValue {
@@ -328,7 +334,7 @@ impl NodePipelines {
         Ok(())
     }
 
-    pub fn draw_overlay(
+    fn draw_overlay(
         &self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
@@ -337,11 +343,12 @@ impl NodePipelines {
         node_width: f32,
         view: View,
         offset: Point,
+        background_color: rgb::RGB<f32>,
     ) -> Result<()> {
         let device = &self.overlay_pipeline.device;
 
         let clear_values = {
-            let bg = self.theme_pipeline.active_background_color();
+            let bg = background_color;
             [
                 vk::ClearValue {
                     color: vk::ClearColorValue {

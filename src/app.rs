@@ -361,12 +361,12 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        self.themes.toggle_previous_theme();
+                        let prev = self.shared_state.dark_mode.fetch_xor(true);
 
-                        let msg = if self.themes.is_active_theme_dark() {
-                            GuiMsg::SetDarkMode
-                        } else {
+                        let msg = if prev {
                             GuiMsg::SetLightMode
+                        } else {
+                            GuiMsg::SetDarkMode
                         };
 
                         gui_msg.send(msg).unwrap();

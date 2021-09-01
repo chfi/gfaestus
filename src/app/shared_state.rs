@@ -23,6 +23,8 @@ pub struct SharedState {
     pub gui_focus_state: GuiFocusState,
 
     pub edges_enabled: Arc<AtomicCell<bool>>,
+
+    pub dark_mode: Arc<AtomicCell<bool>>,
 }
 
 impl SharedState {
@@ -42,6 +44,7 @@ impl SharedState {
             gui_focus_state: GuiFocusState::default(),
 
             edges_enabled: Arc::new(true.into()),
+            dark_mode: Arc::new(false.into()),
         }
     }
 
@@ -67,6 +70,10 @@ impl SharedState {
 
     pub fn edges_enabled(&self) -> bool {
         self.edges_enabled.load()
+    }
+
+    pub fn dark_mode(&self) -> &Arc<AtomicCell<bool>> {
+        &self.dark_mode
     }
 
     pub fn clone_edges_enabled(&self) -> Arc<AtomicCell<bool>> {

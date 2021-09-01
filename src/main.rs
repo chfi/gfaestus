@@ -236,8 +236,9 @@ fn main() {
     let mut main_view = MainView::new(
         &gfaestus,
         app.clone_channels(),
+        app.settings.clone(),
         app.shared_state().clone(),
-        app.settings.node_width().clone(),
+        // app.settings.node_width().clone(),
         graph_query.node_count(),
     )
     .unwrap();
@@ -869,32 +870,20 @@ fn main() {
                             "Nodes",
                         );
 
-                        if let Some(overlay) = overlay {
-                            let gradient_name = app.shared_state().overlay_state().gradient();
-                            let gradient = gradients.gradient(gradient_name).unwrap();
+                        let gradient_name = app.shared_state().overlay_state().gradient();
+                        let gradient = gradients.gradient(gradient_name).unwrap();
 
-                            main_view.draw_nodes_new(
-                                cmd_buf,
-                                node_pass,
-                                framebuffers,
-                                size.into(),
-                                Point::ZERO,
-                                overlay,
-                                gradient,
-                                use_overlay,
-                            ).unwrap();
-                        } else {
-                            main_view
-                                .draw_nodes(
-                                    cmd_buf,
-                                    node_pass,
-                                    framebuffers,
-                                    size.into(),
-                                    Point::ZERO,
-                                    false,
-                                )
-                                .unwrap();
-                        }
+                        main_view.draw_nodes(
+                            cmd_buf,
+                            node_pass,
+                            framebuffers,
+                            size.into(),
+                            Point::ZERO,
+                            overlay,
+                            gradient,
+                            use_overlay,
+                        ).unwrap();
+
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
