@@ -20,9 +20,9 @@ use rustc_hash::FxHashMap;
 
 use rhai::plugin::*;
 
-use crate::overlays::OverlayKind;
 use crate::{app::AppSettings, graph_query::GraphQuery};
 use crate::{app::OverlayState, geometry::*};
+use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
 pub struct Console<'a> {
     input_line: String,
@@ -48,11 +48,86 @@ impl<'a> Console<'a> {
 
         let mut get_set = GetSetTruth::default();
 
-        get_set.add_arc_atomic_cell_get_set(
-            "label_radius",
-            settings.label_radius().clone(),
-            |rad| rad.into(),
-            |rad| rad.as_float().unwrap() as f32,
+        macro_rules! add_f32 {
+            ($name:literal, $arc:expr) => {
+                get_set.add_arc_atomic_cell_get_set(
+                    $name,
+                    $arc,
+                    |x| x.into(),
+                    |x| x.as_float().unwrap() as f32,
+                );
+            };
+        }
+
+        add_f32!("label_radius", settings.label_radius().clone());
+
+        macro_rules! add_nested_t {
+            ($into:expr, $from:expr, $ubo:expr, $field:tt) => {
+                get_set.add_arc_atomic_cell_get_set(
+                    stringify!($field),
+                    $ubo,
+                    $into,
+                    $from,
+                );
+            };
+        }
+
+        macro_rules! add_nested_t_ {
+            ($into:expr, $from:expr, $ubo:expr, $field:tt) => {{
+                let ubo = $ubo.clone();
+                get_set.add_arc_atomic_cell_get_set(
+                    stringify!($field),
+                    $ubo,
+                    $into,
+                    move |val| {
+                        let x = $from(val);
+                        let mut ubo = ubo.load();
+                        ubo.$field = x;
+                        ubo
+                    },
+                );
+            }};
+        }
+
+        macro_rules! add_nested_f32 {
+            ($ubo:expr, $field:tt) => {
+                add_nested_t!(
+                    move |edge_ubo| edge_ubo.$field.into(),
+                    {
+                        let ubo = $ubo.clone();
+                        move |val| {
+                            let x = val.as_float().unwrap() as f32;
+                            let mut ubo = ubo.load();
+                            ubo.$field = x;
+                            ubo
+                        }
+                    },
+                    $ubo,
+                    $field
+                );
+            };
+        }
+
+        let edge = settings.edge_renderer().clone();
+
+        add_nested_f32!(edge.clone(), edge_width);
+        add_nested_f32!(edge.clone(), curve_offset);
+        add_nested_f32!(edge.clone(), curve_offset);
+
+        add_nested_t!(
+            move |edge_ubo| { rhai::Dynamic::from(edge_ubo.edge_color) },
+            {
+                let ubo = edge.clone();
+
+                move |val| {
+                    let x = val.cast::<rgb::RGB<f32>>();
+                    let mut ubo = ubo.load();
+                    ubo.edge_color = x;
+                    ubo
+                }
+            },
+            edge.clone(),
+            edge_color
         );
 
         Self {
@@ -75,8 +150,12 @@ impl<'a> Console<'a> {
 
         let mut engine = rhai::Engine::new();
 
+        let colors = exported_module!(crate::script::plugins::colors);
+
         engine.register_type::<NodeId>();
         engine.register_type::<Handle>();
+
+        engine.register_global_module(colors.into());
 
         let rad1 = self.settings.label_radius().clone();
         let rad2 = self.settings.label_radius().clone();
@@ -124,7 +203,16 @@ impl<'a> Console<'a> {
         match result {
             Ok(result) => {
                 debug!("Eval success!");
-                self.output_history.push(format!("{:?}", result));
+                if let Some(color) = result.clone().try_cast::<rgb::RGB<f32>>()
+                {
+                    self.output_history.push(format!("{}", color))
+                } else if let Some(color) =
+                    result.clone().try_cast::<rgb::RGBA<f32>>()
+                {
+                    self.output_history.push(format!("{}", color));
+                } else {
+                    self.output_history.push(format!("{:?}", result));
+                }
             }
             Err(err) => {
                 debug!("Eval error: {:?}", err);

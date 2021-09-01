@@ -335,4 +335,51 @@ pub mod colors {
     pub fn rgba(r: f32, g: f32, b: f32, a: f32) -> rgb::RGBA<f32> {
         rgb::RGBA::new(r, g, b, a)
     }
+
+    #[rhai_fn(pure, name = "r")]
+    pub fn rgba_r(color: &mut rgb::RGBA<f32>) -> f32 {
+        color.r
+    }
+
+    #[rhai_fn(pure, name = "g")]
+    pub fn rgba_g(color: &mut rgb::RGBA<f32>) -> f32 {
+        color.g
+    }
+
+    #[rhai_fn(pure, name = "b")]
+    pub fn rgba_b(color: &mut rgb::RGBA<f32>) -> f32 {
+        color.b
+    }
+
+    #[rhai_fn(pure, name = "a")]
+    pub fn rgba_a(color: &mut rgb::RGBA<f32>) -> f32 {
+        color.a
+    }
+
+    pub fn rgba_as_tuple(color: &mut rgb::RGBA<f32>) -> (f32, f32, f32, f32) {
+        (color.r, color.g, color.b, color.a)
+    }
+
+    pub fn rgb(r: f32, g: f32, b: f32) -> rgb::RGB<f32> {
+        rgb::RGB::new(r, g, b)
+    }
+
+    #[rhai_fn(pure, name = "r")]
+    pub fn r(color: &mut rgb::RGB<f32>) -> f32 {
+        color.r
+    }
+
+    #[rhai_fn(pure, name = "g")]
+    pub fn g(color: &mut rgb::RGB<f32>) -> f32 {
+        color.g
+    }
+
+    #[rhai_fn(pure, name = "b")]
+    pub fn b(color: &mut rgb::RGB<f32>) -> f32 {
+        color.b
+    }
+
+    pub fn rgb_as_tuple(color: &mut rgb::RGB<f32>) -> (f32, f32, f32) {
+        (color.r, color.g, color.b)
+    }
 }
