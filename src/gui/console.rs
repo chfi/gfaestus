@@ -259,6 +259,12 @@ impl<'a> Console<'a> {
         let engine = self.create_engine();
 
         debug!("evaluating: {}", &self.input_line);
+        if self.input_line == ":clear" {
+            self.input_line.clear();
+            self.output_history.clear();
+
+            return Ok(());
+        }
 
         let result = engine.eval_with_scope::<rhai::Dynamic>(
             &mut self.scope,
@@ -298,10 +304,10 @@ impl<'a> Console<'a> {
             .show(ctx, |ui| {
                 ui.set_width(ctx.input().screen_rect().width());
 
-                let skip_count =
-                    self.output_history.len().checked_sub(20).unwrap_or(0);
-
                 ui.group(|ui| {
+                    let skip_count =
+                        self.output_history.len().checked_sub(20).unwrap_or(0);
+
                     for (ix, output_line) in self
                         .output_history
                         .iter()
