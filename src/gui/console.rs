@@ -33,6 +33,8 @@ use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 pub struct Console<'a> {
     input_line: String,
 
+    input_history_ix: Option<usize>,
+
     input_history: Vec<String>,
     output_history: Vec<String>,
 
@@ -182,6 +184,8 @@ impl<'a> Console<'a> {
         Self {
             input_line: String::new(),
 
+            input_history_ix: None,
+
             input_history: Vec::new(),
             output_history: Vec::new(),
 
@@ -324,6 +328,14 @@ impl<'a> Console<'a> {
                     }
                 }
 
+                if ui.input().key_pressed(egui::Key::ArrowUp) {
+                    self.step_history(true);
+                }
+
+                if ui.input().key_pressed(egui::Key::ArrowDown) {
+                    self.step_history(false);
+                }
+
                 if input.lost_focus()
                     && ui.input().key_pressed(egui::Key::Enter)
                 {
@@ -338,6 +350,8 @@ impl<'a> Console<'a> {
 
                     self.input_line.clear();
 
+                    self.input_history_ix.take();
+
                     // input.request_focus() has to be called the
                     // frame *after* this piece of code is ran, hence
                     // the bool etc.
@@ -347,13 +361,50 @@ impl<'a> Console<'a> {
             });
         // });
     }
+
+    fn step_history(&mut self, step_backward: bool) {
+        if let Some(ix) = self.input_history_ix.as_mut() {
+            let mut clear = false;
+
+            if step_backward {
+                if *ix > 0 {
+                    *ix -= 1;
+                    if let Some(line) = self.input_history.get(*ix) {
+                        self.input_line.clone_from(line);
+                    }
+                } else {
+                    clear = true;
+                }
+            } else {
+                if *ix < self.input_history.len() {
+                    *ix += 1;
+                    if let Some(line) = self.input_history.get(*ix) {
+                        self.input_line.clone_from(line);
+                    }
+                } else {
+                    clear = true;
+                }
+            }
+
+            if clear {
+                self.input_line.clear();
+                self.input_history_ix = None;
+            }
+        } else {
+            let ix = if step_backward {
+                self.input_history.len() - 1
+            } else {
+                0
+            };
+
+            self.input_history_ix = Some(ix);
+
+            if let Some(line) = self.input_history.get(ix) {
+                self.input_line.clone_from(line);
+            }
+        }
+    }
 }
-
-// #[export_module]
-// pub mod console_plugin {
-//     pub fn get_edge_width(
-
-// }
 
 #[derive(Default)]
 pub struct GetSetTruth {
