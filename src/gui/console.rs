@@ -301,63 +301,67 @@ impl<'a> Console<'a> {
                 let skip_count =
                     self.output_history.len().checked_sub(20).unwrap_or(0);
 
-                for (ix, output_line) in self
-                    .output_history
-                    .iter()
-                    .skip(skip_count)
-                    .enumerate()
-                    .take(20)
-                {
-                    ui.add(egui::Label::new(output_line).code());
-                }
-
-                let input = ui.add_sized(
-                    ui.available_size(),
-                    egui::TextEdit::singleline(&mut self.input_line)
-                        .id(egui::Id::new(Self::ID_TEXT))
-                        .code_editor()
-                        .lock_focus(true),
-                );
-
-                // hack to keep input
-                if self.request_focus {
-                    if input.has_focus() {
-                        self.request_focus = false;
-                    } else {
-                        input.request_focus();
+                ui.group(|ui| {
+                    for (ix, output_line) in self
+                        .output_history
+                        .iter()
+                        .skip(skip_count)
+                        .enumerate()
+                        .take(20)
+                    {
+                        ui.add(egui::Label::new(output_line).code());
                     }
-                }
 
-                if ui.input().key_pressed(egui::Key::ArrowUp) {
-                    self.step_history(true);
-                }
+                    let input = ui.add_sized(
+                        ui.available_size(),
+                        egui::TextEdit::singleline(&mut self.input_line)
+                            .id(egui::Id::new(Self::ID_TEXT))
+                            .code_editor()
+                            .lock_focus(true)
+                            .desired_width(ui.available_width()),
+                    );
 
-                if ui.input().key_pressed(egui::Key::ArrowDown) {
-                    self.step_history(false);
-                }
+                    // hack to keep input
+                    if self.request_focus {
+                        if input.has_focus() {
+                            self.request_focus = false;
+                        } else {
+                            input.request_focus();
+                        }
+                    }
 
-                if input.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    self.input_history.push(self.input_line.clone());
-                    self.output_history.push(format!("> {}", self.input_line));
+                    if ui.input().key_pressed(egui::Key::ArrowUp) {
+                        self.step_history(true);
+                    }
 
-                    self.eval().unwrap();
+                    if ui.input().key_pressed(egui::Key::ArrowDown) {
+                        self.step_history(false);
+                    }
 
-                    let mut line =
-                        String::with_capacity(self.input_line.capacity());
-                    std::mem::swap(&mut self.input_line, &mut line);
+                    if input.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        self.input_history.push(self.input_line.clone());
+                        self.output_history
+                            .push(format!("> {}", self.input_line));
 
-                    self.input_line.clear();
+                        self.eval().unwrap();
 
-                    self.input_history_ix.take();
+                        let mut line =
+                            String::with_capacity(self.input_line.capacity());
+                        std::mem::swap(&mut self.input_line, &mut line);
 
-                    // input.request_focus() has to be called the
-                    // frame *after* this piece of code is ran, hence
-                    // the bool etc.
-                    // input.request_focus();
-                    self.request_focus = true;
-                }
+                        self.input_line.clear();
+
+                        self.input_history_ix.take();
+
+                        // input.request_focus() has to be called the
+                        // frame *after* this piece of code is ran, hence
+                        // the bool etc.
+                        // input.request_focus();
+                        self.request_focus = true;
+                    }
+                });
             });
     }
 
