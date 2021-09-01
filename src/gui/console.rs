@@ -20,6 +20,8 @@ use rustc_hash::FxHashMap;
 
 use rhai::plugin::*;
 
+use bstr::ByteSlice;
+
 use crate::{
     app::{AppChannels, OverlayState},
     geometry::*,
@@ -216,8 +218,17 @@ impl<'a> Console<'a> {
 
         let get_set = self.get_set.clone();
 
-        engine.register_fn("ptx", |point: Point| point.x);
-        engine.register_fn("pty", |point: Point| point.y);
+        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
+        engine.register_fn("x", |point: &mut Point| point.x);
+        engine.register_fn("y", |point: &mut Point| point.y);
+
+        {
+            let arc = self.shared_state.hover_node.clone();
+            engine.register_fn("get_hover_node", move || arc.load());
+
+            let arc = self.shared_state.hover_node.clone();
+            engine.register_fn("get_hover_node", move || arc.load());
+        }
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
@@ -255,13 +266,51 @@ impl<'a> Console<'a> {
         engine
     }
 
-    pub fn eval(&mut self) -> Result<()> {
+    pub fn eval_file(&mut self, print: bool, path: &str) -> Result<()> {
+        use std::io::prelude::*;
+        let mut file = std::fs::File::open(path)?;
+        let mut script = String::new();
+        let _count = file.read_to_string(&mut script)?;
+
+        if print {
+            self.output_history
+                .push(format!(">>> Evaluating file '{}'", path));
+        }
+
+        self.eval_line(print, &script)
+    }
+
+    pub fn eval_line(&mut self, print: bool, input_line: &str) -> Result<()> {
+        let mut old_input = input_line.to_string();
+        std::mem::swap(&mut old_input, &mut self.input_line);
+
+        self.eval(print)?;
+        std::mem::swap(&mut old_input, &mut self.input_line);
+
+        Ok(())
+    }
+
+    pub fn eval(&mut self, print: bool) -> Result<()> {
         let engine = self.create_engine();
 
         debug!("evaluating: {}", &self.input_line);
-        if self.input_line == ":clear" {
+
+        if self.input_line.starts_with(":clear") {
             self.input_line.clear();
             self.output_history.clear();
+
+            return Ok(());
+        } else if self.input_line.starts_with(":exec ") {
+            let file_path = &self.input_line[6..].to_string();
+            let result = self.eval_file(print, &file_path);
+
+            if let Err(err) = result {
+                debug!(
+                    "console :exec of file '{}' failed: {:?}",
+                    file_path, err
+                );
+            }
+            self.input_line.clear();
 
             return Ok(());
         }
@@ -273,20 +322,25 @@ impl<'a> Console<'a> {
         match result {
             Ok(result) => {
                 debug!("Eval success!");
-                if let Some(color) = result.clone().try_cast::<rgb::RGB<f32>>()
-                {
-                    self.output_history.push(format!("{}", color))
-                } else if let Some(color) =
-                    result.clone().try_cast::<rgb::RGBA<f32>>()
-                {
-                    self.output_history.push(format!("{}", color));
-                } else {
-                    self.output_history.push(format!("{:?}", result));
+                if print {
+                    if let Some(color) =
+                        result.clone().try_cast::<rgb::RGB<f32>>()
+                    {
+                        self.output_history.push(format!("{}", color))
+                    } else if let Some(color) =
+                        result.clone().try_cast::<rgb::RGBA<f32>>()
+                    {
+                        self.output_history.push(format!("{}", color));
+                    } else {
+                        self.output_history.push(format!("{:?}", result));
+                    }
                 }
             }
             Err(err) => {
                 debug!("Eval error: {:?}", err);
-                self.output_history.push(format!("Error: {:?}", err));
+                if print {
+                    self.output_history.push(format!("Error: {:?}", err));
+                }
             }
         }
 
@@ -352,7 +406,7 @@ impl<'a> Console<'a> {
                     self.input_history.push(self.input_line.clone());
                     self.output_history.push(format!("> {}", self.input_line));
 
-                    self.eval().unwrap();
+                    self.eval(true).unwrap();
 
                     let mut line =
                         String::with_capacity(self.input_line.capacity());
