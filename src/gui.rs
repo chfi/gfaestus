@@ -464,6 +464,12 @@ impl Gui {
             list
         };
 
+        let console = Console::new(
+            channels.clone(),
+            settings.to_owned(),
+            shared_state.to_owned(),
+        );
+
         let gui = Self {
             ctx,
             frame_input,
@@ -498,7 +504,7 @@ impl Gui {
             annotation_file_list,
 
             console_down: false,
-            console: Console::new(settings.to_owned(), shared_state.to_owned()),
+            console,
         };
 
         Ok(gui)

@@ -20,7 +20,10 @@ use rustc_hash::FxHashMap;
 
 use rhai::plugin::*;
 
-use crate::{app::OverlayState, geometry::*};
+use crate::{
+    app::{AppChannels, OverlayState},
+    geometry::*,
+};
 use crate::{
     app::{AppSettings, SharedState},
     graph_query::GraphQuery,
@@ -39,6 +42,7 @@ pub struct Console<'a> {
 
     settings: AppSettings,
     shared_state: SharedState,
+    channels: AppChannels,
 
     get_set: Arc<GetSetTruth>,
 }
@@ -47,7 +51,11 @@ impl<'a> Console<'a> {
     pub const ID: &'static str = "quake_console";
     pub const ID_TEXT: &'static str = "quake_console_input";
 
-    pub fn new(settings: AppSettings, shared_state: SharedState) -> Self {
+    pub fn new(
+        channels: AppChannels,
+        settings: AppSettings,
+        shared_state: SharedState,
+    ) -> Self {
         let scope = rhai::Scope::new();
 
         let mut get_set = GetSetTruth::default();
@@ -107,6 +115,17 @@ impl<'a> Console<'a> {
 
         add_t!(f32, "label_radius", settings.label_radius().clone());
         add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
+
+        add_t!(
+            rgb::RGB<f32>,
+            "background_color_light",
+            settings.background_color_light().clone()
+        );
+        add_t!(
+            rgb::RGB<f32>,
+            "background_color_dark",
+            settings.background_color_dark().clone()
+        );
 
         let edge = settings.edge_renderer().clone();
 
@@ -170,6 +189,7 @@ impl<'a> Console<'a> {
 
             request_focus: false,
 
+            channels,
             settings,
             shared_state,
 
@@ -194,6 +214,24 @@ impl<'a> Console<'a> {
 
         engine.register_fn("ptx", |point: Point| point.x);
         engine.register_fn("pty", |point: Point| point.y);
+
+        {
+            let dark_mode = self.shared_state.dark_mode().clone();
+            let gui_msg_tx = self.channels.gui_tx.clone();
+
+            engine.register_fn("toggle_dark_mode", move || {
+                use crate::gui::GuiMsg;
+
+                let prev = dark_mode.fetch_xor(true);
+                let msg = if prev {
+                    GuiMsg::SetLightMode
+                } else {
+                    GuiMsg::SetDarkMode
+                };
+
+                gui_msg_tx.send(msg).unwrap();
+            });
+        }
 
         engine.register_fn("get", move |name: &str| {
             if let Some(getter) = get_set.getters.get(name) {
