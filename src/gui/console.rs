@@ -20,8 +20,11 @@ use rustc_hash::FxHashMap;
 
 use rhai::plugin::*;
 
-use crate::{app::AppSettings, graph_query::GraphQuery};
 use crate::{app::OverlayState, geometry::*};
+use crate::{
+    app::{AppSettings, SharedState},
+    graph_query::GraphQuery,
+};
 use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
 pub struct Console<'a> {
@@ -35,6 +38,7 @@ pub struct Console<'a> {
     request_focus: bool,
 
     settings: AppSettings,
+    shared_state: SharedState,
 
     get_set: Arc<GetSetTruth>,
 }
@@ -43,23 +47,21 @@ impl<'a> Console<'a> {
     pub const ID: &'static str = "quake_console";
     pub const ID_TEXT: &'static str = "quake_console_input";
 
-    pub fn new(settings: AppSettings) -> Self {
+    pub fn new(settings: AppSettings, shared_state: SharedState) -> Self {
         let scope = rhai::Scope::new();
 
         let mut get_set = GetSetTruth::default();
 
-        macro_rules! add_f32 {
-            ($name:literal, $arc:expr) => {
+        macro_rules! add_t {
+            ($type:ty, $name:literal, $arc:expr) => {
                 get_set.add_arc_atomic_cell_get_set(
                     $name,
                     $arc,
-                    |x| x.into(),
-                    |x| x.as_float().unwrap() as f32,
+                    |x| rhai::Dynamic::from(x),
+                    |x: rhai::Dynamic| x.cast::<$type>(),
                 );
             };
         }
-
-        add_f32!("label_radius", settings.label_radius().clone());
 
         macro_rules! add_nested_t {
             ($into:expr, $from:expr, $ubo:expr, $name:tt, $field:tt) => {
@@ -67,50 +69,14 @@ impl<'a> Console<'a> {
             };
         }
 
-        macro_rules! add_nested_f32 {
-            ($ubo:expr, $field:tt) => {
-                add_nested_t!(
-                    move |edge_ubo| edge_ubo.$field.into(),
-                    {
-                        let ubo = $ubo.clone();
-                        move |val| {
-                            let x = val.as_float().unwrap() as f32;
-                            let mut ubo = ubo.load();
-                            ubo.$field = x;
-                            ubo
-                        }
-                    },
-                    $ubo,
-                    stringify!($field),
-                    $field
-                );
-            };
-        }
-
-        let edge = settings.edge_renderer().clone();
-
         macro_rules! add_nested_cast {
-            ($ubo:expr, $field:tt, $type:ty, $name:tt) => {
-                add_nested_t!(
-                    move |cont| { rhai::Dynamic::from(cont.$field) },
-                    {
-                        let ubo = $ubo.clone();
-                        move |val: rhai::Dynamic| {
-                            let x = val.cast::<$type>();
-                            let mut ubo = ubo.load();
-                            ubo.$field = x;
-                            ubo
-                        }
-                    },
-                    $ubo,
-                    $name,
-                    $field
-                );
-            };
             ($ubo:expr, $field:tt, $type:ty) => {{
                 let name = stringify!($field);
-                add_nested_t!(
-                    move |cont| { rhai::Dynamic::from(cont.$field) },
+
+                get_set.add_arc_atomic_cell_get_set(
+                    name,
+                    $ubo,
+                    move |cont| rhai::Dynamic::from(cont.$field),
                     {
                         let ubo = $ubo.clone();
                         move |val: rhai::Dynamic| {
@@ -120,12 +86,29 @@ impl<'a> Console<'a> {
                             ubo
                         }
                     },
-                    $ubo,
-                    name,
-                    $field
                 );
             }};
         }
+
+        macro_rules! add_nested_cell {
+            ($obj:expr, $get:tt, $set:tt) => {
+                let nw = $obj.clone();
+                let nw_ = $obj.clone();
+
+                get_set.add_dynamic(
+                    stringify!($get),
+                    move || nw.$get(),
+                    move |v| {
+                        nw_.$set(v);
+                    },
+                )
+            };
+        }
+
+        add_t!(f32, "label_radius", settings.label_radius().clone());
+        add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
+
+        let edge = settings.edge_renderer().clone();
 
         add_nested_cast!(edge.clone(), edge_color, rgb::RGB<f32>);
         add_nested_cast!(edge.clone(), edge_width, f32);
@@ -156,37 +139,22 @@ impl<'a> Console<'a> {
             },
         );
 
-        macro_rules! add_nested___ {
-            ($obj:expr, $get:tt, $set:tt) => {
-                let nw = $obj.clone();
-                let nw_ = $obj.clone();
-
-                get_set.add_dynamic(
-                    stringify!($get),
-                    move || nw.$get(),
-                    move |v| {
-                        nw_.$set(v);
-                    },
-                )
-            };
-        }
-
-        add_nested___!(
+        add_nested_cell!(
             settings.node_width().clone(),
             min_node_width,
             set_min_node_width
         );
-        add_nested___!(
+        add_nested_cell!(
             settings.node_width().clone(),
             max_node_width,
             set_max_node_width
         );
-        add_nested___!(
+        add_nested_cell!(
             settings.node_width().clone(),
             min_node_scale,
             set_min_node_scale
         );
-        add_nested___!(
+        add_nested_cell!(
             settings.node_width().clone(),
             max_node_scale,
             set_max_node_scale
@@ -201,7 +169,9 @@ impl<'a> Console<'a> {
             scope,
 
             request_focus: false,
+
             settings,
+            shared_state,
 
             get_set: Arc::new(get_set),
         }
@@ -216,21 +186,29 @@ impl<'a> Console<'a> {
 
         engine.register_type::<NodeId>();
         engine.register_type::<Handle>();
+        engine.register_type::<Point>();
 
         engine.register_global_module(colors.into());
 
         let get_set = self.get_set.clone();
 
+        engine.register_fn("ptx", |point: Point| point.x);
+        engine.register_fn("pty", |point: Point| point.y);
+
         engine.register_fn("get", move |name: &str| {
-            let getter = get_set.getters.get(name).unwrap();
-            getter()
+            if let Some(getter) = get_set.getters.get(name) {
+                getter()
+            } else {
+                rhai::Dynamic::FALSE
+            }
         });
 
         let get_set = self.get_set.clone();
 
         engine.register_fn("set", move |name: &str, val: rhai::Dynamic| {
-            let setter = get_set.setters.get(name).unwrap();
-            setter(val);
+            if let Some(setter) = get_set.setters.get(name) {
+                setter(val);
+            }
         });
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);

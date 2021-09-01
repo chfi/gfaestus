@@ -468,7 +468,7 @@ impl Gui {
             ctx,
             frame_input,
 
-            shared_state,
+            shared_state: shared_state.clone(),
             settings: settings.clone(),
 
             draw_system,
@@ -498,7 +498,7 @@ impl Gui {
             annotation_file_list,
 
             console_down: false,
-            console: Console::new(settings.to_owned()),
+            console: Console::new(settings.to_owned(), shared_state.to_owned()),
         };
 
         Ok(gui)

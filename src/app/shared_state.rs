@@ -9,16 +9,16 @@ use crate::{view::*, vulkan::texture::GradientName};
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(super) mouse_pos: Arc<AtomicCell<Point>>,
-    pub(super) screen_dims: Arc<AtomicCell<ScreenDims>>,
+    pub mouse_pos: Arc<AtomicCell<Point>>,
+    pub screen_dims: Arc<AtomicCell<ScreenDims>>,
 
-    pub(super) view: Arc<AtomicCell<View>>,
+    pub view: Arc<AtomicCell<View>>,
 
-    pub(super) hover_node: Arc<AtomicCell<Option<NodeId>>>,
+    pub hover_node: Arc<AtomicCell<Option<NodeId>>>,
 
-    pub(super) mouse_rect: MouseRect,
+    pub mouse_rect: MouseRect,
 
-    pub(super) overlay_state: OverlayState,
+    pub overlay_state: OverlayState,
 
     pub gui_focus_state: GuiFocusState,
 
