@@ -266,6 +266,12 @@ impl Console<'static> {
             app_msg_tx.send(msg).unwrap();
         });
 
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("pan_to_active_selection", move || {
+            let msg = AppMsg::GotoSelection;
+            app_msg_tx.send(msg).unwrap();
+        });
+
         let graph = self.graph.clone();
         engine.register_fn(
             "path_selection",
@@ -285,13 +291,8 @@ impl Console<'static> {
         engine.register_fn("x", |point: &mut Point| point.x);
         engine.register_fn("y", |point: &mut Point| point.y);
 
-        {
-            let arc = self.shared_state.hover_node.clone();
-            engine.register_fn("get_hover_node", move || arc.load());
-
-            let arc = self.shared_state.hover_node.clone();
-            engine.register_fn("get_hover_node", move || arc.load());
-        }
+        let arc = self.shared_state.hover_node.clone();
+        engine.register_fn("get_hover_node", move || arc.load());
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
@@ -449,9 +450,16 @@ impl Console<'static> {
             let result = self.import_file(&file_path);
 
             if let Err(err) = result {
-                debug!(
-                    "console :import of file '{}' failed: {:?}",
+                let msg = format!(
+                    " >>> error importing file {}: {:?}",
                     file_path, err
+                );
+                self.output_history.push(msg);
+
+                log::warn!(
+                    "console :import of file '{}' failed: {:?}",
+                    file_path,
+                    err
                 );
             }
             self.input_line.clear();
@@ -537,6 +545,11 @@ impl Console<'static> {
         let module =
             rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine)?;
 
+        let (vars, funcs, iters) = module.count();
+
+        let msg = format!(
+            " >>> imported {} variables, {} functions, and {} iterators from '{}'", vars, funcs, iters, file);
+        self.output_history.push(msg);
         self.modules.push(Arc::new(module));
 
         Ok(())

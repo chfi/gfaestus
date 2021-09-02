@@ -36,6 +36,8 @@ pub fn create_engine() -> Engine {
     let graph_iters = exported_module!(plugins::graph_iters);
     let colors = exported_module!(plugins::colors);
 
+    let selection = exported_module!(plugins::selection);
+
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
@@ -95,6 +97,8 @@ pub fn create_engine() -> Engine {
     engine.register_global_module(graph_iters.into());
     engine.register_global_module(colors.into());
 
+    engine.register_global_module(selection.into());
+
     engine.register_iterator::<plugins::HandlesIter>();
     engine.register_iterator::<plugins::OccursIter>();
     engine.register_iterator::<plugins::NeighborsIter>();
@@ -125,6 +129,10 @@ pub fn create_engine() -> Engine {
     engine.register_fn("print_handle", |h: Handle| {
         let suffix = if h.is_reverse() { "-" } else { "+" };
         println!("Handle {}{}", h.id().0, suffix);
+    });
+
+    engine.register_fn("thread_sleep", |ms: u64| {
+        std::thread::sleep(std::time::Duration::from_millis(ms));
     });
 
     engine

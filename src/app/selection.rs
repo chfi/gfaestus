@@ -21,6 +21,21 @@ impl NodeSelection {
         self.nodes.clear();
     }
 
+    pub fn union(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.union(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
+    pub fn intersection(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.intersection(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
+    pub fn difference(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.difference(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
     pub fn add_one(&mut self, clear: bool, node: NodeId) {
         if clear {
             self.nodes.clear();

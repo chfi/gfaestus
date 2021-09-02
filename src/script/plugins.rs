@@ -409,3 +409,40 @@ pub mod colors {
         (color.r, color.g, color.b)
     }
 }
+
+#[export_module]
+pub mod selection {
+    use crate::app::selection::NodeSelection;
+
+    #[rhai_fn(pure)]
+    pub fn union(
+        first: &mut NodeSelection,
+        other: NodeSelection,
+    ) -> NodeSelection {
+        first.union(&other)
+    }
+
+    #[rhai_fn(pure)]
+    pub fn intersection(
+        first: &mut NodeSelection,
+        other: NodeSelection,
+    ) -> NodeSelection {
+        first.intersection(&other)
+    }
+
+    #[rhai_fn(pure)]
+    pub fn difference(
+        first: &mut NodeSelection,
+        other: NodeSelection,
+    ) -> NodeSelection {
+        first.difference(&other)
+    }
+
+    pub fn add_one(sel: &mut NodeSelection, node: NodeId) {
+        sel.add_one(false, node);
+    }
+
+    pub fn add_array(sel: &mut NodeSelection, nodes: Vec<NodeId>) {
+        sel.add_slice(false, &nodes);
+    }
+}
