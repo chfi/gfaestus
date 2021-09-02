@@ -1,6 +1,6 @@
 pub mod channels;
 pub mod mainview;
-pub mod node_flags;
+pub mod selection;
 pub mod settings;
 pub mod shared_state;
 pub mod theme;

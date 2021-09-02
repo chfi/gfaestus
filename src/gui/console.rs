@@ -25,7 +25,9 @@ use rhai::{plugin::*, Func};
 use bstr::ByteSlice;
 
 use crate::{
-    app::{AppChannels, OverlayState},
+    app::{
+        selection::NodeSelection, AppChannels, AppMsg, OverlayState, Select,
+    },
     geometry::*,
     reactor::Reactor,
 };
@@ -250,6 +252,15 @@ impl Console<'static> {
         let path_pos = self.path_positions.clone();
         engine.register_fn("get_graph", move || graph.clone());
         engine.register_fn("get_path_positions", move || path_pos.clone());
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |selection: NodeSelection| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
         engine.register_fn("x", |point: &mut Point| point.x);

@@ -8,7 +8,7 @@ use anyhow::Result;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-use crate::app::node_flags::SelectionBuffer;
+use crate::app::selection::SelectionBuffer;
 
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 

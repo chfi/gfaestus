@@ -15,8 +15,8 @@ use handlegraph::{
 
 use rustc_hash::FxHashMap;
 
-use crate::graph_query::GraphQuery;
 use crate::overlays::{OverlayData, OverlayKind};
+use crate::{app::selection::NodeSelection, graph_query::GraphQuery};
 
 use rhai::plugin::*;
 
@@ -27,6 +27,7 @@ pub fn create_engine() -> Engine {
 
     engine.register_type::<NodeId>();
     engine.register_type::<Handle>();
+    engine.register_type::<NodeSelection>();
 
     let handle = exported_module!(plugins::handle_plugin);
     let graph = exported_module!(plugins::graph_plugin);
@@ -36,6 +37,29 @@ pub fn create_engine() -> Engine {
 
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
+
+    engine.register_fn("build_selection2", |nodes: Vec<NodeId>| {
+        log::warn!("in Vec<NodeId>");
+
+        let mut selection = NodeSelection::default();
+
+        selection.add_slice(false, &nodes);
+
+        selection
+    });
+
+    engine.register_fn("build_selection", |arr: Vec<rhai::Dynamic>| {
+        log::warn!("in Vec<rhai::Dynamic>");
+        let mut selection = NodeSelection::default();
+
+        for val in arr {
+            if let Some(node) = val.try_cast::<NodeId>() {
+                selection.add_one(false, node);
+            }
+        }
+
+        selection
+    });
 
     engine.register_fn("create_hasher", || DefaultHasher::default());
 

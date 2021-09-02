@@ -13,7 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::view::{ScreenDims, View};
 use crate::{
-    app::{node_flags::SelectionBuffer, NodeWidth},
+    app::{selection::SelectionBuffer, NodeWidth},
     overlays::OverlayKind,
     vulkan::texture::GradientTexture,
 };
