@@ -204,13 +204,16 @@ impl Console<'static> {
         let scope = rhai::Scope::new();
         let scope = Arc::new(Mutex::new(scope));
 
+        let output_history =
+            vec![" < close this console with Esc >".to_string()];
+
         Self {
             input_line: String::new(),
 
             input_history_ix: None,
 
             input_history: Vec::new(),
-            output_history: Vec::new(),
+            output_history,
 
             scope,
 
@@ -540,14 +543,19 @@ impl Console<'static> {
                     ui.add(label);
                 }
 
-                let input = ui.add(
-                    egui::TextEdit::singleline(&mut self.input_line)
-                        .id(egui::Id::new(Self::ID_TEXT))
-                        .code_editor()
-                        .lock_focus(true)
-                        .enabled(!scope_locked)
-                        .desired_width(ui.available_width()),
-                );
+                let input = {
+                    let line_count = self.input_line.lines().count().max(1);
+                    ui.add(
+                        // egui::TextEdit::singleline(&mut self.input_line)
+                        egui::TextEdit::multiline(&mut self.input_line)
+                            .id(egui::Id::new(Self::ID_TEXT))
+                            .desired_rows(line_count)
+                            .code_editor()
+                            .lock_focus(true)
+                            .enabled(!scope_locked)
+                            .desired_width(ui.available_width()),
+                    )
+                };
 
                 // hack to keep input
                 if self.request_focus {
@@ -565,22 +573,34 @@ impl Console<'static> {
                     self.step_history(false);
                 }
 
-                if input.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                    && !scope_locked
-                {
-                    self.input_history.push(self.input_line.clone());
-                    self.output_history.push(format!("> {}", self.input_line));
+                // if input.lost_focus()
+                if ui.input().key_pressed(egui::Key::Enter) && !scope_locked {
+                    log::warn!("input line: {}", self.input_line);
 
-                    self.eval_input(reactor, true).unwrap();
+                    if ui.input().modifiers.shift {
+                        // insert newline;
+                        // self.input_line.push_str("\n");
+                    } else {
+                        // evaluate input
 
-                    let mut line =
-                        String::with_capacity(self.input_line.capacity());
-                    std::mem::swap(&mut self.input_line, &mut line);
+                        // remove the last endline added by pressing
+                        // enter in a multiline text box
+                        self.input_line.pop();
 
-                    self.input_line.clear();
+                        self.input_history.push(self.input_line.clone());
+                        self.output_history
+                            .push(format!("> {}", self.input_line));
 
-                    self.input_history_ix.take();
+                        self.eval_input(reactor, true).unwrap();
+
+                        let mut line =
+                            String::with_capacity(self.input_line.capacity());
+                        std::mem::swap(&mut self.input_line, &mut line);
+
+                        self.input_line.clear();
+
+                        self.input_history_ix.take();
+                    }
 
                     // input.request_focus() has to be called the
                     // frame *after* this piece of code is ran, hence

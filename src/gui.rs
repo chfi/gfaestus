@@ -344,6 +344,10 @@ pub enum GuiMsg {
     Cut,
     Copy,
     Paste,
+
+    // TODO this shouldn't really be here, as things like the console
+    // will never update the modifiers
+    SetModifiers(winit::event::ModifiersState),
 }
 
 // TODO: this can probably be replaced by egui's built in focus tracking
@@ -943,6 +947,17 @@ impl Gui {
                             .push(egui::Event::Text(text.clone()));
                     }
                 }
+                GuiMsg::SetModifiers(mods) => {
+                    let modifiers = egui::Modifiers {
+                        alt: mods.alt(),
+                        ctrl: mods.ctrl(),
+                        shift: mods.shift(),
+                        mac_cmd: mods.logo(),
+                        command: mods.logo(),
+                    };
+
+                    self.frame_input.modifiers = modifiers;
+                }
             }
         }
     }
@@ -990,6 +1005,15 @@ impl Gui {
                                     console::Console::ID_TEXT,
                                 ));
                             }
+                        }
+                        GuiInput::KeyConsoleDown => {
+                            self.console_down = true;
+                            self.ctx.memory().request_focus(egui::Id::new(
+                                console::Console::ID_TEXT,
+                            ));
+                        }
+                        GuiInput::KeyConsoleUp => {
+                            self.console_down = false;
                         }
                         _ => (),
                     }
@@ -1052,6 +1076,7 @@ impl Gui {
 #[derive(Debug, Default, Clone)]
 struct FrameInput {
     events: Vec<egui::Event>,
+    modifiers: egui::Modifiers,
     scroll_delta: f32,
 }
 
@@ -1064,6 +1089,7 @@ impl FrameInput {
             x: 0.0,
             y: self.scroll_delta,
         };
+        raw_input.modifiers = self.modifiers;
         self.scroll_delta = 0.0;
 
         raw_input
@@ -1079,6 +1105,8 @@ pub enum GuiInput {
     ButtonRight,
     WheelScroll,
     KeyToggleConsole,
+    KeyConsoleDown,
+    KeyConsoleUp,
 }
 
 impl BindableInput for GuiInput {
@@ -1091,8 +1119,8 @@ impl BindableInput for GuiInput {
             (Key::F1, Input::KeyEguiInspectionUi),
             (Key::F2, Input::KeyEguiSettingsUi),
             (Key::F3, Input::KeyEguiMemoryUi),
-            (Key::Grave, Input::KeyToggleConsole),
-            // (Key::, Input::KeyToggleConsole),
+            (Key::Escape, Input::KeyConsoleUp),
+            (Key::Grave, Input::KeyConsoleDown),
             (Key::F4, Input::KeyToggleConsole),
         ]
         .iter()
