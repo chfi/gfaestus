@@ -131,8 +131,8 @@ pub fn create_engine() -> Engine {
         println!("Handle {}{}", h.id().0, suffix);
     });
 
-    engine.register_fn("thread_sleep", |ms: u64| {
-        std::thread::sleep(std::time::Duration::from_millis(ms));
+    engine.register_fn("thread_sleep", |ms: i64| {
+        std::thread::sleep(std::time::Duration::from_millis(ms as u64));
     });
 
     engine
