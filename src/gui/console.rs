@@ -34,6 +34,8 @@ use crate::{
 };
 use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
+use parking_lot::{Mutex, MutexGuard};
+
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
 
@@ -45,7 +47,7 @@ pub struct Console<'a> {
     input_history: Vec<String>,
     output_history: Vec<String>,
 
-    scope: rhai::Scope<'a>,
+    scope: Arc<Mutex<rhai::Scope<'a>>>,
 
     request_focus: bool,
 
@@ -59,9 +61,6 @@ pub struct Console<'a> {
 
     result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
-
-    scope_rx: crossbeam::channel::Receiver<rhai::Scope<'static>>,
-    scope_tx: crossbeam::channel::Sender<rhai::Scope<'static>>,
 }
 
 impl Console<'static> {
@@ -75,7 +74,6 @@ impl Console<'static> {
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
-        let (scope_tx, scope_rx) = crossbeam::channel::unbounded();
 
         let scope = rhai::Scope::new();
 
@@ -200,6 +198,8 @@ impl Console<'static> {
             set_max_node_scale
         );
 
+        let scope = Arc::new(Mutex::new(scope));
+
         Self {
             input_line: String::new(),
 
@@ -222,8 +222,6 @@ impl Console<'static> {
 
             result_tx,
             result_rx,
-            scope_tx,
-            scope_rx,
         }
     }
 
@@ -339,12 +337,17 @@ impl Console<'static> {
         let handle_name = handle_name.to_string();
 
         let engine = self.create_engine();
-        let mut scope = self.scope.clone();
 
         let start = std::time::Instant::now();
 
         let path = PathBuf::from(path);
         let ast = engine.compile_file(path)?;
+
+        let mut scope = {
+            let scope_lock = self.scope.lock();
+            let scope = scope_lock.to_owned();
+            scope
+        };
 
         let handle = reactor.spawn_interval(
             move || {
@@ -465,23 +468,19 @@ impl Console<'static> {
         let engine = self.create_engine();
 
         let result_tx = self.result_tx.clone();
-        let scope_tx = self.scope_tx.clone();
 
         let input = self.input_line.to_string();
 
         let scope = self.scope.clone();
 
         let handle = reactor.spawn(async move {
-            let mut scope = scope;
+            let mut scope = scope.lock();
             let result =
                 engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
             let _ = result_tx.send(result);
-            let _ = scope_tx.send(scope);
         })?;
 
         handle.forget();
-
-        // self.handle_eval_result(print, result)?;
 
         Ok(())
     }
@@ -500,10 +499,6 @@ impl Console<'static> {
             self.handle_eval_result(true, result).unwrap();
         }
 
-        while let Ok(scope) = self.scope_rx.try_recv() {
-            self.scope = scope;
-        }
-
         egui::Window::new(Self::ID)
             .resizable(false)
             .auto_sized()
@@ -513,6 +508,8 @@ impl Console<'static> {
             .anchor(egui::Align2::CENTER_TOP, Point::new(0.0, 0.0))
             .show(ctx, |ui| {
                 ui.set_width(ctx.input().screen_rect().width());
+
+                let scope_locked = self.scope.is_locked();
 
                 let skip_count =
                     self.output_history.len().checked_sub(20).unwrap_or(0);
@@ -533,6 +530,7 @@ impl Console<'static> {
                         .id(egui::Id::new(Self::ID_TEXT))
                         .code_editor()
                         .lock_focus(true)
+                        .enabled(!scope_locked)
                         .desired_width(ui.available_width()),
                 );
 
@@ -554,6 +552,7 @@ impl Console<'static> {
 
                 if input.lost_focus()
                     && ui.input().key_pressed(egui::Key::Enter)
+                    && !scope_locked
                 {
                     self.input_history.push(self.input_line.clone());
                     self.output_history.push(format!("> {}", self.input_line));
