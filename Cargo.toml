@@ -47,6 +47,7 @@ num_cpus = "1.13.0"
 
 log = "0.4"
 flexi_logger = { version = "0.18", features = ["async"] }
+argh = "0.1.5"
 
 [profile.dev]
 opt-level = 2

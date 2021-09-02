@@ -11,6 +11,8 @@ use winit::platform::unix::*;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
+use argh::FromArgs;
+
 use gfaestus::app::mainview::*;
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
@@ -97,23 +99,12 @@ fn set_up_logger() -> Result<LoggerHandle> {
 }
 
 fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
+    let args: Args = argh::from_env();
 
     let _logger = set_up_logger().unwrap();
 
-    let gfa_file = if let Some(name) = args.get(1) {
-        name
-    } else {
-        error!("Must provide path to a GFA file");
-        std::process::exit(1);
-    };
-
-    let layout_file = if let Some(name) = args.get(2) {
-        name
-    } else {
-        error!("Must provide path to a layout file");
-        std::process::exit(1);
-    };
+    let gfa_file = &args.gfa;
+    let layout_file = &args.layout;
 
     let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
     let window = WindowBuilder::new()
@@ -1150,4 +1141,16 @@ fn handle_new_overlay(
         .create_overlay(overlay);
 
     Ok(())
+}
+
+#[derive(FromArgs)]
+/// Gfaestus
+pub struct Args {
+    /// the GFA file to load
+    #[argh(positional)]
+    gfa: String,
+
+    /// the layout file to use
+    #[argh(positional)]
+    layout: String,
 }
