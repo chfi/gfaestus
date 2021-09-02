@@ -244,6 +244,11 @@ fn main() {
     )
     .unwrap();
 
+    if let Some(script_file) = args.run_script.as_ref() {
+        warn!("executing script file {}", script_file);
+        gui.console.eval_file(true, script_file).unwrap();
+    }
+
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
@@ -1153,4 +1158,8 @@ pub struct Args {
     /// the layout file to use
     #[argh(positional)]
     layout: String,
+
+    /// load and run a script file at startup, e.g. for configuration
+    #[argh(option)]
+    run_script: Option<String>,
 }

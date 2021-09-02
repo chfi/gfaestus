@@ -91,7 +91,7 @@ pub struct Gui {
 
     annotation_file_list: AnnotationFileList,
 
-    console: Console<'static>,
+    pub console: Console<'static>,
     console_down: bool,
 }
 
