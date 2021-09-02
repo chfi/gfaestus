@@ -248,6 +248,7 @@ impl Console<'static> {
 
         // TODO this should be configurable in the app options
         engine.set_max_call_levels(16);
+        engine.set_max_expr_depths(0, 0);
 
         engine.register_type::<Point>();
 

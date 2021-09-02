@@ -23,7 +23,9 @@ void main() {
   vec2 p = gl_in[0].gl_Position.xy;
   vec2 q = gl_in[1].gl_Position.xy;
 
-  float node_width = node_uniform.node_width / (node_uniform.scale * 1000.0);
+  float node_width = node_uniform.node_width / (node_uniform.scale *
+                                                max(node_uniform.viewport_dims.x,
+                                                    node_uniform.viewport_dims.y));
 
   vec4 p_ = node_uniform.view_transform * gl_in[0].gl_Position;
   vec4 q_ = node_uniform.view_transform * gl_in[1].gl_Position;
