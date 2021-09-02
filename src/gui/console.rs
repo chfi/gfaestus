@@ -67,6 +67,8 @@ pub struct Console<'a> {
 
     graph: Arc<PackedGraph>,
     path_positions: Arc<PathPositionMap>,
+
+    modules: Vec<Arc<rhai::Module>>,
 }
 
 impl Console<'static> {
@@ -234,6 +236,8 @@ impl Console<'static> {
 
             graph: graph.graph.clone(),
             path_positions: graph.path_positions.clone(),
+
+            modules: Vec::new(),
         }
     }
 
@@ -261,6 +265,21 @@ impl Console<'static> {
             });
             app_msg_tx.send(msg).unwrap();
         });
+
+        let graph = self.graph.clone();
+        engine.register_fn(
+            "path_selection",
+            move |path: PathId| -> NodeSelection {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                selection
+            },
+        );
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
         engine.register_fn("x", |point: &mut Point| point.x);
@@ -312,6 +331,10 @@ impl Console<'static> {
         engine.register_fn("print_test", || {
             println!("hello world");
         });
+
+        for module in self.modules.iter() {
+            engine.register_global_module(module.clone());
+        }
 
         engine
     }
@@ -404,6 +427,7 @@ impl Console<'static> {
             self.input_line.clear();
             self.input_history.clear();
             self.output_history.clear();
+            self.modules.clear();
 
             return Ok(true);
         } else if self.input_line.starts_with(":exec ") {
@@ -413,6 +437,20 @@ impl Console<'static> {
             if let Err(err) = result {
                 debug!(
                     "console :exec of file '{}' failed: {:?}",
+                    file_path, err
+                );
+            }
+            self.input_line.clear();
+
+            return Ok(true);
+        } else if self.input_line.starts_with(":import ") {
+            log::warn!("importing file");
+            let file_path = &self.input_line[8..].to_string();
+            let result = self.import_file(&file_path);
+
+            if let Err(err) = result {
+                debug!(
+                    "console :import of file '{}' failed: {:?}",
                     file_path, err
                 );
             }
@@ -492,6 +530,18 @@ impl Console<'static> {
         Ok(())
     }
 
+    pub fn import_file(&mut self, file: &str) -> Result<()> {
+        let engine = self.create_engine();
+
+        let ast = engine.compile_file(file.into())?;
+        let module =
+            rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine)?;
+
+        self.modules.push(Arc::new(module));
+
+        Ok(())
+    }
+
     pub fn eval(&mut self, reactor: &mut Reactor, print: bool) -> Result<()> {
         debug!("evaluating: {}", &self.input_line);
         let engine = self.create_engine();
@@ -504,6 +554,7 @@ impl Console<'static> {
 
         let handle = reactor.spawn(async move {
             let mut scope = scope.lock();
+
             let result =
                 engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
             let _ = result_tx.send(result);

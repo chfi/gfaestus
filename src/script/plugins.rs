@@ -216,13 +216,31 @@ pub mod paths_plugin {
         path_len(graph, PathId(path as u64))
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, return_raw)]
+    pub fn path_first_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+    ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
+        graph.path_first_step(path).ok_or("Path not found".into())
+    }
+
+    #[rhai_fn(pure, return_raw)]
+    pub fn path_last_step(
+        graph: &mut Arc<PackedGraph>,
+        path: PathId,
+    ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
+        graph.path_last_step(path).ok_or("Path not found".into())
+    }
+
+    #[rhai_fn(pure, return_raw)]
     pub fn path_handle_at_step(
         graph: &mut Arc<PackedGraph>,
         path: PathId,
         step: StepPtr,
-    ) -> Handle {
-        graph.path_handle_at_step(path, step).unwrap()
+    ) -> std::result::Result<Handle, Box<EvalAltResult>> {
+        graph
+            .path_handle_at_step(path, step)
+            .ok_or("Path or step not found".into())
     }
 
     #[rhai_fn(pure)]
@@ -243,22 +261,28 @@ pub mod paths_plugin {
         graph.path_prev_step(path, step).is_some()
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, return_raw)]
     pub fn next_step(
         graph: &mut Arc<PackedGraph>,
         path: PathId,
         step: StepPtr,
-    ) -> StepPtr {
-        graph.path_next_step(path, step).unwrap()
+        // ) -> StepPtr {
+    ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
+        graph
+            .path_next_step(path, step)
+            .ok_or("Step not found".into())
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, return_raw)]
     pub fn prev_step(
         graph: &mut Arc<PackedGraph>,
         path: PathId,
         step: StepPtr,
-    ) -> StepPtr {
-        graph.path_prev_step(path, step).unwrap()
+        // ) -> StepPtr {
+    ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
+        graph
+            .path_prev_step(path, step)
+            .ok_or("Step not found".into())
     }
 }
 
@@ -299,12 +323,14 @@ pub mod graph_plugin {
         graph.sequence_vec(handle)
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, return_raw)]
     pub fn get_path_id(
         graph: &mut Arc<PackedGraph>,
         path_name: &str,
-    ) -> Option<PathId> {
-        graph.get_path_id(path_name.as_bytes())
+    ) -> std::result::Result<PathId, Box<EvalAltResult>> {
+        graph
+            .get_path_id(path_name.as_bytes())
+            .ok_or("Path not found".into())
     }
 }
 
