@@ -181,7 +181,11 @@ pub fn overlay_colors_tgt(
         .push("graph", graph.graph.clone())
         .push("path_pos", graph.path_positions.clone());
 
-    let engine = create_engine();
+    let mut engine = create_engine();
+
+    let graph_ = graph.graph.clone();
+
+    engine.register_fn("get_graph", move || graph_.clone());
 
     let node_color_ast = engine.compile(script)?;
 

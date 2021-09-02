@@ -465,6 +465,7 @@ impl Gui {
         };
 
         let console = Console::new(
+            graph_query,
             channels.clone(),
             settings.to_owned(),
             shared_state.to_owned(),

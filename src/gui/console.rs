@@ -11,6 +11,7 @@ use handlegraph::{
     packed::*,
     pathhandlegraph::*,
 };
+use handlegraph::{packedgraph::PackedGraph, path_position::PathPositionMap};
 
 use anyhow::Result;
 
@@ -61,6 +62,9 @@ pub struct Console<'a> {
 
     result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
+
+    graph: Arc<PackedGraph>,
+    path_positions: Arc<PathPositionMap>,
 }
 
 impl Console<'static> {
@@ -68,14 +72,13 @@ impl Console<'static> {
     pub const ID_TEXT: &'static str = "quake_console_input";
 
     pub fn new(
+        graph: &GraphQuery,
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
-
-        let scope = rhai::Scope::new();
 
         let mut get_set = GetSetTruth::default();
 
@@ -198,6 +201,7 @@ impl Console<'static> {
             set_max_node_scale
         );
 
+        let scope = rhai::Scope::new();
         let scope = Arc::new(Mutex::new(scope));
 
         Self {
@@ -222,23 +226,27 @@ impl Console<'static> {
 
             result_tx,
             result_rx,
+
+            graph: graph.graph.clone(),
+            path_positions: graph.path_positions.clone(),
         }
     }
 
     fn create_engine(&self) -> rhai::Engine {
         use rhai::plugin::*;
 
-        let mut engine = rhai::Engine::new();
+        // let mut engine = rhai::Engine::new();
 
-        let colors = exported_module!(crate::script::plugins::colors);
+        let mut engine = crate::script::create_engine();
 
-        engine.register_type::<NodeId>();
-        engine.register_type::<Handle>();
         engine.register_type::<Point>();
 
-        engine.register_global_module(colors.into());
-
         let get_set = self.get_set.clone();
+
+        let graph = self.graph.clone();
+        let path_pos = self.path_positions.clone();
+        engine.register_fn("get_graph", move || graph.clone());
+        engine.register_fn("get_path_positions", move || path_pos.clone());
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
         engine.register_fn("x", |point: &mut Point| point.x);
@@ -374,6 +382,13 @@ impl Console<'static> {
     fn exec_console_command(&mut self, reactor: &mut Reactor) -> Result<bool> {
         if self.input_line.starts_with(":clear") {
             self.input_line.clear();
+            self.output_history.clear();
+
+            return Ok(true);
+        } else if self.input_line.starts_with(":reset") {
+            self.scope = Arc::new(Mutex::new(rhai::Scope::new()));
+            self.input_line.clear();
+            self.input_history.clear();
             self.output_history.clear();
 
             return Ok(true);
