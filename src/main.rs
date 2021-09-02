@@ -246,7 +246,9 @@ fn main() {
 
     if let Some(script_file) = args.run_script.as_ref() {
         warn!("executing script file {}", script_file);
-        gui.console.eval_file(true, script_file).unwrap();
+        gui.console
+            .eval_file(&mut reactor, true, script_file)
+            .unwrap();
     }
 
     let mut initial_view: Option<View> = None;
@@ -1162,4 +1164,17 @@ pub struct Args {
     /// load and run a script file at startup, e.g. for configuration
     #[argh(option)]
     run_script: Option<String>,
+
+    /// suppress log messages
+    #[argh(switch, short = 'q')]
+    quiet: bool,
+
+    /// log debug messages
+    #[argh(switch, short = 'd')]
+    debug: bool,
+
+    // #[argh(switch, short = 'l')]
+    /// whether or not to log to a file in the working directory
+    #[argh(switch)]
+    log_to_file: bool,
 }

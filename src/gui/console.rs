@@ -34,6 +34,9 @@ use crate::{
 };
 use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
+pub type ScriptEvalResult =
+    std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
+
 pub struct Console<'a> {
     input_line: String,
 
@@ -53,6 +56,12 @@ pub struct Console<'a> {
     get_set: Arc<GetSetTruth>,
 
     remote_handles: HashMap<String, RemoteHandle<()>>,
+
+    result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
+    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
+
+    scope_rx: crossbeam::channel::Receiver<rhai::Scope<'static>>,
+    scope_tx: crossbeam::channel::Sender<rhai::Scope<'static>>,
 }
 
 impl Console<'static> {
@@ -64,6 +73,10 @@ impl Console<'static> {
         settings: AppSettings,
         shared_state: SharedState,
     ) -> Self {
+        let (result_tx, result_rx) =
+            crossbeam::channel::unbounded::<ScriptEvalResult>();
+        let (scope_tx, scope_rx) = crossbeam::channel::unbounded();
+
         let scope = rhai::Scope::new();
 
         let mut get_set = GetSetTruth::default();
@@ -206,6 +219,11 @@ impl Console<'static> {
             get_set: Arc::new(get_set),
 
             remote_handles: Default::default(),
+
+            result_tx,
+            result_rx,
+            scope_tx,
+            scope_rx,
         }
     }
 
@@ -263,6 +281,12 @@ impl Console<'static> {
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);
 
+        engine.register_fn("test_wait", || {
+            println!("sleeping 2 seconds...");
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            println!("waking up!");
+        });
+
         engine.register_global_module(handle.into());
 
         engine.register_fn("print_test", || {
@@ -272,7 +296,12 @@ impl Console<'static> {
         engine
     }
 
-    pub fn eval_file(&mut self, print: bool, path: &str) -> Result<()> {
+    pub fn eval_file(
+        &mut self,
+        reactor: &mut Reactor,
+        print: bool,
+        path: &str,
+    ) -> Result<()> {
         use std::io::prelude::*;
         let mut file = std::fs::File::open(path)?;
         let mut script = String::new();
@@ -283,14 +312,19 @@ impl Console<'static> {
                 .push(format!(">>> Evaluating file '{}'", path));
         }
 
-        self.eval_line(print, &script)
+        self.eval_line(reactor, print, &script)
     }
 
-    pub fn eval_line(&mut self, print: bool, input_line: &str) -> Result<()> {
+    pub fn eval_line(
+        &mut self,
+        reactor: &mut Reactor,
+        print: bool,
+        input_line: &str,
+    ) -> Result<()> {
         let mut old_input = input_line.to_string();
         std::mem::swap(&mut old_input, &mut self.input_line);
 
-        self.eval(print)?;
+        self.eval(reactor, print)?;
         std::mem::swap(&mut old_input, &mut self.input_line);
 
         Ok(())
@@ -342,7 +376,7 @@ impl Console<'static> {
             return Ok(true);
         } else if self.input_line.starts_with(":exec ") {
             let file_path = &self.input_line[6..].to_string();
-            let result = self.eval_file(true, &file_path);
+            let result = self.eval_file(reactor, true, &file_path);
 
             if let Err(err) = result {
                 debug!(
@@ -388,19 +422,16 @@ impl Console<'static> {
         if executed_command {
             return Ok(());
         }
-        self.eval(print)?;
+        self.eval(reactor, print)?;
 
         Ok(())
     }
 
-    pub fn eval(&mut self, print: bool) -> Result<()> {
-        debug!("evaluating: {}", &self.input_line);
-        let engine = self.create_engine();
-
-        let result = engine.eval_with_scope::<rhai::Dynamic>(
-            &mut self.scope,
-            &self.input_line,
-        );
+    fn handle_eval_result(
+        &mut self,
+        print: bool,
+        result: std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>,
+    ) -> Result<()> {
         match result {
             Ok(result) => {
                 debug!("Eval success!");
@@ -429,6 +460,32 @@ impl Console<'static> {
         Ok(())
     }
 
+    pub fn eval(&mut self, reactor: &mut Reactor, print: bool) -> Result<()> {
+        debug!("evaluating: {}", &self.input_line);
+        let engine = self.create_engine();
+
+        let result_tx = self.result_tx.clone();
+        let scope_tx = self.scope_tx.clone();
+
+        let input = self.input_line.to_string();
+
+        let scope = self.scope.clone();
+
+        let handle = reactor.spawn(async move {
+            let mut scope = scope;
+            let result =
+                engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
+            let _ = result_tx.send(result);
+            let _ = scope_tx.send(scope);
+        })?;
+
+        handle.forget();
+
+        // self.handle_eval_result(print, result)?;
+
+        Ok(())
+    }
+
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
@@ -437,6 +494,14 @@ impl Console<'static> {
     ) {
         if !is_down {
             return;
+        }
+
+        while let Ok(result) = self.result_rx.try_recv() {
+            self.handle_eval_result(true, result).unwrap();
+        }
+
+        while let Ok(scope) = self.scope_rx.try_recv() {
+            self.scope = scope;
         }
 
         egui::Window::new(Self::ID)

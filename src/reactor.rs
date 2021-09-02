@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
-use futures::{future::RemoteHandle, task::SpawnExt};
+use futures::{future::RemoteHandle, task::SpawnExt, Future};
 
 mod paired;
 
@@ -129,5 +129,14 @@ impl Reactor {
             }
         })?;
         Ok(result)
+    }
+
+    pub fn spawn<F, T>(&mut self, fut: F) -> anyhow::Result<RemoteHandle<T>>
+    where
+        F: Future<Output = T> + Send + Sync + 'static,
+        T: Send + Sync + 'static,
+    {
+        let handle = self.thread_pool.spawn_with_handle(fut)?;
+        Ok(handle)
     }
 }
