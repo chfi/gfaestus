@@ -450,8 +450,6 @@ impl GuiPipeline {
                 .depth_bias_slope_factor(0.0)
                 .build();
 
-        // let depth_stencil_info = todo!();
-
         let multisampling_info =
             vk::PipelineMultisampleStateCreateInfo::builder()
                 .sample_shading_enable(false)

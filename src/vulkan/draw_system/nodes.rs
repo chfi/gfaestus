@@ -5,14 +5,10 @@ use rustc_hash::FxHashSet;
 
 use std::{ffi::CString, ops::RangeInclusive};
 
-use crossbeam::atomic::AtomicCell;
-use std::sync::Arc;
-
 use nalgebra_glm as glm;
 
 use anyhow::*;
 
-use crate::app::AppSettings;
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
 use crate::{
@@ -218,7 +214,7 @@ impl NodePipelines {
         Ok(())
     }
 
-    pub fn draw_overlay_new(
+    pub fn draw_overlay(
         &mut self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
@@ -314,127 +310,6 @@ impl NodePipelines {
             device.cmd_push_constants(
                 cmd_buf,
                 layout,
-                Flags::VERTEX
-                    | Flags::TESSELLATION_CONTROL
-                    | Flags::TESSELLATION_EVALUATION
-                    | Flags::FRAGMENT,
-                // Flags::VERTEX | Flags::GEOMETRY | Flags::FRAGMENT,
-                0,
-                &pc_bytes,
-            )
-        };
-
-        unsafe {
-            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
-        };
-
-        // End render pass
-        unsafe { device.cmd_end_render_pass(cmd_buf) };
-
-        Ok(())
-    }
-
-    fn draw_overlay(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffers: &Framebuffers,
-        viewport_dims: [f32; 2],
-        node_width: f32,
-        view: View,
-        offset: Point,
-        background_color: rgb::RGB<f32>,
-    ) -> Result<()> {
-        let device = &self.overlay_pipeline.device;
-
-        let clear_values = {
-            let bg = background_color;
-            [
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [bg.r, bg.g, bg.b, 1.0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        uint32: [0, 0, 0, 0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-            ]
-        };
-
-        let extent = vk::Extent2D {
-            width: viewport_dims[0] as u32,
-            height: viewport_dims[1] as u32,
-        };
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffers.nodes)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values)
-            .build();
-
-        unsafe {
-            device.cmd_begin_render_pass(
-                cmd_buf,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
-        };
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.overlay_pipeline.pipeline,
-            )
-        };
-
-        let vx_bufs = [self.vertices.vertex_buffer];
-        let desc_sets = [
-            self.overlay_pipeline.overlay_set,
-            self.selection_descriptors.descriptor_set,
-        ];
-
-        let offsets = [0];
-        unsafe {
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.overlay_pipeline.pipeline_layout,
-                0,
-                &desc_sets[0..=1],
-                &null,
-            );
-        };
-
-        let push_constants = NodePushConstants::new(
-            [offset.x, offset.y],
-            viewport_dims,
-            view,
-            node_width,
-            7,
-        );
-
-        let pc_bytes = push_constants.bytes();
-
-        unsafe {
-            use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                self.overlay_pipeline.pipeline_layout,
                 Flags::VERTEX
                     | Flags::TESSELLATION_CONTROL
                     | Flags::TESSELLATION_EVALUATION

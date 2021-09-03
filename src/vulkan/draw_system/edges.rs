@@ -83,7 +83,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
@@ -95,7 +94,6 @@ impl EdgeRenderer {
             msaa_samples,
             render_pass,
             layouts,
-            wide_lines,
             &vert_src,
             &tesc_src,
             &tese_src,
@@ -108,7 +106,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/quads.vert.spv");
         let tesc_src = crate::load_shader!("edges/quads.tesc.spv");
@@ -120,7 +117,6 @@ impl EdgeRenderer {
             msaa_samples,
             render_pass,
             layouts,
-            wide_lines,
             &vert_src,
             &tesc_src,
             &tese_src,
@@ -133,7 +129,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
         vert_src: &[u32],
         tesc_src: &[u32],
         tese_src: &[u32],
@@ -214,7 +209,6 @@ impl EdgeRenderer {
                 .depth_clamp_enable(false)
                 .rasterizer_discard_enable(false)
                 .polygon_mode(vk::PolygonMode::FILL)
-                // .line_width(1.0)
                 .cull_mode(vk::CullModeFlags::NONE)
                 .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
                 .depth_bias_enable(false)
@@ -401,7 +395,6 @@ impl EdgeRenderer {
                 msaa_samples,
                 render_pass,
                 &layouts,
-                wide_lines,
             )
         } else {
             Self::create_isoline_pipeline(
@@ -409,7 +402,6 @@ impl EdgeRenderer {
                 msaa_samples,
                 render_pass,
                 &layouts,
-                wide_lines,
             )
         };
 

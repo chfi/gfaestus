@@ -91,7 +91,6 @@ impl OverlayPipelines {
         overlay: (usize, OverlayKind),
         color_scheme: &GradientTexture,
     ) -> Result<()> {
-        // if self.overlay_set_id != Some(overlay) {
         match overlay.1 {
             OverlayKind::RGB => {
                 self.pipeline_rgb.write_active_overlay(overlay.0)?;
@@ -102,7 +101,6 @@ impl OverlayPipelines {
             }
         }
         self.overlay_set_id = Some(overlay);
-        // }
 
         Ok(())
     }

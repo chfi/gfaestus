@@ -66,7 +66,6 @@ impl MainView {
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
-        // node_width: Arc<NodeWidth>,
         node_count: usize,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
@@ -252,7 +251,7 @@ impl MainView {
 
         if use_overlay {
             if let Some(overlay) = overlay {
-                self.node_draw_system.draw_overlay_new(
+                self.node_draw_system.draw_overlay(
                     cmd_buf,
                     render_pass,
                     framebuffers,
