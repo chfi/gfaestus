@@ -7,7 +7,10 @@ use rustc_hash::FxHashMap;
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+
+#[cfg(target_os = "linux")]
 use winit::platform::unix::*;
+
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
@@ -106,16 +109,28 @@ fn main() {
     let gfa_file = &args.gfa;
     let layout_file = &args.layout;
 
-    let event_loop: EventLoop<()> = if args.force_x11 {
-        if let Ok(ev_loop) = EventLoop::new_x11() {
-            ev_loop
+    let event_loop: EventLoop<()>;
+
+    #[cfg(target_os = "linux")]
+    {
+        event_loop = if args.force_x11 {
+            if let Ok(ev_loop) = EventLoop::new_x11() {
+                ev_loop
+            } else {
+                error!(
+                    "Error initializing X11 window, falling back to default"
+                );
+                EventLoop::new()
+            }
         } else {
-            error!("Error initializing X11 window, falling back to default");
             EventLoop::new()
-        }
-    } else {
-        EventLoop::new()
-    };
+        };
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        event_loop = EventLoop::new();
+    }
 
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
@@ -1175,6 +1190,7 @@ pub struct Args {
     #[argh(option)]
     run_script: Option<String>,
 
+    #[cfg(target_os = "linux")]
     /// force use of x11 window (debugging)
     #[argh(switch)]
     force_x11: bool,
