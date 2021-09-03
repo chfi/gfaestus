@@ -23,7 +23,6 @@ use rustc_hash::FxHashMap;
 use rhai::{plugin::*, Func};
 
 use bstr::ByteSlice;
-use winit::event::VirtualKeyCode;
 
 use crate::{
     app::{
@@ -42,6 +41,16 @@ use parking_lot::{Mutex, MutexGuard};
 
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
+
+pub struct ConsoleShared {
+    settings: AppSettings,
+    shared_state: SharedState,
+    channels: AppChannels,
+    get_set: Arc<GetSetTruth>,
+    key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
+    graph: Arc<PackedGraph>,
+    path_positions: Arc<PathPositionMap>,
+}
 
 pub struct Console<'a> {
     input_line: String,
@@ -248,32 +257,33 @@ impl Console<'static> {
         }
     }
 
+    pub fn shared(&self) -> ConsoleShared {
+        ConsoleShared {
+            settings: self.settings.clone(),
+            shared_state: self.shared_state.clone(),
+            channels: self.channels.clone(),
+            get_set: self.get_set.clone(),
+            key_code_map: self.key_code_map.clone(),
+
+            graph: self.graph.clone(),
+            path_positions: self.path_positions.clone(),
+        }
+    }
+
     fn create_scope() -> rhai::Scope<'static> {
-        let mut scope = rhai::Scope::new();
+        let scope = rhai::Scope::new();
         scope
     }
 
     fn create_engine(&self) -> rhai::Engine {
-        use rhai::plugin::*;
+        let shared = self.shared();
+        let mut engine = shared.create_engine();
 
-        let mut engine = crate::script::create_engine();
+        let modules = self.modules.clone();
 
-        // TODO this should be configurable in the app options
-        engine.set_max_call_levels(16);
-        engine.set_max_expr_depths(0, 0);
-
-        engine.register_type::<Point>();
-
-        let graph = self.graph.clone();
-        let path_pos = self.path_positions.clone();
-
-        engine.register_fn("get_graph", move || graph.clone());
-        engine.register_fn("get_path_positions", move || path_pos.clone());
-
-        let modules_ = self.modules.clone();
         let key_code_map = self.key_code_map.clone();
-
         let binds_tx = self.channels.binds_tx.clone();
+
         engine.register_fn(
             "bind_key",
             move |key: &str, fn_name: rhai::Dynamic| {
@@ -294,11 +304,11 @@ impl Console<'static> {
                     let script =
                         format!("fn a_function() {{\n{}();\n}}", fn_name);
                     log::warn!("compiling to AST");
+                    log::warn!("script: \n{}", script);
 
-                    let mut engine = rhai::Engine::new();
-
+                    let mut engine = shared.create_engine();
                     {
-                        let modules = modules_.lock();
+                        let modules = modules.lock();
                         for module in modules.iter() {
                             engine.register_global_module(module.clone());
                         }
@@ -320,8 +330,12 @@ impl Console<'static> {
                             binds_tx
                                 .send((
                                     *key_code,
-                                    Some(Box::new(move || {
-                                        function().unwrap();
+                                    Some(Box::new(move || match function() {
+                                        Ok(_) => (),
+                                        Err(err) => log::warn!(
+                                            "bound function error: {:?}",
+                                            err
+                                        ),
                                     })),
                                 ))
                                 .unwrap();
@@ -331,122 +345,8 @@ impl Console<'static> {
                         }
                     }
                 }
-
-                /*
-                if let Some(func) = cmd.try_cast::<rhai::FnPtr>() {
-                    log::warn!("successfully cast into function pointer");
-
-                    let scope = { let lock = self.scope.lock(); lock.to_owned() };
-
-                    let engine = self.create_engine();
-
-                    let boxed_cmd = Box::new(move || {
-
-                    });
-
-
-
-                    // let msg = (key, Some(
-                }
-                */
-
-                // if let Some(func) = cmd.try_cast::<Box<dyn Fn() + Send + Sync + 'static>>
-                // let msg = (key, Some(
-                // binds_tx.send(
             },
         );
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("set_selection", move |selection: NodeSelection| {
-            let msg = AppMsg::Selection(Select::Many {
-                nodes: selection.nodes,
-                clear: true,
-            });
-            app_msg_tx.send(msg).unwrap();
-        });
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("pan_to_active_selection", move || {
-            let msg = AppMsg::GotoSelection;
-            app_msg_tx.send(msg).unwrap();
-        });
-
-        let graph = self.graph.clone();
-        engine.register_fn(
-            "path_selection",
-            move |path: PathId| -> NodeSelection {
-                let mut selection = NodeSelection::default();
-                if let Some(steps) = graph.path_steps(path) {
-                    for step in steps {
-                        let id = step.handle().id();
-                        selection.add_one(false, id);
-                    }
-                }
-                selection
-            },
-        );
-
-        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
-        engine.register_fn("x", |point: &mut Point| point.x);
-        engine.register_fn("y", |point: &mut Point| point.y);
-
-        let arc = self.shared_state.hover_node.clone();
-        engine.register_fn("get_hover_node", move || arc.load());
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("toggle_dark_mode", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
-        });
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("toggle_overlay", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleOverlay).unwrap();
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_fn("get", move |name: &str| {
-            if let Some(getter) = get_set.getters.get(name) {
-                getter()
-            } else {
-                rhai::Dynamic::FALSE
-            }
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
-            let mut lock = get_set.console_vars.lock();
-            lock.insert(name.to_string(), val);
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_result_fn("get_var", move |name: &str| {
-            let lock = get_set.console_vars.try_lock();
-            let val = lock
-                .and_then(|l| l.get(name).cloned())
-                .ok_or("variable not found")?;
-            Ok(val)
-        });
-
-        let get_set = self.get_set.clone();
-
-        engine.register_fn("set", move |name: &str, val: rhai::Dynamic| {
-            if let Some(setter) = get_set.setters.get(name) {
-                setter(val);
-            }
-        });
-
-        let handle = exported_module!(crate::script::plugins::handle_plugin);
-
-        engine.register_fn("test_wait", || {
-            println!("sleeping 2 seconds...");
-            std::thread::sleep(std::time::Duration::from_millis(2000));
-            println!("waking up!");
-        });
-
-        engine.register_global_module(handle.into());
-
-        engine.register_fn("print_test", || {
-            println!("hello world");
-        });
 
         {
             let modules = self.modules.lock();
@@ -908,6 +808,124 @@ impl GetSetTruth {
 
         self.getters.insert(name.to_string(), Box::new(getter) as _);
         self.setters.insert(name.to_string(), Box::new(setter) as _);
+    }
+}
+
+impl ConsoleShared {
+    pub fn create_engine(&self) -> rhai::Engine {
+        use rhai::plugin::*;
+
+        let mut engine = crate::script::create_engine();
+
+        // TODO this should be configurable in the app options
+        engine.set_max_call_levels(16);
+        engine.set_max_expr_depths(0, 0);
+
+        engine.register_type::<Point>();
+
+        let graph = self.graph.clone();
+        let path_pos = self.path_positions.clone();
+
+        engine.register_fn("get_graph", move || graph.clone());
+        engine.register_fn("get_path_positions", move || path_pos.clone());
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |selection: NodeSelection| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("pan_to_active_selection", move || {
+            let msg = AppMsg::GotoSelection;
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let graph = self.graph.clone();
+        engine.register_fn(
+            "path_selection",
+            move |path: PathId| -> NodeSelection {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                selection
+            },
+        );
+
+        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
+        engine.register_fn("x", |point: &mut Point| point.x);
+        engine.register_fn("y", |point: &mut Point| point.y);
+
+        let arc = self.shared_state.hover_node.clone();
+        engine.register_fn("get_hover_node", move || arc.load());
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("toggle_dark_mode", move || {
+            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
+        });
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("toggle_overlay", move || {
+            app_msg_tx.send(crate::app::AppMsg::ToggleOverlay).unwrap();
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_fn("get", move |name: &str| {
+            if let Some(getter) = get_set.getters.get(name) {
+                getter()
+            } else {
+                rhai::Dynamic::FALSE
+            }
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
+            let mut lock = get_set.console_vars.lock();
+            lock.insert(name.to_string(), val);
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_fn("get_var", move |name: &str| {
+            let lock = get_set.console_vars.try_lock();
+            let val = lock.and_then(|l| l.get(name).cloned());
+            match val {
+                Some(val) => val,
+                None => {
+                    log::trace!("variable `{}` not found", name);
+                    false.into()
+                }
+            }
+        });
+
+        let get_set = self.get_set.clone();
+
+        engine.register_fn("set", move |name: &str, val: rhai::Dynamic| {
+            if let Some(setter) = get_set.setters.get(name) {
+                setter(val);
+            }
+        });
+
+        let handle = exported_module!(crate::script::plugins::handle_plugin);
+
+        engine.register_fn("test_wait", || {
+            println!("sleeping 2 seconds...");
+            std::thread::sleep(std::time::Duration::from_millis(2000));
+            println!("waking up!");
+        });
+
+        engine.register_global_module(handle.into());
+
+        engine.register_fn("print_test", || {
+            println!("hello world");
+        });
+
+        engine
     }
 }
 
