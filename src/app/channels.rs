@@ -1,8 +1,14 @@
 use crossbeam::channel::{self, Receiver, Sender};
+use winit::event::VirtualKeyCode;
 
 use crate::app::mainview::MainViewMsg;
 use crate::app::AppMsg;
 use crate::gui::GuiMsg;
+
+pub type BindMsg = (
+    VirtualKeyCode,
+    Option<Box<dyn Fn() + Send + Sync + 'static>>,
+);
 
 #[derive(Clone)]
 pub struct AppChannels {
@@ -14,6 +20,9 @@ pub struct AppChannels {
 
     pub gui_tx: Sender<GuiMsg>,
     pub gui_rx: Receiver<GuiMsg>,
+
+    pub binds_tx: Sender<BindMsg>,
+    pub binds_rx: Receiver<BindMsg>,
 }
 
 impl AppChannels {
@@ -21,6 +30,7 @@ impl AppChannels {
         let (app_tx, app_rx) = channel::unbounded::<AppMsg>();
         let (main_view_tx, main_view_rx) = channel::unbounded::<MainViewMsg>();
         let (gui_tx, gui_rx) = channel::unbounded::<GuiMsg>();
+        let (binds_tx, binds_rx) = channel::unbounded::<BindMsg>();
 
         Self {
             app_tx,
@@ -31,6 +41,9 @@ impl AppChannels {
 
             gui_tx,
             gui_rx,
+
+            binds_tx,
+            binds_rx,
         }
     }
 }

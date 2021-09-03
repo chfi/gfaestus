@@ -96,8 +96,10 @@ impl InputManager {
     ) where
         F: Fn() + Send + Sync + 'static,
     {
-        // let mut custom_binds = self.custom_binds.lock();
         let boxed = Box::new(command) as Box<dyn Fn() + Send + Sync + 'static>;
+        log::warn!("calling boxed binding command");
+        boxed();
+
         self.custom_binds.insert(key_code, boxed);
     }
 

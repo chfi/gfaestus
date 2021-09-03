@@ -445,6 +445,14 @@ fn main() {
                     }
                 }
 
+                while let Ok((key_code, command)) = app.channels().binds_rx.try_recv() {
+                    if let Some(cmd) = command {
+                        input_manager.add_binding(key_code, cmd);
+                        // input_manager.add_binding(key_code, Box::new(cmd));
+                    } else {
+                    }
+                }
+
                 while let Ok(app_in) = app_rx.try_recv() {
                     app.apply_input(app_in, &gui_msg_tx);
                 }

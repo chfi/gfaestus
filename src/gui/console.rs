@@ -23,6 +23,7 @@ use rustc_hash::FxHashMap;
 use rhai::{plugin::*, Func};
 
 use bstr::ByteSlice;
+use winit::event::VirtualKeyCode;
 
 use crate::{
     app::{
@@ -68,7 +69,7 @@ pub struct Console<'a> {
     graph: Arc<PackedGraph>,
     path_positions: Arc<PathPositionMap>,
 
-    modules: Vec<Arc<rhai::Module>>,
+    modules: Arc<Mutex<Vec<Arc<rhai::Module>>>>,
 }
 
 impl Console<'static> {
@@ -205,7 +206,7 @@ impl Console<'static> {
             set_max_node_scale
         );
 
-        let scope = rhai::Scope::new();
+        let scope = Self::create_scope();
         let scope = Arc::new(Mutex::new(scope));
 
         let output_history =
@@ -237,8 +238,14 @@ impl Console<'static> {
             graph: graph.graph.clone(),
             path_positions: graph.path_positions.clone(),
 
-            modules: Vec::new(),
+            modules: Arc::new(Mutex::new(Vec::new())),
         }
+    }
+
+    fn create_scope() -> rhai::Scope<'static> {
+        let mut scope = rhai::Scope::new();
+        add_virtual_key_codes(&mut scope);
+        scope
     }
 
     fn create_engine(&self) -> rhai::Engine {
@@ -258,6 +265,85 @@ impl Console<'static> {
         let path_pos = self.path_positions.clone();
         engine.register_fn("get_graph", move || graph.clone());
         engine.register_fn("get_path_positions", move || path_pos.clone());
+
+        let modules_ = self.modules.clone();
+
+        let binds_tx = self.channels.binds_tx.clone();
+        engine.register_fn(
+            "bind_key",
+            move |key: VirtualKeyCode, fn_name: rhai::Dynamic| {
+                log::warn!("in bind_key");
+
+                if let Some(name) = fn_name.try_cast::<String>() {
+                    log::warn!("cast to String");
+
+                    let scope = Self::create_scope();
+
+                    let script = format!("fn a_function() {{\n{}();\n}}", name);
+                    log::warn!("compiling to AST");
+
+                    let mut engine = rhai::Engine::new();
+
+                    {
+                        let modules = modules_.lock();
+                        for module in modules.iter() {
+                            engine.register_global_module(module.clone());
+                        }
+                    }
+
+                    let ast = engine.compile_with_scope(&scope, &script);
+
+                    match ast {
+                        Ok(ast) => {
+                            log::warn!("compilation successful");
+                            let function =
+                                rhai::Func::<(), ()>::create_from_ast(
+                                    engine,
+                                    ast,
+                                    "a_function",
+                                );
+                            log::warn!("created rust closure");
+
+                            // let x: () = function;
+
+                            binds_tx
+                                .send((
+                                    key,
+                                    Some(Box::new(move || {
+                                        function().unwrap();
+                                    })),
+                                ))
+                                .unwrap();
+                        }
+                        Err(err) => {
+                            log::warn!("compilation error: {:?}", err);
+                        }
+                    }
+                }
+
+                /*
+                if let Some(func) = cmd.try_cast::<rhai::FnPtr>() {
+                    log::warn!("successfully cast into function pointer");
+
+                    let scope = { let lock = self.scope.lock(); lock.to_owned() };
+
+                    let engine = self.create_engine();
+
+                    let boxed_cmd = Box::new(move || {
+
+                    });
+
+
+
+                    // let msg = (key, Some(
+                }
+                */
+
+                // if let Some(func) = cmd.try_cast::<Box<dyn Fn() + Send + Sync + 'static>>
+                // let msg = (key, Some(
+                // binds_tx.send(
+            },
+        );
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("set_selection", move |selection: NodeSelection| {
@@ -335,8 +421,12 @@ impl Console<'static> {
             println!("hello world");
         });
 
-        for module in self.modules.iter() {
-            engine.register_global_module(module.clone());
+        {
+            let modules = self.modules.lock();
+
+            for module in modules.iter() {
+                engine.register_global_module(module.clone());
+            }
         }
 
         engine
@@ -426,11 +516,14 @@ impl Console<'static> {
 
             return Ok(true);
         } else if self.input_line.starts_with(":reset") {
-            self.scope = Arc::new(Mutex::new(rhai::Scope::new()));
+            self.scope = Arc::new(Mutex::new(Self::create_scope()));
             self.input_line.clear();
             self.input_history.clear();
             self.output_history.clear();
-            self.modules.clear();
+            {
+                let mut modules = self.modules.lock();
+                modules.clear();
+            }
 
             return Ok(true);
         } else if self.input_line.starts_with(":exec ") {
@@ -552,7 +645,11 @@ impl Console<'static> {
         let msg = format!(
             " >>> imported {} variables, {} functions, and {} iterators from '{}'", vars, funcs, iters, file);
         self.output_history.push(msg);
-        self.modules.push(Arc::new(module));
+
+        {
+            let mut modules = self.modules.lock();
+            modules.push(Arc::new(module));
+        }
 
         Ok(())
     }
@@ -778,4 +875,171 @@ impl GetSetTruth {
         self.getters.insert(name.to_string(), Box::new(getter) as _);
         self.setters.insert(name.to_string(), Box::new(setter) as _);
     }
+}
+
+fn add_virtual_key_codes(scope: &mut rhai::Scope) {
+    use winit::event::VirtualKeyCode as Key;
+    scope.push("KEY_Key1", Key::Key1);
+    scope.push("KEY_Key2", Key::Key2);
+    scope.push("KEY_Key3", Key::Key3);
+    scope.push("KEY_Key4", Key::Key4);
+    scope.push("KEY_Key5", Key::Key5);
+    scope.push("KEY_Key6", Key::Key6);
+    scope.push("KEY_Key7", Key::Key7);
+    scope.push("KEY_Key8", Key::Key8);
+    scope.push("KEY_Key9", Key::Key9);
+    scope.push("KEY_Key0", Key::Key0);
+    scope.push("KEY_A", Key::A);
+    scope.push("KEY_B", Key::B);
+    scope.push("KEY_C", Key::C);
+    scope.push("KEY_D", Key::D);
+    scope.push("KEY_E", Key::E);
+    scope.push("KEY_F", Key::F);
+    scope.push("KEY_G", Key::G);
+    scope.push("KEY_H", Key::H);
+    scope.push("KEY_I", Key::I);
+    scope.push("KEY_J", Key::J);
+    scope.push("KEY_K", Key::K);
+    scope.push("KEY_L", Key::L);
+    scope.push("KEY_M", Key::M);
+    scope.push("KEY_N", Key::N);
+    scope.push("KEY_O", Key::O);
+    scope.push("KEY_P", Key::P);
+    scope.push("KEY_Q", Key::Q);
+    scope.push("KEY_R", Key::R);
+    scope.push("KEY_S", Key::S);
+    scope.push("KEY_T", Key::T);
+    scope.push("KEY_U", Key::U);
+    scope.push("KEY_V", Key::V);
+    scope.push("KEY_W", Key::W);
+    scope.push("KEY_X", Key::X);
+    scope.push("KEY_Y", Key::Y);
+    scope.push("KEY_Z", Key::Z);
+    scope.push("KEY_Escape", Key::Escape);
+    scope.push("KEY_F1", Key::F1);
+    scope.push("KEY_F2", Key::F2);
+    scope.push("KEY_F3", Key::F3);
+    scope.push("KEY_F4", Key::F4);
+    scope.push("KEY_F5", Key::F5);
+    scope.push("KEY_F6", Key::F6);
+    scope.push("KEY_F7", Key::F7);
+    scope.push("KEY_F8", Key::F8);
+    scope.push("KEY_F9", Key::F9);
+    scope.push("KEY_F10", Key::F10);
+    scope.push("KEY_F11", Key::F11);
+    scope.push("KEY_F12", Key::F12);
+    scope.push("KEY_F13", Key::F13);
+    scope.push("KEY_F14", Key::F14);
+    scope.push("KEY_F15", Key::F15);
+    scope.push("KEY_F16", Key::F16);
+    scope.push("KEY_F17", Key::F17);
+    scope.push("KEY_F18", Key::F18);
+    scope.push("KEY_F19", Key::F19);
+    scope.push("KEY_F20", Key::F20);
+    scope.push("KEY_F21", Key::F21);
+    scope.push("KEY_F22", Key::F22);
+    scope.push("KEY_F23", Key::F23);
+    scope.push("KEY_F24", Key::F24);
+    scope.push("KEY_Snapshot", Key::Snapshot);
+    scope.push("KEY_Scroll", Key::Scroll);
+    scope.push("KEY_Pause", Key::Pause);
+    scope.push("KEY_Insert", Key::Insert);
+    scope.push("KEY_Home", Key::Home);
+    scope.push("KEY_Delete", Key::Delete);
+    scope.push("KEY_End", Key::End);
+    scope.push("KEY_PageDown", Key::PageDown);
+    scope.push("KEY_PageUp", Key::PageUp);
+    scope.push("KEY_Left", Key::Left);
+    scope.push("KEY_Up", Key::Up);
+    scope.push("KEY_Right", Key::Right);
+    scope.push("KEY_Down", Key::Down);
+    scope.push("KEY_Back", Key::Back);
+    scope.push("KEY_Return", Key::Return);
+    scope.push("KEY_Space", Key::Space);
+    scope.push("KEY_Compose", Key::Compose);
+    scope.push("KEY_Caret", Key::Caret);
+    scope.push("KEY_Numlock", Key::Numlock);
+    scope.push("KEY_Numpad0", Key::Numpad0);
+    scope.push("KEY_Numpad1", Key::Numpad1);
+    scope.push("KEY_Numpad2", Key::Numpad2);
+    scope.push("KEY_Numpad3", Key::Numpad3);
+    scope.push("KEY_Numpad4", Key::Numpad4);
+    scope.push("KEY_Numpad5", Key::Numpad5);
+    scope.push("KEY_Numpad6", Key::Numpad6);
+    scope.push("KEY_Numpad7", Key::Numpad7);
+    scope.push("KEY_Numpad8", Key::Numpad8);
+    scope.push("KEY_Numpad9", Key::Numpad9);
+    scope.push("KEY_NumpadAdd", Key::NumpadAdd);
+    scope.push("KEY_NumpadDivide", Key::NumpadDivide);
+    scope.push("KEY_NumpadDecimal", Key::NumpadDecimal);
+    scope.push("KEY_NumpadComma", Key::NumpadComma);
+    scope.push("KEY_NumpadEnter", Key::NumpadEnter);
+    scope.push("KEY_NumpadEquals", Key::NumpadEquals);
+    scope.push("KEY_NumpadMultiply", Key::NumpadMultiply);
+    scope.push("KEY_NumpadSubtract", Key::NumpadSubtract);
+    scope.push("KEY_AbntC1", Key::AbntC1);
+    scope.push("KEY_AbntC2", Key::AbntC2);
+    scope.push("KEY_Apostrophe", Key::Apostrophe);
+    scope.push("KEY_Apps", Key::Apps);
+    scope.push("KEY_Asterisk", Key::Asterisk);
+    scope.push("KEY_At", Key::At);
+    scope.push("KEY_Ax", Key::Ax);
+    scope.push("KEY_Backslash", Key::Backslash);
+    scope.push("KEY_Calculator", Key::Calculator);
+    scope.push("KEY_Capital", Key::Capital);
+    scope.push("KEY_Colon", Key::Colon);
+    scope.push("KEY_Comma", Key::Comma);
+    scope.push("KEY_Convert", Key::Convert);
+    scope.push("KEY_Equals", Key::Equals);
+    scope.push("KEY_Grave", Key::Grave);
+    scope.push("KEY_Kana", Key::Kana);
+    scope.push("KEY_Kanji", Key::Kanji);
+    scope.push("KEY_LAlt", Key::LAlt);
+    scope.push("KEY_LBracket", Key::LBracket);
+    scope.push("KEY_LControl", Key::LControl);
+    scope.push("KEY_LShift", Key::LShift);
+    scope.push("KEY_LWin", Key::LWin);
+    scope.push("KEY_Mail", Key::Mail);
+    scope.push("KEY_MediaSelect", Key::MediaSelect);
+    scope.push("KEY_MediaStop", Key::MediaStop);
+    scope.push("KEY_Minus", Key::Minus);
+    scope.push("KEY_Mute", Key::Mute);
+    scope.push("KEY_MyComputer", Key::MyComputer);
+    scope.push("KEY_NavigateForward", Key::NavigateForward);
+    scope.push("KEY_NavigateBackward", Key::NavigateBackward);
+    scope.push("KEY_NextTrack", Key::NextTrack);
+    scope.push("KEY_NoConvert", Key::NoConvert);
+    scope.push("KEY_OEM102", Key::OEM102);
+    scope.push("KEY_Period", Key::Period);
+    scope.push("KEY_PlayPause", Key::PlayPause);
+    scope.push("KEY_Plus", Key::Plus);
+    scope.push("KEY_Power", Key::Power);
+    scope.push("KEY_PrevTrack", Key::PrevTrack);
+    scope.push("KEY_RAlt", Key::RAlt);
+    scope.push("KEY_RBracket", Key::RBracket);
+    scope.push("KEY_RControl", Key::RControl);
+    scope.push("KEY_RShift", Key::RShift);
+    scope.push("KEY_RWin", Key::RWin);
+    scope.push("KEY_Semicolon", Key::Semicolon);
+    scope.push("KEY_Slash", Key::Slash);
+    scope.push("KEY_Sleep", Key::Sleep);
+    scope.push("KEY_Stop", Key::Stop);
+    scope.push("KEY_Sysrq", Key::Sysrq);
+    scope.push("KEY_Tab", Key::Tab);
+    scope.push("KEY_Underline", Key::Underline);
+    scope.push("KEY_Unlabeled", Key::Unlabeled);
+    scope.push("KEY_VolumeDown", Key::VolumeDown);
+    scope.push("KEY_VolumeUp", Key::VolumeUp);
+    scope.push("KEY_Wake", Key::Wake);
+    scope.push("KEY_WebBack", Key::WebBack);
+    scope.push("KEY_WebFavorites", Key::WebFavorites);
+    scope.push("KEY_WebForward", Key::WebForward);
+    scope.push("KEY_WebHome", Key::WebHome);
+    scope.push("KEY_WebRefresh", Key::WebRefresh);
+    scope.push("KEY_WebSearch", Key::WebSearch);
+    scope.push("KEY_WebStop", Key::WebStop);
+    scope.push("KEY_Yen", Key::Yen);
+    scope.push("KEY_Copy", Key::Copy);
+    scope.push("KEY_Paste", Key::Paste);
+    scope.push("KEY_Cut", Key::Cut);
 }
