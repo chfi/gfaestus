@@ -96,6 +96,7 @@ impl MainView {
             &app,
             screen_dims.width as u32,
             screen_dims.height as u32,
+            app.render_passes.id_format,
         )?;
 
         let anim_handler = AnimHandler::new(

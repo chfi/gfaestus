@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use nalgebra_glm as glm;
 
-use anyhow::Result;
+use anyhow::*;
 
 use crate::app::AppSettings;
 use crate::view::View;
@@ -586,6 +586,8 @@ pub struct NodeIdBuffer {
     size: vk::DeviceSize,
     pub width: u32,
     pub height: u32,
+
+    elem_size: u32,
 }
 
 impl NodeIdBuffer {
@@ -698,9 +700,22 @@ impl NodeIdBuffer {
         }
     }
 
-    pub fn new(app: &GfaestusVk, width: u32, height: u32) -> Result<Self> {
-        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
-            as vk::DeviceSize;
+    pub fn new(
+        app: &GfaestusVk,
+        width: u32,
+        height: u32,
+        id_format: vk::Format,
+    ) -> Result<Self> {
+        use std::mem;
+        let elem_size = match id_format {
+            vk::Format::R32_UINT => Ok(mem::size_of::<u32>()),
+            vk::Format::R32G32_UINT => Ok(mem::size_of::<[u32; 2]>()),
+            vk::Format::R32G32B32_UINT => Ok(mem::size_of::<[u32; 3]>()),
+            vk::Format::R32G32B32A32_UINT => Ok(mem::size_of::<[u32; 4]>()),
+            _ => Err(anyhow!("Incompatible ID format")),
+        }?;
+
+        let img_size = (width * height * elem_size as u32) as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;
@@ -720,6 +735,8 @@ impl NodeIdBuffer {
             size,
             width,
             height,
+
+            elem_size: elem_size as u32,
         })
     }
 
@@ -748,8 +765,7 @@ impl NodeIdBuffer {
 
         self.destroy(app.vk_context().device());
 
-        let img_size = (width * height * (std::mem::size_of::<u32>() as u32))
-            as vk::DeviceSize;
+        let img_size = (width * height * self.elem_size) as vk::DeviceSize;
 
         let usage = vk::BufferUsageFlags::TRANSFER_DST
             | vk::BufferUsageFlags::STORAGE_BUFFER;

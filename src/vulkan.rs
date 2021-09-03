@@ -228,6 +228,7 @@ impl GfaestusVk {
         let in_flight_frames = Self::create_sync_objects(vk_context.device());
 
         let render_passes = RenderPasses::create(
+            &vk_context,
             vk_context.device(),
             swapchain_props,
             msaa_samples,
@@ -239,6 +240,7 @@ impl GfaestusVk {
             graphics_queue,
             swapchain_props,
             msaa_samples,
+            render_passes.id_format,
         )?;
 
         let offscreen_attachment = OffscreenAttachment::new(
@@ -1257,8 +1259,12 @@ impl GfaestusVk {
         let swapchain_image_views =
             create_swapchain_image_views(device, &images, swapchain_props)?;
 
-        let render_passes =
-            RenderPasses::create(device, swapchain_props, self.msaa_samples)?;
+        let render_passes = RenderPasses::create(
+            &self.vk_context,
+            device,
+            swapchain_props,
+            self.msaa_samples,
+        )?;
 
         render_passes.set_vk_debug_names(self)?;
 
@@ -1268,6 +1274,7 @@ impl GfaestusVk {
             self.graphics_queue,
             swapchain_props,
             self.msaa_samples,
+            render_passes.id_format,
         )?;
 
         node_attachments.set_vk_debug_names(self)?;

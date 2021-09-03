@@ -5,7 +5,7 @@ use super::context::VkContext;
 use super::SwapchainProperties;
 use super::{texture::*, GfaestusVk};
 
-use anyhow::Result;
+use anyhow::*;
 
 pub struct RenderPasses {
     pub nodes: vk::RenderPass,
@@ -13,6 +13,8 @@ pub struct RenderPasses {
     pub selection_edge_detect: vk::RenderPass,
     pub selection_blur: vk::RenderPass,
     pub gui: vk::RenderPass,
+
+    pub id_format: vk::Format,
 }
 
 pub struct Framebuffers {
@@ -58,6 +60,8 @@ pub struct NodeAttachments {
     pub id_resolve: Texture,
     pub mask: Texture,
     pub mask_resolve: Texture,
+
+    pub id_format: vk::Format,
 }
 
 pub struct OffscreenAttachment {
@@ -163,6 +167,7 @@ impl NodeAttachments {
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
+        id_format: vk::Format,
     ) -> Result<Self> {
         let color = Self::color(
             vk_context,
@@ -181,10 +186,16 @@ impl NodeAttachments {
             queue,
             swapchain_props,
             msaa_samples,
+            id_format,
         )?;
 
-        let id_resolve =
-            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        let id_resolve = Self::id_resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            id_format,
+        )?;
 
         let mask = Self::mask(
             vk_context,
@@ -208,6 +219,8 @@ impl NodeAttachments {
             id_color,
             mask,
             mask_resolve,
+
+            id_format,
         })
     }
 
@@ -237,9 +250,15 @@ impl NodeAttachments {
             queue,
             swapchain_props,
             msaa_samples,
+            self.id_format,
         )?;
-        self.id_resolve =
-            Self::id_resolve(vk_context, command_pool, queue, swapchain_props)?;
+        self.id_resolve = Self::id_resolve(
+            vk_context,
+            command_pool,
+            queue,
+            swapchain_props,
+            self.id_format,
+        )?;
 
         self.mask = Self::mask(
             vk_context,
@@ -335,8 +354,9 @@ impl NodeAttachments {
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
+        id_format: vk::Format,
     ) -> Result<Texture> {
-        let format = vk::Format::R32_UINT;
+        let format = id_format;
 
         use vk::ImageLayout as Layout;
         use vk::ImageUsageFlags as Usage;
@@ -376,6 +396,7 @@ impl NodeAttachments {
         command_pool: vk::CommandPool,
         queue: vk::Queue,
         swapchain_props: SwapchainProperties,
+        id_format: vk::Format,
     ) -> Result<Texture> {
         let extent = swapchain_props.extent;
 
@@ -387,7 +408,7 @@ impl NodeAttachments {
                 | vk::ImageUsageFlags::TRANSFER_SRC,
             vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
             extent,
-            vk::Format::R32_UINT,
+            id_format,
             None,
         )?;
 
@@ -462,11 +483,41 @@ impl NodeAttachments {
 
 impl RenderPasses {
     pub fn create(
+        vk_context: &VkContext,
         device: &Device,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
-        let nodes = Self::create_nodes(device, swapchain_props, msaa_samples)?;
+        let id_format: vk::Format = {
+            // TODO what other possibilities are compatible?
+            let candidates = [
+                vk::Format::R32_UINT,
+                vk::Format::R32G32_UINT,
+                vk::Format::R32G32B32_UINT,
+                vk::Format::R32G32B32A32_UINT,
+            ];
+
+            let tiling = vk::ImageTiling::OPTIMAL;
+
+            let features = vk::FormatFeatureFlags::TRANSFER_SRC
+                | vk::FormatFeatureFlags::COLOR_ATTACHMENT;
+
+            let format =
+                vk_context.find_supported_format(&candidates, tiling, features);
+
+            format.ok_or(anyhow!(
+                "Could not find a format for the node ID image"
+            ))?
+        };
+
+        log::warn!("chose format: {:?}", id_format);
+
+        let nodes = Self::create_nodes(
+            device,
+            swapchain_props,
+            msaa_samples,
+            id_format,
+        )?;
         let edges = Self::create_edges(device, swapchain_props, msaa_samples)?;
         let selection_edge_detect = Self::create_selection_edge_detect(
             device,
@@ -482,6 +533,8 @@ impl RenderPasses {
             selection_edge_detect,
             selection_blur,
             gui,
+
+            id_format,
         })
     }
 
@@ -615,7 +668,12 @@ impl RenderPasses {
     ) -> Result<()> {
         self.destroy(device);
 
-        let nodes = Self::create_nodes(device, swapchain_props, msaa_samples)?;
+        let nodes = Self::create_nodes(
+            device,
+            swapchain_props,
+            msaa_samples,
+            self.id_format,
+        )?;
         let edges = Self::create_edges(device, swapchain_props, msaa_samples)?;
 
         let selection_edge_detect = Self::create_selection_edge_detect(
@@ -722,6 +780,7 @@ impl RenderPasses {
         device: &Device,
         swapchain_props: SwapchainProperties,
         msaa_samples: vk::SampleCountFlags,
+        id_format: vk::Format,
     ) -> Result<vk::RenderPass> {
         // attachments:
         // TODO depth
@@ -745,7 +804,7 @@ impl RenderPasses {
             .build();
 
         let id_color_attch_desc = vk::AttachmentDescription::builder()
-            .format(vk::Format::R32_UINT)
+            .format(id_format)
             .samples(msaa_samples)
             .load_op(vk::AttachmentLoadOp::CLEAR)
             .store_op(vk::AttachmentStoreOp::DONT_CARE)
@@ -754,7 +813,7 @@ impl RenderPasses {
             .build();
 
         let id_resolve_attch_desc = vk::AttachmentDescription::builder()
-            .format(vk::Format::R32_UINT)
+            .format(id_format)
             .samples(vk::SampleCountFlags::TYPE_1)
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
