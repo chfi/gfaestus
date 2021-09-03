@@ -1,7 +1,7 @@
-use ash::extensions::ext::DebugUtils;
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
+use gfaestus::gui::console::Console;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::FxHashMap;
 use texture::Gradients;
@@ -10,6 +10,8 @@ use winit::event_loop::{ControlFlow, EventLoop};
 use winit::platform::unix::*;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
+
+use argh::FromArgs;
 
 use gfaestus::app::mainview::*;
 use gfaestus::app::{App, AppMsg};
@@ -97,25 +99,24 @@ fn set_up_logger() -> Result<LoggerHandle> {
 }
 
 fn main() {
-    let args = std::env::args().collect::<Vec<_>>();
+    let args: Args = argh::from_env();
 
     let _logger = set_up_logger().unwrap();
 
-    let gfa_file = if let Some(name) = args.get(1) {
-        name
+    let gfa_file = &args.gfa;
+    let layout_file = &args.layout;
+
+    let event_loop: EventLoop<()> = if args.force_x11 {
+        if let Ok(ev_loop) = EventLoop::new_x11() {
+            ev_loop
+        } else {
+            error!("Error initializing X11 window, falling back to default");
+            EventLoop::new()
+        }
     } else {
-        error!("Must provide path to a GFA file");
-        std::process::exit(1);
+        EventLoop::new()
     };
 
-    let layout_file = if let Some(name) = args.get(2) {
-        name
-    } else {
-        error!("Must provide path to a layout file");
-        std::process::exit(1);
-    };
-
-    let event_loop: EventLoop<()> = EventLoop::new_x11().unwrap();
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
         .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
@@ -236,8 +237,9 @@ fn main() {
     let mut main_view = MainView::new(
         &gfaestus,
         app.clone_channels(),
+        app.settings.clone(),
         app.shared_state().clone(),
-        app.settings.node_width().clone(),
+        // app.settings.node_width().clone(),
         graph_query.node_count(),
     )
     .unwrap();
@@ -251,6 +253,13 @@ fn main() {
         &graph_query,
     )
     .unwrap();
+
+    if let Some(script_file) = args.run_script.as_ref() {
+        warn!("executing script file {}", script_file);
+        gui.console
+            .eval_file(&mut reactor, true, script_file)
+            .unwrap();
+    }
 
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
@@ -479,8 +488,9 @@ fn main() {
 
                     app.apply_app_msg(
                         main_view.main_view_msg_tx(),
-                        app_msg,
+                        &gui_msg_tx,
                         universe.layout().nodes(),
+                        app_msg,
                     );
                 }
 
@@ -623,6 +633,7 @@ fn main() {
                 }
 
                 gui.begin_frame(
+                    &mut reactor,
                     Some(app.dims().into()),
                     &graph_query,
                     &graph_query_worker,
@@ -869,34 +880,20 @@ fn main() {
                             "Nodes",
                         );
 
-                        if let Some(overlay) = overlay {
+                        let gradient_name = app.shared_state().overlay_state().gradient();
+                        let gradient = gradients.gradient(gradient_name).unwrap();
 
-                            let gradient_name = app.shared_state().overlay_state().gradient();
+                        main_view.draw_nodes(
+                            cmd_buf,
+                            node_pass,
+                            framebuffers,
+                            size.into(),
+                            Point::ZERO,
+                            overlay,
+                            gradient,
+                            use_overlay,
+                        ).unwrap();
 
-                            let gradient = gradients.gradient(gradient_name).unwrap();
-
-                            main_view.draw_nodes_new(
-                                cmd_buf,
-                                node_pass,
-                                framebuffers,
-                                size.into(),
-                                Point::ZERO,
-                                overlay,
-                                gradient,
-                                use_overlay,
-                            ).unwrap();
-                        } else {
-                            main_view
-                                .draw_nodes(
-                                    cmd_buf,
-                                    node_pass,
-                                    framebuffers,
-                                    size.into(),
-                                    Point::ZERO,
-                                    false,
-                                )
-                                .unwrap();
-                        }
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
@@ -1161,4 +1158,37 @@ fn handle_new_overlay(
         .create_overlay(overlay);
 
     Ok(())
+}
+
+#[derive(FromArgs)]
+/// Gfaestus
+pub struct Args {
+    /// the GFA file to load
+    #[argh(positional)]
+    gfa: String,
+
+    /// the layout file to use
+    #[argh(positional)]
+    layout: String,
+
+    /// load and run a script file at startup, e.g. for configuration
+    #[argh(option)]
+    run_script: Option<String>,
+
+    /// force use of x11 window (debugging)
+    #[argh(switch)]
+    force_x11: bool,
+
+    /// suppress log messages
+    #[argh(switch, short = 'q')]
+    quiet: bool,
+
+    /// log debug messages
+    #[argh(switch, short = 'd')]
+    debug: bool,
+
+    // #[argh(switch, short = 'l')]
+    /// whether or not to log to a file in the working directory
+    #[argh(switch)]
+    log_to_file: bool,
 }

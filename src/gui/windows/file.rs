@@ -158,7 +158,7 @@ impl FilePicker {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("File picker")
             .id(self.id)
             .collapsible(false)
@@ -173,7 +173,8 @@ impl FilePicker {
                         ui.text_edit_singleline(&mut self.current_dir_text);
 
                     if ui.button("Goto").clicked()
-                        || (text_box.has_focus()
+                        || (text_box.lost_focus()
+                        // || (text_box.has_focus()
                             && ui.input().key_pressed(egui::Key::Enter))
                     {
                         self.goto_path_in_text_box().unwrap();

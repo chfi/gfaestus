@@ -45,12 +45,14 @@ use ash::{extensions::khr::PushDescriptor, vk};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+pub mod console;
 pub mod debug;
 pub mod text;
 pub mod util;
 pub mod widgets;
 pub mod windows;
 
+use console::*;
 use debug::*;
 use util::*;
 use widgets::*;
@@ -88,6 +90,9 @@ pub struct Gui {
     path_picker_source: PathPickerSource,
 
     annotation_file_list: AnnotationFileList,
+
+    pub console: Console<'static>,
+    console_down: bool,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -175,7 +180,6 @@ pub struct AppViewState {
     // theme_list: ThemeList,
     overlay_creator: ViewStateChannel<OverlayCreator, OverlayCreatorMsg>,
     overlay_list: ViewStateChannel<OverlayList, OverlayListMsg>,
-    // repl_window: ViewStateChannel<ReplWindow, ()>,
 }
 
 impl AppViewState {
@@ -230,10 +234,6 @@ impl AppViewState {
             OverlayCreatorMsg,
         >::new(overlay_creator_state);
 
-        // let repl_window_state = ReplWindow::new(repl).unwrap();
-        // let repl_window =
-        //     ViewStateChannel::<ReplWindow, ()>::new(repl_window_state);
-
         Self {
             settings,
 
@@ -248,7 +248,6 @@ impl AppViewState {
 
             overlay_list,
             overlay_creator,
-            // repl_window,
         }
     }
 
@@ -310,8 +309,6 @@ pub struct OpenWindows {
     themes: bool,
     overlays: bool,
     overlay_creator: bool,
-
-    repl_window: bool,
 }
 
 impl std::default::Default for OpenWindows {
@@ -332,8 +329,6 @@ impl std::default::Default for OpenWindows {
             themes: false,
             overlays: false,
             overlay_creator: false,
-
-            repl_window: false,
         }
     }
 }
@@ -349,6 +344,10 @@ pub enum GuiMsg {
     Cut,
     Copy,
     Paste,
+
+    // TODO this shouldn't really be here, as things like the console
+    // will never update the modifiers
+    SetModifiers(winit::event::ModifiersState),
 }
 
 // TODO: this can probably be replaced by egui's built in focus tracking
@@ -385,12 +384,6 @@ impl Gui {
         let render_pass = app.render_passes.gui;
 
         let draw_system = GuiPipeline::new(app, render_pass)?;
-
-        // let repl = GluonRepl::new(
-        //     channels.app_tx.clone(),
-        //     channels.main_view_tx.clone(),
-        // )
-        // .unwrap();
 
         let ctx = egui::CtxRef::default();
 
@@ -475,12 +468,19 @@ impl Gui {
             list
         };
 
+        let console = Console::new(
+            graph_query,
+            channels.clone(),
+            settings.to_owned(),
+            shared_state.to_owned(),
+        );
+
         let gui = Self {
             ctx,
             frame_input,
 
-            shared_state,
-            settings,
+            shared_state: shared_state.clone(),
+            settings: settings.clone(),
 
             draw_system,
 
@@ -507,6 +507,9 @@ impl Gui {
             path_picker_source,
 
             annotation_file_list,
+
+            console_down: false,
+            console,
         };
 
         Ok(gui)
@@ -553,6 +556,7 @@ impl Gui {
 
     pub fn begin_frame(
         &mut self,
+        reactor: &mut Reactor,
         screen_rect: Option<Point>,
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
@@ -591,6 +595,8 @@ impl Gui {
 
         self.menu_bar
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
+
+        self.console.ui(&self.ctx, self.console_down, reactor);
 
         self.view_state.apply_received();
 
@@ -785,15 +791,6 @@ impl Gui {
             }
         }
 
-        // if self.open_windows.repl_window {
-        //     let repl_window = &mut self.open_windows.repl_window;
-        //     view_state.repl_window.state.ui(
-        //         repl_window,
-        //         &self.ctx,
-        //         &self.thread_pool,
-        //     );
-        // }
-
         {
             let debug = &mut view_state.settings.debug;
             let inspection = &mut debug.egui_inspection;
@@ -950,6 +947,17 @@ impl Gui {
                             .push(egui::Event::Text(text.clone()));
                     }
                 }
+                GuiMsg::SetModifiers(mods) => {
+                    let modifiers = egui::Modifiers {
+                        alt: mods.alt(),
+                        ctrl: mods.ctrl(),
+                        shift: mods.shift(),
+                        mac_cmd: mods.logo(),
+                        command: mods.logo(),
+                    };
+
+                    self.frame_input.modifiers = modifiers;
+                }
             }
         }
     }
@@ -989,6 +997,23 @@ impl Gui {
                                     open: None,
                                 })
                                 .unwrap();
+                        }
+                        GuiInput::KeyToggleConsole => {
+                            self.console_down = !self.console_down;
+                            if self.console_down {
+                                self.ctx.memory().request_focus(egui::Id::new(
+                                    console::Console::ID_TEXT,
+                                ));
+                            }
+                        }
+                        GuiInput::KeyConsoleDown => {
+                            self.console_down = true;
+                            self.ctx.memory().request_focus(egui::Id::new(
+                                console::Console::ID_TEXT,
+                            ));
+                        }
+                        GuiInput::KeyConsoleUp => {
+                            self.console_down = false;
                         }
                         _ => (),
                     }
@@ -1051,6 +1076,7 @@ impl Gui {
 #[derive(Debug, Default, Clone)]
 struct FrameInput {
     events: Vec<egui::Event>,
+    modifiers: egui::Modifiers,
     scroll_delta: f32,
 }
 
@@ -1063,6 +1089,7 @@ impl FrameInput {
             x: 0.0,
             y: self.scroll_delta,
         };
+        raw_input.modifiers = self.modifiers;
         self.scroll_delta = 0.0;
 
         raw_input
@@ -1077,6 +1104,9 @@ pub enum GuiInput {
     ButtonLeft,
     ButtonRight,
     WheelScroll,
+    KeyToggleConsole,
+    KeyConsoleDown,
+    KeyConsoleUp,
 }
 
 impl BindableInput for GuiInput {
@@ -1089,6 +1119,9 @@ impl BindableInput for GuiInput {
             (Key::F1, Input::KeyEguiInspectionUi),
             (Key::F2, Input::KeyEguiSettingsUi),
             (Key::F3, Input::KeyEguiMemoryUi),
+            (Key::Escape, Input::KeyConsoleUp),
+            (Key::Grave, Input::KeyConsoleDown),
+            (Key::F4, Input::KeyToggleConsole),
         ]
         .iter()
         .copied()

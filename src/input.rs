@@ -89,6 +89,7 @@ impl InputManager {
 
             if let event::WindowEvent::ModifiersChanged(mods) = winit_ev {
                 self.modifiers.store(mods);
+                gui_msg_tx.send(GuiMsg::SetModifiers(mods)).unwrap();
             }
 
             let mouse_pos = self.mouse_screen_pos.load();

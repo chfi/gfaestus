@@ -53,7 +53,7 @@ impl LabelSetList {
         ctx: &egui::CtxRef,
         open: &mut bool,
         annotations: &Annotations,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Label sets")
             .id(egui::Id::new(Self::ID))
             .open(open)
@@ -278,7 +278,7 @@ impl AnnotationFileList {
         open: &mut bool,
         gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
         annotations: &Annotations,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         if let Some(result) = self.load_host.take() {
             if let Ok((file_type, name)) = &result {
                 self.current_annotation = Some((*file_type, name.to_owned()));
@@ -398,8 +398,6 @@ impl AnnotationFileList {
                                         })
                                         .unwrap();
                                 }
-
-                                ui.end_row();
                             }
                         })
                 });
@@ -443,7 +441,7 @@ impl<T: ColumnKey> ColumnPickerOne<T> {
         ctx: &egui::CtxRef,
         open: &mut bool,
         window_name: &str,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new(window_name).id(self.id).open(open).show(
             ctx,
             |mut ui| {
@@ -559,7 +557,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
         pos: Option<egui::Pos2>,
         open: &mut bool,
         window_name: &str,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let window = egui::Window::new(window_name).id(self.id);
 
         let window = if let Some(pos) = pos {
@@ -851,7 +849,7 @@ where
         path_id: PathId,
         records: Arc<C>,
         filtered_records: &[usize],
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         if let Some(result) = self.host_data.take() {
             if result.is_ok() {
                 self.overlay_name.clear();

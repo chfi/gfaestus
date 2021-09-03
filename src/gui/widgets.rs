@@ -19,7 +19,7 @@ pub trait Widget {
         ctx: &egui::CtxRef,
         pos: Point,
         size: Option<Point>,
-    ) -> Option<egui::Response>;
+    ) -> Option<egui::InnerResponse<Option<()>>>;
 }
 
 pub struct MenuBar {
@@ -59,8 +59,6 @@ impl MenuBar {
 
         let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
-
-        let repl = &mut open_windows.repl_window;
 
         let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
             // ui.horizontal(|ui| {
@@ -127,16 +125,10 @@ impl MenuBar {
                 });
 
                 menu::menu(ui, "Tools", |ui| {
-                    if ui.button("REPL").clicked() {
-                        *repl = !*repl;
+                    if ui.selectable_label(*settings, "Settings").clicked() {
+                        *settings = !*settings;
                     }
                 });
-
-                // menu::menu(ui, "Settings", |ui| {
-                if ui.selectable_label(*settings, "Settings").clicked() {
-                    *settings = !*settings;
-                }
-                // });
             });
         });
 
@@ -180,7 +172,7 @@ impl Widget for FrameRate {
         ctx: &egui::CtxRef,
         pos: Point,
         _size: Option<Point>,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let scr = ctx.input().screen_rect();
 
         let width = 100.0;
@@ -225,7 +217,7 @@ impl Widget for GraphStats {
         ctx: &egui::CtxRef,
         pos: Point,
         _size: Option<Point>,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new(Self::id())
             .title_bar(false)
             .collapsible(false)

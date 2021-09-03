@@ -13,7 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::view::{ScreenDims, View};
 use crate::{
-    app::{node_flags::SelectionBuffer, NodeWidth},
+    app::{selection::SelectionBuffer, NodeWidth},
     overlays::OverlayKind,
     vulkan::texture::GradientTexture,
 };
@@ -35,7 +35,7 @@ pub mod view;
 
 use view::*;
 
-use super::{AppChannels, SharedState};
+use super::{AppChannels, AppSettings, SharedState};
 
 pub struct MainView {
     pub node_draw_system: NodePipelines,
@@ -48,6 +48,7 @@ pub struct MainView {
 
     view_input_state: ViewInputState,
 
+    settings: AppSettings,
     shared_state: SharedState,
     channels: AppChannels,
 
@@ -63,8 +64,9 @@ impl MainView {
     pub fn new(
         app: &GfaestusVk,
         channels: AppChannels,
+        settings: AppSettings,
         shared_state: SharedState,
-        node_width: Arc<NodeWidth>,
+        // node_width: Arc<NodeWidth>,
         node_count: usize,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
@@ -72,6 +74,8 @@ impl MainView {
         let swapchain_props = app.swapchain_props;
         let msaa_samples = app.msaa_samples;
         let render_pass = app.render_passes.nodes;
+
+        let node_width = settings.node_width().clone();
 
         let node_draw_system = NodePipelines::new(
             app,
@@ -113,6 +117,7 @@ impl MainView {
 
             move_delta: AtomicCell::new(None),
 
+            settings,
             shared_state,
             channels,
         };
@@ -202,14 +207,14 @@ impl MainView {
             .read(self.node_draw_system.device(), x, y)
     }
 
-    pub fn draw_nodes_new(
+    pub fn draw_nodes(
         &mut self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
         offset: Point,
-        overlay: (usize, OverlayKind),
+        overlay: Option<(usize, OverlayKind)>,
         color_scheme: &GradientTexture,
         use_overlay: bool,
     ) -> Result<()> {
@@ -219,8 +224,8 @@ impl MainView {
             let min = self.node_width.min_node_width();
             let max = self.node_width.max_node_width();
 
-            let min_scale = self.node_width.min_scale();
-            let max_scale = self.node_width.max_scale();
+            let min_scale = self.node_width.min_node_scale();
+            let max_scale = self.node_width.max_node_scale();
 
             let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
 
@@ -236,97 +241,42 @@ impl MainView {
                 width = min
             }
             width
+        };
+
+        let background_color = if self.shared_state.dark_mode.load() {
+            self.settings.background_color_dark().load()
+        } else {
+            self.settings.background_color_light().load()
         };
 
         if use_overlay {
-            self.node_draw_system.draw_overlay_new(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-                overlay,
-                color_scheme,
-            )
-        } else {
-            self.node_draw_system.draw_themed(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-            )
-        }
-    }
+            if let Some(overlay) = overlay {
+                self.node_draw_system.draw_overlay_new(
+                    cmd_buf,
+                    render_pass,
+                    framebuffers,
+                    screen_dims,
+                    node_width,
+                    view,
+                    offset,
+                    background_color,
+                    overlay,
+                    color_scheme,
+                )?;
 
-    pub fn draw_nodes(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffers: &Framebuffers,
-        screen_dims: [f32; 2],
-        offset: Point,
-        use_overlay: bool,
-    ) -> Result<()> {
-        let view = self.shared_state.view();
-
-        let node_width = {
-            let min = self.node_width.min_node_width();
-            let max = self.node_width.max_node_width();
-
-            let min_scale = self.node_width.min_scale();
-            let max_scale = self.node_width.max_scale();
-
-            // let norm_scale =
-            //     1.0 - ((view.scale - min_scale) / (max_scale - min_scale));
-
-            // let easing_val =
-            //     EasingExpoIn::value_at_normalized_time(norm_scale as f64)
-            //         as f32;
-
-            let norm_scale = (view.scale - min_scale) / (max_scale - min_scale);
-
-            let easing_val =
-                EasingExpoOut::value_at_normalized_time(norm_scale as f64)
-                    as f32;
-
-            let mut width = min + easing_val * (max - min);
-
-            if view.scale > max_scale {
-                width *= view.scale / (min_scale - max_scale);
-            } else if view.scale < min_scale {
-                width = min
+                return Ok(());
             }
-            width
-        };
-
-        let has_overlay = self.node_draw_system.has_overlay();
-
-        if use_overlay && has_overlay {
-            self.node_draw_system.draw_overlay(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-            )
-        } else {
-            self.node_draw_system.draw_themed(
-                cmd_buf,
-                render_pass,
-                framebuffers,
-                screen_dims,
-                node_width,
-                view,
-                offset,
-            )
         }
+        self.node_draw_system.draw_themed(
+            cmd_buf,
+            render_pass,
+            framebuffers,
+            screen_dims,
+            node_width,
+            view,
+            offset,
+            background_color,
+        )
     }
 
     pub fn update_node_selection(

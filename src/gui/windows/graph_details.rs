@@ -122,7 +122,7 @@ impl NodeDetails {
         ctx: &egui::CtxRef,
         path_details_id_cell: &AtomicCell<Option<PathId>>,
         open_path_details: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         if self.need_fetch() {
             self.fetch(graph_query);
         }
@@ -208,8 +208,6 @@ impl NodeDetails {
                                             .store(Some(*path_id));
                                         *open_path_details = true;
                                     }
-
-                                    ui.end_row();
                                 }
                             });
                     });
@@ -412,7 +410,7 @@ impl NodeList {
         app_msg_tx: &Sender<AppMsg>,
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let filter = self.apply_filter.load();
 
         let nodes = if !filter || self.filtered_nodes.is_empty() {
@@ -589,8 +587,6 @@ impl NodeList {
 
                                         *open_node_details = true;
                                     }
-
-                                    ui.end_row();
                                 }
                             }
                         },

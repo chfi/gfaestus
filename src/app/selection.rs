@@ -7,7 +7,81 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+use crate::geometry::Rect;
+use crate::universe::Node;
 use crate::vulkan::GfaestusVk;
+
+#[derive(Debug, Clone, Default)]
+pub struct NodeSelection {
+    pub nodes: FxHashSet<NodeId>,
+}
+
+impl NodeSelection {
+    pub fn clear(&mut self) {
+        self.nodes.clear();
+    }
+
+    pub fn union(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.union(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
+    pub fn intersection(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.intersection(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
+    pub fn difference(&self, other: &NodeSelection) -> NodeSelection {
+        let nodes = self.nodes.difference(&other.nodes).copied().collect();
+        Self { nodes }
+    }
+
+    pub fn add_one(&mut self, clear: bool, node: NodeId) {
+        if clear {
+            self.nodes.clear();
+        }
+
+        self.nodes.insert(node);
+    }
+
+    pub fn add_slice(&mut self, clear: bool, nodes: &[NodeId]) {
+        if clear {
+            self.nodes.clear();
+        }
+
+        self.nodes.extend(nodes.iter().copied());
+    }
+
+    pub fn remove_one(&mut self, clear: bool, node: NodeId) {
+        if clear {
+            self.nodes.clear();
+        } else {
+            self.nodes.remove(&node);
+        }
+    }
+
+    pub fn remove_slice(&mut self, clear: bool, nodes: &[NodeId]) {
+        if clear {
+            self.nodes.clear();
+        } else {
+            for n in nodes {
+                self.nodes.remove(n);
+            }
+        }
+    }
+
+    pub fn bounding_box(&self, node_positions: &[Node]) -> Rect {
+        let mut bbox = Rect::default();
+
+        for id in self.nodes.iter() {
+            let ix = (id.0 - 1) as usize;
+            let node = node_positions[ix];
+            bbox = bbox.union(Rect::new(node.p0, node.p1));
+        }
+
+        bbox
+    }
+}
 
 pub struct SelectionBuffer {
     latest_selection: FxHashSet<NodeId>,

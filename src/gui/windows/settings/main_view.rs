@@ -37,8 +37,8 @@ impl MainViewSettings {
         let mut min_width = self.node_width.min_node_width();
         let mut max_width = self.node_width.max_node_width();
 
-        let mut min_scale = self.node_width.min_scale();
-        let mut max_scale = self.node_width.max_scale();
+        let mut min_scale = self.node_width.min_node_scale();
+        let mut max_scale = self.node_width.max_node_scale();
 
         let min_node_width_slider = ui
             .add(
@@ -109,11 +109,11 @@ impl MainViewSettings {
         }
 
         if min_scale_slider.changed() {
-            self.node_width.set_min_scale(min_scale);
+            self.node_width.set_min_node_scale(min_scale);
         }
 
         if max_scale_slider.changed() {
-            self.node_width.set_max_scale(max_scale);
+            self.node_width.set_max_node_scale(max_scale);
         }
 
         let mut label_radius = self.label_radius.load();

@@ -48,7 +48,8 @@ impl SettingsWindow {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-    ) -> Option<egui::Response> {
+        // ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Settings")
             .id(egui::Id::new(Self::ID))
             .open(open)

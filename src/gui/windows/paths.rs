@@ -140,7 +140,7 @@ impl PathDetails {
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
         app_msg_tx: &Sender<AppMsg>,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         self.path_details.fetch(graph_query)?;
 
         if let Some(path) = self.path_details.path_id.load() {
@@ -228,7 +228,7 @@ impl PathList {
         _app_msg_tx: &Sender<AppMsg>,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         let paths = &self.all_paths;
 
         self.page_count = paths.len() / self.page_size;

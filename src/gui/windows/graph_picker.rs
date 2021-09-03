@@ -87,7 +87,7 @@ impl PathPicker {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-    ) -> Option<egui::Response> {
+    ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Path picker")
             .id(egui::Id::new(("Path picker", self.id)))
             .open(open)

@@ -9,20 +9,22 @@ use crate::{view::*, vulkan::texture::GradientName};
 
 #[derive(Clone)]
 pub struct SharedState {
-    pub(super) mouse_pos: Arc<AtomicCell<Point>>,
-    pub(super) screen_dims: Arc<AtomicCell<ScreenDims>>,
+    pub mouse_pos: Arc<AtomicCell<Point>>,
+    pub screen_dims: Arc<AtomicCell<ScreenDims>>,
 
-    pub(super) view: Arc<AtomicCell<View>>,
+    pub view: Arc<AtomicCell<View>>,
 
-    pub(super) hover_node: Arc<AtomicCell<Option<NodeId>>>,
+    pub hover_node: Arc<AtomicCell<Option<NodeId>>>,
 
-    pub(super) mouse_rect: MouseRect,
+    pub mouse_rect: MouseRect,
 
-    pub(super) overlay_state: OverlayState,
+    pub overlay_state: OverlayState,
 
     pub gui_focus_state: GuiFocusState,
 
     pub edges_enabled: Arc<AtomicCell<bool>>,
+
+    pub dark_mode: Arc<AtomicCell<bool>>,
 }
 
 impl SharedState {
@@ -42,6 +44,7 @@ impl SharedState {
             gui_focus_state: GuiFocusState::default(),
 
             edges_enabled: Arc::new(true.into()),
+            dark_mode: Arc::new(false.into()),
         }
     }
 
@@ -67,6 +70,10 @@ impl SharedState {
 
     pub fn edges_enabled(&self) -> bool {
         self.edges_enabled.load()
+    }
+
+    pub fn dark_mode(&self) -> &Arc<AtomicCell<bool>> {
+        &self.dark_mode
     }
 
     pub fn clone_edges_enabled(&self) -> Arc<AtomicCell<bool>> {
