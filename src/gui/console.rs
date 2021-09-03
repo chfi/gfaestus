@@ -259,10 +259,9 @@ impl Console<'static> {
 
         engine.register_type::<Point>();
 
-        let get_set = self.get_set.clone();
-
         let graph = self.graph.clone();
         let path_pos = self.path_positions.clone();
+
         engine.register_fn("get_graph", move || graph.clone());
         engine.register_fn("get_path_positions", move || path_pos.clone());
 
@@ -391,12 +390,28 @@ impl Console<'static> {
             app_msg_tx.send(crate::app::AppMsg::ToggleOverlay).unwrap();
         });
 
+        let get_set = self.get_set.clone();
         engine.register_fn("get", move |name: &str| {
             if let Some(getter) = get_set.getters.get(name) {
                 getter()
             } else {
                 rhai::Dynamic::FALSE
             }
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
+            let mut lock = get_set.console_vars.lock();
+            lock.insert(name.to_string(), val);
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_result_fn("get_var", move |name: &str| {
+            let lock = get_set.console_vars.try_lock();
+            let val = lock
+                .and_then(|l| l.get(name).cloned())
+                .ok_or("variable not found")?;
+            Ok(val)
         });
 
         let get_set = self.get_set.clone();
@@ -826,9 +841,16 @@ pub struct GetSetTruth {
         HashMap<String, Box<dyn Fn() -> rhai::Dynamic + Send + Sync + 'static>>,
     setters:
         HashMap<String, Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>>,
+
+    console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
 }
 
 impl GetSetTruth {
+    pub fn add_var(&mut self, name: &str, val: rhai::Dynamic) {
+        let mut lock = self.console_vars.lock();
+        lock.insert(name.to_string(), val);
+    }
+
     pub fn add_arc_atomic_cell_get_set<T>(
         &mut self,
         name: &str,
