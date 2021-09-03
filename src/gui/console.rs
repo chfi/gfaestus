@@ -1,7 +1,5 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use clipboard::{ClipboardContext, ClipboardProvider};
-
 use futures::future::RemoteHandle;
 #[allow(unused_imports)]
 use handlegraph::{
@@ -18,11 +16,8 @@ use anyhow::Result;
 use log::debug;
 
 use crossbeam::atomic::AtomicCell;
-use rustc_hash::FxHashMap;
 
-use rhai::{plugin::*, Func};
-
-use bstr::ByteSlice;
+use rhai::plugin::*;
 
 use crate::{
     app::{
@@ -37,11 +32,12 @@ use crate::{
 };
 use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
-use parking_lot::{Mutex, MutexGuard};
+use parking_lot::Mutex;
 
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
 
+#[allow(dead_code)]
 pub struct ConsoleShared {
     settings: AppSettings,
     shared_state: SharedState,
@@ -644,6 +640,8 @@ impl Console<'static> {
                     ui.add(label);
                 }
 
+                let old_input = self.input_line.clone();
+
                 let input = {
                     let line_count = self.input_line.lines().count().max(1);
                     ui.add(
@@ -676,17 +674,16 @@ impl Console<'static> {
 
                 // if input.lost_focus()
                 if ui.input().key_pressed(egui::Key::Enter) && !scope_locked {
-                    log::warn!("input line: {}", self.input_line);
-
                     if ui.input().modifiers.shift {
                         // insert newline;
-                        // self.input_line.push_str("\n");
                     } else {
                         // evaluate input
+                        self.input_line = old_input;
+                        log::warn!("input line: {}", self.input_line);
 
                         // remove the last endline added by pressing
                         // enter in a multiline text box
-                        self.input_line.pop();
+                        // self.input_line.pop();
 
                         self.input_history.push(self.input_line.clone());
                         self.output_history
