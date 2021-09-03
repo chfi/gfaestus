@@ -226,7 +226,11 @@ fn main() {
 
     let mut app = App::new((100.0, 100.0)).expect("error when creating App");
 
-    let input_manager = InputManager::new(winit_rx, app.shared_state());
+    let mut input_manager = InputManager::new(winit_rx, app.shared_state());
+
+    input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
+        println!("i'm a bound command!");
+    });
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();

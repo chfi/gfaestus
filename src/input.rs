@@ -1,4 +1,6 @@
-use winit::event::VirtualKeyCode;
+use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
+use winit::event::{ElementState, VirtualKeyCode};
 #[allow(unused_imports)]
 use winit::{
     event::{self, Event, KeyboardInput, WindowEvent},
@@ -7,7 +9,7 @@ use winit::{
 
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-use std::sync::Arc;
+use std::{hash::Hash, sync::Arc};
 
 use crate::app::AppInput;
 use crate::gui::GuiInput;
@@ -53,6 +55,15 @@ pub struct InputManager {
     gui: SubsystemInput<GuiInput>,
 
     gui_focus_state: crate::gui::GuiFocusState,
+
+    custom_binds: FxHashMap<
+        winit::event::VirtualKeyCode,
+        Box<dyn Fn() + Send + Sync + 'static>,
+    >,
+    // custom_binds: Arc<Mutex<FxHashMap<
+    //     winit::event::VirtualKeyCode,
+    //     Box<dyn Fn() + Send + Sync + 'static>,
+    // >>>,
 }
 
 impl InputManager {
@@ -76,6 +87,18 @@ impl InputManager {
 
     pub fn clone_mouse_pos(&self) -> Arc<AtomicCell<Point>> {
         self.mouse_screen_pos.clone()
+    }
+
+    pub fn add_binding<F>(
+        &mut self,
+        key_code: winit::event::VirtualKeyCode,
+        command: F,
+    ) where
+        F: Fn() + Send + Sync + 'static,
+    {
+        // let mut custom_binds = self.custom_binds.lock();
+        let boxed = Box::new(command) as Box<dyn Fn() + Send + Sync + 'static>;
+        self.custom_binds.insert(key_code, boxed);
     }
 
     pub fn handle_events(&self, gui_msg_tx: &channel::Sender<GuiMsg>) {
@@ -177,6 +200,19 @@ impl InputManager {
                     }
                 }
             }
+
+            if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
+                let pressed = input.state == ElementState::Pressed;
+                if pressed && !gui_wants_keyboard {
+                    if let Some(command) = input
+                        .virtual_keycode
+                        .and_then(|kc| self.custom_binds.get(&kc))
+                    {
+                        log::warn!("executing bound command!");
+                        command();
+                    }
+                }
+            }
         }
     }
 
@@ -203,6 +239,8 @@ impl InputManager {
             gui,
 
             gui_focus_state,
+
+            custom_binds: FxHashMap::default(),
         }
     }
 }
