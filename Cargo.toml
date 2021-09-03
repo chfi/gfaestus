@@ -14,7 +14,7 @@ ash = "0.32"
 ash-window = "0.6"
 vk-mem = "0.2.2"
 
-winit = "0.24"
+winit = "0.25"
 egui = "0.14.2"
 clipboard = "0.5"
 
