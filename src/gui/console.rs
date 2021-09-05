@@ -882,24 +882,29 @@ impl ConsoleShared {
         });
 
         let get_set = self.get_set.clone();
-        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
-            let mut lock = get_set.console_vars.lock();
-            lock.insert(name.to_string(), val);
-        });
+
+        engine.register_result_fn(
+            "set",
+            move |name: &str, val: rhai::Dynamic| {
+                get_set
+                    .setters
+                    .get(name)
+                    .map(|set| set(val))
+                    .ok_or(format!("Setting `{}` not found", name).into())
+            },
+        );
 
         let get_set = self.get_set.clone();
-        engine.register_result_fn("get_var", move |name: &str| -> std::result::Result<rhai::Dynamic, Box<EvalAltResult>> {
+        engine.register_result_fn("get_var", move |name: &str| {
             let lock = get_set.console_vars.try_lock();
             let val = lock.and_then(|l| l.get(name).cloned());
             val.ok_or(format!("Global variable `{}` not found", name).into())
         });
 
         let get_set = self.get_set.clone();
-
-        engine.register_fn("set", move |name: &str, val: rhai::Dynamic| {
-            if let Some(setter) = get_set.setters.get(name) {
-                setter(val);
-            }
+        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
+            let mut lock = get_set.console_vars.lock();
+            lock.insert(name.to_string(), val);
         });
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);
