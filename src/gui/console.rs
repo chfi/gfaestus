@@ -873,12 +873,12 @@ impl ConsoleShared {
         });
 
         let get_set = self.get_set.clone();
-        engine.register_fn("get", move |name: &str| {
-            if let Some(getter) = get_set.getters.get(name) {
-                getter()
-            } else {
-                rhai::Dynamic::FALSE
-            }
+        engine.register_result_fn("get", move |name: &str| {
+            get_set
+                .getters
+                .get(name)
+                .map(|get| get())
+                .ok_or(format!("Setting `{}` not found", name).into())
         });
 
         let get_set = self.get_set.clone();
@@ -888,16 +888,10 @@ impl ConsoleShared {
         });
 
         let get_set = self.get_set.clone();
-        engine.register_fn("get_var", move |name: &str| {
+        engine.register_result_fn("get_var", move |name: &str| -> std::result::Result<rhai::Dynamic, Box<EvalAltResult>> {
             let lock = get_set.console_vars.try_lock();
             let val = lock.and_then(|l| l.get(name).cloned());
-            match val {
-                Some(val) => val,
-                None => {
-                    log::trace!("variable `{}` not found", name);
-                    false.into()
-                }
-            }
+            val.ok_or(format!("Global variable `{}` not found", name).into())
         });
 
         let get_set = self.get_set.clone();
