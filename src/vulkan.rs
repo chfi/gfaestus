@@ -476,7 +476,7 @@ impl GfaestusVk {
                 width: self.swapchain_props.extent.width as f32,
                 height: self.swapchain_props.extent.height as f32,
                 min_depth: 0.0,
-                max_depth: 0.0,
+                max_depth: 1.0,
             };
 
             let viewports = [viewport];
