@@ -104,7 +104,7 @@ impl SelectionBuffer {
             | vk::MemoryPropertyFlags::HOST_CACHED
             | vk::MemoryPropertyFlags::HOST_COHERENT;
 
-        let (buffer, memory, size) =
+        let (buffer, memory, _size) =
             app.create_buffer(size, usage, mem_props)?;
 
         app.set_debug_object_name(buffer, "Node Selection Flag Buffer")?;
