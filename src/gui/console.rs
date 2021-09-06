@@ -18,6 +18,7 @@ use log::debug;
 use crossbeam::atomic::AtomicCell;
 
 use rhai::plugin::*;
+use rustc_hash::FxHashSet;
 
 use crate::{
     app::{
@@ -966,6 +967,20 @@ impl ConsoleShared {
         self.add_view_fns(&mut engine);
 
         self.add_overlay_fns(&mut engine);
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection", move || {
+            use futures::channel::oneshot;
+
+            let (tx, rx) = oneshot::channel::<FxHashSet<NodeId>>();
+            let msg = AppMsg::RequestSelection(tx);
+
+            app_msg_tx.send(msg).unwrap();
+
+            let result = futures::executor::block_on(async { rx.await })
+                .expect("Console error when retrieving the current selection");
+            NodeSelection { nodes: result }
+        });
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("set_selection", move |selection: NodeSelection| {

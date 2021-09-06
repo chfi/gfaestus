@@ -93,7 +93,7 @@ pub enum Select {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum AppMsg {
     Selection(Select),
     GotoSelection,
@@ -112,6 +112,8 @@ pub enum AppMsg {
         name: String,
         label_set: AnnotationLabelSet,
     },
+
+    RequestSelection(futures::channel::oneshot::Sender<FxHashSet<NodeId>>),
 }
 
 impl App {
@@ -347,6 +349,10 @@ impl App {
             }
             AppMsg::ToggleOverlay => {
                 self.shared_state.overlay_state.toggle_overlay();
+            }
+            AppMsg::RequestSelection(sender) => {
+                let selection = self.selected_nodes.to_owned();
+                sender.send(selection).unwrap();
             }
         }
     }
