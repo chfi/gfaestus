@@ -62,6 +62,7 @@ pub struct Console<'a> {
     input_history_ix: Option<usize>,
 
     input_history: Vec<String>,
+    output_offset: usize,
     output_history: Vec<String>,
 
     scope: Arc<Mutex<rhai::Scope<'a>>>,
@@ -245,6 +246,7 @@ impl Console<'static> {
             input_history_ix: None,
 
             input_history: Vec::new(),
+            output_offset: 0,
             output_history,
 
             scope,
@@ -288,6 +290,10 @@ impl Console<'static> {
 
             overlay_list: self.overlay_list.clone(),
         }
+    }
+
+    pub fn append_output(&mut self, output: &str) {
+        self.output_history.extend(output.lines().map(String::from));
     }
 
     pub fn populate_overlay_list(
@@ -501,7 +507,7 @@ impl Console<'static> {
                     " >>> error importing file {}: {:?}",
                     file_path, err
                 );
-                self.output_history.push(msg);
+                self.append_output(&msg);
 
                 log::warn!(
                     "console :import of file '{}' failed: {:?}",
@@ -568,19 +574,19 @@ impl Console<'static> {
                         // don't log unit
                     } else if rtype == rgb::RGB::<f32>::default().type_id() {
                         let color = result.cast::<rgb::RGB<f32>>();
-                        self.output_history.push(format!("{}", color))
+                        self.append_output(&format!("{}", color))
                     } else if rtype == rgb::RGBA::<f32>::default().type_id() {
                         let color = result.cast::<rgb::RGBA<f32>>();
-                        self.output_history.push(format!("{}", color));
+                        self.append_output(&format!("{}", color));
                     } else {
-                        self.output_history.push(format!("{:?}", result));
+                        self.append_output(&format!("{:?}", result));
                     }
                 }
             }
             Err(err) => {
                 debug!("Eval error: {:?}", err);
                 if print {
-                    self.output_history.push(format!("Error: {:?}", err));
+                    self.append_output(&format!("Error: {:?}", err));
                 }
             }
         }
@@ -599,7 +605,7 @@ impl Console<'static> {
 
         let msg = format!(
             " >>> imported {} variables, {} functions, and {} iterators from '{}'", vars, funcs, iters, file);
-        self.output_history.push(msg);
+        self.append_output(&msg);
 
         {
             let mut modules = self.modules.lock();
@@ -659,7 +665,9 @@ impl Console<'static> {
 
                 let mut output_lines = Vec::with_capacity(20);
 
-                for output_line in self.output_history.iter().rev() {
+                for output_line in
+                    self.output_history.iter().rev().skip(self.output_offset)
+                {
                     if output_lines.len() >= 20 {
                         break;
                     }
@@ -677,8 +685,41 @@ impl Console<'static> {
 
                 output_lines.reverse();
 
+                let mut output_resp: Option<egui::Response> = None;
+
                 for label in output_lines {
-                    ui.add(label);
+                    let resp = ui.add(label);
+                    if let Some(union) = output_resp.as_mut() {
+                        *union = union.union(resp);
+                    } else {
+                        output_resp = Some(resp);
+                    }
+                }
+
+                if let Some(resp) = output_resp {
+                    let mut rect = resp.rect;
+                    rect.set_width(ui.available_width());
+
+                    let interact = ui.interact(
+                        rect,
+                        egui::Id::new("console_lines"),
+                        egui::Sense::hover(),
+                    );
+                    if interact.hovered() {
+                        let scroll = ui.input().scroll_delta.y;
+
+                        let mag = scroll.abs();
+                        let delta = ((mag / 4.0) as usize).max(1);
+
+                        let mut delta = delta as isize;
+                        if scroll < 0.0 {
+                            delta *= -1;
+                        }
+
+                        if mag > 1.0 {
+                            self.scrollback(delta);
+                        }
+                    }
                 }
 
                 let old_input = self.input_line.clone();
@@ -721,8 +762,7 @@ impl Console<'static> {
                         log::debug!("console input line: {}", self.input_line);
 
                         self.input_history.push(self.input_line.clone());
-                        self.output_history
-                            .push(format!("> {}", self.input_line));
+                        self.append_output(&format!("> {}", self.input_line));
 
                         self.eval_input(reactor, true).unwrap();
 
@@ -775,6 +815,21 @@ impl Console<'static> {
             if let Some(line) = self.input_history.get(ix) {
                 self.input_line.clone_from(line);
             }
+        }
+    }
+
+    fn scrollback(&mut self, delta: isize) {
+        let reverse = delta < 0;
+        let delta = delta.abs() as usize;
+
+        if reverse {
+            self.output_offset =
+                self.output_offset.checked_sub(delta).unwrap_or(0);
+        } else {
+            let max_count =
+                self.output_history.len().checked_sub(20).unwrap_or(0);
+
+            self.output_offset = (self.output_offset + delta).min(max_count);
         }
     }
 }
