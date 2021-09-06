@@ -41,16 +41,6 @@ pub fn create_engine() -> Engine {
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
 
-    engine.register_fn("build_selection2", |nodes: Vec<NodeId>| {
-        log::warn!("in Vec<NodeId>");
-
-        let mut selection = NodeSelection::default();
-
-        selection.add_slice(false, &nodes);
-
-        selection
-    });
-
     engine.register_fn("build_selection", |arr: Vec<rhai::Dynamic>| {
         log::warn!("in Vec<rhai::Dynamic>");
         let mut selection = NodeSelection::default();

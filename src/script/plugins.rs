@@ -125,12 +125,12 @@ pub mod handle_plugin {
         Handle::pack(id.0, reverse)
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, get = "id")]
     pub fn id(handle: &mut Handle) -> NodeId {
         handle.id()
     }
 
-    #[rhai_fn(pure)]
+    #[rhai_fn(pure, get = "is_reverse")]
     pub fn is_reverse(handle: &mut Handle) -> bool {
         handle.is_reverse()
     }
@@ -266,7 +266,6 @@ pub mod paths_plugin {
         graph: &mut Arc<PackedGraph>,
         path: PathId,
         step: StepPtr,
-        // ) -> StepPtr {
     ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
         graph
             .path_next_step(path, step)
@@ -278,7 +277,6 @@ pub mod paths_plugin {
         graph: &mut Arc<PackedGraph>,
         path: PathId,
         step: StepPtr,
-        // ) -> StepPtr {
     ) -> std::result::Result<StepPtr, Box<EvalAltResult>> {
         graph
             .path_prev_step(path, step)
@@ -362,24 +360,44 @@ pub mod colors {
         rgb::RGBA::new(r, g, b, a)
     }
 
-    #[rhai_fn(pure, name = "r")]
+    #[rhai_fn(pure, get = "r")]
     pub fn rgba_r(color: &mut rgb::RGBA<f32>) -> f32 {
         color.r
     }
 
-    #[rhai_fn(pure, name = "g")]
+    #[rhai_fn(pure, get = "g")]
     pub fn rgba_g(color: &mut rgb::RGBA<f32>) -> f32 {
         color.g
     }
 
-    #[rhai_fn(pure, name = "b")]
+    #[rhai_fn(pure, get = "b")]
     pub fn rgba_b(color: &mut rgb::RGBA<f32>) -> f32 {
         color.b
     }
 
-    #[rhai_fn(pure, name = "a")]
+    #[rhai_fn(pure, get = "a")]
     pub fn rgba_a(color: &mut rgb::RGBA<f32>) -> f32 {
         color.a
+    }
+
+    #[rhai_fn(set = "r")]
+    pub fn rgba_r_set(color: &mut rgb::RGBA<f32>, v: f32) {
+        color.r = v;
+    }
+
+    #[rhai_fn(set = "g")]
+    pub fn rgba_g_set(color: &mut rgb::RGBA<f32>, v: f32) {
+        color.g = v;
+    }
+
+    #[rhai_fn(set = "b")]
+    pub fn rgba_b_set(color: &mut rgb::RGBA<f32>, v: f32) {
+        color.b = v;
+    }
+
+    #[rhai_fn(set = "a")]
+    pub fn rgba_a_set(color: &mut rgb::RGBA<f32>, v: f32) {
+        color.a = v;
     }
 
     pub fn rgba_as_tuple(color: &mut rgb::RGBA<f32>) -> (f32, f32, f32, f32) {
@@ -390,19 +408,34 @@ pub mod colors {
         rgb::RGB::new(r, g, b)
     }
 
-    #[rhai_fn(pure, name = "r")]
-    pub fn r(color: &mut rgb::RGB<f32>) -> f32 {
+    #[rhai_fn(pure, get = "r")]
+    pub fn rgb_r(color: &mut rgb::RGB<f32>) -> f32 {
         color.r
     }
 
-    #[rhai_fn(pure, name = "g")]
-    pub fn g(color: &mut rgb::RGB<f32>) -> f32 {
+    #[rhai_fn(pure, get = "g")]
+    pub fn rgb_g(color: &mut rgb::RGB<f32>) -> f32 {
         color.g
     }
 
-    #[rhai_fn(pure, name = "b")]
-    pub fn b(color: &mut rgb::RGB<f32>) -> f32 {
+    #[rhai_fn(pure, get = "b")]
+    pub fn rgb_b(color: &mut rgb::RGB<f32>) -> f32 {
         color.b
+    }
+
+    #[rhai_fn(set = "r")]
+    pub fn rgb_r_set(color: &mut rgb::RGB<f32>, v: f32) {
+        color.r = v;
+    }
+
+    #[rhai_fn(set = "g")]
+    pub fn rgb_g_set(color: &mut rgb::RGB<f32>, v: f32) {
+        color.g = v;
+    }
+
+    #[rhai_fn(set = "b")]
+    pub fn rgb_b_set(color: &mut rgb::RGB<f32>, v: f32) {
+        color.b = v;
     }
 
     pub fn rgb_as_tuple(color: &mut rgb::RGB<f32>) -> (f32, f32, f32) {
@@ -444,5 +477,10 @@ pub mod selection {
 
     pub fn add_array(sel: &mut NodeSelection, nodes: Vec<NodeId>) {
         sel.add_slice(false, &nodes);
+    }
+
+    #[rhai_fn(pure)]
+    pub fn len(sel: &mut NodeSelection) -> i64 {
+        sel.nodes.len() as i64
     }
 }
