@@ -159,8 +159,8 @@ impl std::default::Default for MouseRect {
 
 #[derive(Debug, Clone)]
 pub struct OverlayState {
-    use_overlay: Arc<AtomicCell<bool>>,
-    current_overlay: Arc<AtomicCell<Option<(usize, OverlayKind)>>>,
+    pub use_overlay: Arc<AtomicCell<bool>>,
+    pub current_overlay: Arc<AtomicCell<Option<(usize, OverlayKind)>>>,
 
     gradient: Arc<AtomicCell<GradientName>>,
 }

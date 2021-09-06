@@ -151,6 +151,12 @@ impl Console<'static> {
         add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
 
         add_t!(
+            bool,
+            "overlay_enabled",
+            shared_state.overlay_state.use_overlay.clone()
+        );
+
+        add_t!(
             rgb::RGB<f32>,
             "background_color_light",
             settings.background_color_light().clone()
@@ -809,6 +815,29 @@ impl GetSetTruth {
 }
 
 impl ConsoleShared {
+    fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
+        engine.register_type_with_name::<(usize, OverlayKind)>("OverlayHandle");
+
+        let overlay_state = self.shared_state.overlay_state.clone();
+
+        // returns `false` if there is no active overlay
+        let overlay_state = self.shared_state.overlay_state.clone();
+        engine.register_fn("get_active_overlay", move || -> rhai::Dynamic {
+            if let Some(cur_overlay) = overlay_state.current_overlay() {
+                rhai::Dynamic::from(cur_overlay)
+            } else {
+                false.into()
+            }
+        });
+
+        let overlay_state = self.shared_state.overlay_state.clone();
+        engine.register_fn("set_active_overlay", move |v: rhai::Dynamic| {
+            if let Some(overlay) = v.try_cast::<(usize, OverlayKind)>() {
+                overlay_state.set_current_overlay(Some(overlay));
+            }
+        });
+    }
+
     pub fn create_engine(&self) -> rhai::Engine {
         use rhai::plugin::*;
 
@@ -825,6 +854,8 @@ impl ConsoleShared {
 
         engine.register_fn("get_graph", move || graph.clone());
         engine.register_fn("get_path_positions", move || path_pos.clone());
+
+        self.add_overlay_fns(&mut engine);
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("set_selection", move |selection: NodeSelection| {
