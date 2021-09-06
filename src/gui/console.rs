@@ -46,6 +46,8 @@ pub struct ConsoleShared {
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
     graph: Arc<PackedGraph>,
     path_positions: Arc<PathPositionMap>,
+
+    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 }
 
 pub struct Console<'a> {
@@ -269,6 +271,8 @@ impl Console<'static> {
 
             graph: self.graph.clone(),
             path_positions: self.path_positions.clone(),
+
+            result_tx: self.result_tx.clone(),
         }
     }
 
@@ -536,15 +540,19 @@ impl Console<'static> {
     ) -> Result<()> {
         match result {
             Ok(result) => {
+                use std::any::Any;
+
                 debug!("Eval success!");
                 if print {
-                    if let Some(color) =
-                        result.clone().try_cast::<rgb::RGB<f32>>()
-                    {
+                    let rtype = result.type_id();
+
+                    if rtype == ().type_id() {
+                        // don't log unit
+                    } else if rtype == rgb::RGB::<f32>::default().type_id() {
+                        let color = result.cast::<rgb::RGB<f32>>();
                         self.output_history.push(format!("{}", color))
-                    } else if let Some(color) =
-                        result.clone().try_cast::<rgb::RGBA<f32>>()
-                    {
+                    } else if rtype == rgb::RGBA::<f32>::default().type_id() {
+                        let color = result.cast::<rgb::RGBA<f32>>();
                         self.output_history.push(format!("{}", color));
                     } else {
                         self.output_history.push(format!("{:?}", result));
@@ -632,17 +640,27 @@ impl Console<'static> {
 
                 let scope_locked = self.scope.is_locked();
 
-                let skip_count =
-                    self.output_history.len().checked_sub(20).unwrap_or(0);
+                let mut output_lines = Vec::with_capacity(20);
 
-                for (_ix, output_line) in self
-                    .output_history
-                    .iter()
-                    .skip(skip_count)
-                    .enumerate()
-                    .take(20)
-                {
-                    let label = egui::Label::new(output_line).monospace();
+                for output_line in self.output_history.iter().rev() {
+                    if output_lines.len() >= 20 {
+                        break;
+                    }
+
+                    let split_lines = output_line.lines().rev();
+
+                    for line in split_lines {
+                        if output_lines.len() >= 20 {
+                            break;
+                        }
+
+                        output_lines.push(egui::Label::new(line).monospace());
+                    }
+                }
+
+                output_lines.reverse();
+
+                for label in output_lines {
                     ui.add(label);
                 }
 
@@ -651,7 +669,6 @@ impl Console<'static> {
                 let input = {
                     let line_count = self.input_line.lines().count().max(1);
                     ui.add(
-                        // egui::TextEdit::singleline(&mut self.input_line)
                         egui::TextEdit::multiline(&mut self.input_line)
                             .id(egui::Id::new(Self::ID_TEXT))
                             .desired_rows(line_count)
@@ -678,7 +695,6 @@ impl Console<'static> {
                     self.step_history(false);
                 }
 
-                // if input.lost_focus()
                 if ui.input().key_pressed(egui::Key::Enter) && !scope_locked {
                     if ui.input().modifiers.shift {
                         // insert newline;
@@ -686,10 +702,6 @@ impl Console<'static> {
                         // evaluate input
                         self.input_line = old_input;
                         log::warn!("input line: {}", self.input_line);
-
-                        // remove the last endline added by pressing
-                        // enter in a multiline text box
-                        // self.input_line.pop();
 
                         self.input_history.push(self.input_line.clone());
                         self.output_history
@@ -848,6 +860,12 @@ impl ConsoleShared {
         engine.set_max_expr_depths(0, 0);
 
         engine.register_type::<Point>();
+
+        let result_tx = self.result_tx.clone();
+        engine.register_fn("log", move |v: rhai::Dynamic| {
+            log::warn!("in console print");
+            result_tx.send(Ok(v)).unwrap();
+        });
 
         let graph = self.graph.clone();
         let path_pos = self.path_positions.clone();
