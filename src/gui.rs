@@ -530,9 +530,15 @@ impl Gui {
     // TODO this should be handled better
     pub fn populate_overlay_list<'a>(
         &mut self,
+        // TODO should be a slice, but this function shouldn't exist, so
         names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
-        self.view_state.overlay_list.state.populate_names(names);
+        let names = names.collect::<Vec<_>>();
+        self.view_state
+            .overlay_list
+            .state
+            .populate_names(names.iter().copied());
+        self.console.populate_overlay_list(&names);
     }
 
     pub fn scroll_to_gff_record(

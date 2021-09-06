@@ -33,6 +33,7 @@ use crate::{
 use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
@@ -48,6 +49,9 @@ pub struct ConsoleShared {
     path_positions: Arc<PathPositionMap>,
 
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
+
+    overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
+    // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
 }
 
 pub struct Console<'a> {
@@ -79,6 +83,8 @@ pub struct Console<'a> {
     modules: Arc<Mutex<Vec<Arc<rhai::Module>>>>,
 
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
+    overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
+    // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
 }
 
 impl Console<'static> {
@@ -229,6 +235,8 @@ impl Console<'static> {
 
         let key_code_map = Arc::new(virtual_key_code_map());
 
+        let overlay_list = Arc::new(Mutex::new(Vec::new()));
+
         Self {
             input_line: String::new(),
 
@@ -258,6 +266,8 @@ impl Console<'static> {
             modules: Arc::new(Mutex::new(Vec::new())),
 
             key_code_map,
+
+            overlay_list,
         }
     }
 
@@ -273,7 +283,18 @@ impl Console<'static> {
             path_positions: self.path_positions.clone(),
 
             result_tx: self.result_tx.clone(),
+
+            overlay_list: self.overlay_list.clone(),
         }
+    }
+
+    pub fn populate_overlay_list(
+        &mut self,
+        names: &[(usize, OverlayKind, &str)],
+    ) {
+        let mut overlays = self.overlay_list.lock();
+        overlays.clear();
+        overlays.extend(names.iter().map(|&(a, b, s)| (a, b, s.to_string())));
     }
 
     fn create_scope() -> rhai::Scope<'static> {
@@ -293,7 +314,7 @@ impl Console<'static> {
         engine.register_fn(
             "bind_key",
             move |key: &str, fn_name: rhai::Dynamic| {
-                log::warn!("in bind_key");
+                log::debug!("in bind_key");
 
                 let key_code = if let Some(map) = key_code_map.get(key) {
                     map
@@ -302,15 +323,13 @@ impl Console<'static> {
                 };
 
                 if let Some(fn_name) = fn_name.try_cast::<String>() {
-                    log::warn!("cast to String");
-
                     let scope = Self::create_scope();
 
                     // lol this is really hacky
                     let script =
                         format!("fn a_function() {{\n{}();\n}}", fn_name);
-                    log::warn!("compiling to AST");
-                    log::warn!("script: \n{}", script);
+                    log::debug!("compiling to AST");
+                    log::debug!("script: \n{}", script);
 
                     let mut engine = shared.create_engine();
                     {
@@ -324,14 +343,12 @@ impl Console<'static> {
 
                     match ast {
                         Ok(ast) => {
-                            log::warn!("compilation successful");
                             let function =
                                 rhai::Func::<(), ()>::create_from_ast(
                                     engine,
                                     ast,
                                     "a_function",
                                 );
-                            log::warn!("created rust closure");
 
                             binds_tx
                                 .send((
@@ -473,7 +490,7 @@ impl Console<'static> {
 
             return Ok(true);
         } else if self.input_line.starts_with(":import ") {
-            log::warn!("importing file");
+            log::debug!("importing file");
             let file_path = &self.input_line[8..].to_string();
             let result = self.import_file(&file_path);
 
@@ -542,7 +559,6 @@ impl Console<'static> {
             Ok(result) => {
                 use std::any::Any;
 
-                debug!("Eval success!");
                 if print {
                     let rtype = result.type_id();
 
@@ -592,7 +608,6 @@ impl Console<'static> {
     }
 
     pub fn eval(&mut self, reactor: &mut Reactor, print: bool) -> Result<()> {
-        debug!("evaluating: {}", &self.input_line);
         let engine = self.create_engine();
 
         let result_tx = self.result_tx.clone();
@@ -701,7 +716,7 @@ impl Console<'static> {
                     } else {
                         // evaluate input
                         self.input_line = old_input;
-                        log::warn!("input line: {}", self.input_line);
+                        log::debug!("console input line: {}", self.input_line);
 
                         self.input_history.push(self.input_line.clone());
                         self.output_history
@@ -830,8 +845,6 @@ impl ConsoleShared {
     fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
         engine.register_type_with_name::<(usize, OverlayKind)>("OverlayHandle");
 
-        let overlay_state = self.shared_state.overlay_state.clone();
-
         // returns `false` if there is no active overlay
         let overlay_state = self.shared_state.overlay_state.clone();
         engine.register_fn("get_active_overlay", move || -> rhai::Dynamic {
@@ -844,10 +857,36 @@ impl ConsoleShared {
 
         let overlay_state = self.shared_state.overlay_state.clone();
         engine.register_fn("set_active_overlay", move |v: rhai::Dynamic| {
-            if let Some(overlay) = v.try_cast::<(usize, OverlayKind)>() {
+            if let Ok(v) = v.as_unit() {
+                overlay_state.set_current_overlay(None);
+            } else if let Some(overlay) = v.try_cast::<(usize, OverlayKind)>() {
                 overlay_state.set_current_overlay(Some(overlay));
             }
         });
+
+        let overlay_list: Arc<_> = self.overlay_list.clone();
+        // let overlay_map: Arc<HashMap<String, (usize, OverlayKind)>> =
+        engine.register_fn("get_overlays", move || {
+            // TODO: should probably use try_lock -- but the overlays
+            // shouldn't be organized like this anyway
+            let overlays = overlay_list.lock();
+            overlays
+                .iter()
+                .map(|v| rhai::Dynamic::from(v.to_owned()))
+                .collect::<Vec<_>>()
+        });
+
+        engine.register_fn(
+            "overlay_name",
+            move |overlay: (usize, OverlayKind, String)| overlay.2,
+        );
+
+        engine.register_fn(
+            "overlay_id",
+            move |overlay: (usize, OverlayKind, String)| (overlay.0, overlay.1),
+        );
+        // engine
+        //     .register_fn("get_overlays", move || overlays.as_slice().to_vec());
     }
 
     pub fn create_engine(&self) -> rhai::Engine {
@@ -863,7 +902,6 @@ impl ConsoleShared {
 
         let result_tx = self.result_tx.clone();
         engine.register_fn("log", move |v: rhai::Dynamic| {
-            log::warn!("in console print");
             result_tx.send(Ok(v)).unwrap();
         });
 
