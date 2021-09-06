@@ -25,6 +25,7 @@ use crate::{
     },
     geometry::*,
     reactor::Reactor,
+    view::View,
 };
 use crate::{
     app::{AppSettings, SharedState},
@@ -562,7 +563,7 @@ impl Console<'static> {
                 if print {
                     let rtype = result.type_id();
 
-                    if rtype == ().type_id() {
+                    if let Ok(_) = result.as_unit() {
                         // don't log unit
                     } else if rtype == rgb::RGB::<f32>::default().type_id() {
                         let color = result.cast::<rgb::RGB<f32>>();
@@ -889,6 +890,45 @@ impl ConsoleShared {
         //     .register_fn("get_overlays", move || overlays.as_slice().to_vec());
     }
 
+    fn add_view_fns(&self, engine: &mut Engine) {
+        engine.register_type::<View>();
+
+        engine.register_get_set(
+            "scale",
+            |v: &mut View| v.scale,
+            |v, s| v.scale = s,
+        );
+        engine.register_get_set(
+            "center",
+            |v: &mut View| v.center,
+            |v, c| v.center = c,
+        );
+
+        // NB: these are not regular console get/sets because the view
+        // system will likely be reworked soon, to make it a queue --
+        // and remove direct mutable access by other systems
+        // (but for now, load/store is enough)
+        let view = self.shared_state.view.clone();
+        engine.register_fn("get_view", move || view.load());
+
+        let view = self.shared_state.view.clone();
+        engine.register_fn("set_view", move |v: View| view.store(v));
+
+        let view = self.shared_state.view.clone();
+        engine.register_fn("set_view_origin", move |p: Point| {
+            let mut v = view.load();
+            v.center = p;
+            view.store(v);
+        });
+
+        let view = self.shared_state.view.clone();
+        engine.register_fn("set_scale", move |s: f32| {
+            let mut v = view.load();
+            v.scale = s;
+            view.store(v);
+        });
+    }
+
     pub fn create_engine(&self) -> rhai::Engine {
         use rhai::plugin::*;
 
@@ -900,6 +940,18 @@ impl ConsoleShared {
 
         engine.register_type::<Point>();
 
+        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
+        engine.register_get_set(
+            "x",
+            |p: &mut Point| p.x,
+            |p: &mut Point, x| p.x = x,
+        );
+        engine.register_get_set(
+            "y",
+            |p: &mut Point| p.y,
+            |p: &mut Point, y| p.y = y,
+        );
+
         let result_tx = self.result_tx.clone();
         engine.register_fn("log", move |v: rhai::Dynamic| {
             result_tx.send(Ok(v)).unwrap();
@@ -910,6 +962,8 @@ impl ConsoleShared {
 
         engine.register_fn("get_graph", move || graph.clone());
         engine.register_fn("get_path_positions", move || path_pos.clone());
+
+        self.add_view_fns(&mut engine);
 
         self.add_overlay_fns(&mut engine);
 
@@ -942,10 +996,6 @@ impl ConsoleShared {
                 selection
             },
         );
-
-        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
-        engine.register_fn("x", |point: &mut Point| point.x);
-        engine.register_fn("y", |point: &mut Point| point.y);
 
         let arc = self.shared_state.hover_node.clone();
         engine.register_fn("get_hover_node", move || arc.load());
