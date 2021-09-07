@@ -17,15 +17,17 @@ use log::debug;
 
 use crossbeam::atomic::AtomicCell;
 
-use rhai::plugin::*;
+use rhai::{plugin::*, Func};
 use rustc_hash::FxHashSet;
 
 use crate::{
     app::{
-        selection::NodeSelection, AppChannels, AppMsg, OverlayState, Select,
+        selection::NodeSelection, AppChannels, AppMsg, OverlayCreatorMsg,
+        OverlayState, Select,
     },
     geometry::*,
     reactor::Reactor,
+    script::{overlay_colors_tgt_, ScriptConfig, ScriptTarget},
     view::View,
 };
 use crate::{
@@ -346,12 +348,6 @@ impl Console<'static> {
                 if let Some(fn_name) = fn_name.try_cast::<String>() {
                     let scope = Self::create_scope();
 
-                    // lol this is really hacky
-                    let script =
-                        format!("fn a_function() {{\n{}();\n}}", fn_name);
-                    log::debug!("compiling to AST");
-                    log::debug!("script: \n{}", script);
-
                     let mut engine = shared.create_engine();
                     {
                         let modules = modules.lock();
@@ -359,6 +355,10 @@ impl Console<'static> {
                             engine.register_global_module(module.clone());
                         }
                     }
+
+                    log::debug!("compiling to AST");
+                    let script =
+                        format!("fn a_function() {{\n{}();\n}}", fn_name);
 
                     let ast = engine.compile_with_scope(&scope, &script);
 

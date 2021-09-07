@@ -34,6 +34,7 @@ use crate::{
         AnnotationLabelSet, AnnotationRecord, Annotations, BedRecords,
         ColumnKey, Gff3Records,
     },
+    app::channels::OverlayCreatorMsg,
     app::AppMsg,
     geometry::Point,
     graph_query::{GraphQuery, GraphQueryWorker},
@@ -42,7 +43,7 @@ use crate::{
     reactor::{Host, Outbox, Reactor},
 };
 
-use super::{file::FilePicker, overlays::OverlayCreatorMsg};
+use super::file::FilePicker;
 
 pub struct LabelSetList {}
 

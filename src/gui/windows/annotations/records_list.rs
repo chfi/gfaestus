@@ -12,12 +12,10 @@ use log::{debug, error, info, trace, warn};
 use crate::reactor::Reactor;
 use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
+    app::channels::OverlayCreatorMsg,
     app::AppMsg,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::{
-        util::grid_row_label,
-        windows::{graph_picker::PathPicker, overlays::OverlayCreatorMsg},
-    },
+    gui::{util::grid_row_label, windows::graph_picker::PathPicker},
 };
 
 use super::{filter::RecordFilter, ColumnPickerMany, OverlayLabelSetCreator};

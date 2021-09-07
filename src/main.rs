@@ -13,7 +13,7 @@ use winit::window::{Window, WindowBuilder};
 
 use argh::FromArgs;
 
-use gfaestus::app::mainview::*;
+use gfaestus::app::{mainview::*, OverlayCreatorMsg};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -268,7 +268,8 @@ fn main() {
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
-    let new_overlay_rx = reactor.overlay_create_rx.clone();
+    let new_overlay_rx = app.channels().new_overlay_rx.clone();
+    // let new_overlay_rx = reactor.overlay_create_rx.clone();
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),

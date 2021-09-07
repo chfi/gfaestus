@@ -9,7 +9,8 @@ pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
 use paired::*;
 
-use crate::{graph_query::GraphQuery, gui::windows::OverlayCreatorMsg};
+use crate::app::channels::OverlayCreatorMsg;
+use crate::graph_query::GraphQuery;
 
 pub struct Reactor {
     thread_pool: futures::executor::ThreadPool,

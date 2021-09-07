@@ -17,7 +17,7 @@ use crate::{
     vulkan::texture::{GradientName, Gradients},
 };
 
-use crate::app::OverlayState;
+use crate::app::{OverlayCreatorMsg, OverlayState};
 use crate::overlays::{OverlayData, OverlayKind};
 
 use super::file::FilePicker;
@@ -389,10 +389,6 @@ impl OverlayCreator {
                 }
             })
     }
-}
-
-pub enum OverlayCreatorMsg {
-    NewOverlay { name: String, data: OverlayData },
 }
 
 pub struct GradientPicker {

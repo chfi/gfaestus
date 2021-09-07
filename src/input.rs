@@ -98,7 +98,7 @@ impl InputManager {
         F: Fn() + Send + Sync + 'static,
     {
         let boxed = Arc::new(command) as Arc<dyn Fn() + Send + Sync + 'static>;
-        log::warn!("calling boxed binding command");
+        // log::warn!("calling boxed binding command");
         // boxed();
 
         self.custom_binds.insert(key_code, boxed);

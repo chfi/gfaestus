@@ -22,7 +22,7 @@ use crate::{
         AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
         Gff3Records,
     },
-    app::{AppChannels, AppMsg, AppSettings, SharedState},
+    app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
     graph_query::GraphQueryWorker,
     reactor::Reactor,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
@@ -187,7 +187,7 @@ pub struct AppViewState {
 impl AppViewState {
     pub fn new(
         reactor: &mut Reactor,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
@@ -381,7 +381,7 @@ impl Gui {
         shared_state: SharedState,
         channels: &AppChannels,
         settings: AppSettings,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -471,6 +471,7 @@ impl Gui {
         };
 
         let console = Console::new(
+            reactor,
             graph_query,
             channels.clone(),
             settings.to_owned(),
