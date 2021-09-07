@@ -11,9 +11,9 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::{hash::Hash, sync::Arc};
 
-use crate::app::AppInput;
 use crate::gui::GuiInput;
 use crate::{app::mainview::MainViewInput, gui::GuiMsg};
+use crate::{app::AppInput, reactor::Reactor};
 use crate::{app::SharedState, geometry::*};
 
 pub mod binds;
@@ -58,7 +58,8 @@ pub struct InputManager {
 
     custom_binds: FxHashMap<
         winit::event::VirtualKeyCode,
-        Box<dyn Fn() + Send + Sync + 'static>,
+        Arc<dyn Fn() + Send + Sync + 'static>,
+        // Box<dyn Fn() + Send + Sync + 'static>,
     >,
     // custom_binds: Arc<Mutex<FxHashMap<
     //     winit::event::VirtualKeyCode,
@@ -96,14 +97,18 @@ impl InputManager {
     ) where
         F: Fn() + Send + Sync + 'static,
     {
-        let boxed = Box::new(command) as Box<dyn Fn() + Send + Sync + 'static>;
+        let boxed = Arc::new(command) as Arc<dyn Fn() + Send + Sync + 'static>;
         log::warn!("calling boxed binding command");
-        boxed();
+        // boxed();
 
         self.custom_binds.insert(key_code, boxed);
     }
 
-    pub fn handle_events(&self, gui_msg_tx: &channel::Sender<GuiMsg>) {
+    pub fn handle_events(
+        &self,
+        reactor: &mut Reactor,
+        gui_msg_tx: &channel::Sender<GuiMsg>,
+    ) {
         while let Ok(winit_ev) = self.winit_rx.try_recv() {
             if let event::WindowEvent::CursorMoved { position, .. } = winit_ev {
                 self.mouse_screen_pos.store(Point {
@@ -211,7 +216,14 @@ impl InputManager {
                         .and_then(|kc| self.custom_binds.get(&kc))
                     {
                         log::warn!("executing bound command!");
-                        command();
+
+                        let command = command.clone();
+
+                        if let Ok(handle) =
+                            reactor.spawn(async move { command() })
+                        {
+                            handle.forget();
+                        }
                     }
                 }
             }

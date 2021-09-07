@@ -12,15 +12,21 @@ fn try_initialize() {
 fn add_point_of_interest() {
   try_initialize();
 
+  // let point = Point(0.0, 0.0);
+  log("1");
   let point = get_selection_center();
+  log("2");
   let id = label_count().to_string();
+  log("3");
   let label_text = id;
 
   let points = get_var("_points");
+  log("4");
   points.push(point);
 
   set_var("_points", points);
 
+  log("5");
   add_label(id, label_text, point);
 }
 

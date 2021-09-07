@@ -42,3 +42,7 @@ fn anim_follow_path(delay_ms, speed, path) {
 
   }
 }
+
+fn fuck() {
+  log("ASS");
+}

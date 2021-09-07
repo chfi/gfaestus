@@ -324,12 +324,13 @@ impl Console<'static> {
 
     fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
-        let mut engine = shared.create_engine();
 
         let modules = self.modules.clone();
 
         let key_code_map = self.key_code_map.clone();
         let binds_tx = self.channels.binds_tx.clone();
+
+        let mut engine = shared.create_engine();
 
         engine.register_fn(
             "bind_key",
@@ -1065,7 +1066,7 @@ impl ConsoleShared {
         engine.register_fn("get_selection", move || {
             use crossbeam::channel;
 
-            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
+            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(16);
             let msg = AppMsg::RequestSelection(tx);
 
             app_msg_tx.send(msg).unwrap();
@@ -1084,18 +1085,31 @@ impl ConsoleShared {
         engine.register_fn("get_selection_center", move || {
             use crossbeam::channel;
 
-            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
-            let msg = AppMsg::RequestSelection(tx);
+            let (tx, rx) = channel::unbounded::<(Rect, FxHashSet<NodeId>)>();
+            let msg = AppMsg::RequestSelection(tx.clone());
+
+            let tx_ = tx.clone();
+            let rx_ = rx.clone();
 
             app_msg_tx.send(msg).unwrap();
 
             log::warn!("what the");
-            let (rect, _result) = rx
-                .recv()
-                .expect("Console error when retrieving the current selection");
+            let (rect, _result) =
+            // let join_hdl =
+                std::thread::spawn(move || rx.recv().unwrap())
+                .join()
+                .unwrap();
+
+            // let (rect, _result) = rx
+            //     .recv()
+            //     .expect("Console error when retrieving the current selection");
+
+            // let (rect, _result) = join_hdl.join().unwrap();
+
             log::warn!("fuCK");
 
             rect.center()
+            // Point::new(0.0, 0.0)
         });
 
         let app_msg_tx = self.channels.app_tx.clone();

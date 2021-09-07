@@ -412,7 +412,7 @@ fn main() {
 
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
-                input_manager.handle_events(&gui_msg_tx);
+                input_manager.handle_events(&mut reactor, &gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();
 
