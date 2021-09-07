@@ -58,6 +58,8 @@ use util::*;
 use widgets::*;
 use windows::*;
 
+use self::text::draw_text_at_world_point;
+
 pub struct Gui {
     pub ctx: egui::CtxRef,
     frame_input: FrameInput,
@@ -603,6 +605,11 @@ impl Gui {
             .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
 
         self.console.ui(&self.ctx, self.console_down, reactor);
+
+        let view = self.shared_state.view();
+        for (pt, label) in self.console.labels().into_iter() {
+            draw_text_at_world_point(&self.ctx, view, pt, &label);
+        }
 
         self.view_state.apply_received();
 

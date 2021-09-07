@@ -54,6 +54,7 @@ pub struct ConsoleShared {
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
     // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
+    label_list: Arc<Mutex<Vec<(Point, String)>>>,
 }
 
 pub struct Console<'a> {
@@ -88,6 +89,10 @@ pub struct Console<'a> {
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
     // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
+
+    // TODO this thing should probably move somewhere else in the GUI,
+    // and be more generic
+    label_list: Arc<Mutex<Vec<(Point, String)>>>,
 }
 
 impl Console<'static> {
@@ -239,6 +244,7 @@ impl Console<'static> {
         let key_code_map = Arc::new(virtual_key_code_map());
 
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
+        let label_list = Arc::new(Mutex::new(Vec::new()));
 
         Self {
             input_line: String::new(),
@@ -272,6 +278,7 @@ impl Console<'static> {
             key_code_map,
 
             overlay_list,
+            label_list,
         }
     }
 
@@ -289,11 +296,17 @@ impl Console<'static> {
             result_tx: self.result_tx.clone(),
 
             overlay_list: self.overlay_list.clone(),
+            label_list: self.label_list.clone(),
         }
     }
 
     pub fn append_output(&mut self, output: &str) {
         self.output_history.extend(output.lines().map(String::from));
+    }
+
+    pub fn labels(&self) -> Vec<(Point, String)> {
+        let labels = self.label_list.lock();
+        labels.to_vec()
     }
 
     pub fn populate_overlay_list(
@@ -983,6 +996,17 @@ impl ConsoleShared {
             v.scale = s;
             view.store(v);
         });
+
+        let mouse = self.shared_state.mouse_pos.clone();
+        let view = self.shared_state.view.clone();
+        let screen_dims = self.shared_state.screen_dims.clone();
+
+        engine.register_fn("get_cursor_world", move || {
+            let screen = mouse.load();
+            let view = view.load();
+            let dims = screen_dims.load();
+            view.screen_point_to_world(dims, screen)
+        });
     }
 
     pub fn create_engine(&self) -> rhai::Engine {
@@ -995,6 +1019,14 @@ impl ConsoleShared {
         engine.set_max_expr_depths(0, 0);
 
         engine.register_type::<Point>();
+
+        let label_list = self.label_list.clone();
+
+        engine.register_fn("add_label", move |name: &str, at: Point| {
+            let mut labels = label_list.lock();
+            log::warn!("pushing to label list");
+            labels.push((at, name.to_string()));
+        });
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
         engine.register_get_set(
