@@ -1106,9 +1106,15 @@ impl ConsoleShared {
         );
 
         let label_map = self.label_map.clone();
-        engine.register_fn("label_count", move || {
-            let labels = label_map.lock();
-            labels.len() as i64
+        engine.register_fn("remove_label", move |id: &str| {
+            let mut labels = label_map.lock();
+            labels.remove(id);
+        });
+
+        let label_map = self.label_map.clone();
+        engine.register_fn("remove_all_labels", move || {
+            let mut labels = label_map.lock();
+            labels.clear();
         });
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
