@@ -53,8 +53,7 @@ pub struct ConsoleShared {
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
-    // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
-    label_list: Arc<Mutex<Vec<(Point, String)>>>,
+    label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
 }
 
 pub struct Console<'a> {
@@ -92,7 +91,7 @@ pub struct Console<'a> {
 
     // TODO this thing should probably move somewhere else in the GUI,
     // and be more generic
-    label_list: Arc<Mutex<Vec<(Point, String)>>>,
+    label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
 }
 
 impl Console<'static> {
@@ -244,7 +243,7 @@ impl Console<'static> {
         let key_code_map = Arc::new(virtual_key_code_map());
 
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
-        let label_list = Arc::new(Mutex::new(Vec::new()));
+        let label_map = Arc::new(Mutex::new(HashMap::default()));
 
         Self {
             input_line: String::new(),
@@ -278,7 +277,7 @@ impl Console<'static> {
             key_code_map,
 
             overlay_list,
-            label_list,
+            label_map,
         }
     }
 
@@ -296,7 +295,7 @@ impl Console<'static> {
             result_tx: self.result_tx.clone(),
 
             overlay_list: self.overlay_list.clone(),
-            label_list: self.label_list.clone(),
+            label_map: self.label_map.clone(),
         }
     }
 
@@ -305,8 +304,8 @@ impl Console<'static> {
     }
 
     pub fn labels(&self) -> Vec<(Point, String)> {
-        let labels = self.label_list.lock();
-        labels.to_vec()
+        let labels = self.label_map.lock();
+        labels.values().cloned().collect()
     }
 
     pub fn populate_overlay_list(
@@ -1020,12 +1019,19 @@ impl ConsoleShared {
 
         engine.register_type::<Point>();
 
-        let label_list = self.label_list.clone();
+        let label_map = self.label_map.clone();
+        engine.register_fn(
+            "add_label",
+            move |id: &str, label: &str, at: Point| {
+                let mut labels = label_map.lock();
+                labels.insert(id.to_string(), (at, label.to_string()));
+            },
+        );
 
-        engine.register_fn("add_label", move |name: &str, at: Point| {
-            let mut labels = label_list.lock();
-            log::warn!("pushing to label list");
-            labels.push((at, name.to_string()));
+        let label_map = self.label_map.clone();
+        engine.register_fn("label_count", move || {
+            let labels = label_map.lock();
+            labels.len();
         });
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
@@ -1057,16 +1063,35 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {
-            use futures::channel::oneshot;
+            use crossbeam::channel;
 
-            let (tx, rx) = oneshot::channel::<FxHashSet<NodeId>>();
+            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
             let msg = AppMsg::RequestSelection(tx);
 
             app_msg_tx.send(msg).unwrap();
 
-            let result = futures::executor::block_on(async { rx.await })
+            let (_rect, result) = rx
+                .recv()
                 .expect("Console error when retrieving the current selection");
+
             NodeSelection { nodes: result }
+        });
+
+        // TODO probably... don't do it like this
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection_center", move || {
+            use crossbeam::channel;
+
+            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
+            let msg = AppMsg::RequestSelection(tx);
+
+            app_msg_tx.send(msg).unwrap();
+
+            let (rect, _result) = rx
+                .recv()
+                .expect("Console error when retrieving the current selection");
+
+            rect.center()
         });
 
         let app_msg_tx = self.channels.app_tx.clone();

@@ -113,7 +113,7 @@ pub enum AppMsg {
         label_set: AnnotationLabelSet,
     },
 
-    RequestSelection(futures::channel::oneshot::Sender<FxHashSet<NodeId>>),
+    RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
 }
 
 impl App {
@@ -352,7 +352,12 @@ impl App {
             }
             AppMsg::RequestSelection(sender) => {
                 let selection = self.selected_nodes.to_owned();
-                sender.send(selection).unwrap();
+                let rect = self
+                    .selected_nodes_bounding_box
+                    .map(|(p0, p1)| Rect::new(p0, p1))
+                    .unwrap_or(Rect::default());
+
+                sender.send((rect, selection)).unwrap();
             }
         }
     }
