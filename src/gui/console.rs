@@ -408,11 +408,8 @@ impl Console<'static> {
         let shared = self.shared();
         let modules = self.modules.clone();
         engine.register_fn(
-            "create_overlay",
-            // move |name: &str, fn_name: &str| {
+            "create_overlay_from_fn",
             move |name: &str, fn_name: rhai::Dynamic| {
-                // move |name: &str, function: rhai::Dynamic| {
-
                 if let Some(fn_name) = fn_name.try_cast::<String>() {
                     let mut scope = Self::create_scope();
 
@@ -430,31 +427,13 @@ impl Console<'static> {
 
                     let script =
                         format!("\nfn node_color(i) {{\n{}(i);\n}}", fn_name);
-                    log::warn!("script: {}", script);
+                    log::debug!("script: {}", script);
 
                     let node_color_ast =
                         engine.compile_into_self_contained(&scope, &script);
-                    // let node_color_ast = engine.compile(&script);
-                    // engine.compile_with_scope(&scope, &script);
 
                     match node_color_ast {
                         Ok(node_color_ast) => {
-                            use rayon::prelude::*;
-                            //
-                            log::warn!("ast compiled");
-
-                            // let function: Box<
-                            //     dyn Fn() -> Result<(), Box<EvalAltResult>>
-                            //         + Send
-                            //         + Sync,
-                            // > = rhai::Func::<(), ()>::create_from_ast(
-                            //     engine,
-                            //     node_color_ast,
-                            //     "node_color",
-                            // );
-
-                            dbg!();
-
                             let result = overlay_colors_tgt_(
                                 &rayon_pool,
                                 &config,
@@ -471,25 +450,18 @@ impl Console<'static> {
                                         data,
                                     };
                                     overlay_tx.send(msg).unwrap();
-                                    //
-                                    log::warn!("overlay data success");
+                                    log::info!("overlay data success");
                                 }
                                 Err(err) => {
-                                    //
                                     log::warn!("overlay failure");
                                 }
                             }
                         }
                         Err(err) => {
-                            //
                             log::warn!("ast failure");
                         }
                     }
                 }
-
-                //         engine.
-                // engine.create_from_script(
-                // engine.create_from_ast(ast, entry_point)
             },
         );
 
