@@ -1071,11 +1071,9 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
-            log::warn!("what the");
             let (_rect, result) = rx
                 .recv()
                 .expect("Console error when retrieving the current selection");
-            log::warn!("fuCK");
 
             NodeSelection { nodes: result }
         });
@@ -1088,28 +1086,14 @@ impl ConsoleShared {
             let (tx, rx) = channel::unbounded::<(Rect, FxHashSet<NodeId>)>();
             let msg = AppMsg::RequestSelection(tx.clone());
 
-            let tx_ = tx.clone();
-            let rx_ = rx.clone();
-
             app_msg_tx.send(msg).unwrap();
 
-            log::warn!("what the");
             let (rect, _result) =
-            // let join_hdl =
                 std::thread::spawn(move || rx.recv().unwrap())
-                .join()
-                .unwrap();
-
-            // let (rect, _result) = rx
-            //     .recv()
-            //     .expect("Console error when retrieving the current selection");
-
-            // let (rect, _result) = join_hdl.join().unwrap();
-
-            log::warn!("fuCK");
+                    .join()
+                    .unwrap();
 
             rect.center()
-            // Point::new(0.0, 0.0)
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
