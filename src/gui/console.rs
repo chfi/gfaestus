@@ -1031,7 +1031,7 @@ impl ConsoleShared {
         let label_map = self.label_map.clone();
         engine.register_fn("label_count", move || {
             let labels = label_map.lock();
-            labels.len();
+            labels.len() as i64
         });
 
         engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
@@ -1070,9 +1070,11 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
+            log::warn!("what the");
             let (_rect, result) = rx
                 .recv()
                 .expect("Console error when retrieving the current selection");
+            log::warn!("fuCK");
 
             NodeSelection { nodes: result }
         });
@@ -1087,9 +1089,11 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
+            log::warn!("what the");
             let (rect, _result) = rx
                 .recv()
                 .expect("Console error when retrieving the current selection");
+            log::warn!("fuCK");
 
             rect.center()
         });
