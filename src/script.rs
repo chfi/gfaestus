@@ -20,6 +20,7 @@ use crate::{app::selection::NodeSelection, graph_query::GraphQuery};
 
 use rhai::plugin::*;
 
+pub mod console;
 pub mod plugins;
 
 pub fn create_engine() -> Engine {

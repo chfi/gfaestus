@@ -51,13 +51,14 @@ pub struct ConsoleShared {
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
 
     graph: Arc<GraphQuery>,
-    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
     label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
 
     // is this a bad idea? i should probably just use a global pool
     rayon_pool: Arc<rayon::ThreadPool>,
+
+    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 }
 
 pub struct Console<'a> {
