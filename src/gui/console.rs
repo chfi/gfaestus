@@ -49,13 +49,15 @@ pub struct ConsoleShared {
     channels: AppChannels,
     get_set: Arc<GetSetTruth>,
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
-    graph: Arc<PackedGraph>,
-    path_positions: Arc<PathPositionMap>,
 
+    graph: Arc<GraphQuery>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
     label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
+
+    // is this a bad idea? i should probably just use a global pool
+    rayon_pool: Arc<rayon::ThreadPool>,
 }
 
 pub struct Console<'a> {
@@ -82,9 +84,7 @@ pub struct Console<'a> {
     result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 
-    graph: Arc<PackedGraph>,
-    path_positions: Arc<PathPositionMap>,
-
+    graph: Arc<GraphQuery>,
     modules: Arc<Mutex<Vec<Arc<rhai::Module>>>>,
 
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
@@ -94,6 +94,7 @@ pub struct Console<'a> {
     // TODO this thing should probably move somewhere else in the GUI,
     // and be more generic
     label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
+    rayon_pool: Arc<rayon::ThreadPool>,
 }
 
 impl Console<'static> {
@@ -101,13 +102,16 @@ impl Console<'static> {
     pub const ID_TEXT: &'static str = "quake_console_input";
 
     pub fn new(
-        graph: &GraphQuery,
+        reactor: &Reactor,
+        graph: &Arc<GraphQuery>,
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
+
+        let rayon_pool = reactor.rayon_pool.clone();
 
         let mut get_set = GetSetTruth::default();
 
@@ -271,15 +275,16 @@ impl Console<'static> {
             result_tx,
             result_rx,
 
-            graph: graph.graph.clone(),
-            path_positions: graph.path_positions.clone(),
-
+            graph: graph.clone(),
+            // graph: graph.graph.clone(),
+            // path_positions: graph.path_positions.clone(),
             modules: Arc::new(Mutex::new(Vec::new())),
 
             key_code_map,
 
             overlay_list,
             label_map,
+            rayon_pool,
         }
     }
 
@@ -292,12 +297,12 @@ impl Console<'static> {
             key_code_map: self.key_code_map.clone(),
 
             graph: self.graph.clone(),
-            path_positions: self.path_positions.clone(),
-
+            // path_positions: self.path_positions.clone(),
             result_tx: self.result_tx.clone(),
 
             overlay_list: self.overlay_list.clone(),
             label_map: self.label_map.clone(),
+            rayon_pool: self.rayon_pool.clone(),
         }
     }
 
@@ -389,6 +394,102 @@ impl Console<'static> {
                         }
                     }
                 }
+            },
+        );
+
+        let rayon_pool = self.rayon_pool.clone();
+        let graph = self.graph.clone();
+        let config = ScriptConfig {
+            default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+            target: ScriptTarget::Nodes,
+        };
+
+        let overlay_tx = self.channels.new_overlay_tx.clone();
+        let shared = self.shared();
+        let modules = self.modules.clone();
+        engine.register_fn(
+            "create_overlay",
+            // move |name: &str, fn_name: &str| {
+            move |name: &str, fn_name: rhai::Dynamic| {
+                // move |name: &str, function: rhai::Dynamic| {
+
+                if let Some(fn_name) = fn_name.try_cast::<String>() {
+                    let mut scope = Self::create_scope();
+
+                    scope
+                        .push("graph", graph.graph.clone())
+                        .push("path_pos", graph.path_positions.clone());
+
+                    let mut engine = shared.create_engine();
+                    {
+                        let modules = modules.lock();
+                        for module in modules.iter() {
+                            engine.register_global_module(module.clone());
+                        }
+                    }
+
+                    let script =
+                        format!("\nfn node_color(i) {{\n{}(i);\n}}", fn_name);
+                    log::warn!("script: {}", script);
+
+                    let node_color_ast =
+                        engine.compile_into_self_contained(&scope, &script);
+                    // let node_color_ast = engine.compile(&script);
+                    // engine.compile_with_scope(&scope, &script);
+
+                    match node_color_ast {
+                        Ok(node_color_ast) => {
+                            use rayon::prelude::*;
+                            //
+                            log::warn!("ast compiled");
+
+                            // let function: Box<
+                            //     dyn Fn() -> Result<(), Box<EvalAltResult>>
+                            //         + Send
+                            //         + Sync,
+                            // > = rhai::Func::<(), ()>::create_from_ast(
+                            //     engine,
+                            //     node_color_ast,
+                            //     "node_color",
+                            // );
+
+                            dbg!();
+
+                            let result = overlay_colors_tgt_(
+                                &rayon_pool,
+                                &config,
+                                &graph,
+                                &engine,
+                                scope,
+                                node_color_ast,
+                            );
+
+                            match result {
+                                Ok(data) => {
+                                    let msg = OverlayCreatorMsg::NewOverlay {
+                                        name: name.to_string(),
+                                        data,
+                                    };
+                                    overlay_tx.send(msg).unwrap();
+                                    //
+                                    log::warn!("overlay data success");
+                                }
+                                Err(err) => {
+                                    //
+                                    log::warn!("overlay failure");
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            //
+                            log::warn!("ast failure");
+                        }
+                    }
+                }
+
+                //         engine.
+                // engine.create_from_script(
+                // engine.create_from_ast(ast, entry_point)
             },
         );
 
@@ -957,6 +1058,9 @@ impl ConsoleShared {
         );
         // engine
         //     .register_fn("get_overlays", move || overlays.as_slice().to_vec());
+
+        // engine.register_fn(
+        // "evaluate_overlay_script")
     }
 
     fn add_view_fns(&self, engine: &mut Engine) {
@@ -1053,10 +1157,12 @@ impl ConsoleShared {
         });
 
         let graph = self.graph.clone();
-        let path_pos = self.path_positions.clone();
+        engine.register_fn("get_graph", move || graph.graph.clone());
 
-        engine.register_fn("get_graph", move || graph.clone());
-        engine.register_fn("get_path_positions", move || path_pos.clone());
+        let graph = self.graph.clone();
+        engine.register_fn("get_path_positions", move || {
+            graph.path_positions.clone()
+        });
 
         self.add_view_fns(&mut engine);
 
@@ -1111,7 +1217,7 @@ impl ConsoleShared {
             app_msg_tx.send(msg).unwrap();
         });
 
-        let graph = self.graph.clone();
+        let graph = self.graph.graph.clone();
         engine.register_fn(
             "path_selection",
             move |path: PathId| -> NodeSelection {

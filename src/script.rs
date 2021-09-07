@@ -191,6 +191,136 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
     None
 }
 
+pub fn overlay_colors_tgt_(
+    rayon_pool: &rayon::ThreadPool,
+    config: &ScriptConfig,
+    graph: &GraphQuery,
+    engine: &rhai::Engine,
+    scope: rhai::Scope<'_>,
+    node_color_ast: rhai::AST,
+) -> std::result::Result<OverlayData, Box<EvalAltResult>> {
+    match config.target.clone() {
+        ScriptTarget::Nodes => {
+            let mut node_ids =
+                graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
+            node_ids.sort();
+
+            let values = rayon_pool.install(|| {
+                let mut values: Vec<rhai::Dynamic> =
+                    Vec::with_capacity(node_ids.len());
+                node_ids
+                    .into_par_iter()
+                    .map_with(scope, |mut thread_scope, node_id| {
+                        let value = engine
+                            .call_fn(
+                                &mut thread_scope,
+                                &node_color_ast,
+                                "node_color",
+                                (node_id,),
+                            )
+                            .unwrap();
+
+                        value
+                    })
+                    .collect_into_vec(&mut values);
+
+                values
+            });
+
+            let data = cast_overlay_data(values)
+                .ok_or("Couldn't process overlay data")?;
+
+            Ok(data)
+        }
+        ScriptTarget::Path { name } => {
+            let path_id = graph
+                .graph()
+                .get_path_id(name.as_bytes())
+                .ok_or("Path not found")?;
+
+            let steps =
+                graph.path_pos_steps(path_id).ok_or("Path not found")?;
+
+            let node_value_map = rayon_pool.install(|| {
+                let mut id_values: Vec<(NodeId, rhai::Dynamic)> =
+                    Vec::with_capacity(steps.len());
+
+                steps
+                    .into_par_iter()
+                    .map_with(scope, |mut thread_scope, step| {
+                        let (handle, _, pos) = step;
+                        let node_id = handle.id();
+
+                        let value = engine
+                            .call_fn(
+                                &mut thread_scope,
+                                &node_color_ast,
+                                "node_color",
+                                (node_id,),
+                            )
+                            .unwrap();
+
+                        value
+                    })
+                    .collect_into_vec(&mut id_values);
+
+                id_values
+            });
+
+            let (nodes, values): (Vec<_>, Vec<_>) =
+                node_value_map.into_iter().unzip();
+
+            let data = cast_overlay_data(values)
+                .ok_or("Couldn't process overlay data")?;
+
+            let mut node_ids =
+                graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
+            node_ids.sort();
+
+            let default_color = config.default_color;
+
+            match data {
+                OverlayData::RGB(rgb) => {
+                    let node_rgb_map: FxHashMap<NodeId, rgb::RGBA<f32>> = nodes
+                        .into_iter()
+                        .zip(rgb.into_iter())
+                        .collect::<FxHashMap<_, _>>();
+
+                    let data = node_ids
+                        .into_iter()
+                        .map(|node_id| {
+                            node_rgb_map
+                                .get(&node_id)
+                                .copied()
+                                .unwrap_or(default_color)
+                        })
+                        .collect();
+
+                    Ok(OverlayData::RGB(data))
+                }
+                OverlayData::Value(val) => {
+                    let node_val_map: FxHashMap<NodeId, f32> = nodes
+                        .into_iter()
+                        .zip(val.into_iter())
+                        .collect::<FxHashMap<_, _>>();
+
+                    let data = node_ids
+                        .into_iter()
+                        .map(|node_id| {
+                            node_val_map
+                                .get(&node_id)
+                                .copied()
+                                .unwrap_or_default()
+                        })
+                        .collect();
+
+                    Ok(OverlayData::Value(data))
+                }
+            }
+        }
+    }
+}
+
 pub fn overlay_colors_tgt(
     rayon_pool: &rayon::ThreadPool,
     config: &ScriptConfig,
