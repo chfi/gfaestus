@@ -621,12 +621,8 @@ impl EdgeIndices {
         let memory_usage = vk_mem::MemoryUsage::GpuOnly;
 
         let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<u32, _>(
-                usage,
-                memory_usage,
-                false,
-                &edges,
-            )?;
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(usage, memory_usage, false, &edges)?;
 
         app.set_debug_object_name(buffer, "Edge Indices Buffer")?;
 
@@ -733,12 +729,8 @@ impl EdgesUBOBuffer {
         let memory_usage = vk_mem::MemoryUsage::CpuOnly;
 
         let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<f32, _>(
-                usage,
-                memory_usage,
-                true,
-                &data,
-            )?;
+            // .create_buffer_with_data::<f32, _>(
+            .create_buffer_with_data(usage, memory_usage, true, &data)?;
 
         app.set_debug_object_name(buffer, "Edges UBO")?;
 

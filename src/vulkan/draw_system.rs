@@ -1,13 +1,16 @@
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
+use bytemuck::{Pod, Zeroable};
+
 pub mod edges;
 pub mod gui;
 pub mod nodes;
 pub mod post;
 pub mod selection;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
 pub struct Vertex {
     pub position: [f32; 2],
 }

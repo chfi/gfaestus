@@ -707,6 +707,56 @@ impl NodeOverlayPipeline {
     }
 }
 
+pub struct Overlay_ {
+    name: String,
+    kind: OverlayKind,
+
+    buffer: vk::Buffer,
+    alloc: vk_mem::Allocation,
+    alloc_info: vk_mem::AllocationInfo,
+
+    host_visible: bool,
+}
+
+impl Overlay_ {
+    /*
+    /// Create a new overlay that can be written to by the CPU after construction
+    ///
+    /// Uses host-visible and host-coherent memory
+
+    pub fn new_empty_value(
+        name: &str,
+        app: &GfaestusVk,
+        node_count: usize,
+    ) -> Result<Self> {
+        let size = ((node_count * std::mem::size_of::<f32>()) as u32)
+            as vk::DeviceSize;
+
+        let usage = vk::BufferUsageFlags::STORAGE_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST;
+
+        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
+            | vk::MemoryPropertyFlags::HOST_COHERENT;
+
+        let (buffer, memory, size) =
+            app.create_buffer(size, usage, mem_props)?;
+
+        let obj_name = format!("Overlay (Value) - {}", name);
+        app.set_debug_object_name(buffer, &obj_name)?;
+
+        Ok(Self {
+            name: name.into(),
+
+            buffer,
+            memory,
+            size,
+
+            host_visible: true,
+        })
+    }
+    */
+}
+
 pub enum Overlay {
     RGB(NodeOverlay),
     Value(NodeOverlayValue),

@@ -726,7 +726,8 @@ impl NodeVertices {
         let memory_usage = vk_mem::MemoryUsage::GpuOnly;
 
         let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<f32, _>(
+            .create_buffer_with_data(
+                // .create_buffer_with_data::<f32, _>(
                 usage,
                 memory_usage,
                 false,

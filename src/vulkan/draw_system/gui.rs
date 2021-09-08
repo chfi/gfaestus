@@ -644,7 +644,8 @@ impl GuiVertices {
         }
 
         let (vx_buf, vx_alloc, vx_alloc_info) = app
-            .create_buffer_with_data::<u32, _>(
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(
                 vk::BufferUsageFlags::VERTEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
                 false,
@@ -652,7 +653,8 @@ impl GuiVertices {
             )?;
 
         let (ix_buf, ix_alloc, ix_alloc_info) = app
-            .create_buffer_with_data::<u32, _>(
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(
                 vk::BufferUsageFlags::INDEX_BUFFER,
                 vk_mem::MemoryUsage::GpuOnly,
                 false,
@@ -701,7 +703,10 @@ impl GuiVertices {
     }
 }
 
-#[derive(Clone, Copy)]
+use bytemuck::{Pod, Zeroable};
+
+#[derive(Clone, Copy, Zeroable, Pod)]
+#[repr(C)]
 pub struct GuiVertex {
     pub position: [f32; 2],
     pub uv: [f32; 2],

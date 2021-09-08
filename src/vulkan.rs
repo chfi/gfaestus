@@ -23,11 +23,11 @@ use winit::window::Window;
 
 use std::{mem::size_of, sync::Arc};
 
+use bytemuck::{Pod, TransparentWrapper, Zeroable};
+
 use parking_lot::{Mutex, MutexGuard};
 
 use anyhow::Result;
-
-use render_pass::Framebuffers;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -1021,6 +1021,16 @@ impl GfaestusVk {
     ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
     where
         T: Copy,
+
+    pub fn create_buffer_with_data<T>(
+        &self,
+        usage: vk::BufferUsageFlags,
+        memory_usage: vk_mem::MemoryUsage,
+        mapped: bool,
+        data: &[T],
+    ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
+    where
+        T: Pod,
     {
         use vk::BufferUsageFlags as Usage;
 
@@ -1047,15 +1057,24 @@ impl GfaestusVk {
         unsafe {
             let mapped_ptr = staging_alloc_info.get_mapped_data();
 
-            let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
+            let mapped_ptr = mapped_ptr as *mut u8;
+            // let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
 
+            let target_slice =
+                std::slice::from_raw_parts_mut(mapped_ptr, size as usize);
+
+            target_slice.clone_from_slice(bytemuck::cast_slice(&data))
+
+            /*
             let mut align = ash::util::Align::new(
                 mapped_ptr,
-                std::mem::align_of::<A>() as u64,
+                std::mem::align_of::<T>() as u64,
+                // std::mem::align_of::<T>() as u64,
                 std::mem::size_of_val(&data) as u64,
             );
 
             align.copy_from_slice(data);
+            */
         }
 
         let buffer_info = vk::BufferCreateInfo::builder()
