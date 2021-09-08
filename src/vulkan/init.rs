@@ -71,7 +71,7 @@ pub(super) fn create_instance(
 
     for ext in extension_names.iter() {
         let name = unsafe { CStr::from_ptr(*ext) };
-        log::warn!("{:?}", name);
+        log::debug!("Loading instance extension {:?}", name);
     }
 
     let instance =
@@ -203,22 +203,26 @@ pub(super) fn choose_physical_device(
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
 ) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
+    let devices = unsafe { instance.enumerate_physical_devices() }?;
+
     log::debug!("Enumerating physical devices");
+
     let (_, device) = {
-        let devices = unsafe { instance.enumerate_physical_devices() }?;
+        for (ix, device) in devices.iter().enumerate() {
+            unsafe {
+                let props = instance.get_physical_device_properties(*device);
+                log::debug!(
+                    "Device {} - {:?}",
+                    ix,
+                    CStr::from_ptr(props.device_name.as_ptr())
+                );
+            }
+        }
 
         devices
             .into_iter()
             .enumerate()
-            .find(|(ix, dev)| {
-                unsafe {
-                    let props = instance.get_physical_device_properties(*dev);
-                    log::debug!(
-                        "Device {} - {:?}",
-                        ix,
-                        CStr::from_ptr(props.device_name.as_ptr())
-                    );
-                }
+            .find(|(_ix, dev)| {
                 device_is_suitable(instance, surface, surface_khr, *dev)
                     .unwrap()
             })

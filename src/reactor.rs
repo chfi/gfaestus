@@ -57,7 +57,6 @@ impl Reactor {
 
         self.thread_pool
             .spawn(async move {
-                eprintln!("spawning reactor task");
                 log::debug!("spawning reactor task");
 
                 loop {

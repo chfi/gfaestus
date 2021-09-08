@@ -86,14 +86,13 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     }
 
     if !objects.is_empty() {
-        message_string.push_str("\n  Objects: \n");
+        let mut first = true;
         for obj in objects {
-            if obj.p_object_name.is_null() {
-                message_string.push_str(&format!(
-                    "       {:#x} - no name\n",
-                    obj.object_handle,
-                ));
-            } else {
+            if !obj.p_object_name.is_null() {
+                if first {
+                    message_string.push_str("\n  Objects: \n");
+                    first = false;
+                }
                 message_string.push_str(&format!(
                     "       {:#x} - {:?}\n",
                     obj.object_handle,

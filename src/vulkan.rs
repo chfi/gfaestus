@@ -34,82 +34,6 @@ use log::{debug, error, info, trace, warn};
 
 use crate::view::ScreenDims;
 
-#[derive(Clone)]
-pub struct Queues {
-    graphics_queue: Arc<Mutex<vk::Queue>>,
-    present_queue: Arc<Mutex<vk::Queue>>,
-    compute_queue: Arc<Mutex<vk::Queue>>,
-}
-
-impl Queues {
-    #[allow(dead_code)]
-    fn new(
-        graphics: vk::Queue,
-        present: vk::Queue,
-        compute: vk::Queue,
-    ) -> Self {
-        let graphics_queue: Arc<Mutex<vk::Queue>>;
-        let present_queue: Arc<Mutex<vk::Queue>>;
-        let compute_queue: Arc<Mutex<vk::Queue>>;
-
-        graphics_queue = Arc::new(Mutex::new(graphics));
-
-        if present == graphics {
-            present_queue = graphics_queue.clone();
-        } else {
-            present_queue = Arc::new(Mutex::new(present));
-        }
-
-        if compute == graphics {
-            compute_queue = graphics_queue.clone();
-        } else {
-            compute_queue = Arc::new(Mutex::new(compute));
-        }
-
-        Self {
-            graphics_queue,
-            present_queue,
-            compute_queue,
-        }
-    }
-
-    pub fn lock_graphics(&self) -> MutexGuard<'_, vk::Queue> {
-        self.graphics_queue.lock()
-    }
-
-    pub fn try_lock_graphics(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.graphics_queue.try_lock()
-    }
-
-    pub fn lock_present(&self) -> MutexGuard<'_, vk::Queue> {
-        self.present_queue.lock()
-    }
-
-    pub fn try_lock_present(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.present_queue.try_lock()
-    }
-
-    pub fn lock_compute(&self) -> MutexGuard<'_, vk::Queue> {
-        self.compute_queue.lock()
-    }
-
-    pub fn try_lock_compute(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.compute_queue.try_lock()
-    }
-
-    pub fn is_graphics_locked(&self) -> bool {
-        self.graphics_queue.is_locked()
-    }
-
-    pub fn is_present_locked(&self) -> bool {
-        self.present_queue.is_locked()
-    }
-
-    pub fn is_compute_locked(&self) -> bool {
-        self.compute_queue.is_locked()
-    }
-}
-
 pub struct GfaestusVk {
     pub allocator: Allocator,
 
@@ -180,14 +104,6 @@ impl GfaestusVk {
         };
 
         let allocator = vk_mem::Allocator::new(&allocator_create_info)?;
-
-        trace!("graphics_ix: {}", graphics_ix);
-        trace!("present_ix: {}", present_ix);
-        trace!("compute_ix: {}", compute_ix);
-
-        trace!("graphics_queue: {:?}", graphics_queue);
-        trace!("present_queue: {:?}", present_queue);
-        trace!("compute_queue: {:?}", compute_queue);
 
         let vk_context = VkContext::new(
             entry,
@@ -744,6 +660,8 @@ impl GfaestusVk {
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
     ) -> Result<(vk::Image, vk::DeviceMemory)> {
+        let device = vk_context.device();
+
         let img_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(vk::Extent3D {
@@ -762,8 +680,7 @@ impl GfaestusVk {
             .flags(vk::ImageCreateFlags::empty())
             .build();
 
-        let device = vk_context.device();
-
+        log::debug!("Creating image {:?}", img_info);
         let image = unsafe { device.create_image(&img_info, None) }?;
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
         let mem_type_ix = find_memory_type(
@@ -777,11 +694,13 @@ impl GfaestusVk {
             .memory_type_index(mem_type_ix)
             .build();
 
+        log::debug!("Allocating {} bytes of memory for image", mem_reqs.size);
         let memory = unsafe {
             let mem = device.allocate_memory(&alloc_info, None)?;
             device.bind_image_memory(image, mem, 0)?;
             mem
         };
+        log::debug!("Image created: {:?}", image);
 
         Ok((image, memory))
     }
@@ -1614,5 +1533,81 @@ impl Iterator for InFlightFrames {
         self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
 
         Some(next)
+    }
+}
+
+#[derive(Clone)]
+pub struct Queues {
+    graphics_queue: Arc<Mutex<vk::Queue>>,
+    present_queue: Arc<Mutex<vk::Queue>>,
+    compute_queue: Arc<Mutex<vk::Queue>>,
+}
+
+impl Queues {
+    #[allow(dead_code)]
+    fn new(
+        graphics: vk::Queue,
+        present: vk::Queue,
+        compute: vk::Queue,
+    ) -> Self {
+        let graphics_queue: Arc<Mutex<vk::Queue>>;
+        let present_queue: Arc<Mutex<vk::Queue>>;
+        let compute_queue: Arc<Mutex<vk::Queue>>;
+
+        graphics_queue = Arc::new(Mutex::new(graphics));
+
+        if present == graphics {
+            present_queue = graphics_queue.clone();
+        } else {
+            present_queue = Arc::new(Mutex::new(present));
+        }
+
+        if compute == graphics {
+            compute_queue = graphics_queue.clone();
+        } else {
+            compute_queue = Arc::new(Mutex::new(compute));
+        }
+
+        Self {
+            graphics_queue,
+            present_queue,
+            compute_queue,
+        }
+    }
+
+    pub fn lock_graphics(&self) -> MutexGuard<'_, vk::Queue> {
+        self.graphics_queue.lock()
+    }
+
+    pub fn try_lock_graphics(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.graphics_queue.try_lock()
+    }
+
+    pub fn lock_present(&self) -> MutexGuard<'_, vk::Queue> {
+        self.present_queue.lock()
+    }
+
+    pub fn try_lock_present(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.present_queue.try_lock()
+    }
+
+    pub fn lock_compute(&self) -> MutexGuard<'_, vk::Queue> {
+        self.compute_queue.lock()
+    }
+
+    pub fn try_lock_compute(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.compute_queue.try_lock()
+    }
+
+    pub fn is_graphics_locked(&self) -> bool {
+        self.graphics_queue.is_locked()
+    }
+
+    pub fn is_present_locked(&self) -> bool {
+        self.present_queue.is_locked()
+    }
+
+    pub fn is_compute_locked(&self) -> bool {
+        self.compute_queue.is_locked()
     }
 }

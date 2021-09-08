@@ -163,6 +163,9 @@ fn main() {
         rayon_cpus = num_cpus - 4;
     }
 
+    log::debug!("futures thread pool: {}", futures_cpus);
+    log::debug!("rayon   thread pool: {}", rayon_cpus);
+
     // TODO make sure to set thread pool size to less than number of CPUs
     let thread_pool = ThreadPoolBuilder::new()
         .pool_size(futures_cpus)
@@ -1194,11 +1197,11 @@ pub struct Args {
     #[argh(positional)]
     layout: String,
 
-    /// load and run a script file at startup, e.g. for configuration
+    /// load and run a Rhai script file at startup, e.g. for configuration
     #[argh(option)]
     run_script: Option<String>,
 
-    /// force use of x11 window (debugging)
+    /// force use of X11 window (only applicable in Wayland contexts)
     #[argh(switch)]
     force_x11: bool,
 
@@ -1210,8 +1213,12 @@ pub struct Args {
     #[argh(switch, short = 'd')]
     debug: bool,
 
-    // #[argh(switch, short = 'l')]
+    /// log trace-level debug messages
+    #[argh(switch)]
+    trace: bool,
+    /*
     /// whether or not to log to a file in the working directory
     #[argh(switch)]
     log_to_file: bool,
+    */
 }
