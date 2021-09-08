@@ -143,13 +143,17 @@ pub struct GfaestusVk {
 
 impl GfaestusVk {
     pub fn new(window: &Window) -> Result<Self> {
+        log::debug!("Initializing GfaestusVk context");
         let entry = unsafe { Entry::new() }?;
+        log::debug!("Created Vulkan entry");
         let instance = create_instance(&entry, window)?;
+        log::debug!("Created Vulkan instance");
 
         let surface = Surface::new(&entry, &instance);
         let surface_khr = unsafe {
             ash_window::create_surface(&entry, &instance, window, None)
         }?;
+        log::debug!("Created window surface");
 
         let debug_utils = debug::setup_debug_utils(&entry, &instance);
 

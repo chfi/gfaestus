@@ -109,11 +109,15 @@ fn main() {
 
     let _logger = set_up_logger(&args).unwrap();
 
+    log::debug!("Logger initalized");
+
     let gfa_file = &args.gfa;
     let layout_file = &args.layout;
+    log::debug!("using {} and {}", gfa_file, layout_file);
 
     let event_loop: EventLoop<()> = if args.force_x11 {
         if let Ok(ev_loop) = EventLoop::new_x11() {
+            log::debug!("--force-x11 is enabled, using X11 event loop");
             ev_loop
         } else {
             error!("Error initializing X11 window, falling back to default");
@@ -123,6 +127,7 @@ fn main() {
         EventLoop::new()
     };
 
+    log::debug!("Creating window");
     let window = WindowBuilder::new()
         .with_title("Gfaestus")
         .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
@@ -547,7 +552,6 @@ fn main() {
 
             }
             Event::RedrawEventsCleared => {
-
 
                 let edge_ubo = app.settings.edge_renderer().load();
                 let edge_width = edge_ubo.edge_width;

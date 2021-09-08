@@ -29,6 +29,7 @@ pub(super) fn create_instance(
     entry: &Entry,
     window: &Window,
 ) -> Result<Instance> {
+    log::debug!("Creating instance");
     let app_name = CString::new("Gfaestus")?;
 
     let app_info = vk::ApplicationInfo::builder()
@@ -41,6 +42,7 @@ pub(super) fn create_instance(
 
     let extension_names =
         ash_window::enumerate_required_extensions(window).unwrap();
+    log::debug!("Enumerated required extensions");
     let mut extension_names = extension_names
         .iter()
         .map(|ext| ext.as_ptr())
@@ -54,6 +56,7 @@ pub(super) fn create_instance(
         CString::new("VK_KHR_get_physical_device_properties2")?;
     extension_names.push(phys_device_properties2.as_ptr());
 
+    log::debug!("getting layer names and pointers");
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
     let mut instance_create_info = vk::InstanceCreateInfo::builder()
@@ -64,6 +67,11 @@ pub(super) fn create_instance(
         check_validation_layer_support(&entry);
         instance_create_info =
             instance_create_info.enabled_layer_names(&layer_names_ptrs);
+    }
+
+    for ext in extension_names.iter() {
+        let name = unsafe { CStr::from_ptr(*ext) };
+        log::warn!("{:?}", name);
     }
 
     let instance =
@@ -195,22 +203,29 @@ pub(super) fn choose_physical_device(
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
 ) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
-    info!("Enumerating physical devices");
-
-    let device = {
+    log::debug!("Enumerating physical devices");
+    let (_, device) = {
         let devices = unsafe { instance.enumerate_physical_devices() }?;
 
         devices
             .into_iter()
-            .find(|&dev| {
+            .enumerate()
+            .find(|(ix, dev)| {
                 unsafe {
-                    let props = instance.get_physical_device_properties(dev);
-                    info!("{:?}", CStr::from_ptr(props.device_name.as_ptr()));
+                    let props = instance.get_physical_device_properties(*dev);
+                    log::debug!(
+                        "Device {} - {:?}",
+                        ix,
+                        CStr::from_ptr(props.device_name.as_ptr())
+                    );
                 }
-                device_is_suitable(instance, surface, surface_khr, dev).unwrap()
+                device_is_suitable(instance, surface, surface_khr, *dev)
+                    .unwrap()
             })
-            .unwrap()
+            .expect("No suitable physical device found!")
     };
+
+    // let device = *device;
 
     let properties = unsafe { instance.get_physical_device_properties(device) };
 
@@ -223,6 +238,12 @@ pub(super) fn choose_physical_device(
 
     let (graphics_ix, present_ix, compute_ix) =
         find_queue_families(instance, surface, surface_khr, device)?;
+    log::debug!(
+        "Found queue families; graphics: {:?}, present: {:?}, compute: {:?}",
+        graphics_ix,
+        present_ix,
+        compute_ix
+    );
 
     Ok((
         device,
