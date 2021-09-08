@@ -10,6 +10,7 @@ pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 use paired::*;
 
 use crate::app::channels::OverlayCreatorMsg;
+use crate::app::AppChannels;
 use crate::graph_query::GraphQuery;
 
 pub struct Reactor {
@@ -27,9 +28,8 @@ impl Reactor {
         thread_pool: futures::executor::ThreadPool,
         rayon_pool: rayon::ThreadPool,
         graph_query: Arc<GraphQuery>,
+        channels: &AppChannels,
     ) -> Self {
-        let overlay = crossbeam::channel::unbounded::<OverlayCreatorMsg>();
-
         let rayon_pool = Arc::new(rayon_pool);
 
         Self {
@@ -38,8 +38,8 @@ impl Reactor {
 
             graph_query,
 
-            overlay_create_tx: overlay.0,
-            overlay_create_rx: overlay.1,
+            overlay_create_tx: channels.new_overlay_tx.clone(),
+            overlay_create_rx: channels.new_overlay_rx.clone(),
         }
     }
 

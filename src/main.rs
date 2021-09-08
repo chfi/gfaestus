@@ -182,10 +182,13 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
+    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
+
     let mut reactor = gfaestus::reactor::Reactor::init(
         thread_pool.clone(),
         rayon_pool,
         graph_query.clone(),
+        app.channels(),
     );
 
     let graph_query_worker =
@@ -237,8 +240,6 @@ fn main() {
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
-
-    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
 
     let mut input_manager = InputManager::new(winit_rx, app.shared_state());
 
