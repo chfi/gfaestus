@@ -55,7 +55,8 @@ impl Texture {
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            // .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC
@@ -222,7 +223,8 @@ impl Texture {
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            // .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC
@@ -515,7 +517,8 @@ impl Texture1D {
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            // .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC
