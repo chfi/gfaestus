@@ -214,7 +214,7 @@ impl MainView {
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
         offset: Point,
-        overlay: Option<(usize, OverlayKind)>,
+        overlay_id: Option<usize>,
         color_scheme: &GradientTexture,
         use_overlay: bool,
     ) -> Result<()> {
@@ -250,7 +250,7 @@ impl MainView {
         };
 
         if use_overlay {
-            if let Some(overlay) = overlay {
+            if let Some(overlay_id) = overlay_id {
                 self.node_draw_system.draw_overlay(
                     cmd_buf,
                     render_pass,
@@ -260,7 +260,7 @@ impl MainView {
                     view,
                     offset,
                     background_color,
-                    overlay,
+                    overlay_id,
                     color_scheme,
                 )?;
 

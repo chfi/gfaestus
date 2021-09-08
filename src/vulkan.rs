@@ -1012,15 +1012,42 @@ impl GfaestusVk {
         Ok(())
     }
 
-    pub fn create_buffer_with_data<A, T>(
+    pub fn create_uninitialized_buffer<T>(
         &self,
-        usage: vk::BufferUsageFlags,
+        buffer_usage: vk::BufferUsageFlags,
         memory_usage: vk_mem::MemoryUsage,
         mapped: bool,
-        data: &[T],
+        element_count: usize,
     ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
     where
-        T: Copy,
+        T: Zeroable,
+    {
+        let size = element_count * std::mem::size_of::<T>();
+
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(size as vk::DeviceSize)
+            .usage(buffer_usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let create_info = if mapped {
+            vk_mem::AllocationCreateInfo {
+                usage: vk_mem::MemoryUsage::CpuOnly,
+                flags: vk_mem::AllocationCreateFlags::MAPPED,
+                ..Default::default()
+            }
+        } else {
+            vk_mem::AllocationCreateInfo {
+                usage: memory_usage,
+                ..Default::default()
+            }
+        };
+
+        let (buffer, alloc, alloc_info) =
+            self.allocator.create_buffer(&buffer_info, &create_info)?;
+
+        Ok((buffer, alloc, alloc_info))
+    }
 
     pub fn create_buffer_with_data<T>(
         &self,
@@ -1057,24 +1084,10 @@ impl GfaestusVk {
         unsafe {
             let mapped_ptr = staging_alloc_info.get_mapped_data();
 
-            let mapped_ptr = mapped_ptr as *mut u8;
-            // let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
-
             let target_slice =
                 std::slice::from_raw_parts_mut(mapped_ptr, size as usize);
 
             target_slice.clone_from_slice(bytemuck::cast_slice(&data))
-
-            /*
-            let mut align = ash::util::Align::new(
-                mapped_ptr,
-                std::mem::align_of::<T>() as u64,
-                // std::mem::align_of::<T>() as u64,
-                std::mem::size_of_val(&data) as u64,
-            );
-
-            align.copy_from_slice(data);
-            */
         }
 
         let buffer_info = vk::BufferCreateInfo::builder()

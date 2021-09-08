@@ -29,8 +29,7 @@ use gfaestus::vulkan::debug;
 
 #[allow(unused_imports)]
 use gfaestus::vulkan::draw_system::{
-    nodes::{NodeOverlay, NodeOverlayValue, Overlay},
-    post::PostProcessPipeline,
+    nodes::Overlay, post::PostProcessPipeline,
 };
 
 use gfaestus::vulkan::draw_system::selection::{
@@ -1148,34 +1147,31 @@ fn handle_new_overlay(
     let overlay = match data {
         OverlayData::RGB(data) => {
             let mut overlay =
-                NodeOverlay::new_empty_rgb(&name, app, node_count).unwrap();
+                Overlay::new_empty_rgb(&name, app, node_count).unwrap();
 
             overlay
-                .update_overlay(
-                    app.vk_context().device(),
+                .update_rgb_overlay(
                     data.iter()
                         .enumerate()
                         .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
                 )
                 .unwrap();
 
-            Overlay::RGB(overlay)
+            overlay
         }
         OverlayData::Value(data) => {
             let mut overlay =
-                NodeOverlayValue::new_empty_value(&name, &app, node_count)
-                    .unwrap();
+                Overlay::new_empty_value(&name, &app, node_count).unwrap();
 
             overlay
-                .update_overlay(
-                    app.vk_context().device(),
+                .update_value_overlay(
                     data.iter()
                         .enumerate()
                         .map(|(ix, v)| (NodeId::from((ix as u64) + 1), *v)),
                 )
                 .unwrap();
 
-            Overlay::Value(overlay)
+            overlay
         }
     };
 

@@ -108,11 +108,11 @@ impl OverlayList {
                         let mut current_overlay =
                             self.overlay_state.current_overlay();
 
-                        for (id, (kind, name)) in overlay_names {
+                        for (id, (_kind, name)) in overlay_names {
                             if ui
                                 .radio_value(
                                     &mut current_overlay,
-                                    Some((*id, *kind)),
+                                    Some(*id),
                                     name,
                                 )
                                 .clicked()

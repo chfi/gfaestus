@@ -1003,7 +1003,7 @@ impl ConsoleShared {
         engine.register_fn("set_active_overlay", move |v: rhai::Dynamic| {
             if let Ok(v) = v.as_unit() {
                 overlay_state.set_current_overlay(None);
-            } else if let Some(overlay) = v.try_cast::<(usize, OverlayKind)>() {
+            } else if let Some(overlay) = v.try_cast::<usize>() {
                 overlay_state.set_current_overlay(Some(overlay));
             }
         });
