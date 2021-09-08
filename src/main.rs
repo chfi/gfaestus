@@ -89,8 +89,14 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
-fn set_up_logger() -> Result<LoggerHandle> {
-    let logger = Logger::try_with_env_or_str("info")?
+fn set_up_logger(args: &Args) -> Result<LoggerHandle> {
+    let spec = match (args.debug, args.quiet) {
+        (true, _) => "debug",
+        (_, true) => "",
+        _ => "info",
+    };
+
+    let logger = Logger::try_with_env_or_str(spec)?
         .log_to_file(FileSpec::default())
         .duplicate_to_stderr(Duplicate::Debug)
         .start()?;
@@ -101,7 +107,7 @@ fn set_up_logger() -> Result<LoggerHandle> {
 fn main() {
     let args: Args = argh::from_env();
 
-    let _logger = set_up_logger().unwrap();
+    let _logger = set_up_logger(&args).unwrap();
 
     let gfa_file = &args.gfa;
     let layout_file = &args.layout;
