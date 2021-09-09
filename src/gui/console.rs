@@ -1063,6 +1063,23 @@ impl ConsoleShared {
         let view = self.shared_state.view.clone();
         engine.register_fn("set_view", move |v: View| view.store(v));
 
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_node", move |node: NodeId| {
+            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_node", move |node: i64| {
+            let node = NodeId::from(node as u64);
+            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+        });
+
         let view = self.shared_state.view.clone();
         engine.register_fn("set_view_origin", move |p: Point| {
             let mut v = view.load();
@@ -1188,6 +1205,15 @@ impl ConsoleShared {
         engine.register_fn("set_selection", move |selection: NodeSelection| {
             let msg = AppMsg::Selection(Select::Many {
                 nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |node: NodeId| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: Some(node).into_iter().collect(),
                 clear: true,
             });
             app_msg_tx.send(msg).unwrap();

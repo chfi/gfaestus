@@ -97,6 +97,7 @@ pub enum Select {
 pub enum AppMsg {
     Selection(Select),
     GotoSelection,
+    GotoNode(NodeId),
     RectSelect(Rect),
     TranslateSelected(Point),
 
@@ -212,6 +213,14 @@ impl App {
                         bounds.0,
                         bounds.1,
                     );
+                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
+                }
+            }
+            AppMsg::GotoNode(id) => {
+                if let Some(node_pos) = node_positions.get((id.0 - 1) as usize)
+                {
+                    let mut view = self.shared_state.view();
+                    view.center = node_pos.center();
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }
             }
