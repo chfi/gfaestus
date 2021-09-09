@@ -87,129 +87,7 @@ impl NodePipelines {
         self.overlay_pipelines.overlay_set_id.is_some()
     }
 
-    /*
-    pub fn draw_themed(
-        &self,
-        cmd_buf: vk::CommandBuffer,
-        render_pass: vk::RenderPass,
-        framebuffers: &Framebuffers,
-        viewport_dims: [f32; 2],
-        node_width: f32,
-        view: View,
-        offset: Point,
-        background_color: rgb::RGB<f32>,
-    ) -> Result<()> {
-        let device = &self.device;
-
-        let clear_values = {
-            let bg = background_color;
-            [
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [bg.r, bg.g, bg.b, 1.0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        uint32: [0, 0, 0, 0],
-                    },
-                },
-                vk::ClearValue {
-                    color: vk::ClearColorValue {
-                        float32: [0.0, 0.0, 0.0, 1.0],
-                    },
-                },
-            ]
-        };
-
-        let extent = vk::Extent2D {
-            width: viewport_dims[0] as u32,
-            height: viewport_dims[1] as u32,
-        };
-
-        let render_pass_begin_info = vk::RenderPassBeginInfo::builder()
-            .render_pass(render_pass)
-            .framebuffer(framebuffers.nodes)
-            .render_area(vk::Rect2D {
-                offset: vk::Offset2D { x: 0, y: 0 },
-                extent,
-            })
-            .clear_values(&clear_values)
-            .build();
-
-        unsafe {
-            device.cmd_begin_render_pass(
-                cmd_buf,
-                &render_pass_begin_info,
-                vk::SubpassContents::INLINE,
-            )
-        };
-
-        unsafe {
-            device.cmd_bind_pipeline(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline,
-            )
-        };
-
-        let vx_bufs = [self.vertices.vertex_buffer];
-        let desc_sets = [
-            self.theme_pipeline.theme_set,
-            self.selection_descriptors.descriptor_set,
-        ];
-
-        let offsets = [0];
-        unsafe {
-            device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
-
-            let null = [];
-            device.cmd_bind_descriptor_sets(
-                cmd_buf,
-                vk::PipelineBindPoint::GRAPHICS,
-                self.theme_pipeline.pipeline_layout,
-                0,
-                &desc_sets[0..=1],
-                &null,
-            );
-        };
-
-        let push_constants = NodePushConstants::new(
-            [offset.x, offset.y],
-            viewport_dims,
-            view,
-            node_width,
-            7,
-        );
-
-        let pc_bytes = push_constants.bytes();
-
-        unsafe {
-            use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                self.theme_pipeline.pipeline_layout,
-                Flags::VERTEX
-                    | Flags::TESSELLATION_CONTROL
-                    | Flags::TESSELLATION_EVALUATION
-                    | Flags::FRAGMENT,
-                0,
-                &pc_bytes,
-            )
-        };
-
-        unsafe {
-            device.cmd_draw(cmd_buf, self.vertices.vertex_count as u32, 1, 0, 0)
-        };
-
-        // End render pass
-        unsafe { device.cmd_end_render_pass(cmd_buf) };
-
-        Ok(())
-    }
-    */
-
-    pub fn draw_overlay(
+    pub fn draw(
         &mut self,
         cmd_buf: vk::CommandBuffer,
         render_pass: vk::RenderPass,
@@ -219,7 +97,6 @@ impl NodePipelines {
         view: View,
         offset: Point,
         background_color: rgb::RGB<f32>,
-        // overlay_id: (usize, OverlayKind),
         overlay_id: usize,
         color_scheme: &GradientTexture,
     ) -> Result<()> {
@@ -340,7 +217,6 @@ impl NodePipelines {
         }
 
         self.vertices.destroy(app).unwrap();
-        // self.theme_pipeline.destroy();
         self.overlay_pipelines.destroy(&app.allocator).unwrap();
     }
 }

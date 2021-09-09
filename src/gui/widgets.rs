@@ -106,16 +106,6 @@ impl MenuBar {
                     {
                         *overlays = !*overlays;
                     }
-
-                    if ui
-                        .selectable_label(
-                            self.overlay_state.use_overlay(),
-                            "Show overlay",
-                        )
-                        .clicked()
-                    {
-                        self.overlay_state.toggle_overlay()
-                    }
                 });
 
                 menu::menu(ui, "View", |ui| {

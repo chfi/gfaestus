@@ -54,7 +54,6 @@ pub struct App {
 pub enum AppInput {
     KeyClearSelection,
     KeyToggleTheme,
-    KeyToggleOverlay,
 }
 
 impl BindableInput for AppInput {
@@ -65,7 +64,6 @@ impl BindableInput for AppInput {
         let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
             (Key::Escape, Input::KeyClearSelection),
             (Key::F9, Input::KeyToggleTheme),
-            (Key::F10, Input::KeyToggleOverlay),
         ]
         .iter()
         .copied()
@@ -103,7 +101,6 @@ pub enum AppMsg {
 
     HoverNode(Option<NodeId>),
 
-    ToggleOverlay,
     ToggleDarkMode,
 
     AddGff3Records(Gff3Records),
@@ -356,9 +353,6 @@ impl App {
             AppMsg::ToggleDarkMode => {
                 self.toggle_dark_mode(gui_msg);
             }
-            AppMsg::ToggleOverlay => {
-                self.shared_state.overlay_state.toggle_overlay();
-            }
             AppMsg::RequestSelection(sender) => {
                 let selection = self.selected_nodes.to_owned();
                 let rect = self
@@ -400,11 +394,6 @@ impl App {
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
                         self.toggle_dark_mode(gui_msg);
-                    }
-                }
-                AppInput::KeyToggleOverlay => {
-                    if state.pressed() {
-                        self.shared_state.overlay_state.toggle_overlay();
                     }
                 }
             }

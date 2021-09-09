@@ -69,31 +69,22 @@ impl OverlayList {
             .show(ctx, |mut ui| {
                 ui.set_min_width(300.0);
 
-                let use_overlay = self.overlay_state.use_overlay();
-
                 ui.horizontal(|ui| {
-                    if ui
-                        .selectable_label(use_overlay, "Overlay enabled")
-                        .clicked()
-                    {
-                        self.overlay_state.toggle_overlay();
-                    }
-
                     if ui
                         .selectable_label(*open_creator, "Overlay creator")
                         .clicked()
                     {
                         *open_creator = !*open_creator;
                     }
-                });
 
-                let open_gradient_picker = self.gradient_picker_open.load();
-                if ui
-                    .selectable_label(open_gradient_picker, "Gradients")
-                    .clicked()
-                {
-                    self.gradient_picker_open.store(!open_gradient_picker);
-                }
+                    let open_gradient_picker = self.gradient_picker_open.load();
+                    if ui
+                        .selectable_label(open_gradient_picker, "Gradients")
+                        .clicked()
+                    {
+                        self.gradient_picker_open.store(!open_gradient_picker);
+                    }
+                });
 
                 egui::Grid::new("overlay_list_window_grid").show(
                     &mut ui,

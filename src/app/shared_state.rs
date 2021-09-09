@@ -159,31 +159,18 @@ impl std::default::Default for MouseRect {
 
 #[derive(Debug, Clone)]
 pub struct OverlayState {
-    pub use_overlay: Arc<AtomicCell<bool>>,
     pub current_overlay: Arc<AtomicCell<Option<usize>>>,
 
     gradient: Arc<AtomicCell<GradientName>>,
 }
 
 impl OverlayState {
-    pub fn use_overlay(&self) -> bool {
-        self.use_overlay.load()
-    }
-
     pub fn current_overlay(&self) -> Option<usize> {
         self.current_overlay.load()
     }
 
     pub fn gradient(&self) -> GradientName {
         self.gradient.load()
-    }
-
-    pub fn set_use_overlay(&self, use_overlay: bool) {
-        self.use_overlay.store(use_overlay);
-    }
-
-    pub fn toggle_overlay(&self) {
-        self.use_overlay.fetch_xor(true);
     }
 
     pub fn set_current_overlay(&self, overlay_id: Option<usize>) {
@@ -197,13 +184,11 @@ impl OverlayState {
 
 impl std::default::Default for OverlayState {
     fn default() -> Self {
-        let use_overlay = Arc::new(AtomicCell::new(false));
         let current_overlay = Arc::new(AtomicCell::new(None));
 
         let gradient = Arc::new(AtomicCell::new(GradientName::Magma));
 
         Self {
-            use_overlay,
             current_overlay,
             gradient,
         }

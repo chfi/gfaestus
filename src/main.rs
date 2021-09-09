@@ -866,14 +866,6 @@ fn node_color(id) {
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
-                // main_view
-                //     .node_draw_system
-                //     .theme_pipeline
-                //     .set_active_theme(app.themes.active_theme())
-                //     .unwrap();
-
-                let use_overlay = app.shared_state().overlay_state().use_overlay();
-
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
                 let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
@@ -957,7 +949,6 @@ fn node_color(id) {
                             Point::ZERO,
                             overlay,
                             gradient,
-                            use_overlay,
                         ).unwrap();
 
 

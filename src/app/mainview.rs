@@ -216,7 +216,6 @@ impl MainView {
         offset: Point,
         overlay_id: Option<usize>,
         color_scheme: &GradientTexture,
-        use_overlay: bool,
     ) -> Result<()> {
         let view = self.shared_state.view();
 
@@ -249,9 +248,8 @@ impl MainView {
             self.settings.background_color_light().load()
         };
 
-        // if use_overlay {
         if let Some(overlay_id) = overlay_id {
-            self.node_draw_system.draw_overlay(
+            self.node_draw_system.draw(
                 cmd_buf,
                 render_pass,
                 framebuffers,

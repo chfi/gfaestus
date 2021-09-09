@@ -173,12 +173,6 @@ impl Console<'static> {
         add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
 
         add_t!(
-            bool,
-            "overlay_enabled",
-            shared_state.overlay_state.use_overlay.clone()
-        );
-
-        add_t!(
             rgb::RGB<f32>,
             "background_color_light",
             settings.background_color_light().clone()
@@ -1246,10 +1240,6 @@ impl ConsoleShared {
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
             app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
-        });
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("toggle_overlay", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleOverlay).unwrap();
         });
 
         let get_set = self.get_set.clone();
