@@ -325,13 +325,6 @@ fn node_color(id) {
         .overlay_state
         .set_current_overlay(Some(0));
 
-    if let Some(script_file) = args.run_script.as_ref() {
-        warn!("executing script file {}", script_file);
-        gui.console
-            .eval_file(&mut reactor, true, script_file)
-            .unwrap();
-    }
-
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
@@ -411,7 +404,7 @@ fn node_color(id) {
     gui.populate_overlay_list(
         main_view
             .node_draw_system
-            .overlay_pipelines
+            .pipelines
             .overlay_names()
             .into_iter(),
     );
@@ -426,20 +419,18 @@ fn node_color(id) {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
-    if app.themes.is_active_theme_dark() {
-        gui_msg_tx.send(GuiMsg::SetDarkMode).unwrap();
-    } else {
-        gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
-    }
-
-    /*
-    let mut fence_id: Option<usize> = None;
-    let mut translate_timer = std::time::Instant::now();
-    */
+    gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
     let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
         FxHashMap::default();
+
+    if let Some(script_file) = args.run_script.as_ref() {
+        warn!("executing script file {}", script_file);
+        gui.console
+            .eval_file(&mut reactor, true, script_file)
+            .unwrap();
+    }
 
     event_loop.run(move |event, _, control_flow| {
 
@@ -577,7 +568,7 @@ fn node_color(id) {
                         gui.populate_overlay_list(
                             main_view
                                 .node_draw_system
-                                .overlay_pipelines
+                                .pipelines
                                 .overlay_names()
                                 .into_iter(),
                         );
@@ -1206,10 +1197,7 @@ fn handle_new_overlay(
         }
     };
 
-    main_view
-        .node_draw_system
-        .overlay_pipelines
-        .create_overlay(overlay);
+    main_view.node_draw_system.pipelines.create_overlay(overlay);
 
     Ok(())
 }

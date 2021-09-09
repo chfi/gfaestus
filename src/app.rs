@@ -3,7 +3,6 @@ pub mod mainview;
 pub mod selection;
 pub mod settings;
 pub mod shared_state;
-pub mod theme;
 
 use crossbeam::channel::Sender;
 
@@ -27,8 +26,6 @@ use crate::{
     universe::Node,
 };
 
-use theme::*;
-
 pub use channels::*;
 pub use settings::*;
 pub use shared_state::*;
@@ -36,8 +33,6 @@ pub use shared_state::*;
 use self::mainview::MainViewMsg;
 
 pub struct App {
-    pub themes: AppThemes,
-
     shared_state: SharedState,
     channels: AppChannels,
     pub settings: AppSettings,
@@ -96,6 +91,8 @@ pub enum AppMsg {
     Selection(Select),
     GotoSelection,
     GotoNode(NodeId),
+
+    // TODO these two should not be here (see how they're handled in main)
     RectSelect(Rect),
     TranslateSelected(Point),
 
@@ -116,13 +113,9 @@ pub enum AppMsg {
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Result<Self> {
-        let themes = AppThemes::default_themes();
-
         let shared_state = SharedState::new(screen_dims);
 
         Ok(Self {
-            themes,
-
             shared_state,
             channels: AppChannels::new(),
 
@@ -131,7 +124,6 @@ impl App {
 
             selected_nodes_bounding_box: None,
 
-            // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
 
             annotations: Annotations::default(),

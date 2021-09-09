@@ -17,20 +17,16 @@ use crate::{
 
 use crate::vulkan::render_pass::Framebuffers;
 
-use super::create_shader_module;
 use super::Vertex;
 
 pub mod base;
 pub mod overlay;
-pub mod theme;
 
 pub use base::*;
 pub use overlay::*;
-pub use theme::*;
 
 pub struct NodePipelines {
-    // pub theme_pipeline: NodeThemePipeline,
-    pub overlay_pipelines: OverlayPipelines,
+    pub pipelines: OverlayPipelines,
 
     selection_descriptors: SelectionDescriptors,
 
@@ -54,14 +50,7 @@ impl NodePipelines {
         let selection_descriptors =
             SelectionDescriptors::new(app, selection_buffer, 1)?;
 
-        // let theme_pipeline = NodeThemePipeline::new(
-        //     app,
-        //     msaa_samples,
-        //     render_pass,
-        //     selection_descriptors.layout,
-        // )?;
-
-        let overlay_pipelines = OverlayPipelines::new(
+        let pipelines = OverlayPipelines::new(
             app,
             device,
             msaa_samples,
@@ -70,8 +59,7 @@ impl NodePipelines {
         )?;
 
         Ok(Self {
-            // theme_pipeline,
-            overlay_pipelines,
+            pipelines,
             vertices,
             selection_descriptors,
 
@@ -84,7 +72,7 @@ impl NodePipelines {
     }
 
     pub fn has_overlay(&self) -> bool {
-        self.overlay_pipelines.overlay_set_id.is_some()
+        self.pipelines.overlay_set_id.is_some()
     }
 
     pub fn draw(
@@ -100,12 +88,11 @@ impl NodePipelines {
         overlay_id: usize,
         color_scheme: &GradientTexture,
     ) -> Result<()> {
-        self.overlay_pipelines
-            .write_overlay(overlay_id, color_scheme)?;
+        self.pipelines.write_overlay(overlay_id, color_scheme)?;
 
-        let overlay = self.overlay_pipelines.overlays.get(&overlay_id).unwrap();
+        let overlay = self.pipelines.overlays.get(&overlay_id).unwrap();
 
-        let device = &self.overlay_pipelines.device;
+        let device = &self.pipelines.device;
 
         let clear_values = {
             let bg = background_color;
@@ -151,8 +138,7 @@ impl NodePipelines {
             )
         };
 
-        self.overlay_pipelines
-            .bind_pipeline(device, cmd_buf, overlay.kind);
+        self.pipelines.bind_pipeline(device, cmd_buf, overlay.kind);
 
         let vx_bufs = [self.vertices.vertex_buffer];
         let offsets = [0];
@@ -161,7 +147,7 @@ impl NodePipelines {
             device.cmd_bind_vertex_buffers(cmd_buf, 0, &vx_bufs, &offsets);
         }
 
-        self.overlay_pipelines.bind_descriptor_sets(
+        self.pipelines.bind_descriptor_sets(
             device,
             cmd_buf,
             overlay_id,
@@ -178,7 +164,7 @@ impl NodePipelines {
 
         let pc_bytes = push_constants.bytes();
 
-        let layout = self.overlay_pipelines.pipeline_layout_kind(overlay.kind);
+        let layout = self.pipelines.pipeline_layout_kind(overlay.kind);
 
         unsafe {
             use vk::ShaderStageFlags as Flags;
@@ -217,7 +203,7 @@ impl NodePipelines {
         }
 
         self.vertices.destroy(app).unwrap();
-        self.overlay_pipelines.destroy(&app.allocator).unwrap();
+        self.pipelines.destroy(&app.allocator).unwrap();
     }
 }
 
