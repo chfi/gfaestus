@@ -330,7 +330,7 @@ impl Console<'static> {
         scope
     }
 
-    fn create_engine(&self) -> rhai::Engine {
+    pub fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
 
         let modules = self.modules.clone();
@@ -554,15 +554,18 @@ impl Console<'static> {
         self.remote_handles.remove(handle_name);
     }
 
-    fn exec_console_command(&mut self, reactor: &mut Reactor) -> Result<bool> {
-        if self.input_line.starts_with(":clear") {
-            self.input_line.clear();
+    fn exec_console_command(
+        &mut self,
+        reactor: &mut Reactor,
+        input: &str,
+    ) -> Result<bool> {
+        if input.starts_with(":clear") {
             self.output_history.clear();
 
             return Ok(true);
-        } else if self.input_line.starts_with(":reset") {
+        } else if input.starts_with(":reset") {
             self.scope = Arc::new(Mutex::new(Self::create_scope()));
-            self.input_line.clear();
+
             self.input_history.clear();
             self.output_history.clear();
             {
@@ -571,7 +574,7 @@ impl Console<'static> {
             }
 
             return Ok(true);
-        } else if self.input_line.starts_with(":exec ") {
+        } else if input.starts_with(":exec ") {
             let file_path = &self.input_line[6..].to_string();
             let result = self.eval_file(reactor, true, &file_path);
 
@@ -581,10 +584,9 @@ impl Console<'static> {
                     file_path, err
                 );
             }
-            self.input_line.clear();
 
             return Ok(true);
-        } else if self.input_line.starts_with(":import ") {
+        } else if input.starts_with(":import ") {
             log::debug!("importing file");
             let file_path = &self.input_line[8..].to_string();
             let result = self.import_file(&file_path);
@@ -602,10 +604,9 @@ impl Console<'static> {
                     err
                 );
             }
-            self.input_line.clear();
 
             return Ok(true);
-        } else if self.input_line.starts_with(":start_interval ") {
+        } else if input.starts_with(":start_interval ") {
             let mut fields = self.input_line.split_ascii_whitespace();
 
             fields.next();
@@ -619,7 +620,7 @@ impl Console<'static> {
             }
 
             return Ok(true);
-        } else if self.input_line.starts_with(":end_interval ") {
+        } else if input.starts_with(":end_interval ") {
             let handle = &self.input_line[":end_interval ".len()..].to_string();
             self.stop_interval(&handle);
 
@@ -636,8 +637,10 @@ impl Console<'static> {
     ) -> Result<()> {
         debug!("evaluating: {}", &self.input_line);
 
-        let executed_command = self.exec_console_command(reactor)?;
+        let input = self.input_line.to_owned();
+        let executed_command = self.exec_console_command(reactor, &input)?;
         if executed_command {
+            self.input_line.clear();
             return Ok(());
         }
         self.eval(reactor, print)?;

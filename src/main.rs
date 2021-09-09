@@ -2,6 +2,7 @@
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::gui::console::Console;
+use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::FxHashMap;
 use texture::Gradients;
@@ -272,6 +273,52 @@ fn main() {
         &graph_query,
     )
     .unwrap();
+
+    // create default overlays
+    {
+        let node_seq_script = "
+fn node_color(id) {
+  let h = handle(id, false);
+  let seq = graph.sequence(h);
+  let hash = hash_bytes(seq);
+  let color = hash_color(hash);
+  color
+}
+";
+
+        let step_count_script = "
+fn node_color(id) {
+  let h = handle(id, false);
+
+  let steps = graph.steps_on_handle(h);
+  let count = 0.0;
+
+  for step in steps {
+    count += 1.0;
+  }
+
+  count
+}
+";
+
+        create_overlay(
+            &gfaestus,
+            &mut main_view,
+            &reactor,
+            "Node Seq Hash",
+            node_seq_script,
+        )
+        .expect("Error creating node seq hash overlay");
+
+        create_overlay(
+            &gfaestus,
+            &mut main_view,
+            &reactor,
+            "Node Step Count",
+            step_count_script,
+        )
+        .expect("Error creating step count overlay");
+    }
 
     if let Some(script_file) = args.run_script.as_ref() {
         warn!("executing script file {}", script_file);
@@ -1180,6 +1227,36 @@ fn handle_new_overlay(
         .node_draw_system
         .overlay_pipelines
         .create_overlay(overlay);
+
+    Ok(())
+}
+
+fn create_overlay(
+    app: &GfaestusVk,
+    main_view: &mut MainView,
+    reactor: &Reactor,
+    name: &str,
+    script: &str,
+) -> Result<()> {
+    let node_count = reactor.graph_query.graph.node_count();
+
+    let script_config = gfaestus::script::ScriptConfig {
+        default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+        target: gfaestus::script::ScriptTarget::Nodes,
+    };
+
+    if let Ok(data) = gfaestus::script::overlay_colors_tgt(
+        &reactor.rayon_pool,
+        &script_config,
+        &reactor.graph_query,
+        script,
+    ) {
+        let msg = OverlayCreatorMsg::NewOverlay {
+            name: name.to_string(),
+            data,
+        };
+        handle_new_overlay(app, main_view, node_count, msg)?;
+    }
 
     Ok(())
 }
