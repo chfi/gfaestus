@@ -90,9 +90,10 @@ fn universe_from_gfa_layout(
 }
 
 fn set_up_logger(args: &Args) -> Result<LoggerHandle> {
-    let spec = match (args.debug, args.quiet) {
-        (true, _) => "debug",
-        (_, true) => "",
+    let spec = match (args.trace, args.debug, args.quiet) {
+        (true, _, _) => "trace",
+        (_, true, _) => "debug",
+        (_, _, true) => "",
         _ => "info",
     };
 
