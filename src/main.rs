@@ -133,14 +133,15 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let mut gfaestus = match GfaestusVk::new(&window) {
-        Ok(app) => app,
-        Err(err) => {
-            error!("Error initializing Gfaestus");
-            error!("{:?}", err.root_cause());
-            std::process::exit(1);
-        }
-    };
+    let mut gfaestus =
+        match GfaestusVk::new(&window, args.force_graphics_device.as_deref()) {
+            Ok(app) => app,
+            Err(err) => {
+                error!("Error initializing Gfaestus");
+                error!("{:?}", err.root_cause());
+                std::process::exit(1);
+            }
+        };
 
     let num_cpus = num_cpus::get();
 
@@ -1218,4 +1219,7 @@ pub struct Args {
     #[argh(switch)]
     log_to_file: bool,
     */
+    /// if a device name is provided, use that instead of the default graphics device
+    #[argh(option)]
+    force_graphics_device: Option<String>,
 }

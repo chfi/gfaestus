@@ -66,7 +66,10 @@ pub struct GfaestusVk {
 }
 
 impl GfaestusVk {
-    pub fn new(window: &Window) -> Result<Self> {
+    pub fn new(
+        window: &Window,
+        force_graphics_device: Option<&str>,
+    ) -> Result<Self> {
         log::debug!("Initializing GfaestusVk context");
         let entry = unsafe { Entry::new() }?;
         log::debug!("Created Vulkan entry");
@@ -82,7 +85,12 @@ impl GfaestusVk {
         let debug_utils = debug::setup_debug_utils(&entry, &instance);
 
         let (physical_device, graphics_ix, present_ix, compute_ix) =
-            choose_physical_device(&instance, &surface, surface_khr)?;
+            choose_physical_device(
+                &instance,
+                &surface,
+                surface_khr,
+                force_graphics_device,
+            )?;
 
         let (device, graphics_queue, present_queue, compute_queue) =
             create_logical_device(

@@ -202,12 +202,33 @@ pub(super) fn choose_physical_device(
     instance: &Instance,
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
+    force_device: Option<&str>,
 ) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
     let devices = unsafe { instance.enumerate_physical_devices() }?;
 
     log::debug!("Enumerating physical devices");
 
-    let (_, device) = {
+    let (_, device) = if let Some(preferred_device) = force_device {
+        log::warn!("Attempting to force use of device {}", preferred_device);
+
+        let device_name = CString::new(preferred_device)?;
+
+        let device = devices
+            .into_iter()
+            .enumerate()
+            .find(|(_ix, dev)| {
+                let name = unsafe {
+                    let props = instance.get_physical_device_properties(*dev);
+                    CStr::from_ptr(props.device_name.as_ptr())
+                };
+                (name == device_name.as_c_str())
+                    && device_is_suitable(instance, surface, surface_khr, *dev)
+                        .unwrap()
+            })
+            .expect("No suitable physical device found!");
+
+        device
+    } else {
         for (ix, device) in devices.iter().enumerate() {
             unsafe {
                 let props = instance.get_physical_device_properties(*device);
@@ -228,8 +249,6 @@ pub(super) fn choose_physical_device(
             })
             .expect("No suitable physical device found!")
     };
-
-    // let device = *device;
 
     let properties = unsafe { instance.get_physical_device_properties(device) };
 
