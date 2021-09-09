@@ -25,7 +25,7 @@ use super::file::FilePicker;
 pub struct OverlayList {
     overlay_state: OverlayState,
 
-    overlay_names: FxHashMap<usize, (OverlayKind, String)>,
+    pub(crate) overlay_names: FxHashMap<usize, (OverlayKind, String)>,
 
     gradient_picker: GradientPicker,
 

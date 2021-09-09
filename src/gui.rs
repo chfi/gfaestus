@@ -537,11 +537,17 @@ impl Gui {
         names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
         let names = names.collect::<Vec<_>>();
+
         self.view_state
             .overlay_list
             .state
             .populate_names(names.iter().copied());
+
         self.console.populate_overlay_list(&names);
+
+        self.menu_bar.populate_overlay_list(
+            &self.view_state.overlay_list.state.overlay_names,
+        );
     }
 
     pub fn scroll_to_gff_record(
