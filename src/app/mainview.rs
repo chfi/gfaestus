@@ -249,34 +249,28 @@ impl MainView {
             self.settings.background_color_light().load()
         };
 
-        if use_overlay {
-            if let Some(overlay_id) = overlay_id {
-                self.node_draw_system.draw_overlay(
-                    cmd_buf,
-                    render_pass,
-                    framebuffers,
-                    screen_dims,
-                    node_width,
-                    view,
-                    offset,
-                    background_color,
-                    overlay_id,
-                    color_scheme,
-                )?;
+        // if use_overlay {
+        if let Some(overlay_id) = overlay_id {
+            self.node_draw_system.draw_overlay(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+                background_color,
+                overlay_id,
+                color_scheme,
+            )?;
 
-                return Ok(());
-            }
+            Ok(())
+        } else {
+            log::error!("No overlay found");
+
+            // should be an error but the output of this function is just unwrapped at this point
+            Ok(())
         }
-        self.node_draw_system.draw_themed(
-            cmd_buf,
-            render_pass,
-            framebuffers,
-            screen_dims,
-            node_width,
-            view,
-            offset,
-            background_color,
-        )
     }
 
     pub fn update_node_selection(

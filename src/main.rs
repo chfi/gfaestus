@@ -321,6 +321,10 @@ fn node_color(id) {
         .expect("Error creating step count overlay");
     }
 
+    app.shared_state()
+        .overlay_state
+        .set_current_overlay(Some(0));
+
     if let Some(script_file) = args.run_script.as_ref() {
         warn!("executing script file {}", script_file);
         gui.console
@@ -375,19 +379,6 @@ fn node_color(id) {
         use_quad_renderer,
     )
     .unwrap();
-
-    app.themes
-        .upload_to_gpu(
-            &gfaestus,
-            &mut main_view.node_draw_system.theme_pipeline,
-        )
-        .unwrap();
-
-    main_view
-        .node_draw_system
-        .theme_pipeline
-        .set_active_theme(0)
-        .unwrap();
 
     let mut dirty_swapchain = false;
 
@@ -875,11 +866,11 @@ fn node_color(id) {
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
-                main_view
-                    .node_draw_system
-                    .theme_pipeline
-                    .set_active_theme(app.themes.active_theme())
-                    .unwrap();
+                // main_view
+                //     .node_draw_system
+                //     .theme_pipeline
+                //     .set_active_theme(app.themes.active_theme())
+                //     .unwrap();
 
                 let use_overlay = app.shared_state().overlay_state().use_overlay();
 

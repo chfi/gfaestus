@@ -29,12 +29,14 @@ pub use overlay::*;
 pub use theme::*;
 
 pub struct NodePipelines {
-    pub theme_pipeline: NodeThemePipeline,
+    // pub theme_pipeline: NodeThemePipeline,
     pub overlay_pipelines: OverlayPipelines,
 
     selection_descriptors: SelectionDescriptors,
 
     pub vertices: NodeVertices,
+
+    device: Device,
 }
 
 impl NodePipelines {
@@ -52,12 +54,12 @@ impl NodePipelines {
         let selection_descriptors =
             SelectionDescriptors::new(app, selection_buffer, 1)?;
 
-        let theme_pipeline = NodeThemePipeline::new(
-            app,
-            msaa_samples,
-            render_pass,
-            selection_descriptors.layout,
-        )?;
+        // let theme_pipeline = NodeThemePipeline::new(
+        //     app,
+        //     msaa_samples,
+        //     render_pass,
+        //     selection_descriptors.layout,
+        // )?;
 
         let overlay_pipelines = OverlayPipelines::new(
             app,
@@ -68,21 +70,24 @@ impl NodePipelines {
         )?;
 
         Ok(Self {
-            theme_pipeline,
+            // theme_pipeline,
             overlay_pipelines,
             vertices,
             selection_descriptors,
+
+            device: device.clone(),
         })
     }
 
     pub fn device(&self) -> &Device {
-        &self.theme_pipeline.device
+        &self.device
     }
 
     pub fn has_overlay(&self) -> bool {
         self.overlay_pipelines.overlay_set_id.is_some()
     }
 
+    /*
     pub fn draw_themed(
         &self,
         cmd_buf: vk::CommandBuffer,
@@ -94,7 +99,7 @@ impl NodePipelines {
         offset: Point,
         background_color: rgb::RGB<f32>,
     ) -> Result<()> {
-        let device = &self.theme_pipeline.device;
+        let device = &self.device;
 
         let clear_values = {
             let bg = background_color;
@@ -202,6 +207,7 @@ impl NodePipelines {
 
         Ok(())
     }
+    */
 
     pub fn draw_overlay(
         &mut self,
@@ -322,7 +328,7 @@ impl NodePipelines {
     }
 
     pub fn destroy(&mut self, app: &super::super::GfaestusVk) {
-        let device = &self.theme_pipeline.device;
+        let device = &self.device;
 
         unsafe {
             device.destroy_descriptor_set_layout(
@@ -334,7 +340,7 @@ impl NodePipelines {
         }
 
         self.vertices.destroy(app).unwrap();
-        self.theme_pipeline.destroy();
+        // self.theme_pipeline.destroy();
         self.overlay_pipelines.destroy(&app.allocator).unwrap();
     }
 }
