@@ -7,6 +7,8 @@ use rustc_hash::FxHashMap;
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::{ControlFlow, EventLoop};
+
+#[cfg(target_os = "linux")]
 use winit::platform::unix::*;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
@@ -115,17 +117,28 @@ fn main() {
     let layout_file = &args.layout;
     log::debug!("using {} and {}", gfa_file, layout_file);
 
-    let event_loop: EventLoop<()> = if args.force_x11 {
-        if let Ok(ev_loop) = EventLoop::new_x11() {
-            log::debug!("--force-x11 is enabled, using X11 event loop");
-            ev_loop
+    let event_loop: EventLoop<()>;
+
+    #[cfg(target_os = "linux")]
+    {
+        event_loop = if args.force_x11 {
+            if let Ok(ev_loop) = EventLoop::new_x11() {
+                ev_loop
+            } else {
+                error!(
+                    "Error initializing X11 window, falling back to default"
+                );
+                EventLoop::new()
+            }
         } else {
-            error!("Error initializing X11 window, falling back to default");
             EventLoop::new()
-        }
-    } else {
-        EventLoop::new()
-    };
+        };
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        event_loop = EventLoop::new();
+    }
 
     log::debug!("Creating window");
     let window = WindowBuilder::new()
@@ -1250,6 +1263,7 @@ pub struct Args {
     #[argh(switch)]
     force_x11: bool,
 
+    #[cfg(target_os = "linux")]
     /// suppress log messages
     #[argh(switch, short = 'q')]
     quiet: bool,
