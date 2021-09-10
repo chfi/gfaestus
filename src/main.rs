@@ -1259,11 +1259,11 @@ pub struct Args {
     #[argh(option)]
     run_script: Option<String>,
 
+    #[cfg(target_os = "linux")]
     /// force use of X11 window (only applicable in Wayland contexts)
     #[argh(switch)]
     force_x11: bool,
 
-    #[cfg(target_os = "linux")]
     /// suppress log messages
     #[argh(switch, short = 'q')]
     quiet: bool,
@@ -1275,6 +1275,7 @@ pub struct Args {
     /// log trace-level debug messages
     #[argh(switch)]
     trace: bool,
+
     /*
     /// whether or not to log to a file in the working directory
     #[argh(switch)]
