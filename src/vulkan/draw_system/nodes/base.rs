@@ -101,13 +101,182 @@ impl NodePipelineConfig {
     }
 }
 
-/*
-fn create_node_pipeline(device: &Device,
-                        msaa_samples: vk::SampleCountFlags,
-                        render_pass: vk::RenderPass,
-                        layouts: &[vk::DescriptorSetLayout],
-                        frag_shader: &[u32],
-*/
+fn create_node_pipeline(
+    app: &GfaestusVk,
+    // msaa_samples: vk::SampleCountFlags,
+    // render_pass: vk::RenderPass,
+    pipeline_config: NodePipelineConfig,
+    layouts: &[vk::DescriptorSetLayout],
+    // frag_shader: &[u32],
+) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+    let render_config = app.node_render_config()?;
+
+    let msaa_samples = app.msaa_samples;
+    let render_pass = app.render_passes.nodes;
+
+    let device = app.vk_context().device();
+
+    let shader_stages_create_infos = pipeline_config.shader_modules(device)?;
+
+    let vert_binding_descs = [Vertex::get_binding_desc()];
+    let vert_attr_descs = Vertex::get_attribute_descs();
+    let vert_input_info = vk::PipelineVertexInputStateCreateInfo::builder()
+        .vertex_binding_descriptions(&vert_binding_descs)
+        .vertex_attribute_descriptions(&vert_attr_descs)
+        .build();
+
+    let input_assembly_info =
+        vk::PipelineInputAssemblyStateCreateInfo::builder()
+            .topology(vk::PrimitiveTopology::PATCH_LIST)
+            .primitive_restart_enable(false)
+            .build();
+
+    let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
+        .viewport_count(1)
+        .scissor_count(1)
+        .build();
+
+    let dynamic_states = {
+        use vk::DynamicState as DS;
+        [DS::VIEWPORT, DS::SCISSOR]
+    };
+
+    let dynamic_state_info = vk::PipelineDynamicStateCreateInfo::builder()
+        .dynamic_states(&dynamic_states)
+        .build();
+
+    let rasterizer_info = vk::PipelineRasterizationStateCreateInfo::builder()
+        .depth_clamp_enable(false)
+        .rasterizer_discard_enable(false)
+        .polygon_mode(vk::PolygonMode::FILL)
+        .line_width(1.0)
+        .cull_mode(vk::CullModeFlags::NONE)
+        .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
+        .depth_bias_enable(false)
+        .depth_bias_constant_factor(0.0)
+        .depth_bias_clamp(0.0)
+        .depth_bias_slope_factor(0.0)
+        .build();
+
+    let multisampling_info = vk::PipelineMultisampleStateCreateInfo::builder()
+        .sample_shading_enable(false)
+        .rasterization_samples(msaa_samples)
+        .min_sample_shading(1.0)
+        .alpha_to_coverage_enable(true)
+        .alpha_to_one_enable(false)
+        .build();
+
+    let color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(true)
+            .src_color_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_color_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .color_blend_op(vk::BlendOp::ADD)
+            .src_alpha_blend_factor(vk::BlendFactor::SRC_ALPHA)
+            .dst_alpha_blend_factor(vk::BlendFactor::ONE_MINUS_SRC_ALPHA)
+            .alpha_blend_op(vk::BlendOp::ADD)
+            .build();
+
+    let id_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::R)
+            .blend_enable(false)
+            .build();
+
+    let mask_color_blend_attachment =
+        vk::PipelineColorBlendAttachmentState::builder()
+            .color_write_mask(vk::ColorComponentFlags::all())
+            .blend_enable(false)
+            .build();
+
+    let color_blend_attachments = [
+        color_blend_attachment,
+        id_color_blend_attachment,
+        mask_color_blend_attachment,
+    ];
+
+    let color_blending_info = vk::PipelineColorBlendStateCreateInfo::builder()
+        .logic_op_enable(false)
+        .logic_op(vk::LogicOp::COPY)
+        .attachments(&color_blend_attachments)
+        .blend_constants([0.0, 0.0, 0.0, 0.0])
+        .build();
+
+    let layout = {
+        use vk::ShaderStageFlags as Flags;
+
+        let stage_flags = if render_config.tessellation {
+            Flags::VERTEX
+                | Flags::TESSELLATION_CONTROL
+                | Flags::TESSELLATION_EVALUATION
+                | Flags::FRAGMENT
+        } else {
+            Flags::VERTEX | Flags::FRAGMENT
+        };
+
+        let pc_range = vk::PushConstantRange::builder()
+            .stage_flags(stage_flags)
+            .offset(0)
+            .size(84)
+            .build();
+
+        let pc_ranges = [pc_range];
+
+        let layout_info = vk::PipelineLayoutCreateInfo::builder()
+            .set_layouts(&layouts)
+            .push_constant_ranges(&pc_ranges)
+            .build();
+
+        unsafe { device.create_pipeline_layout(&layout_info, None).unwrap() }
+    };
+
+    let mut pipeline_info = vk::GraphicsPipelineCreateInfo::builder()
+        .stages(&shader_stages_create_infos)
+        .vertex_input_state(&vert_input_info)
+        .input_assembly_state(&input_assembly_info)
+        .viewport_state(&viewport_info)
+        .dynamic_state(&dynamic_state_info)
+        .rasterization_state(&rasterizer_info)
+        .multisample_state(&multisampling_info)
+        .color_blend_state(&color_blending_info)
+        .layout(layout)
+        .render_pass(render_pass)
+        .subpass(0);
+
+    // only used if tessellation active, but define it anyway
+    let tessellation_state_info =
+        vk::PipelineTessellationStateCreateInfo::builder()
+            .patch_control_points(2)
+            .build();
+
+    if render_config.tessellation {
+        pipeline_info =
+            pipeline_info.tessellation_state(&tessellation_state_info);
+    }
+
+    let pipeline_info = pipeline_info.build();
+
+    let pipeline_infos = [pipeline_info];
+
+    let pipeline = unsafe {
+        device
+            .create_graphics_pipelines(
+                vk::PipelineCache::null(),
+                &pipeline_infos,
+                None,
+            )
+            .unwrap()[0]
+    };
+
+    unsafe {
+        for stage in shader_stages_create_infos {
+            device.destroy_shader_module(stage.module, None);
+        }
+    }
+
+    Ok((pipeline, layout))
+}
 
 pub(super) fn create_tess_pipeline(
     device: &Device,
