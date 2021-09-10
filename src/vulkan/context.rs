@@ -13,6 +13,8 @@ use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, StructureType};
 
 use ash::vk;
 
+use super::draw_system::nodes::NodeRenderConfig;
+
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
@@ -29,6 +31,17 @@ pub struct VkContext {
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 
     pub portability_subset: bool,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SupportedFeatures {
+    sampler_anisotropy: bool,
+    tessellation_shader: bool,
+    independent_blend: bool,
+
+    wide_lines: bool,
+
+    tessellation_isolines: bool,
 }
 
 impl VkContext {
@@ -58,6 +71,66 @@ impl VkContext {
 
     pub fn debug_utils(&self) -> Option<&DebugUtils> {
         self.debug_utils.as_ref().map(|(utils, _)| utils)
+    }
+
+    pub fn supported_features(&self) -> anyhow::Result<SupportedFeatures> {
+        let instance = &self.instance;
+        let phys_device = self.physical_device;
+
+        let features =
+            unsafe { instance.get_physical_device_features(phys_device) };
+
+        let mut result = SupportedFeatures {
+            sampler_anisotropy: true,
+            tessellation_shader: true,
+            independent_blend: true,
+            wide_lines: true,
+
+            // portability_subset: false,
+            tessellation_isolines: true,
+        };
+        // let mut result = true;
+
+        macro_rules! mandatory {
+            ($path:tt) => {
+                if features.$path == vk::FALSE {
+                    log::error!(
+                        "Device is missing the mandatory feature: {}",
+                        stringify!($path)
+                    );
+                    result.$path = false;
+                }
+            };
+        }
+
+        macro_rules! optional {
+            ($path:tt) => {
+                if features.$path == vk::FALSE {
+                    log::warn!(
+                        "Device is missing the optional feature: {}",
+                        stringify!($path)
+                    );
+                    result.$path = false;
+                }
+            };
+        }
+
+        mandatory!(sampler_anisotropy);
+        mandatory!(tessellation_shader);
+        mandatory!(independent_blend);
+
+        // optional features
+        optional!(wide_lines);
+
+        if self.portability_subset {
+            let portability = self.portability_features()?;
+
+            if portability.tessellation_isolines == vk::FALSE {
+                result.tessellation_isolines = false;
+            }
+        }
+
+        Ok(result)
     }
 
     pub fn portability_features(
@@ -93,6 +166,48 @@ impl VkContext {
 
         Ok(subset_features.features)
     }
+
+    // pub fn node_render_config(&self) -> anyhow::Result<NodeRenderConfig> {
+
+    // let features =
+
+    /*
+    let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
+        .features(vk::PhysicalDeviceFeatures::default());
+
+    let mut atomic_features = ShaderAtomicFloatFeaturesEXT_::default();
+    let atomic_ptr: *mut _ = &mut atomic_features;
+    let atomic_ptr = atomic_ptr as *mut c_void;
+    features_2.p_next = atomic_ptr;
+
+    let mut features_2 = features_2.build();
+
+    let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
+
+    unsafe {
+        self.get_physical_device_features2
+            .get_physical_device_features2_khr(
+                self.physical_device,
+                features_ptr,
+            );
+    }
+
+    let atomic_features = {
+        unsafe {
+            let atomic: *mut ShaderAtomicFloatFeaturesEXT_ =
+                std::mem::transmute(atomic_ptr);
+            *atomic
+        }
+    };
+
+    log::warn!(
+        "shader atomic float features: {:?}",
+        atomic_features.features
+    );
+
+    Ok(())
+    */
+    // }
 
     pub fn testin(&self) -> anyhow::Result<()> {
         let mut features_2 = vk::PhysicalDeviceFeatures2::builder()

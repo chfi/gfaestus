@@ -127,14 +127,16 @@ impl NodeVertices {
         let mut quad_vertices: Vec<Vertex> =
             Vec::with_capacity(vertices.len() * 3);
 
-        for &[p0, p1] in vertices.chunks_exact(2) {
-            quad_vertices.push(p0);
-            quad_vertices.push(p0);
-            quad_vertices.push(p1);
+        for chunk in vertices.chunks_exact(2) {
+            if let &[p0, p1] = chunk {
+                quad_vertices.push(p0);
+                quad_vertices.push(p0);
+                quad_vertices.push(p1);
 
-            quad_vertices.push(p1);
-            quad_vertices.push(p1);
-            quad_vertices.push(p0);
+                quad_vertices.push(p1);
+                quad_vertices.push(p1);
+                quad_vertices.push(p0);
+            }
         }
 
         let vertices = quad_vertices;

@@ -504,3 +504,67 @@ fn device_supports_features(
 
     Ok(result)
 }
+
+/*
+pub(crate) fn supported_device_features(
+    instance: &Instance,
+    device: vk::PhysicalDevice,
+) -> Result<SupportedFeatures> {
+    // TODO! this doesn't check portability yet
+
+    let features = unsafe { instance.get_physical_device_features(device) };
+
+    let mut result = SupportedFeatures {
+        sampler_anisotropy: true,
+        tessellation_shader: true,
+        independent_blend: true,
+        wide_lines: true,
+    };
+    // let mut result = true;
+
+    macro_rules! mandatory {
+        ($path:tt) => {
+            if features.$path == vk::FALSE {
+                error!(
+                    "Device is missing the mandatory feature: {}",
+                    stringify!($path)
+                );
+                result.$path = false;
+            }
+        };
+    }
+
+    macro_rules! optional {
+        ($path:tt) => {
+            if features.$path == vk::FALSE {
+                warn!(
+                    "Device is missing the optional feature: {}",
+                    stringify!($path)
+                );
+                result.$path = false;
+            }
+        };
+    }
+
+    mandatory!(sampler_anisotropy);
+    mandatory!(tessellation_shader);
+    mandatory!(independent_blend);
+
+    // optional features
+    optional!(wide_lines);
+
+    Ok(result)
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct SupportedFeatures {
+    // tessellation: bool,
+    // tessellation_isoline: bool,
+    sampler_anisotropy: bool,
+    tessellation_shader: bool,
+    independent_blend: bool,
+
+    wide_lines: bool,
+}
+
+*/

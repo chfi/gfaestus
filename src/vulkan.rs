@@ -65,6 +65,7 @@ pub struct GfaestusVk {
 
     pub vk_context: VkContext,
     // dimensions: ScreenDims,
+    pub supported_features: SupportedFeatures,
 }
 
 impl GfaestusVk {
@@ -195,6 +196,8 @@ impl GfaestusVk {
             })
             .collect::<Vec<_>>();
 
+        let supported_features = vk_context.supported_features()?;
+
         let result = Self {
             vk_context,
 
@@ -224,6 +227,8 @@ impl GfaestusVk {
             transient_command_pool,
 
             in_flight_frames,
+
+            supported_features,
         };
 
         result.render_passes.set_vk_debug_names(&result)?;
