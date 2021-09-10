@@ -20,16 +20,18 @@ use crate::vulkan::render_pass::Framebuffers;
 
 use super::super::{create_shader_module, Vertex};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PipelineKind {
     OverlayRgb,
     OverlayU, // instead of "value"
               // OverlayUv, // might add later
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NodePipelineConfig {
-    tessellation: bool,
+    pub tessellation: bool,
 
-    kind: PipelineKind,
+    pub kind: PipelineKind,
     // frag_shader:
     // geometry: bool,
 }

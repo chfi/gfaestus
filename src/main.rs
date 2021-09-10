@@ -253,7 +253,7 @@ fn main() {
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    let node_vertices = universe.new_vertices();
+    let node_vertices = universe.node_vertices();
 
     let mut main_view = MainView::new(
         &gfaestus,

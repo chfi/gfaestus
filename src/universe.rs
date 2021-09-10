@@ -153,7 +153,7 @@ impl Universe<FlatLayout> {
     }
     */
 
-    pub fn new_vertices(&self) -> Vec<Vertex> {
+    pub fn node_vertices(&self) -> Vec<Vertex> {
         let mut vertices = Vec::new();
 
         for node in self.graph_layout.nodes().iter() {

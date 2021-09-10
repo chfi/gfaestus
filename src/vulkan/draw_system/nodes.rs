@@ -21,9 +21,11 @@ use super::Vertex;
 
 pub mod base;
 pub mod overlay;
+pub mod vertices;
 
 pub use base::*;
 pub use overlay::*;
+pub use vertices::*;
 
 pub struct NodePipelines {
     pub pipelines: OverlayPipelines,
@@ -44,6 +46,12 @@ impl NodePipelines {
     ) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = vk_context.device();
+
+        // TODO actually derive this from the vulkan context!
+        let pipeline_config = NodePipelineConfig {
+            tessellation: true,
+            kind: (),
+        };
 
         let vertices = NodeVertices::new();
 
@@ -518,150 +526,6 @@ impl NodeIdBuffer {
         self.size = size;
         self.width = width;
         self.height = height;
-
-        Ok(())
-    }
-}
-
-pub struct NodeVertices {
-    pub(crate) vertex_count: usize,
-
-    pub(crate) vertex_buffer: vk::Buffer,
-
-    allocation: vk_mem::Allocation,
-    allocation_info: Option<vk_mem::AllocationInfo>,
-}
-
-impl NodeVertices {
-    pub fn new() -> Self {
-        let vertex_count = 0;
-        let vertex_buffer = vk::Buffer::null();
-
-        let allocation = vk_mem::Allocation::null();
-        let allocation_info = None;
-
-        Self {
-            vertex_count,
-            vertex_buffer,
-            allocation,
-            allocation_info,
-        }
-    }
-
-    pub fn buffer(&self) -> vk::Buffer {
-        self.vertex_buffer
-    }
-
-    pub fn has_vertices(&self) -> bool {
-        self.allocation_info.is_some()
-    }
-
-    pub fn destroy(&mut self, app: &GfaestusVk) -> Result<()> {
-        if self.has_vertices() {
-            app.allocator
-                .destroy_buffer(self.vertex_buffer, &self.allocation)?;
-
-            self.vertex_buffer = vk::Buffer::null();
-            self.allocation = vk_mem::Allocation::null();
-            self.allocation_info = None;
-
-            self.vertex_count = 0;
-        }
-
-        Ok(())
-    }
-
-    pub fn upload_vertices(
-        &mut self,
-        app: &super::super::GfaestusVk,
-        vertices: &[Vertex],
-    ) -> Result<()> {
-        if self.has_vertices() {
-            self.destroy(app)?;
-        }
-
-        let usage = vk::BufferUsageFlags::VERTEX_BUFFER
-            | vk::BufferUsageFlags::STORAGE_BUFFER
-            | vk::BufferUsageFlags::TRANSFER_SRC;
-        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
-
-        let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data(
-                // .create_buffer_with_data::<f32, _>(
-                usage,
-                memory_usage,
-                false,
-                &vertices,
-            )?;
-
-        app.set_debug_object_name(buffer, "Node Vertex Buffer")?;
-
-        self.vertex_count = vertices.len();
-
-        self.vertex_buffer = buffer;
-        self.allocation = allocation;
-        self.allocation_info = Some(allocation_info);
-
-        Ok(())
-    }
-
-    pub fn download_vertices(
-        &self,
-        app: &super::super::GfaestusVk,
-        node_count: usize,
-        target: &mut Vec<crate::universe::Node>,
-    ) -> Result<()> {
-        target.clear();
-        let cap = target.capacity();
-        if cap < node_count {
-            target.reserve(node_count - cap);
-        }
-
-        let alloc_info = self.allocation_info.as_ref().unwrap();
-
-        let staging_buffer_info = vk::BufferCreateInfo::builder()
-            .size(alloc_info.get_size() as u64)
-            .usage(vk::BufferUsageFlags::TRANSFER_DST)
-            .sharing_mode(vk::SharingMode::EXCLUSIVE)
-            .build();
-
-        let staging_create_info = vk_mem::AllocationCreateInfo {
-            usage: vk_mem::MemoryUsage::GpuToCpu,
-            flags: vk_mem::AllocationCreateFlags::MAPPED,
-            ..Default::default()
-        };
-
-        let (staging_buf, staging_alloc, staging_alloc_info) = app
-            .allocator
-            .create_buffer(&staging_buffer_info, &staging_create_info)?;
-
-        app.set_debug_object_name(
-            staging_buf,
-            "Node Position Download Staging Buffer",
-        )?;
-
-        GfaestusVk::copy_buffer(
-            app.vk_context().device(),
-            app.transient_command_pool,
-            app.graphics_queue,
-            self.buffer(),
-            staging_buf,
-            staging_alloc_info.get_size() as u64,
-        );
-
-        unsafe {
-            let mapped_ptr = staging_alloc_info.get_mapped_data();
-
-            let val_ptr = mapped_ptr as *const crate::universe::Node;
-
-            let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
-
-            target.extend_from_slice(sel_slice);
-        }
-
-        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
-
-        target.shrink_to_fit();
 
         Ok(())
     }
