@@ -120,11 +120,17 @@ pub(crate) fn create_node_pipeline(
         .vertex_attribute_descriptions(&vert_attr_descs)
         .build();
 
-    let input_assembly_info =
+    let input_assembly_info = {
+        let topology = if render_config.tessellation {
+            vk::PrimitiveTopology::PATCH_LIST
+        } else {
+            vk::PrimitiveTopology::TRIANGLE_LIST
+        };
         vk::PipelineInputAssemblyStateCreateInfo::builder()
-            .topology(vk::PrimitiveTopology::PATCH_LIST)
+            .topology(topology)
             .primitive_restart_enable(false)
-            .build();
+            .build()
+    };
 
     let viewport_info = vk::PipelineViewportStateCreateInfo::builder()
         .viewport_count(1)

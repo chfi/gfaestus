@@ -55,5 +55,13 @@ void main() {
       break;
   }
 
-  gl_Position = vec4(position.xy + offset, 0.0, 1.0);
+  // gl_Position = vec4(position.xy + offset, 0.0, 1.0);
+
+  // vec4 pos = node_uniform.view_transform * vec4(position.xy + offset, 0.0, 1.0);
+  vec4 pos = node_uniform.view_transform * vec4(position.xy, 0.0, 1.0);
+  pos.x += offset.x;
+  pos.y += offset.y;
+
+
+  gl_Position = pos;
 }

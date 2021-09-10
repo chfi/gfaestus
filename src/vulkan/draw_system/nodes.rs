@@ -40,7 +40,14 @@ impl NodePipelines {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        let render_config = app.node_render_config()?;
+        let mut render_config = app.node_render_config()?;
+
+        /*
+        {
+            log::warn!("forcing node tessellation off");
+            render_config.tessellation = false;
+        }
+        */
 
         let vertices = NodeVertices::new(&render_config);
 
@@ -165,16 +172,15 @@ impl NodePipelines {
 
         unsafe {
             use vk::ShaderStageFlags as Flags;
-            device.cmd_push_constants(
-                cmd_buf,
-                layout,
-                Flags::VERTEX
-                    | Flags::TESSELLATION_CONTROL
-                    | Flags::TESSELLATION_EVALUATION
-                    | Flags::FRAGMENT,
-                0,
-                &pc_bytes,
-            )
+
+            let mut stages = Flags::VERTEX | Flags::FRAGMENT;
+
+            if self.render_config.tessellation {
+                stages |= Flags::TESSELLATION_CONTROL
+                    | Flags::TESSELLATION_EVALUATION;
+            }
+
+            device.cmd_push_constants(cmd_buf, layout, stages, 0, &pc_bytes)
         };
 
         unsafe {
