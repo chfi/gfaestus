@@ -28,9 +28,11 @@ pub enum PipelineKind {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NodePipelineConfig {
+pub struct NodeRenderConfig {
     pub tessellation: bool,
+}
 
+pub struct NodePipelineConfig {
     pub kind: PipelineKind,
     // frag_shader:
     // geometry: bool,

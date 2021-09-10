@@ -34,6 +34,8 @@ use log::{debug, error, info, trace, warn};
 
 use crate::view::ScreenDims;
 
+use self::draw_system::nodes::NodeRenderConfig;
+
 pub struct GfaestusVk {
     pub allocator: Allocator,
 
@@ -251,6 +253,12 @@ impl GfaestusVk {
 
     pub fn vk_context(&self) -> &VkContext {
         &self.vk_context
+    }
+
+    // TODO actually derive this from the vulkan context!
+    pub fn node_render_config(&self) -> Result<NodeRenderConfig> {
+        let config = NodeRenderConfig { tessellation: true };
+        Ok(config)
     }
 
     pub fn draw_frame_from<F>(

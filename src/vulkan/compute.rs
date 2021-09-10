@@ -8,11 +8,11 @@ use anyhow::Result;
 use super::GfaestusVk;
 
 pub mod edges;
-pub mod node_motion;
+// pub mod node_motion;
 pub mod selection;
 
 pub use edges::*;
-pub use node_motion::*;
+// pub use node_motion::*;
 pub use selection::*;
 
 pub struct ComputeManager {

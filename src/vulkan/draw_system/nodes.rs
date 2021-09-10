@@ -35,6 +35,8 @@ pub struct NodePipelines {
     pub vertices: NodeVertices,
 
     device: Device,
+
+    render_config: NodeRenderConfig,
 }
 
 impl NodePipelines {
@@ -47,13 +49,9 @@ impl NodePipelines {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        // TODO actually derive this from the vulkan context!
-        let pipeline_config = NodePipelineConfig {
-            tessellation: true,
-            kind: (),
-        };
+        let render_config = app.node_render_config()?;
 
-        let vertices = NodeVertices::new();
+        let vertices = NodeVertices::new(&render_config);
 
         let selection_descriptors =
             SelectionDescriptors::new(app, selection_buffer, 1)?;
@@ -72,6 +70,8 @@ impl NodePipelines {
             selection_descriptors,
 
             device: device.clone(),
+
+            render_config,
         })
     }
 

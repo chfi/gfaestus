@@ -13,7 +13,7 @@ use crate::{geometry::Point, overlays::OverlayKind};
 
 use crate::vulkan::draw_system::Vertex;
 
-use super::NodePipelineConfig;
+use super::{NodePipelineConfig, NodeRenderConfig};
 
 pub struct NodeVertices {
     pub(crate) vertex_count: usize,
@@ -23,11 +23,11 @@ pub struct NodeVertices {
     allocation: vk_mem::Allocation,
     allocation_info: Option<vk_mem::AllocationInfo>,
 
-    pipeline_config: NodePipelineConfig,
+    render_config: NodeRenderConfig,
 }
 
 impl NodeVertices {
-    pub fn new(config: &NodePipelineConfig) -> Self {
+    pub fn new(config: &NodeRenderConfig) -> Self {
         let vertex_count = 0;
         let vertex_buffer = vk::Buffer::null();
 
@@ -40,7 +40,7 @@ impl NodeVertices {
             allocation,
             allocation_info,
 
-            pipeline_config: *config,
+            render_config: *config,
         }
     }
 
@@ -76,7 +76,7 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        assert!(self.pipeline_config.tessellation);
+        assert!(self.render_config.tessellation);
 
         if self.has_vertices() {
             self.destroy(app)?;
@@ -113,7 +113,7 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        assert!(!self.pipeline_config.tessellation);
+        assert!(!self.render_config.tessellation);
 
         if self.has_vertices() {
             self.destroy(app)?;
@@ -158,7 +158,7 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        if self.pipeline_config.tessellation {
+        if self.render_config.tessellation {
             self.upload_line_vertices(app, vertices)
         } else {
             self.upload_quad_vertices(app, vertices)
