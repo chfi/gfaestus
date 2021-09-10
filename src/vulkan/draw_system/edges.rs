@@ -4,10 +4,7 @@ use crate::{
     view::{ScreenDims, View},
 };
 
-use handlegraph::{
-    handle::{Edge, NodeId},
-    handlegraph::*,
-};
+use handlegraph::{handle::Edge, handlegraph::*};
 
 use handlegraph::packedgraph::PackedGraph;
 
@@ -786,6 +783,12 @@ impl EdgesUBOBuffer {
             align.copy_from_slice(&ubos);
         }
 
+        Ok(())
+    }
+
+    pub fn destroy(&self, app: &GfaestusVk) -> Result<()> {
+        app.allocator
+            .destroy_buffer(self.buffer, &self.allocation)?;
         Ok(())
     }
 }

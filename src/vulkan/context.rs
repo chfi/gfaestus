@@ -13,8 +13,6 @@ use ash::vk::{KhrGetPhysicalDeviceProperties2Fn, StructureType};
 
 use ash::vk;
 
-use super::draw_system::nodes::NodeRenderConfig;
-
 pub struct VkContext {
     _entry: Entry,
     instance: Instance,
@@ -86,10 +84,8 @@ impl VkContext {
             independent_blend: true,
             wide_lines: true,
 
-            // portability_subset: false,
             tessellation_isolines: true,
         };
-        // let mut result = true;
 
         macro_rules! mandatory {
             ($path:tt) => {
@@ -165,85 +161,6 @@ impl VkContext {
         };
 
         Ok(subset_features.features)
-    }
-
-    // pub fn node_render_config(&self) -> anyhow::Result<NodeRenderConfig> {
-
-    // let features =
-
-    /*
-    let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
-        .features(vk::PhysicalDeviceFeatures::default());
-
-    let mut atomic_features = ShaderAtomicFloatFeaturesEXT_::default();
-    let atomic_ptr: *mut _ = &mut atomic_features;
-    let atomic_ptr = atomic_ptr as *mut c_void;
-    features_2.p_next = atomic_ptr;
-
-    let mut features_2 = features_2.build();
-
-    let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
-
-    unsafe {
-        self.get_physical_device_features2
-            .get_physical_device_features2_khr(
-                self.physical_device,
-                features_ptr,
-            );
-    }
-
-    let atomic_features = {
-        unsafe {
-            let atomic: *mut ShaderAtomicFloatFeaturesEXT_ =
-                std::mem::transmute(atomic_ptr);
-            *atomic
-        }
-    };
-
-    log::warn!(
-        "shader atomic float features: {:?}",
-        atomic_features.features
-    );
-
-    Ok(())
-    */
-    // }
-
-    pub fn testin(&self) -> anyhow::Result<()> {
-        let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
-            .features(vk::PhysicalDeviceFeatures::default());
-
-        let mut atomic_features = ShaderAtomicFloatFeaturesEXT_::default();
-        let atomic_ptr: *mut _ = &mut atomic_features;
-        let atomic_ptr = atomic_ptr as *mut c_void;
-        features_2.p_next = atomic_ptr;
-
-        let mut features_2 = features_2.build();
-
-        let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
-
-        unsafe {
-            self.get_physical_device_features2
-                .get_physical_device_features2_khr(
-                    self.physical_device,
-                    features_ptr,
-                );
-        }
-
-        let atomic_features = {
-            unsafe {
-                let atomic: *mut ShaderAtomicFloatFeaturesEXT_ =
-                    std::mem::transmute(atomic_ptr);
-                *atomic
-            }
-        };
-
-        log::warn!(
-            "shader atomic float features: {:?}",
-            atomic_features.features
-        );
-
-        Ok(())
     }
 }
 

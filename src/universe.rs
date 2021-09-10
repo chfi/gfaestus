@@ -1,4 +1,3 @@
-use ash::Device;
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -15,7 +14,6 @@ use handlegraph::packedgraph::PackedGraph;
 use log::{debug, error, info, trace, warn};
 
 use anyhow::Result;
-use rustc_hash::FxHashSet;
 
 use crate::vulkan::{draw_system::Vertex, GfaestusVk};
 use crate::{geometry::*, vulkan::draw_system::nodes::NodeVertices};

@@ -11,23 +11,18 @@ use context::*;
 use init::*;
 use render_pass::*;
 
+use anyhow::Result;
 use ash::{
     extensions::khr::{Surface, Swapchain},
     version::DeviceV1_0,
+    vk, Device, Entry,
 };
-use ash::{vk, Device, Entry};
 
-use vk_mem::Allocator;
-
-use winit::window::Window;
-
-use std::{mem::size_of, sync::Arc};
-
-use bytemuck::{Pod, TransparentWrapper, Zeroable};
-
+use bytemuck::{Pod, Zeroable};
 use parking_lot::{Mutex, MutexGuard};
-
-use anyhow::Result;
+use std::{mem::size_of, sync::Arc};
+use vk_mem::Allocator;
+use winit::window::Window;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -95,7 +90,7 @@ impl GfaestusVk {
                 force_graphics_device,
             )?;
 
-        let (device, graphics_queue, present_queue, compute_queue) =
+        let (device, graphics_queue, present_queue, _compute_queue) =
             create_logical_device(
                 &instance,
                 physical_device,

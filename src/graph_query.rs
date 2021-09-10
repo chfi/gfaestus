@@ -9,14 +9,11 @@ use handlegraph::{
 };
 
 use handlegraph::{
-    packedgraph::{index::OneBasedIndex, paths::StepPtr, PackedGraph},
+    packedgraph::{paths::StepPtr, PackedGraph},
     path_position::PathPositionMap,
 };
 
-use crossbeam::{
-    atomic::AtomicCell,
-    channel::{self, Receiver},
-};
+use crossbeam::channel;
 
 use std::sync::Arc;
 

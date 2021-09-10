@@ -163,7 +163,6 @@ impl View {
     pub fn world_to_screen_map(&self) -> glm::Mat4 {
         let s = 1.0 / self.scale;
         let vcx = self.center.x;
-        let vcy = self.center.y;
 
         let view_scale_screen =
             glm::mat4(s,   0.0, 0.0, (s * 0.5) - vcx,

@@ -9,10 +9,7 @@ use log::{debug, error, info, trace, warn};
 
 use crate::app::selection::SelectionBuffer;
 
-use crate::vulkan::{
-    draw_system::{nodes::NodeVertices, Vertex},
-    GfaestusVk,
-};
+use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 use super::{ComputeManager, ComputePipeline};
 

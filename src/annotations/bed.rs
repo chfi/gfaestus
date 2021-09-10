@@ -1,11 +1,9 @@
-use std::collections::{HashMap, HashSet};
-
 use bstr::ByteSlice;
 
 use anyhow::Result;
 
 use super::{
-    AnnotationCollection, AnnotationColumn, AnnotationRecord, ColumnKey, Strand,
+    AnnotationCollection, AnnotationColumn, AnnotationRecord, ColumnKey,
 };
 
 #[derive(Debug, Clone, Default)]

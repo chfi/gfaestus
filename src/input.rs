@@ -1,4 +1,3 @@
-use parking_lot::Mutex;
 use rustc_hash::FxHashMap;
 use winit::event::{ElementState, VirtualKeyCode};
 #[allow(unused_imports)]
@@ -9,7 +8,7 @@ use winit::{
 
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
-use std::{hash::Hash, sync::Arc};
+use std::sync::Arc;
 
 use crate::gui::GuiInput;
 use crate::{app::mainview::MainViewInput, gui::GuiMsg};

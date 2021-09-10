@@ -16,7 +16,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{geometry::*, universe::Node, view::*};
 
-use nalgebra as na;
 use nalgebra_glm as glm;
 
 pub mod bed;

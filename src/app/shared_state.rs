@@ -3,7 +3,6 @@ use std::sync::Arc;
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
 
-use crate::overlays::OverlayKind;
 use crate::{geometry::*, gui::GuiFocusState};
 use crate::{view::*, vulkan::texture::GradientName};
 

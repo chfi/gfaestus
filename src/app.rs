@@ -6,13 +6,11 @@ pub mod shared_state;
 
 use crossbeam::channel::Sender;
 
-use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use handlegraph::handle::NodeId;
 
 use anyhow::Result;
-use winit::event::VirtualKeyCode;
 
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,

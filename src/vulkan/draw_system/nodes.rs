@@ -3,7 +3,7 @@ use ash::{vk, Device};
 use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
 
-use std::{ffi::CString, ops::RangeInclusive};
+use std::ops::RangeInclusive;
 
 use nalgebra_glm as glm;
 
@@ -11,13 +11,9 @@ use anyhow::*;
 
 use crate::view::View;
 use crate::vulkan::GfaestusVk;
-use crate::{
-    geometry::Point, overlays::OverlayKind, vulkan::texture::GradientTexture,
-};
+use crate::{geometry::Point, vulkan::texture::GradientTexture};
 
 use crate::vulkan::render_pass::Framebuffers;
-
-use super::Vertex;
 
 pub mod base;
 pub mod overlay;
@@ -40,12 +36,7 @@ pub struct NodePipelines {
 }
 
 impl NodePipelines {
-    pub fn new(
-        app: &GfaestusVk,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
-        selection_buffer: vk::Buffer,
-    ) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, selection_buffer: vk::Buffer) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
@@ -58,9 +49,7 @@ impl NodePipelines {
 
         let pipelines = OverlayPipelines::new(
             app,
-            device,
-            msaa_samples,
-            render_pass,
+            &render_config,
             selection_descriptors.layout,
         )?;
 

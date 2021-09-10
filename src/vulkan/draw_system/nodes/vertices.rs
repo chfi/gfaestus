@@ -1,19 +1,9 @@
-use ash::version::DeviceV1_0;
-use ash::{vk, Device};
-use handlegraph::handle::NodeId;
-use rustc_hash::FxHashSet;
-
-use nalgebra_glm as glm;
+use ash::vk;
 
 use anyhow::*;
 
-use crate::view::View;
-use crate::vulkan::GfaestusVk;
-use crate::{geometry::Point, overlays::OverlayKind};
-
-use crate::vulkan::draw_system::Vertex;
-
-use super::{NodePipelineConfig, NodeRenderConfig};
+use super::NodeRenderConfig;
+use crate::vulkan::{draw_system::Vertex, GfaestusVk};
 
 pub struct NodeVertices {
     pub(crate) vertex_count: usize,

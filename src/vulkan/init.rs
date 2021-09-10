@@ -8,13 +8,9 @@ use ash::{
 };
 use ash::{vk, Device, Entry, Instance};
 
-use bstr::ByteSlice;
 use winit::window::Window;
 
-use std::{
-    ffi::{CStr, CString},
-    os::raw::c_char,
-};
+use std::ffi::{CStr, CString};
 
 use anyhow::Result;
 

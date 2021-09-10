@@ -248,7 +248,6 @@ impl GradientName {
 
 pub struct GradientTexture {
     pub texture: Texture1D,
-    gradient: Gradient,
 }
 
 impl GradientTexture {
@@ -285,7 +284,7 @@ impl GradientTexture {
             &colors,
         )?;
 
-        Ok(Self { texture, gradient })
+        Ok(Self { texture })
     }
 
     pub fn create_sampler(device: &Device) -> Result<vk::Sampler> {

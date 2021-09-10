@@ -18,7 +18,7 @@ use crate::{
 };
 
 use crate::app::{OverlayCreatorMsg, OverlayState};
-use crate::overlays::{OverlayData, OverlayKind};
+use crate::overlays::OverlayKind;
 
 use super::file::FilePicker;
 
@@ -305,7 +305,6 @@ impl OverlayCreator {
                 let name = &mut self.name;
                 let file_picker = &mut self.file_picker;
                 let file_picker_open = &mut self.file_picker_open;
-                let latest_result = &self.latest_result;
 
                 let script_results = &mut self.script_results;
 

@@ -9,7 +9,6 @@ use handlegraph::{
     packed::*,
     pathhandlegraph::*,
 };
-use handlegraph::{packedgraph::PackedGraph, path_position::PathPositionMap};
 
 use anyhow::Result;
 
@@ -17,27 +16,26 @@ use log::debug;
 
 use crossbeam::atomic::AtomicCell;
 
-use rhai::{plugin::*, Func};
+use rhai::plugin::*;
 use rustc_hash::FxHashSet;
 
+use crate::overlays::OverlayKind;
 use crate::{
     app::{
         selection::NodeSelection, AppChannels, AppMsg, OverlayCreatorMsg,
-        OverlayState, Select,
+        Select,
     },
     geometry::*,
     reactor::Reactor,
-    script::{overlay_colors_tgt_, ScriptConfig, ScriptTarget},
+    script::{overlay_colors_tgt_ast, ScriptConfig, ScriptTarget},
     view::View,
 };
 use crate::{
     app::{AppSettings, SharedState},
     graph_query::GraphQuery,
 };
-use crate::{overlays::OverlayKind, vulkan::draw_system::edges::EdgesUBO};
 
 use parking_lot::Mutex;
-use parking_lot::RwLock;
 
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
@@ -127,11 +125,13 @@ impl Console<'static> {
             };
         }
 
+        /*
         macro_rules! add_nested_t {
             ($into:expr, $from:expr, $ubo:expr, $name:tt, $field:tt) => {
                 get_set.add_arc_atomic_cell_get_set($name, $ubo, $into, $from);
             };
         }
+        */
 
         macro_rules! add_nested_cast {
             ($ubo:expr, $field:tt, $type:ty) => {{
@@ -429,7 +429,7 @@ impl Console<'static> {
 
                     match node_color_ast {
                         Ok(node_color_ast) => {
-                            let result = overlay_colors_tgt_(
+                            let result = overlay_colors_tgt_ast(
                                 &rayon_pool,
                                 &config,
                                 &graph,
@@ -447,12 +447,12 @@ impl Console<'static> {
                                     overlay_tx.send(msg).unwrap();
                                     log::info!("overlay data success");
                                 }
-                                Err(err) => {
+                                Err(_err) => {
                                     log::warn!("overlay failure");
                                 }
                             }
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             log::warn!("ast failure");
                         }
                     }
@@ -699,7 +699,7 @@ impl Console<'static> {
         Ok(())
     }
 
-    pub fn eval(&mut self, reactor: &mut Reactor, print: bool) -> Result<()> {
+    pub fn eval(&mut self, reactor: &mut Reactor, _print: bool) -> Result<()> {
         let engine = self.create_engine();
 
         let result_tx = self.result_tx.clone();
@@ -998,7 +998,7 @@ impl ConsoleShared {
 
         let overlay_state = self.shared_state.overlay_state.clone();
         engine.register_fn("set_active_overlay", move |v: rhai::Dynamic| {
-            if let Ok(v) = v.as_unit() {
+            if let Ok(_) = v.as_unit() {
                 overlay_state.set_current_overlay(None);
             } else if let Some(overlay) = v.try_cast::<usize>() {
                 overlay_state.set_current_overlay(Some(overlay));

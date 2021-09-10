@@ -19,12 +19,11 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    asynchronous::AsyncResult,
     gui::util::grid_row_label,
     reactor::{Host, Outbox, Reactor},
 };
 
-use crate::graph_query::{GraphQuery, GraphQueryWorker};
+use crate::graph_query::GraphQuery;
 use crate::{
     app::{AppMsg, Select},
     geometry::*,
@@ -135,7 +134,6 @@ impl PathDetails {
         &mut self,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
-        graph_query_worker: &GraphQueryWorker,
         ctx: &egui::CtxRef,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
@@ -463,15 +461,12 @@ impl StepRange {
     }
 }
 
-enum StepsMsg {
-    Running,
-    Error(String),
-}
+// enum StepsMsg {
+//     Error(String),
+// }
 
-type StepsResult = std::result::Result<
-    (PathId, usize, Vec<(Handle, StepPtr, usize)>),
-    StepsMsg,
->;
+type StepsResult =
+    std::result::Result<(PathId, usize, Vec<(Handle, StepPtr, usize)>), String>;
 
 pub struct StepList {
     fetched_path_id: Option<PathId>,
@@ -493,7 +488,7 @@ impl StepList {
         let graph_query = reactor.graph_query.clone();
 
         let steps_host = reactor.create_host(
-            move |outbox: &Outbox<StepsResult>, path: PathId| {
+            move |_outbox: &Outbox<StepsResult>, path: PathId| {
                 println!("in steps_host");
                 dbg!();
                 let graph = graph_query.graph();
@@ -516,7 +511,7 @@ impl StepList {
                     Ok((path, base_len, steps_vec))
                 } else {
                     dbg!();
-                    Err(StepsMsg::Error("Path not found".to_string()))
+                    Err("Path not found".to_string())
                 }
             },
         );
@@ -537,36 +532,6 @@ impl StepList {
         }
     }
 
-    fn async_path_update(
-        &mut self,
-        graph_query_worker: &GraphQueryWorker,
-        path: PathId,
-    ) {
-        let result =
-            graph_query_worker.run_query(move |graph_query| async move {
-                let graph = graph_query.graph();
-                let path_pos = graph_query.path_positions();
-
-                if let Some(steps) = graph.path_steps(path) {
-                    let base_len = path_pos.path_base_len(path).unwrap();
-
-                    let steps_vec = steps
-                        .filter_map(|step| {
-                            let handle = step.handle();
-                            let (step_ptr, _) = step;
-                            let base =
-                                path_pos.path_step_position(path, step_ptr)?;
-                            Some((handle, step_ptr, base))
-                        })
-                        .collect::<Vec<_>>();
-
-                    (path, base_len, steps_vec)
-                } else {
-                    return (path, 0, Vec::new());
-                }
-            });
-    }
-
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
@@ -576,18 +541,12 @@ impl StepList {
         open_node_details: &mut bool,
     ) -> egui::InnerResponse<()> {
         if let Some(result) = self.steps_host.take() {
-            println!("steps_host.take()");
-            match &result {
-                Ok((path, path_base_len, steps)) => {
-                    if self.update_filter {
-                        self.range_filter =
-                            StepRange::from_steps(*path_base_len, steps);
+            if let Ok((_path, path_base_len, steps)) = &result {
+                if self.update_filter {
+                    self.range_filter =
+                        StepRange::from_steps(*path_base_len, steps);
 
-                        self.update_filter = false;
-                    }
-                }
-                Err(err) => {
-                    //
+                    self.update_filter = false;
                 }
             }
 

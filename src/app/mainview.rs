@@ -14,7 +14,6 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::view::{ScreenDims, View};
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
-    overlays::OverlayKind,
     vulkan::texture::GradientTexture,
 };
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
@@ -71,17 +70,11 @@ impl MainView {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
         let swapchain_props = app.swapchain_props;
-        let msaa_samples = app.msaa_samples;
-        let render_pass = app.render_passes.nodes;
 
         let node_width = settings.node_width().clone();
 
-        let node_draw_system = NodePipelines::new(
-            app,
-            msaa_samples,
-            render_pass,
-            selection_buffer.buffer,
-        )?;
+        let node_draw_system =
+            NodePipelines::new(app, selection_buffer.buffer)?;
 
         let screen_dims = {
             let extent = swapchain_props.extent;

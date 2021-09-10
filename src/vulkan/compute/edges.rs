@@ -6,11 +6,10 @@ use ash::{vk, Device};
 use anyhow::Result;
 use handlegraph::handle::Handle;
 
-// use nalgebra_glm as glm;
-
-use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
-
-use crate::vulkan::draw_system::edges::PreprocessPushConstants;
+use crate::vulkan::{
+    draw_system::{edges::PreprocessPushConstants, nodes::NodeVertices},
+    GfaestusVk,
+};
 
 use super::ComputePipeline;
 
@@ -104,7 +103,7 @@ impl EdgePreprocess {
     pub fn preprocess_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
-        edges: &EdgeIndices,
+        _edges: &EdgeIndices,
         view: View,
         viewport_dims: [f32; 2],
     ) -> Result<()> {

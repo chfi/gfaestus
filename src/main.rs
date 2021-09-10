@@ -1,7 +1,6 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::gui::console::Console;
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use rustc_hash::FxHashMap;

@@ -54,6 +54,7 @@ pub mod windows;
 
 use console::*;
 use debug::*;
+#[allow(unused_imports)]
 use util::*;
 use widgets::*;
 use windows::*;
@@ -65,6 +66,7 @@ pub struct Gui {
     frame_input: FrameInput,
 
     shared_state: SharedState,
+    #[allow(dead_code)]
     settings: AppSettings,
 
     pub draw_system: GuiPipeline,
@@ -88,8 +90,6 @@ pub struct Gui {
 
     gff3_list: RecordList<Gff3Records>,
     bed_list: RecordList<BedRecords>,
-
-    path_picker_source: PathPickerSource,
 
     annotation_file_list: AnnotationFileList,
 
@@ -507,8 +507,6 @@ impl Gui {
             gff3_list,
             bed_list,
 
-            path_picker_source,
-
             annotation_file_list,
 
             console_down: false,
@@ -802,7 +800,6 @@ impl Gui {
                 view_state.path_details.state.ui(
                     path_details,
                     graph_query,
-                    graph_query_worker,
                     &self.ctx,
                     node_details_id_cell,
                     node_details,

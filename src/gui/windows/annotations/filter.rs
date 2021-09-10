@@ -108,8 +108,6 @@ pub struct RecordFilter<T: ColumnKey> {
     columns: HashMap<T, FilterString>,
 
     pub quick_filter: QuickFilter<T>,
-
-    id: egui::Id,
 }
 
 impl<T: ColumnKey> RecordFilter<T> {
@@ -140,8 +138,6 @@ impl<T: ColumnKey> RecordFilter<T> {
             columns,
 
             quick_filter,
-
-            id,
         }
     }
 

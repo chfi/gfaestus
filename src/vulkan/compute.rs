@@ -19,7 +19,6 @@ pub struct ComputeManager {
     pub(super) compute_cmd_pool: vk::CommandPool,
 
     compute_queue: vk::Queue,
-    compute_queue_ix: u32,
 
     fences: HashMap<usize, vk::Fence>,
     command_buffers: HashMap<usize, vk::CommandBuffer>,
@@ -45,7 +44,6 @@ impl ComputeManager {
             compute_cmd_pool: command_pool,
 
             compute_queue: queue,
-            compute_queue_ix: queue_ix,
 
             fences: HashMap::default(),
             command_buffers: HashMap::default(),
@@ -66,7 +64,7 @@ impl ComputeManager {
     pub fn block_on_fence(&self, fence_id: usize) -> Result<()> {
         let fence = *self.fences.get(&fence_id).unwrap();
         let fences = [fence];
-        let status =
+        let _status =
             unsafe { self.device.wait_for_fences(&fences, true, 100_000_000) }?;
 
         Ok(())
@@ -77,7 +75,7 @@ impl ComputeManager {
 
         if block {
             let fences = [fence];
-            let status =
+            let _status =
                 unsafe { self.device.wait_for_fences(&fences, true, 0) }?;
         }
 

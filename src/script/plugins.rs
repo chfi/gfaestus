@@ -1,14 +1,9 @@
 use handlegraph::packedgraph::{iter::EdgeListHandleIter, nodes::IndexMapIter};
 use rhai::plugin::*;
 
-use anyhow::Result;
-
-use rayon::prelude::*;
-
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
     handlegraph::*,
-    packed::*,
     pathhandlegraph::*,
 };
 
