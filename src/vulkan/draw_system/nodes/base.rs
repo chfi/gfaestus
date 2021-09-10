@@ -30,14 +30,11 @@ pub struct NodePipelineConfig {
 impl NodePipelineConfig {
     fn stage_create_info(
         &self,
+        render_config: &NodeRenderConfig,
         device: &Device,
         entry_point: &std::ffi::CStr,
-        // modules: &[ShaderModule],
     ) -> Result<Vec<PipelineShaderStageCreateInfo>> {
         let vert_src = crate::load_shader!("nodes/base.vert.spv");
-
-        let tesc_src = crate::load_shader!("nodes/base.tesc.spv");
-        let tese_src = crate::load_shader!("nodes/base.tese.spv");
 
         let frag_src = match self.kind {
             PipelineKind::OverlayRgb => {
@@ -50,25 +47,11 @@ impl NodePipelineConfig {
         };
 
         let vert_module = create_shader_module(device, &vert_src);
-        let tesc_module = create_shader_module(device, &tesc_src);
-        let tese_module = create_shader_module(device, &tese_src);
         let frag_module = create_shader_module(device, &frag_src);
 
         let vert_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(vert_module)
-            .name(entry_point)
-            .build();
-
-        let tesc_state_info = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::TESSELLATION_CONTROL)
-            .module(tesc_module)
-            .name(entry_point)
-            .build();
-
-        let tese_state_info = vk::PipelineShaderStageCreateInfo::builder()
-            .stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION)
-            .module(tese_module)
             .name(entry_point)
             .build();
 
@@ -78,14 +61,36 @@ impl NodePipelineConfig {
             .name(entry_point)
             .build();
 
-        let shader_state_infos = vec![
-            vert_state_info,
-            tesc_state_info,
-            tese_state_info,
-            frag_state_info,
-        ];
+        if render_config.tessellation {
+            let tesc_src = crate::load_shader!("nodes/base.tesc.spv");
+            let tese_src = crate::load_shader!("nodes/base.tese.spv");
 
-        Ok(shader_state_infos)
+            let tesc_module = create_shader_module(device, &tesc_src);
+            let tese_module = create_shader_module(device, &tese_src);
+
+            let tesc_state_info = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::TESSELLATION_CONTROL)
+                .module(tesc_module)
+                .name(entry_point)
+                .build();
+
+            let tese_state_info = vk::PipelineShaderStageCreateInfo::builder()
+                .stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION)
+                .module(tese_module)
+                .name(entry_point)
+                .build();
+
+            let shader_state_infos = vec![
+                vert_state_info,
+                tesc_state_info,
+                tese_state_info,
+                frag_state_info,
+            ];
+            Ok(shader_state_infos)
+        } else {
+            let shader_state_infos = vec![vert_state_info, frag_state_info];
+            Ok(shader_state_infos)
+        }
     }
 }
 
@@ -102,8 +107,11 @@ pub(crate) fn create_node_pipeline(
 
     let entry_point = CString::new("main").unwrap();
 
-    let shader_stages_create_infos =
-        pipeline_config.stage_create_info(device, &entry_point)?;
+    let shader_stages_create_infos = pipeline_config.stage_create_info(
+        render_config,
+        device,
+        &entry_point,
+    )?;
 
     let vert_binding_descs = [Vertex::get_binding_desc()];
     let vert_attr_descs = Vertex::get_attribute_descs();
