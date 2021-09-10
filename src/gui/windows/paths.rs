@@ -483,9 +483,6 @@ pub struct StepList {
     steps_host: Host<PathId, StepsResult>,
     latest_result: Option<StepsResult>,
 
-    step_query:
-        Option<AsyncResult<(PathId, usize, Vec<(Handle, StepPtr, usize)>)>>,
-
     range_filter: StepRange,
 
     update_filter: bool,
@@ -534,8 +531,6 @@ impl StepList {
             steps_host,
             latest_result: None,
 
-            step_query: None,
-
             range_filter: StepRange::default(),
 
             update_filter: false,
@@ -570,8 +565,6 @@ impl StepList {
                     return (path, 0, Vec::new());
                 }
             });
-
-        self.step_query = Some(result);
     }
 
     pub fn ui(
@@ -600,29 +593,6 @@ impl StepList {
 
             self.latest_result = Some(result);
         }
-
-        /*
-        if let Some(query) = self.step_query.as_mut() {
-            query.move_result_if_ready();
-        }
-
-        let steps = if let Some((_path, path_base_len, result)) =
-            self.step_query.as_ref().and_then(|q| q.get_result())
-        {
-            if self.update_filter {
-                self.range_filter =
-                    StepRange::from_steps(*path_base_len, &result);
-
-                self.update_filter = false;
-            }
-
-            result.as_slice()
-        } else {
-            self.range_filter = StepRange::default();
-
-            &[]
-        };
-        */
 
         let steps = if let Some(Ok((_, len, steps))) = &self.latest_result {
             if self.update_filter {

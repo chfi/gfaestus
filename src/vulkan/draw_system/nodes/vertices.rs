@@ -127,15 +127,18 @@ impl NodeVertices {
         let mut quad_vertices: Vec<Vertex> =
             Vec::with_capacity(vertices.len() * 3);
 
+        // NB: first triangle, if p0 is the left side, goes "bottom
+        // left, top right, top left"; second is "bottom left, bottom
+        // right, top right"
         for chunk in vertices.chunks_exact(2) {
             if let &[p0, p1] = chunk {
                 quad_vertices.push(p0);
-                quad_vertices.push(p0);
                 quad_vertices.push(p1);
+                quad_vertices.push(p0);
 
-                quad_vertices.push(p1);
-                quad_vertices.push(p1);
                 quad_vertices.push(p0);
+                quad_vertices.push(p1);
+                quad_vertices.push(p1);
             }
         }
 
@@ -218,7 +221,21 @@ impl NodeVertices {
 
             let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
 
-            target.extend_from_slice(sel_slice);
+            if self.render_config.tessellation {
+                // if it uses just two vertices per node, copy the entire slice
+                target.extend_from_slice(sel_slice);
+            } else {
+                // if it uses six vertices per node, only read every
+                // third pair of vertices (per the vx order in
+                // upload_vertices)
+
+                // TODO this probably works; but untested (could be
+                // parallelized too)
+                for n in 0..node_count {
+                    let ix = n * 3;
+                    target.push(sel_slice[ix]);
+                }
+            }
         }
 
         app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
