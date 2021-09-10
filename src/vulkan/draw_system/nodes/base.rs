@@ -1,5 +1,5 @@
 use ash::version::DeviceV1_0;
-use ash::vk::PipelineShaderStageCreateInfo;
+use ash::vk::{PipelineShaderStageCreateInfo, ShaderModule};
 use ash::{vk, Device};
 use handlegraph::handle::NodeId;
 use rustc_hash::FxHashSet;
@@ -34,16 +34,15 @@ pub struct NodeRenderConfig {
 
 pub struct NodePipelineConfig {
     pub kind: PipelineKind,
-    // frag_shader:
-    // geometry: bool,
 }
 
 impl NodePipelineConfig {
-    fn shader_modules(
+    fn stage_create_info(
         &self,
         device: &Device,
+        entry_point: &std::ffi::CStr,
+        // modules: &[ShaderModule],
     ) -> Result<Vec<PipelineShaderStageCreateInfo>> {
-        // TODO pick which vertex shader to use; different for no-tess version
         let vert_src = crate::load_shader!("nodes/base.vert.spv");
 
         let tesc_src = crate::load_shader!("nodes/base.tesc.spv");
@@ -64,30 +63,28 @@ impl NodePipelineConfig {
         let tese_module = create_shader_module(device, &tese_src);
         let frag_module = create_shader_module(device, &frag_src);
 
-        let entry_point = CString::new("main").unwrap();
-
         let vert_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::VERTEX)
             .module(vert_module)
-            .name(&entry_point)
+            .name(entry_point)
             .build();
 
         let tesc_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::TESSELLATION_CONTROL)
             .module(tesc_module)
-            .name(&entry_point)
+            .name(entry_point)
             .build();
 
         let tese_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION)
             .module(tese_module)
-            .name(&entry_point)
+            .name(entry_point)
             .build();
 
         let frag_state_info = vk::PipelineShaderStageCreateInfo::builder()
             .stage(vk::ShaderStageFlags::FRAGMENT)
             .module(frag_module)
-            .name(&entry_point)
+            .name(entry_point)
             .build();
 
         let shader_state_infos = vec![
@@ -101,13 +98,10 @@ impl NodePipelineConfig {
     }
 }
 
-fn create_node_pipeline(
+pub(crate) fn create_node_pipeline(
     app: &GfaestusVk,
-    // msaa_samples: vk::SampleCountFlags,
-    // render_pass: vk::RenderPass,
     pipeline_config: NodePipelineConfig,
     layouts: &[vk::DescriptorSetLayout],
-    // frag_shader: &[u32],
 ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
     let render_config = app.node_render_config()?;
 
@@ -116,7 +110,10 @@ fn create_node_pipeline(
 
     let device = app.vk_context().device();
 
-    let shader_stages_create_infos = pipeline_config.shader_modules(device)?;
+    let entry_point = CString::new("main").unwrap();
+
+    let shader_stages_create_infos =
+        pipeline_config.stage_create_info(device, &entry_point)?;
 
     let vert_binding_descs = [Vertex::get_binding_desc()];
     let vert_attr_descs = Vertex::get_attribute_descs();

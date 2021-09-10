@@ -7,6 +7,8 @@ use anyhow::*;
 use crate::vulkan::texture::GradientTexture;
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
+use super::NodePipelineConfig;
+
 pub struct OverlayPipelines {
     pipeline_rgb: OverlayPipelineRGB,
     pipeline_value: OverlayPipelineValue,
@@ -272,6 +274,23 @@ impl OverlayPipelineValue {
     }
 
     fn create_pipeline(
+        app: &GfaestusVk,
+        descriptor_set_layout: vk::DescriptorSetLayout,
+        selection_set_layout: vk::DescriptorSetLayout,
+    ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+        let pipeline_config = NodePipelineConfig {
+            kind: super::PipelineKind::OverlayU,
+        };
+
+        super::create_node_pipeline(
+            app,
+            pipeline_config,
+            &[descriptor_set_layout, selection_set_layout],
+        )
+    }
+
+    /*
+    fn create_pipeline(
         device: &Device,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
@@ -286,6 +305,7 @@ impl OverlayPipelineValue {
             crate::include_shader!("nodes/overlay_value.frag.spv"),
         )
     }
+    */
 
     pub(super) fn new(
         app: &GfaestusVk,
@@ -296,13 +316,8 @@ impl OverlayPipelineValue {
     ) -> Result<Self> {
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
-            desc_set_layout,
-            selection_set_layout,
-        );
+        let (pipeline, pipeline_layout) =
+            Self::create_pipeline(app, desc_set_layout, selection_set_layout)?;
 
         let image_count = 1;
 
