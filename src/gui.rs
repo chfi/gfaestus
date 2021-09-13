@@ -858,14 +858,20 @@ impl Gui {
     }
 
     pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+        log::trace!("Gui::upload_texture");
+
         let egui_tex = self.ctx.texture();
         if egui_tex.version != self.draw_system.texture_version() {
+            log::trace!(
+                "Texture version difference, uploading new GUI texture"
+            );
             self.draw_system.upload_texture(
                 app,
                 app.transient_command_pool,
                 app.graphics_queue,
                 &egui_tex,
             )?;
+            log::trace!("Texture upload complete");
         }
 
         Ok(())
@@ -876,6 +882,7 @@ impl Gui {
         app: &GfaestusVk,
         meshes: &[egui::ClippedMesh],
     ) -> Result<()> {
+        log::trace!("Uploading GUI vertices");
         self.draw_system.vertices.upload_meshes(app, meshes)
     }
 

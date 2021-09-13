@@ -15,7 +15,7 @@ use winit::window::{Window, WindowBuilder};
 
 use argh::FromArgs;
 
-use gfaestus::app::{mainview::*, OverlayCreatorMsg};
+use gfaestus::app::{mainview::*, OverlayCreatorMsg, Select};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -599,14 +599,17 @@ fn node_color(id) {
             }
             Event::RedrawEventsCleared => {
 
+                log::trace!("Event::RedrawEventsCleared");
                 let edge_ubo = app.settings.edge_renderer().load();
                 let edge_width = edge_ubo.edge_width;
 
                 if let Some(fid) = translate_fence_id {
                     if compute_manager.is_fence_ready(fid).unwrap() {
+                        log::trace!("Node translation fence ready");
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
 
+                        log::trace!("Compute fence freed, updating CPU node positions");
                         universe.update_positions_from_gpu(&gfaestus,
                                                            &main_view.node_draw_system.vertices).unwrap();
 
@@ -617,19 +620,17 @@ fn node_color(id) {
                 if let Some(fid) = select_fence_id {
 
                     if compute_manager.is_fence_ready(fid).unwrap() {
-                        let t = std::time::Instant::now();
+                        log::trace!("Node selection fence ready");
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
-                        trace!("block & free took {} ns", t.elapsed().as_nanos());
 
-                        let t = std::time::Instant::now();
                         GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
                                                 gfaestus.transient_command_pool,
                                                 gfaestus.graphics_queue,
                                                 gpu_selection.selection_buffer.buffer,
                                                 main_view.selection_buffer.buffer,
                                                 main_view.selection_buffer.size);
-                        trace!("buffer copy took {} ns", t.elapsed().as_nanos());
+                        log::trace!("Copied selection buffer to main view");
 
 
                         let t = std::time::Instant::now();
@@ -639,11 +640,9 @@ fn node_color(id) {
                                                 .vk_context()
                                                 .device())
                             .unwrap();
+                        log::trace!("Updated CPU selection buffer");
                         trace!("fill_selection_set took {} ns", t.elapsed().as_nanos());
 
-                        use gfaestus::app::Select;
-
-                        let t = std::time::Instant::now();
                         app.channels().app_tx
                             .send(AppMsg::Selection(Select::Many {
                             nodes: main_view
@@ -652,7 +651,6 @@ fn node_color(id) {
                                 .clone(),
                             clear: true }))
                             .unwrap();
-                        trace!("send took {} ns", t.elapsed().as_nanos());
 
 
                         select_fence_id = None;
@@ -663,6 +661,7 @@ fn node_color(id) {
 
                 if dirty_swapchain {
                     let size = window.inner_size();
+                    log::trace!("Dirty swapchain, reconstructing");
                     if size.width > 0 && size.height > 0 {
                         app.update_dims([size.width as f32, size.height as f32]);
                         gfaestus
@@ -697,6 +696,7 @@ fn node_color(id) {
                             Some(new_initial_view.scale),
                         );
                     } else {
+                        log::debug!("Can't recreate swapchain with a zero resolution");
                         return;
                     }
                 }
@@ -712,6 +712,7 @@ fn node_color(id) {
                 let annotations = app.annotations();
 
 
+                log::trace!("Drawing label sets");
                 for label_set in annotations.visible_label_sets() {
 
                     if !step_caches.contains_key(&label_set.path_id) {
@@ -885,6 +886,7 @@ fn node_color(id) {
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
+                        log::trace!("In draw_frame_from callback");
                         // let size = window.inner_size();
                         let size = swapchain_dims;
 
@@ -901,6 +903,7 @@ fn node_color(id) {
                             "Image transitions"
                         );
 
+                        log::trace!("Pre-rendering image transitions");
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -944,6 +947,7 @@ fn node_color(id) {
                         let gradient_name = app.shared_state().overlay_state().gradient();
                         let gradient = gradients.gradient(gradient_name).unwrap();
 
+                        log::trace!("Drawing nodes");
                         main_view.draw_nodes(
                             cmd_buf,
                             node_pass,
@@ -959,6 +963,7 @@ fn node_color(id) {
 
                         if edges_enabled {
 
+                            log::trace!("Drawing edges");
                             debug::begin_cmd_buf_label(
                                 debug_utils,
                                 cmd_buf,
@@ -991,6 +996,7 @@ fn node_color(id) {
                         }
 
 
+                        log::trace!("Post-edge image transitions");
                         unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -1029,6 +1035,7 @@ fn node_color(id) {
                             "Node selection border",
                         );
 
+                        log::trace!("Drawing selection border edge detection");
                         selection_edge
                             .draw(
                                 &device,
@@ -1039,6 +1046,7 @@ fn node_color(id) {
                             )
                             .unwrap();
 
+                        log::trace!("Selection border edge detection -- image transitions");
                         unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -1072,6 +1080,7 @@ fn node_color(id) {
                             );
                         }
 
+                        log::trace!("Drawing selection border blur");
                         selection_blur
                             .draw(
                                 &device,
@@ -1090,6 +1099,7 @@ fn node_color(id) {
                             "GUI",
                         );
 
+                        log::trace!("Drawing GUI");
                         gui.draw(
                             cmd_buf,
                             gui_pass,
@@ -1103,6 +1113,7 @@ fn node_color(id) {
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
+                        log::trace!("End of draw_frame_from callback");
                     };
 
                 let size = window.inner_size();
@@ -1111,6 +1122,7 @@ fn node_color(id) {
                 if !dirty_swapchain {
                     let screen_dims = app.dims();
 
+                    log::trace!("Copying node ID image to buffer");
                     GfaestusVk::copy_image_to_buffer(
                         gfaestus.vk_context().device(),
                         gfaestus.transient_command_pool,
@@ -1124,6 +1136,7 @@ fn node_color(id) {
                     ).unwrap();
                 }
 
+                log::trace!("Calculating FPS");
                 let frame_time = frame_t.elapsed().as_secs_f32();
                 frame_time_history[frame % frame_time_history.len()] = frame_time;
 
@@ -1144,14 +1157,18 @@ fn node_color(id) {
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
+                    log::trace!("WindowEvent::CloseRequested");
                     *control_flow = ControlFlow::Exit;
                 }
                 WindowEvent::Resized { .. } => {
+                    // log::trace!("WindowEvent::Resized");
                     dirty_swapchain = true;
                 }
                 _ => (),
             },
             Event::LoopDestroyed => {
+                log::trace!("Event::LoopDestroyed");
+
                 gfaestus.wait_gpu_idle().unwrap();
 
                 let device = gfaestus.vk_context().device();
