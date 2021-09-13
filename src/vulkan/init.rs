@@ -402,14 +402,11 @@ pub(super) fn create_logical_device(
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
 
-    // device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
-
     let available_features =
         unsafe { instance.get_physical_device_features(device) };
 
     let mut device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
-        .tessellation_shader(true)
         .independent_blend(true);
 
     if available_features.wide_lines == vk::TRUE {
