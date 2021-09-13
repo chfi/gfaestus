@@ -42,10 +42,12 @@ impl NodePipelines {
 
         let mut render_config = app.node_render_config()?;
 
+        /*
         {
             log::warn!("forcing node tessellation off");
             render_config.tessellation = false;
         }
+        */
 
         let vertices = NodeVertices::new(&render_config);
 

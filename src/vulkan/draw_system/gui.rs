@@ -11,7 +11,9 @@ use crate::vulkan::texture::{Gradients, Texture};
 use super::create_shader_module;
 
 pub struct GuiPipeline {
+    descriptor_pool: vk::DescriptorPool,
     descriptor_set_layout: vk::DescriptorSetLayout,
+    descriptor_sets: Vec<vk::DescriptorSet>,
 
     sampler: vk::Sampler,
     texture: Texture,
@@ -36,6 +38,40 @@ impl GuiPipeline {
         let device = app.vk_context().device();
 
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let image_count = 2;
+
+        let descriptor_pool = {
+            let sampler_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: image_count * 2,
+            };
+
+            // let value_size = vk::DescriptorPoolSize {
+            //     ty: vk::DescriptorType::Com
+            //     descriptor_count: image_count,
+            // };
+
+            let pool_sizes = [sampler_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(image_count)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
+        let descriptor_sets = {
+            let layouts = vec![desc_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
 
         let (tex_2d_pipeline, tex_2d_pipeline_layout) = Self::create_pipeline(
             device,
@@ -75,7 +111,9 @@ impl GuiPipeline {
         let vertices = GuiVertices::new(device);
 
         Ok(Self {
+            descriptor_pool,
             descriptor_set_layout: desc_set_layout,
+            descriptor_sets,
 
             sampler,
             texture,
@@ -177,17 +215,37 @@ impl GuiPipeline {
                             self.tex_2d_pipeline,
                         );
 
-                        let desc_write = self.egui_descriptor_write();
+                        let desc_sets = [self.descriptor_sets[0]];
 
-                        let desc_writes = [desc_write];
-
-                        push_descriptor.cmd_push_descriptor_set(
+                        device.cmd_bind_descriptor_sets(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
                             self.tex_2d_pipeline_layout,
                             0,
-                            &desc_writes,
+                            &desc_sets,
+                            &[],
                         );
+
+                        /*
+                        self.pipelines.bind_descriptor_sets(
+                            device,
+                            cmd_buf,
+                            overlay_id,
+                            self.selection_descriptors.descriptor_set,
+                        )?;
+                        */
+
+                        // let desc_write = self.egui_descriptor_write();
+
+                        // let desc_writes = [desc_write];
+
+                        // push_descriptor.cmd_push_descriptor_set(
+                        //     cmd_buf,
+                        //     vk::PipelineBindPoint::GRAPHICS,
+                        //     self.tex_2d_pipeline_layout,
+                        //     0,
+                        //     &desc_writes,
+                        // );
 
                         use vk::ShaderStageFlags as Flags;
                         device.cmd_push_constants(
@@ -197,8 +255,18 @@ impl GuiPipeline {
                             0,
                             &pc_bytes,
                         );
+
+                        device.cmd_draw_indexed(
+                            cmd_buf,
+                            ix_count,
+                            1,
+                            0,
+                            vx_offset as i32,
+                            0,
+                        )
                     }
                     egui::TextureId::User(_) => {
+                        /*
                         device.cmd_bind_pipeline(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
@@ -226,17 +294,9 @@ impl GuiPipeline {
                             0,
                             &pc_bytes,
                         );
+                        */
                     }
                 }
-
-                device.cmd_draw_indexed(
-                    cmd_buf,
-                    ix_count,
-                    1,
-                    0,
-                    vx_offset as i32,
-                    0,
-                )
             };
         }
 
@@ -307,6 +367,13 @@ impl GuiPipeline {
         self.texture = texture;
         self.texture_version = version;
 
+        let desc_write = self.egui_descriptor_write();
+        let desc_writes = [desc_write];
+
+        let device = app.vk_context().device();
+
+        unsafe { device.update_descriptor_sets(&desc_writes, &[]) }
+
         Ok(())
     }
 
@@ -319,7 +386,7 @@ impl GuiPipeline {
         let image_infos = [image_info];
 
         let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(vk::DescriptorSet::null())
+            .dst_set(self.descriptor_sets[0])
             .dst_binding(0)
             .dst_array_element(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
@@ -373,7 +440,6 @@ impl GuiPipeline {
 
         let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
             .bindings(&bindings)
-            .flags(vk::DescriptorSetLayoutCreateFlags::PUSH_DESCRIPTOR_KHR)
             .build();
 
         let layout =

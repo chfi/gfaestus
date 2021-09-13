@@ -1,7 +1,7 @@
 use ash::{
     extensions::{
         ext::DebugUtils,
-        khr::{PushDescriptor, Surface, Swapchain},
+        khr::{Surface, Swapchain},
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::SurfaceKHR,
@@ -397,20 +397,21 @@ pub(super) fn create_logical_device(
     };
 
     let device_extensions = required_device_extensions();
-    let mut device_extensions_ptrs = device_extensions
+    let device_extensions_ptrs = device_extensions
         .iter()
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
-
-    device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
 
     let available_features =
         unsafe { instance.get_physical_device_features(device) };
 
     let mut device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
-        .tessellation_shader(true)
         .independent_blend(true);
+
+    if available_features.tessellation_shader == vk::TRUE {
+        device_features = device_features.tessellation_shader(true);
+    }
 
     if available_features.wide_lines == vk::TRUE {
         device_features = device_features.wide_lines(true);
