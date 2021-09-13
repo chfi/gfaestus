@@ -124,6 +124,35 @@ impl Texture {
         Ok(texture)
     }
 
+    pub fn copy_from_slice(
+        &self,
+        app: &super::GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        width: usize,
+        height: usize,
+        data: &[u8],
+    ) -> Result<()> {
+        let usage = vk::BufferUsageFlags::TRANSFER_SRC;
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (staging_buf, staging_alloc, _) =
+            app.create_buffer_with_data(usage, memory_usage, false, &data)?;
+
+        self.copy_from_buffer(
+            app,
+            command_pool,
+            transition_queue,
+            staging_buf,
+            width,
+            height,
+        )?;
+
+        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
+
+        Ok(())
+    }
+
     pub fn copy_from_buffer(
         &self,
         app: &super::GfaestusVk,

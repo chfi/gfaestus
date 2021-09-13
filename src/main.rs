@@ -3,6 +3,7 @@ use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
+use gfaestus::vulkan::texture::Gradients_;
 use rustc_hash::FxHashMap;
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
@@ -404,6 +405,14 @@ fn node_color(id) {
     .unwrap();
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
+
+    let gradients_ = Gradients_::initialize(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        1024,
+    )
+    .unwrap();
 
     let gradients = Gradients::initialize(
         &gfaestus,
