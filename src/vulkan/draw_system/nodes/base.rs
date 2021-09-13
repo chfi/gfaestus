@@ -34,7 +34,11 @@ impl NodePipelineConfig {
         device: &Device,
         entry_point: &std::ffi::CStr,
     ) -> Result<Vec<PipelineShaderStageCreateInfo>> {
-        let vert_src = crate::load_shader!("nodes/base.vert.spv");
+        let vert_src = if render_config.tessellation {
+            crate::load_shader!("nodes/base.vert.spv")
+        } else {
+            crate::load_shader!("nodes/quad.vert.spv")
+        };
 
         let frag_src = match self.kind {
             PipelineKind::OverlayRgb => {

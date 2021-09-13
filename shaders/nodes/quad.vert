@@ -33,31 +33,35 @@ void main() {
 
   switch (vx_mod) {
     case 0:
-      offset = vec2(-0.05, -0.05);
+      // offset = vec2(-0.05, -0.05);
+      offset = vec2(0.0, -0.05);
       break;
     case 1:
-      offset = vec2(0.05, 0.05);
+      // offset = vec2(0.05, 0.05);
+      offset = vec2(0.0, 0.05);
       break;
     case 2:
-      offset = vec2(-0.05, 0.05);
+      // offset = vec2(-0.05, 0.05);
+      offset = vec2(0.0, 0.05);
       break;
     case 3:
-      offset = vec2(-0.05, -0.05);
+      // offset = vec2(-0.05, -0.05);
+      offset = vec2(0.0, -0.05);
       break;
     case 4:
-      offset = vec2(0.05, -0.05);
+      // offset = vec2(0.05, -0.05);
+      offset = vec2(0.0, -0.05);
       break;
     case 5:
-      offset = vec2(0.05, 0.05);
+      // offset = vec2(0.05, 0.05);
+      offset = vec2(0.0, 0.05);
       break;
     default:
-      offset = vec2(-0.05, -0.05);
+      // offset = vec2(-0.05, -0.05);
+      offset = vec2(0.0, 0.0);
       break;
   }
 
-  // gl_Position = vec4(position.xy + offset, 0.0, 1.0);
-
-  // vec4 pos = node_uniform.view_transform * vec4(position.xy + offset, 0.0, 1.0);
   vec4 pos = node_uniform.view_transform * vec4(position.xy, 0.0, 1.0);
   pos.x += offset.x;
   pos.y += offset.y;
