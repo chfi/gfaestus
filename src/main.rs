@@ -375,6 +375,7 @@ fn node_color(id) {
         warn!("using the isoline edge renderer");
     }
 
+    /*
     let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,
         &graph_query.graph_arc(),
@@ -384,6 +385,7 @@ fn node_color(id) {
         use_quad_renderer,
     )
     .unwrap();
+    */
 
     let mut dirty_swapchain = false;
 
@@ -594,7 +596,7 @@ fn node_color(id) {
 
                 let edge_ubo = app.settings.edge_renderer().load();
 
-                edge_renderer.write_ubo(&edge_ubo).unwrap();
+                // edge_renderer.write_ubo(&edge_ubo).unwrap();
 
             }
             Event::RedrawEventsCleared => {
@@ -872,7 +874,7 @@ fn node_color(id) {
 
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
-                let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
+                // let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
 
                 let current_view = app.shared_state().view();
 
@@ -961,6 +963,7 @@ fn node_color(id) {
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
+                            /*
                         if edges_enabled {
 
                             log::trace!("Drawing edges");
@@ -994,6 +997,7 @@ fn node_color(id) {
 
                             debug::end_cmd_buf_label(debug_utils, cmd_buf);
                         }
+                            */
 
 
                         log::trace!("Post-edge image transitions");
@@ -1093,6 +1097,8 @@ fn node_color(id) {
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
+
+                        /*
                         debug::begin_cmd_buf_label(
                             debug_utils,
                             cmd_buf,
@@ -1112,6 +1118,7 @@ fn node_color(id) {
                         .unwrap();
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
+                        */
 
                         log::trace!("End of draw_frame_from callback");
                     };

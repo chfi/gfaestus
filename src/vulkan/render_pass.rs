@@ -985,7 +985,8 @@ impl RenderPasses {
             .load_op(vk::AttachmentLoadOp::DONT_CARE)
             .store_op(vk::AttachmentStoreOp::STORE)
             .initial_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
-            .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
+            .final_layout(vk::ImageLayout::PRESENT_SRC_KHR)
+            // .final_layout(vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL)
             .build();
 
         let attch_descs = [color_attch_desc];

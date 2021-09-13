@@ -24,8 +24,7 @@ pub struct VkContext {
     physical_device: vk::PhysicalDevice,
     device: Device,
 
-    push_descriptor: PushDescriptor,
-
+    // push_descriptor: PushDescriptor,
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 
     pub portability_subset: bool,
@@ -43,9 +42,11 @@ pub struct SupportedFeatures {
 }
 
 impl VkContext {
+    /*
     pub fn push_descriptor(&self) -> &PushDescriptor {
         &self.push_descriptor
     }
+    */
 
     pub fn instance(&self) -> &Instance {
         &self.instance
@@ -174,7 +175,7 @@ impl VkContext {
         physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
-        let push_descriptor = PushDescriptor::new(&instance, &device);
+        // let push_descriptor = PushDescriptor::new(&instance, &device);
 
         let get_physical_device_features2 =
             unsafe {
@@ -215,7 +216,7 @@ impl VkContext {
             physical_device,
             device,
 
-            push_descriptor,
+            // push_descriptor,
             get_physical_device_features2,
             portability_subset,
         }
