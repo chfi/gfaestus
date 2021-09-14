@@ -158,6 +158,8 @@ fn main() {
             }
         };
 
+    let gpu_features = gfaestus.vk_context().supported_features().unwrap();
+
     let num_cpus = num_cpus::get();
 
     let futures_cpus;
@@ -881,11 +883,13 @@ fn node_color(id) {
 
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
-                let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
 
                 let current_view = app.shared_state().view();
 
                 let edges_enabled = app.shared_state().edges_enabled();
+
+                // TODO this should also check tess. isoline support etc. i think
+                let edges_enabled = edges_enabled && gpu_features.tessellation_shader;
 
                 let debug_utils = gfaestus.vk_context().debug_utils().map(|u| u.to_owned());
 
@@ -1114,8 +1118,6 @@ fn node_color(id) {
                             gui_pass,
                             framebuffers,
                             size.into(),
-                            // [size.width as f32, size.height as f32],
-                            &push_descriptor,
                             &gradients,
                         )
                         .unwrap();

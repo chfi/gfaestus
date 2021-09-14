@@ -42,6 +42,8 @@ impl NodePipelines {
 
         let mut render_config = app.node_render_config()?;
 
+        log::warn!("node_render_config: {:?}", render_config);
+
         /*
         {
             log::warn!("forcing node tessellation off");

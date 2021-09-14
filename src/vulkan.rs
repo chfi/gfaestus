@@ -255,9 +255,12 @@ impl GfaestusVk {
         &self.vk_context
     }
 
-    // TODO actually derive this from the vulkan context!
     pub fn node_render_config(&self) -> Result<NodeRenderConfig> {
-        let config = NodeRenderConfig { tessellation: true };
+        let features = self.vk_context.supported_features()?;
+
+        let config = NodeRenderConfig {
+            tessellation: features.tessellation_shader,
+        };
         Ok(config)
     }
 

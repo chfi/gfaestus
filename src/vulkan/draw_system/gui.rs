@@ -1,4 +1,4 @@
-use ash::{extensions::khr::PushDescriptor, version::DeviceV1_0};
+use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 
 use std::ffi::CString;
@@ -137,7 +137,6 @@ impl GuiPipeline {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         viewport_dims: [f32; 2],
-        push_descriptor: &PushDescriptor,
         gradients: &Gradients,
     ) -> Result<()> {
         let device = &self.device;

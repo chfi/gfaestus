@@ -2,10 +2,7 @@ use std::ffi::c_void;
 
 use ash::{Device, Entry, Instance};
 
-use ash::extensions::{
-    ext::DebugUtils,
-    khr::{PushDescriptor, Surface},
-};
+use ash::extensions::{ext::DebugUtils, khr::Surface};
 
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 
@@ -24,8 +21,6 @@ pub struct VkContext {
     physical_device: vk::PhysicalDevice,
     device: Device,
 
-    push_descriptor: PushDescriptor,
-
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 
     pub portability_subset: bool,
@@ -33,20 +28,16 @@ pub struct VkContext {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct SupportedFeatures {
-    sampler_anisotropy: bool,
-    tessellation_shader: bool,
-    independent_blend: bool,
+    pub sampler_anisotropy: bool,
+    pub tessellation_shader: bool,
+    pub independent_blend: bool,
 
-    wide_lines: bool,
+    pub wide_lines: bool,
 
-    tessellation_isolines: bool,
+    pub tessellation_isolines: bool,
 }
 
 impl VkContext {
-    pub fn push_descriptor(&self) -> &PushDescriptor {
-        &self.push_descriptor
-    }
-
     pub fn instance(&self) -> &Instance {
         &self.instance
     }
@@ -174,8 +165,6 @@ impl VkContext {
         physical_device: vk::PhysicalDevice,
         device: Device,
     ) -> Self {
-        let push_descriptor = PushDescriptor::new(&instance, &device);
-
         let get_physical_device_features2 =
             unsafe {
                 KhrGetPhysicalDeviceProperties2Fn::load(|name| {
@@ -215,7 +204,6 @@ impl VkContext {
             physical_device,
             device,
 
-            push_descriptor,
             get_physical_device_features2,
             portability_subset,
         }

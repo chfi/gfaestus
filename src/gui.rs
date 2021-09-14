@@ -892,7 +892,6 @@ impl Gui {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
-        push_descriptor: &PushDescriptor,
         gradients: &Gradients,
     ) -> Result<()> {
         self.draw_system.draw(
@@ -900,7 +899,6 @@ impl Gui {
             render_pass,
             framebuffers,
             screen_dims,
-            push_descriptor,
             gradients,
         )
     }
