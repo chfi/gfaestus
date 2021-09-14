@@ -29,35 +29,30 @@ void main() {
   // 4 -> bottom right
   // 5 -> top right
 
+  float del = 0.01;
+
   vec2 offset;
 
   switch (vx_mod) {
     case 0:
-      // offset = vec2(-0.05, -0.05);
-      offset = vec2(0.0, -0.05);
+      offset = vec2(0.0, -del);
       break;
     case 1:
-      // offset = vec2(0.05, 0.05);
-      offset = vec2(0.0, 0.05);
+      offset = vec2(0.0, del);
       break;
     case 2:
-      // offset = vec2(-0.05, 0.05);
-      offset = vec2(0.0, 0.05);
+      offset = vec2(0.0, del);
       break;
     case 3:
-      // offset = vec2(-0.05, -0.05);
-      offset = vec2(0.0, -0.05);
+      offset = vec2(0.0, -del);
       break;
     case 4:
-      // offset = vec2(0.05, -0.05);
-      offset = vec2(0.0, -0.05);
+      offset = vec2(0.0, -del);
       break;
     case 5:
-      // offset = vec2(0.05, 0.05);
-      offset = vec2(0.0, 0.05);
+      offset = vec2(0.0, del);
       break;
     default:
-      // offset = vec2(-0.05, -0.05);
       offset = vec2(0.0, 0.0);
       break;
   }
