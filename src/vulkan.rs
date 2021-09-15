@@ -35,8 +35,6 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{app::Args, view::ScreenDims};
 
-use self::draw_system::nodes::NodeRenderConfig;
-
 pub struct GfaestusVk {
     pub allocator: Allocator,
 

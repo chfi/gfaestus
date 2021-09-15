@@ -21,6 +21,7 @@ pub struct VkContext {
     physical_device: vk::PhysicalDevice,
     device: Device,
 
+    #[allow(dead_code)]
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 
     pub portability_subset: bool,
@@ -38,8 +39,8 @@ pub struct RendererConfig {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeRendererType {
-    VertexOnly,
     TessellationQuads,
+    VertexOnly,
     // TessellationTriangles,
     // Geometry
 }

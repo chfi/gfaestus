@@ -19,11 +19,6 @@ pub enum PipelineKind {
     // OverlayUv,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NodeRenderConfig {
-    pub tessellation: bool,
-}
-
 pub struct NodePipelineConfig {
     pub kind: PipelineKind,
 }

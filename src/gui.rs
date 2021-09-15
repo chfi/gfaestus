@@ -40,7 +40,7 @@ use crate::input::binds::{
 
 use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
-use ash::{extensions::khr::PushDescriptor, vk};
+use ash::vk;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};

@@ -41,17 +41,9 @@ impl NodePipelines {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        // let
         let renderer_type = vk_context.renderer_config.nodes;
 
         log::warn!("node_renderer_type: {:?}", renderer_type);
-
-        /*
-        {
-            log::warn!("forcing node tessellation off");
-            render_config.tessellation = false;
-        }
-        */
 
         let vertices = NodeVertices::new(renderer_type);
 

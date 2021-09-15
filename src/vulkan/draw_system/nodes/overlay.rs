@@ -8,7 +8,7 @@ use crate::vulkan::context::NodeRendererType;
 use crate::vulkan::texture::GradientTexture;
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
-use super::{NodePipelineConfig, NodeRenderConfig};
+use super::NodePipelineConfig;
 
 pub struct OverlayPipelines {
     pipeline_rgb: OverlayPipelineRGB,

@@ -316,9 +316,11 @@ impl EdgeRenderer {
         layout: &FlatLayout,
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
-        use_quad_pipeline: bool,
     ) -> Result<Self> {
+        let vk_context = app.vk_context();
         let device = app.vk_context().device();
+
+        let renderer_type = vk_context.renderer_config.edges;
 
         let ubo = EdgesUBOBuffer::new(app)?;
 
@@ -386,20 +388,26 @@ impl EdgeRenderer {
 
         let wide_lines = features.wide_lines == vk::TRUE;
 
-        let (pipeline, pipeline_layout) = if use_quad_pipeline {
-            Self::create_quad_pipeline(
-                device,
-                msaa_samples,
-                render_pass,
-                &layouts,
-            )
-        } else {
-            Self::create_isoline_pipeline(
-                device,
-                msaa_samples,
-                render_pass,
-                &layouts,
-            )
+        let (pipeline, pipeline_layout) = match renderer_type {
+            crate::vulkan::context::EdgeRendererType::TessellationIsolines => {
+                Self::create_isoline_pipeline(
+                    device,
+                    msaa_samples,
+                    render_pass,
+                    &layouts,
+                )
+            }
+            crate::vulkan::context::EdgeRendererType::TessellationQuads => {
+                Self::create_quad_pipeline(
+                    device,
+                    msaa_samples,
+                    render_pass,
+                    &layouts,
+                )
+            }
+            crate::vulkan::context::EdgeRendererType::Disabled => {
+                anyhow::bail!("Tried to create a Disabled edge renderer!");
+            }
         };
 
         let edge_index_buffer =

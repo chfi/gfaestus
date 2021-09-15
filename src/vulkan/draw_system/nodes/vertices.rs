@@ -2,7 +2,6 @@ use ash::vk;
 
 use anyhow::*;
 
-use super::NodeRenderConfig;
 use crate::vulkan::{
     context::NodeRendererType, draw_system::Vertex, GfaestusVk,
 };

@@ -325,37 +325,25 @@ fn node_color(id) {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
-    let use_quad_renderer = true;
-    /*
-    let use_quad_renderer = {
-        let vk_ctx = gfaestus.vk_context();
-
-        if vk_ctx.portability_subset {
-            let subset_features =
-                gfaestus.vk_context().portability_features().unwrap();
-            println!("subset_features: {:?}", subset_features);
-            subset_features.tessellation_isolines == vk::FALSE
-        } else {
-            false
-        }
-    };
-
-    if use_quad_renderer {
-        warn!("using the quad edge renderer");
+    let mut edge_renderer = if gfaestus.vk_context().renderer_config.edges
+        == EdgeRendererType::Disabled
+    {
+        log::warn!(
+            "Device does not support tessellation shaders, disabling edges"
+        );
+        None
     } else {
-        warn!("using the isoline edge renderer");
-    }
-    */
+        let edge_renderer = EdgeRenderer::new(
+            &gfaestus,
+            &graph_query.graph_arc(),
+            universe.layout(),
+            gfaestus.msaa_samples,
+            gfaestus.render_passes.edges,
+        )
+        .unwrap();
 
-    let mut edge_renderer = EdgeRenderer::new(
-        &gfaestus,
-        &graph_query.graph_arc(),
-        universe.layout(),
-        gfaestus.msaa_samples,
-        gfaestus.render_passes.edges,
-        use_quad_renderer,
-    )
-    .unwrap();
+        Some(edge_renderer)
+    };
 
     let mut dirty_swapchain = false;
 
@@ -579,8 +567,9 @@ fn node_color(id) {
 
                 let edge_ubo = app.settings.edge_renderer().load();
 
-                edge_renderer.write_ubo(&edge_ubo).unwrap();
-
+                for er in edge_renderer.iter_mut() {
+                    er.write_ubo(&edge_ubo).unwrap();
+                }
             }
             Event::RedrawEventsCleared => {
 
@@ -968,17 +957,19 @@ fn node_color(id) {
                             edge_pipeline.preprocess_memory_barrier(cmd_buf).unwrap();
                             */
 
-                            edge_renderer.draw(
-                                cmd_buf,
-                                edge_width,
-                                &main_view.node_draw_system.vertices,
-                                edges_pass,
-                                framebuffers,
-                                size.into(),
-                                2.0,
-                                current_view,
-                                Point::ZERO,
-                            ).unwrap();
+                            for er in edge_renderer.iter_mut() {
+                                er.draw(
+                                    cmd_buf,
+                                    edge_width,
+                                    &main_view.node_draw_system.vertices,
+                                    edges_pass,
+                                    framebuffers,
+                                    size.into(),
+                                    2.0,
+                                    current_view,
+                                    Point::ZERO,
+                                ).unwrap();
+                            }
 
                             debug::end_cmd_buf_label(debug_utils, cmd_buf);
                         }
