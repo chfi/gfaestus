@@ -3,7 +3,9 @@ use ash::vk;
 use anyhow::*;
 
 use super::NodeRenderConfig;
-use crate::vulkan::{draw_system::Vertex, GfaestusVk};
+use crate::vulkan::{
+    context::NodeRendererType, draw_system::Vertex, GfaestusVk,
+};
 
 pub struct NodeVertices {
     pub(crate) vertex_count: usize,
@@ -13,11 +15,11 @@ pub struct NodeVertices {
     allocation: vk_mem::Allocation,
     allocation_info: Option<vk_mem::AllocationInfo>,
 
-    render_config: NodeRenderConfig,
+    renderer_type: NodeRendererType,
 }
 
 impl NodeVertices {
-    pub fn new(config: &NodeRenderConfig) -> Self {
+    pub fn new(renderer_type: NodeRendererType) -> Self {
         let vertex_count = 0;
         let vertex_buffer = vk::Buffer::null();
 
@@ -30,7 +32,7 @@ impl NodeVertices {
             allocation,
             allocation_info,
 
-            render_config: *config,
+            renderer_type,
         }
     }
 
@@ -66,7 +68,7 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        assert!(self.render_config.tessellation);
+        assert!(self.renderer_type == NodeRendererType::TessellationQuads);
 
         if self.has_vertices() {
             self.destroy(app)?;
@@ -103,7 +105,7 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        assert!(!self.render_config.tessellation);
+        assert!(self.renderer_type == NodeRendererType::VertexOnly);
 
         if self.has_vertices() {
             self.destroy(app)?;
@@ -153,10 +155,13 @@ impl NodeVertices {
         app: &GfaestusVk,
         vertices: &[Vertex],
     ) -> Result<()> {
-        if self.render_config.tessellation {
-            self.upload_line_vertices(app, vertices)
-        } else {
-            self.upload_quad_vertices(app, vertices)
+        match self.renderer_type {
+            NodeRendererType::VertexOnly => {
+                self.upload_quad_vertices(app, vertices)
+            }
+            NodeRendererType::TessellationQuads => {
+                self.upload_line_vertices(app, vertices)
+            }
         }
     }
 
@@ -211,19 +216,22 @@ impl NodeVertices {
 
             let sel_slice = std::slice::from_raw_parts(val_ptr, node_count);
 
-            if self.render_config.tessellation {
-                // if it uses just two vertices per node, copy the entire slice
-                target.extend_from_slice(sel_slice);
-            } else {
-                // if it uses six vertices per node, only read every
-                // third pair of vertices (per the vx order in
-                // upload_vertices)
+            match self.renderer_type {
+                NodeRendererType::TessellationQuads => {
+                    // if it uses just two vertices per node, copy the entire slice
+                    target.extend_from_slice(sel_slice);
+                }
+                NodeRendererType::VertexOnly => {
+                    // if it uses six vertices per node, only read every
+                    // third pair of vertices (per the vx order in
+                    // upload_vertices)
 
-                // TODO this probably works; but untested (could be
-                // parallelized too)
-                for n in 0..node_count {
-                    let ix = n * 3;
-                    target.push(sel_slice[ix]);
+                    // TODO this probably works; but untested (could be
+                    // parallelized too)
+                    for n in 0..node_count {
+                        let ix = n * 3;
+                        target.push(sel_slice[ix]);
+                    }
                 }
             }
         }

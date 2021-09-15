@@ -2,6 +2,7 @@
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::reactor::Reactor;
+use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use gfaestus::vulkan::texture::Gradients_;
 use rustc_hash::FxHashMap;
@@ -123,7 +124,7 @@ fn main() {
         }
     };
 
-    let gpu_features = gfaestus.vk_context().supported_features().unwrap();
+    let renderer_config = gfaestus.vk_context().renderer_config;
 
     let num_cpus = num_cpus::get();
 
@@ -324,6 +325,8 @@ fn node_color(id) {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
+    let use_quad_renderer = true;
+    /*
     let use_quad_renderer = {
         let vk_ctx = gfaestus.vk_context();
 
@@ -342,6 +345,7 @@ fn node_color(id) {
     } else {
         warn!("using the isoline edge renderer");
     }
+    */
 
     let mut edge_renderer = EdgeRenderer::new(
         &gfaestus,
@@ -373,13 +377,13 @@ fn node_color(id) {
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
-    let gradients_ = Gradients_::initialize(
-        &gfaestus,
-        gfaestus.transient_command_pool,
-        gfaestus.graphics_queue,
-        1024,
-    )
-    .unwrap();
+    // let gradients_ = Gradients_::initialize(
+    //     &gfaestus,
+    //     gfaestus.transient_command_pool,
+    //     gfaestus.graphics_queue,
+    //     1024,
+    // )
+    // .unwrap();
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -859,7 +863,8 @@ fn node_color(id) {
                 let edges_enabled = app.shared_state().edges_enabled();
 
                 // TODO this should also check tess. isoline support etc. i think
-                let edges_enabled = edges_enabled && gpu_features.tessellation_shader;
+                let edges_enabled = edges_enabled &&
+                    !matches!(renderer_config.edges, EdgeRendererType::Disabled);
 
                 let debug_utils = gfaestus.vk_context().debug_utils().map(|u| u.to_owned());
 

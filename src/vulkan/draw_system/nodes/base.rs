@@ -7,6 +7,7 @@ use std::ffi::CString;
 use anyhow::*;
 
 use super::super::{create_shader_module, Vertex};
+use crate::vulkan::context::NodeRendererType;
 use crate::vulkan::GfaestusVk;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,14 +31,17 @@ pub struct NodePipelineConfig {
 impl NodePipelineConfig {
     fn stage_create_info(
         &self,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         device: &Device,
         entry_point: &std::ffi::CStr,
     ) -> Result<Vec<PipelineShaderStageCreateInfo>> {
-        let vert_src = if render_config.tessellation {
-            crate::load_shader!("nodes/base.vert.spv")
-        } else {
-            crate::load_shader!("nodes/quad.vert.spv")
+        let vert_src = match renderer_type {
+            NodeRendererType::VertexOnly => {
+                crate::load_shader!("nodes/quad.vert.spv")
+            }
+            NodeRendererType::TessellationQuads => {
+                crate::load_shader!("nodes/base.vert.spv")
+            }
         };
 
         let frag_src = match self.kind {
@@ -65,7 +69,7 @@ impl NodePipelineConfig {
             .name(entry_point)
             .build();
 
-        if render_config.tessellation {
+        if matches!(renderer_type, NodeRendererType::TessellationQuads) {
             let tesc_src = crate::load_shader!("nodes/base.tesc.spv");
             let tese_src = crate::load_shader!("nodes/base.tese.spv");
 
@@ -100,7 +104,7 @@ impl NodePipelineConfig {
 
 pub(crate) fn create_node_pipeline(
     app: &GfaestusVk,
-    render_config: &NodeRenderConfig,
+    renderer_type: NodeRendererType,
     pipeline_config: NodePipelineConfig,
     layouts: &[vk::DescriptorSetLayout],
 ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
@@ -112,7 +116,7 @@ pub(crate) fn create_node_pipeline(
     let entry_point = CString::new("main").unwrap();
 
     let shader_stages_create_infos = pipeline_config.stage_create_info(
-        render_config,
+        renderer_type,
         device,
         &entry_point,
     )?;
@@ -125,11 +129,12 @@ pub(crate) fn create_node_pipeline(
         .build();
 
     let input_assembly_info = {
-        let topology = if render_config.tessellation {
-            vk::PrimitiveTopology::PATCH_LIST
-        } else {
-            vk::PrimitiveTopology::TRIANGLE_LIST
-        };
+        let topology =
+            if matches!(renderer_type, NodeRendererType::TessellationQuads) {
+                vk::PrimitiveTopology::PATCH_LIST
+            } else {
+                vk::PrimitiveTopology::TRIANGLE_LIST
+            };
         vk::PipelineInputAssemblyStateCreateInfo::builder()
             .topology(topology)
             .primitive_restart_enable(false)
@@ -211,14 +216,15 @@ pub(crate) fn create_node_pipeline(
     let layout = {
         use vk::ShaderStageFlags as Flags;
 
-        let stage_flags = if render_config.tessellation {
-            Flags::VERTEX
-                | Flags::TESSELLATION_CONTROL
-                | Flags::TESSELLATION_EVALUATION
-                | Flags::FRAGMENT
-        } else {
-            Flags::VERTEX | Flags::FRAGMENT
-        };
+        let stage_flags =
+            if matches!(renderer_type, NodeRendererType::TessellationQuads) {
+                Flags::VERTEX
+                    | Flags::TESSELLATION_CONTROL
+                    | Flags::TESSELLATION_EVALUATION
+                    | Flags::FRAGMENT
+            } else {
+                Flags::VERTEX | Flags::FRAGMENT
+            };
 
         let pc_range = vk::PushConstantRange::builder()
             .stage_flags(stage_flags)
@@ -255,7 +261,7 @@ pub(crate) fn create_node_pipeline(
             .patch_control_points(2)
             .build();
 
-    if render_config.tessellation {
+    if matches!(renderer_type, NodeRendererType::TessellationQuads) {
         pipeline_info =
             pipeline_info.tessellation_state(&tessellation_state_info);
     }

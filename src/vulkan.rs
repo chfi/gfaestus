@@ -66,7 +66,7 @@ pub struct GfaestusVk {
 
     pub vk_context: VkContext,
     // dimensions: ScreenDims,
-    pub supported_features: SupportedFeatures,
+    // pub supported_features: SupportedFeatures,
 }
 
 impl GfaestusVk {
@@ -162,7 +162,7 @@ impl GfaestusVk {
             surface_khr,
             physical_device,
             device,
-        );
+        )?;
 
         let width = 800u32;
         let height = 600u32;
@@ -233,7 +233,7 @@ impl GfaestusVk {
             })
             .collect::<Vec<_>>();
 
-        let supported_features = vk_context.supported_features()?;
+        // let supported_features = vk_context.supported_features()?;
 
         let result = Self {
             vk_context,
@@ -264,8 +264,7 @@ impl GfaestusVk {
             transient_command_pool,
 
             in_flight_frames,
-
-            supported_features,
+            // supported_features,
         };
 
         result.render_passes.set_vk_debug_names(&result)?;
@@ -297,6 +296,7 @@ impl GfaestusVk {
         &self.vk_context
     }
 
+    /*
     pub fn node_render_config(&self) -> Result<NodeRenderConfig> {
         let features = self.vk_context.supported_features()?;
 
@@ -305,6 +305,7 @@ impl GfaestusVk {
         };
         Ok(config)
     }
+    */
 
     pub fn draw_frame_from<F>(
         &mut self,

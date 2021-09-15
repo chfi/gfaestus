@@ -4,6 +4,7 @@ use rustc_hash::FxHashMap;
 
 use anyhow::*;
 
+use crate::vulkan::context::NodeRendererType;
 use crate::vulkan::texture::GradientTexture;
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 
@@ -26,14 +27,14 @@ pub struct OverlayPipelines {
 impl OverlayPipelines {
     pub(super) fn new(
         app: &GfaestusVk,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let pipeline_rgb =
-            OverlayPipelineRGB::new(app, render_config, selection_set_layout)?;
+            OverlayPipelineRGB::new(app, renderer_type, selection_set_layout)?;
         let pipeline_value = OverlayPipelineValue::new(
             app,
-            render_config,
+            renderer_type,
             selection_set_layout,
         )?;
 
@@ -263,7 +264,7 @@ impl OverlayPipelineValue {
 
     fn create_pipeline(
         app: &GfaestusVk,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
@@ -273,7 +274,7 @@ impl OverlayPipelineValue {
 
         super::create_node_pipeline(
             app,
-            render_config,
+            renderer_type,
             pipeline_config,
             &[descriptor_set_layout, selection_set_layout],
         )
@@ -281,7 +282,7 @@ impl OverlayPipelineValue {
 
     pub(super) fn new(
         app: &GfaestusVk,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let device = app.vk_context().device();
@@ -290,7 +291,7 @@ impl OverlayPipelineValue {
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
             app,
-            render_config,
+            renderer_type,
             desc_set_layout,
             selection_set_layout,
         )?;
@@ -412,7 +413,7 @@ impl OverlayPipelineRGB {
 
     fn create_pipeline(
         app: &GfaestusVk,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
@@ -422,7 +423,7 @@ impl OverlayPipelineRGB {
 
         super::create_node_pipeline(
             app,
-            render_config,
+            renderer_type,
             pipeline_config,
             &[descriptor_set_layout, selection_set_layout],
         )
@@ -430,7 +431,7 @@ impl OverlayPipelineRGB {
 
     pub(super) fn new(
         app: &GfaestusVk,
-        render_config: &NodeRenderConfig,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let device = app.vk_context().device();
@@ -439,7 +440,7 @@ impl OverlayPipelineRGB {
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
             app,
-            render_config,
+            renderer_type,
             desc_set_layout,
             selection_set_layout,
         )?;

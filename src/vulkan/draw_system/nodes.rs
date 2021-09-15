@@ -10,6 +10,7 @@ use nalgebra_glm as glm;
 use anyhow::*;
 
 use crate::view::View;
+use crate::vulkan::context::NodeRendererType;
 use crate::vulkan::GfaestusVk;
 use crate::{geometry::Point, vulkan::texture::GradientTexture};
 
@@ -32,7 +33,7 @@ pub struct NodePipelines {
 
     device: Device,
 
-    render_config: NodeRenderConfig,
+    renderer_type: NodeRendererType,
 }
 
 impl NodePipelines {
@@ -40,9 +41,10 @@ impl NodePipelines {
         let vk_context = app.vk_context();
         let device = vk_context.device();
 
-        let mut render_config = app.node_render_config()?;
+        // let
+        let renderer_type = vk_context.renderer_config.nodes;
 
-        log::warn!("node_render_config: {:?}", render_config);
+        log::warn!("node_renderer_type: {:?}", renderer_type);
 
         /*
         {
@@ -51,14 +53,14 @@ impl NodePipelines {
         }
         */
 
-        let vertices = NodeVertices::new(&render_config);
+        let vertices = NodeVertices::new(renderer_type);
 
         let selection_descriptors =
             SelectionDescriptors::new(app, selection_buffer, 1)?;
 
         let pipelines = OverlayPipelines::new(
             app,
-            &render_config,
+            renderer_type,
             selection_descriptors.layout,
         )?;
 
@@ -69,7 +71,7 @@ impl NodePipelines {
 
             device: device.clone(),
 
-            render_config,
+            renderer_type,
         })
     }
 
@@ -177,7 +179,7 @@ impl NodePipelines {
 
             let mut stages = Flags::VERTEX | Flags::FRAGMENT;
 
-            if self.render_config.tessellation {
+            if self.renderer_type == NodeRendererType::TessellationQuads {
                 stages |= Flags::TESSELLATION_CONTROL
                     | Flags::TESSELLATION_EVALUATION;
             }

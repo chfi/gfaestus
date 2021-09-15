@@ -24,9 +24,35 @@ pub struct VkContext {
     get_physical_device_features2: KhrGetPhysicalDeviceProperties2Fn,
 
     pub portability_subset: bool,
+
+    pub renderer_config: RendererConfig,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RendererConfig {
+    pub nodes: NodeRendererType,
+    pub edges: EdgeRendererType,
+
+    pub supported_features: SupportedFeatures,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeRendererType {
+    VertexOnly,
+    TessellationQuads,
+    // TessellationTriangles,
+    // Geometry
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EdgeRendererType {
+    TessellationIsolines,
+    TessellationQuads,
+    // VertexOnly,
+    Disabled,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SupportedFeatures {
     pub sampler_anisotropy: bool,
     pub tessellation_shader: bool,
@@ -62,10 +88,12 @@ impl VkContext {
         self.debug_utils.as_ref().map(|(utils, _)| utils)
     }
 
-    pub fn supported_features(&self) -> anyhow::Result<SupportedFeatures> {
-        let instance = &self.instance;
-        let phys_device = self.physical_device;
-
+    fn supported_features(
+        instance: &Instance,
+        phys_device: vk::PhysicalDevice,
+        get_physical_device_features2: &KhrGetPhysicalDeviceProperties2Fn,
+        portability_subset: bool,
+    ) -> anyhow::Result<SupportedFeatures> {
         let features =
             unsafe { instance.get_physical_device_features(phys_device) };
 
@@ -109,8 +137,11 @@ impl VkContext {
         // optional features
         optional!(wide_lines);
 
-        if self.portability_subset {
-            let portability = self.portability_features()?;
+        if portability_subset {
+            let portability = Self::portability_features(
+                phys_device,
+                get_physical_device_features2,
+            )?;
 
             if portability.tessellation_isolines == vk::FALSE {
                 result.tessellation_isolines = false;
@@ -120,8 +151,17 @@ impl VkContext {
         Ok(result)
     }
 
+    /*
+    pub fn supported_features(&self) -> anyhow::Result<SupportedFeatures> {
+        let instance = &self.instance;
+        let phys_device = self.physical_device;
+
+    }
+    */
+
     pub fn portability_features(
-        &self,
+        physical_device: vk::PhysicalDevice,
+        get_physical_device_features2: &KhrGetPhysicalDeviceProperties2Fn,
     ) -> anyhow::Result<PortabilitySubsetFeatures> {
         let mut features_2 = vk::PhysicalDeviceFeatures2::builder()
             .features(vk::PhysicalDeviceFeatures::default());
@@ -136,11 +176,10 @@ impl VkContext {
         let features_ptr: *mut vk::PhysicalDeviceFeatures2 = &mut features_2;
 
         unsafe {
-            self.get_physical_device_features2
-                .get_physical_device_features2_khr(
-                    self.physical_device,
-                    features_ptr,
-                );
+            get_physical_device_features2.get_physical_device_features2_khr(
+                physical_device,
+                features_ptr,
+            );
         }
 
         let subset_features = {
@@ -164,7 +203,7 @@ impl VkContext {
         surface_khr: vk::SurfaceKHR,
         physical_device: vk::PhysicalDevice,
         device: Device,
-    ) -> Self {
+    ) -> anyhow::Result<Self> {
         let get_physical_device_features2 =
             unsafe {
                 KhrGetPhysicalDeviceProperties2Fn::load(|name| {
@@ -177,10 +216,8 @@ impl VkContext {
 
         let portability_subset = {
             let extension_props = unsafe {
-                instance
-                    .enumerate_device_extension_properties(physical_device)
-                    .unwrap()
-            };
+                instance.enumerate_device_extension_properties(physical_device)
+            }?;
 
             let portability =
                 std::ffi::CString::new("VK_KHR_portability_subset").unwrap();
@@ -193,9 +230,37 @@ impl VkContext {
             })
         };
 
-        // log::warn!("vk_context portability subset: {}", portability_subset);
+        let renderer_config = {
+            let supported = Self::supported_features(
+                &instance,
+                physical_device,
+                &get_physical_device_features2,
+                portability_subset,
+            )?;
 
-        VkContext {
+            let nodes = if supported.tessellation_shader {
+                NodeRendererType::TessellationQuads
+            } else {
+                NodeRendererType::VertexOnly
+            };
+
+            let edges = match (
+                supported.tessellation_shader,
+                supported.tessellation_isolines,
+            ) {
+                (true, true) => EdgeRendererType::TessellationIsolines,
+                (true, false) => EdgeRendererType::TessellationQuads,
+                _ => EdgeRendererType::Disabled,
+            };
+
+            RendererConfig {
+                nodes,
+                edges,
+                supported_features: supported,
+            }
+        };
+
+        Ok(VkContext {
             _entry: entry,
             instance,
             debug_utils,
@@ -206,7 +271,9 @@ impl VkContext {
 
             get_physical_device_features2,
             portability_subset,
-        }
+
+            renderer_config,
+        })
     }
 }
 
