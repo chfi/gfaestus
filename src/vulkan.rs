@@ -22,12 +22,18 @@ use bytemuck::{Pod, Zeroable};
 use parking_lot::{Mutex, MutexGuard};
 use std::{mem::size_of, sync::Arc};
 use vk_mem::Allocator;
-use winit::window::Window;
+
+#[cfg(target_os = "linux")]
+use winit::platform::unix::*;
+use winit::{
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-use crate::view::ScreenDims;
+use crate::{app::Args, view::ScreenDims};
 
 use self::draw_system::nodes::NodeRenderConfig;
 
@@ -64,19 +70,56 @@ pub struct GfaestusVk {
 }
 
 impl GfaestusVk {
-    pub fn new(
-        window: &Window,
-        force_graphics_device: Option<&str>,
-    ) -> Result<Self> {
+    pub fn new(args: &Args) -> Result<(Self, EventLoop<()>, Window)> {
         log::debug!("Initializing GfaestusVk context");
         let entry = unsafe { Entry::new() }?;
+
+        let instance_exts = init::instance_extensions(&entry)?;
+
+        let (event_loop, window) = {
+            let event_loop: EventLoop<()>;
+
+            #[cfg(target_os = "linux")]
+            {
+                event_loop = if args.force_x11 || !instance_exts.wayland_surface
+                {
+                    if let Ok(ev_loop) = EventLoop::new_x11() {
+                        log::debug!("Using X11 event loop");
+                        ev_loop
+                    } else {
+                        error!(
+                            "Error initializing X11 window, falling back to default"
+                        );
+                        EventLoop::new()
+                    }
+                } else {
+                    log::debug!("Using default event loop");
+                    EventLoop::new()
+                };
+            }
+
+            #[cfg(not(target_os = "linux"))]
+            {
+                log::debug!("Using default event loop");
+                event_loop = EventLoop::new();
+            }
+
+            log::debug!("Creating window");
+            let window = WindowBuilder::new()
+                .with_title("Gfaestus")
+                .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+                .build(&event_loop)?;
+
+            (event_loop, window)
+        };
+
         log::debug!("Created Vulkan entry");
-        let instance = create_instance(&entry, window)?;
+        let instance = create_instance(&entry, &window)?;
         log::debug!("Created Vulkan instance");
 
         let surface = Surface::new(&entry, &instance);
         let surface_khr = unsafe {
-            ash_window::create_surface(&entry, &instance, window, None)
+            ash_window::create_surface(&entry, &instance, &window, None)
         }?;
         log::debug!("Created window surface");
 
@@ -87,7 +130,7 @@ impl GfaestusVk {
                 &instance,
                 &surface,
                 surface_khr,
-                force_graphics_device,
+                args.force_graphics_device.as_deref(),
             )?;
 
         let (device, graphics_queue, present_queue, _compute_queue) =
@@ -138,7 +181,6 @@ impl GfaestusVk {
         )?;
 
         let msaa_samples = vk_context.get_max_usable_sample_count();
-        // let msaa_samples = vk::SampleCountFlags::TYPE_4;
 
         let command_pool = Self::create_command_pool(
             vk_context.device(),
@@ -239,7 +281,7 @@ impl GfaestusVk {
             "Offscreen Color Attachment",
         )?;
 
-        Ok(result)
+        Ok((result, event_loop, window))
     }
 
     pub fn swapchain_dims(&self) -> ScreenDims {

@@ -21,30 +21,10 @@ use super::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-pub(super) fn create_instance(
-    entry: &Entry,
-    window: &Window,
-) -> Result<Instance> {
-    log::debug!("Creating instance");
-    let app_name = CString::new("Gfaestus")?;
-
-    let app_info = vk::ApplicationInfo::builder()
-        .application_name(app_name.as_c_str())
-        .application_version(vk::make_version(0, 1, 0))
-        .engine_name(app_name.as_c_str())
-        .engine_version(vk::make_version(0, 1, 0))
-        .api_version(vk::make_version(1, 0, 0))
-        .build();
-
+pub(super) fn instance_extensions(entry: &Entry) -> Result<InstanceExtensions> {
     let instance_ext_props = entry.enumerate_instance_extension_properties()?;
 
-    let extension_names =
-        ash_window::enumerate_required_extensions(window).unwrap();
-    log::debug!("Enumerated required instance extensions");
-    let mut extension_names = extension_names
-        .iter()
-        .map(|ext| ext.as_ptr())
-        .collect::<Vec<_>>();
+    let instance_extensions: InstanceExtensions;
 
     // on linux, swiftshader only supports X11, not Wayland, so we
     // need to make sure not to load the corresponding instance
@@ -73,21 +53,42 @@ pub(super) fn create_instance(
             }
         }
 
-        let mut to_remove: Vec<CString> = Vec::new();
-
-        if !has_x11 {
-            to_remove.push(xlib_surface);
-        }
-
-        if !has_wayland {
-            to_remove.push(wayland_surface);
-        }
-
-        extension_names.retain(|ext_name| {
-            let name = unsafe { CStr::from_ptr(*ext_name) };
-            !to_remove.iter().any(|rem| rem.as_c_str() == name)
-        });
+        instance_extensions = InstanceExtensions {
+            x11_surface: has_x11,
+            wayland_surface: has_wayland,
+        };
     }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        instance_extensions = InstanceExtensions;
+    }
+
+    Ok(instance_extensions)
+}
+
+pub(super) fn create_instance(
+    entry: &Entry,
+    window: &Window,
+) -> Result<Instance> {
+    log::debug!("Creating instance");
+    let app_name = CString::new("Gfaestus")?;
+
+    let app_info = vk::ApplicationInfo::builder()
+        .application_name(app_name.as_c_str())
+        .application_version(vk::make_version(0, 1, 0))
+        .engine_name(app_name.as_c_str())
+        .engine_version(vk::make_version(0, 1, 0))
+        .api_version(vk::make_version(1, 0, 0))
+        .build();
+
+    let extension_names =
+        ash_window::enumerate_required_extensions(window).unwrap();
+    log::debug!("Enumerated required instance extensions");
+    let mut extension_names = extension_names
+        .iter()
+        .map(|ext| ext.as_ptr())
+        .collect::<Vec<_>>();
 
     if super::debug::ENABLE_VALIDATION_LAYERS {
         extension_names.push(DebugUtils::name().as_ptr());
@@ -545,4 +546,16 @@ fn device_supports_features(
     optional!(wide_lines);
 
     Ok(result)
+}
+
+// for now Linux is the only OS where the instance features may
+// differ, so non-Linux platforms use an empty struct
+#[cfg(not(target_os = "linux"))]
+pub struct InstanceExtensions {}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy)]
+pub struct InstanceExtensions {
+    pub x11_surface: bool,
+    pub wayland_surface: bool,
 }

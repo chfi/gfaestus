@@ -7,16 +7,12 @@ use gfaestus::vulkan::texture::Gradients_;
 use rustc_hash::FxHashMap;
 use texture::Gradients;
 use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use winit::event_loop::ControlFlow;
 
-#[cfg(target_os = "linux")]
-use winit::platform::unix::*;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use argh::FromArgs;
-
-use gfaestus::app::{mainview::*, OverlayCreatorMsg, Select};
+use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -118,45 +114,14 @@ fn main() {
     let layout_file = &args.layout;
     log::debug!("using {} and {}", gfa_file, layout_file);
 
-    let event_loop: EventLoop<()>;
-
-    #[cfg(target_os = "linux")]
-    {
-        event_loop = if args.force_x11 {
-            if let Ok(ev_loop) = EventLoop::new_x11() {
-                ev_loop
-            } else {
-                error!(
-                    "Error initializing X11 window, falling back to default"
-                );
-                EventLoop::new()
-            }
-        } else {
-            EventLoop::new()
-        };
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        event_loop = EventLoop::new();
-    }
-
-    log::debug!("Creating window");
-    let window = WindowBuilder::new()
-        .with_title("Gfaestus")
-        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
-        .build(&event_loop)
-        .unwrap();
-
-    let mut gfaestus =
-        match GfaestusVk::new(&window, args.force_graphics_device.as_deref()) {
-            Ok(app) => app,
-            Err(err) => {
-                error!("Error initializing Gfaestus");
-                error!("{:?}", err.root_cause());
-                std::process::exit(1);
-            }
-        };
+    let (mut gfaestus, event_loop, window) = match GfaestusVk::new(&args) {
+        Ok(app) => app,
+        Err(err) => {
+            error!("Error initializing Gfaestus");
+            error!("{:?}", err.root_cause());
+            std::process::exit(1);
+        }
+    };
 
     let gpu_features = gfaestus.vk_context().supported_features().unwrap();
 
@@ -459,6 +424,11 @@ fn node_color(id) {
 
         *control_flow = ControlFlow::Poll;
 
+        // NB: AFAIK the only event that isn't 'static is the window
+        // scale change (for high DPI displays), as it returns a
+        // reference
+        // so until the corresponding support is added, those events
+        // are simply ignored here
         let event = if let Some(ev) = event.to_static() {
             ev
         } else {
@@ -1270,46 +1240,4 @@ fn create_overlay(
     }
 
     Ok(())
-}
-
-#[derive(FromArgs)]
-/// Gfaestus
-pub struct Args {
-    /// the GFA file to load
-    #[argh(positional)]
-    gfa: String,
-
-    /// the layout file to use
-    #[argh(positional)]
-    layout: String,
-
-    /// load and run a Rhai script file at startup, e.g. for configuration
-    #[argh(option)]
-    run_script: Option<String>,
-
-    #[cfg(target_os = "linux")]
-    /// force use of X11 window (only applicable in Wayland contexts)
-    #[argh(switch)]
-    force_x11: bool,
-
-    /// suppress log messages
-    #[argh(switch, short = 'q')]
-    quiet: bool,
-
-    /// log debug messages
-    #[argh(switch, short = 'd')]
-    debug: bool,
-
-    /// log trace-level debug messages
-    #[argh(switch)]
-    trace: bool,
-
-    /*
-    /// whether or not to log to a file in the working directory
-    #[argh(switch)]
-    log_to_file: bool,
-    */
-    /// if a device name is provided, use that instead of the default graphics device
-    #[argh(option)]
-    force_graphics_device: Option<String>,
 }

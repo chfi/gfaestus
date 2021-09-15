@@ -4,6 +4,10 @@ pub mod selection;
 pub mod settings;
 pub mod shared_state;
 
+pub use channels::*;
+pub use settings::*;
+pub use shared_state::*;
+
 use crossbeam::channel::Sender;
 
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -12,6 +16,9 @@ use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
+use argh::FromArgs;
+
+use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
     Gff3Records,
@@ -23,12 +30,6 @@ use crate::{
     input::binds::{BindableInput, KeyBind, SystemInput},
     universe::Node,
 };
-
-pub use channels::*;
-pub use settings::*;
-pub use shared_state::*;
-
-use self::mainview::MainViewMsg;
 
 pub struct App {
     shared_state: SharedState,
@@ -389,4 +390,46 @@ impl App {
             }
         }
     }
+}
+
+#[derive(FromArgs)]
+/// Gfaestus
+pub struct Args {
+    /// the GFA file to load
+    #[argh(positional)]
+    pub gfa: String,
+
+    /// the layout file to use
+    #[argh(positional)]
+    pub layout: String,
+
+    /// load and run a Rhai script file at startup, e.g. for configuration
+    #[argh(option)]
+    pub run_script: Option<String>,
+
+    #[cfg(target_os = "linux")]
+    /// force use of X11 window (only applicable in Wayland contexts)
+    #[argh(switch)]
+    pub force_x11: bool,
+
+    /// suppress log messages
+    #[argh(switch, short = 'q')]
+    pub quiet: bool,
+
+    /// log debug messages
+    #[argh(switch, short = 'd')]
+    pub debug: bool,
+
+    /// log trace-level debug messages
+    #[argh(switch)]
+    pub trace: bool,
+
+    /*
+    /// whether or not to log to a file in the working directory
+    #[argh(switch)]
+    log_to_file: bool,
+    */
+    /// if a device name is provided, use that instead of the default graphics device
+    #[argh(option)]
+    pub force_graphics_device: Option<String>,
 }
