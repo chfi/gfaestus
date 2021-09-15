@@ -36,13 +36,58 @@ pub(super) fn create_instance(
         .api_version(vk::make_version(1, 0, 0))
         .build();
 
+    let instance_ext_props = entry.enumerate_instance_extension_properties()?;
+
     let extension_names =
         ash_window::enumerate_required_extensions(window).unwrap();
-    log::debug!("Enumerated required extensions");
+    log::debug!("Enumerated required instance extensions");
     let mut extension_names = extension_names
         .iter()
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
+
+    // on linux, swiftshader only supports X11, not Wayland, so we
+    // need to make sure not to load the corresponding instance
+    // extension if it's not available
+    #[cfg(target_os = "linux")]
+    {
+        let mut has_x11 = false;
+        let mut has_wayland = false;
+
+        let xlib_surface = CString::new("VK_KHR_lib_surface")?;
+        let wayland_surface = CString::new("VK_KHR_wayland_surface")?;
+
+        log::warn!("enumerating instance extension properties");
+
+        for inst_prop in instance_ext_props {
+            let name =
+                unsafe { CStr::from_ptr(inst_prop.extension_name.as_ptr()) };
+            log::warn!("{:?}", name);
+
+            if name == xlib_surface.as_c_str() {
+                has_x11 = true;
+            }
+
+            if name == wayland_surface.as_c_str() {
+                has_wayland = true;
+            }
+        }
+
+        let mut to_remove: Vec<CString> = Vec::new();
+
+        if !has_x11 {
+            to_remove.push(xlib_surface);
+        }
+
+        if !has_wayland {
+            to_remove.push(wayland_surface);
+        }
+
+        extension_names.retain(|ext_name| {
+            let name = unsafe { CStr::from_ptr(*ext_name) };
+            !to_remove.iter().any(|rem| rem.as_c_str() == name)
+        });
+    }
 
     if super::debug::ENABLE_VALIDATION_LAYERS {
         extension_names.push(DebugUtils::name().as_ptr());
