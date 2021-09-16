@@ -231,8 +231,6 @@ impl GfaestusVk {
             })
             .collect::<Vec<_>>();
 
-        // let supported_features = vk_context.supported_features()?;
-
         let result = Self {
             vk_context,
 
@@ -262,7 +260,6 @@ impl GfaestusVk {
             transient_command_pool,
 
             in_flight_frames,
-            // supported_features,
         };
 
         result.render_passes.set_vk_debug_names(&result)?;
@@ -293,17 +290,6 @@ impl GfaestusVk {
     pub fn vk_context(&self) -> &VkContext {
         &self.vk_context
     }
-
-    /*
-    pub fn node_render_config(&self) -> Result<NodeRenderConfig> {
-        let features = self.vk_context.supported_features()?;
-
-        let config = NodeRenderConfig {
-            tessellation: features.tessellation_shader,
-        };
-        Ok(config)
-    }
-    */
 
     pub fn draw_frame_from<F>(
         &mut self,
@@ -616,26 +602,19 @@ impl GfaestusVk {
                     vk::ImageLayout::GENERAL,
                 ) => (
                     vk::AccessFlags::SHADER_READ,
-                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    // | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
                     vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 ),
                 (
                     vk::ImageLayout::GENERAL,
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 ) => (
-                    // vk::AccessFlags::empty(),
-                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    // vk::AccessFlags::COLOR_ATTACHMENT_WRITE
                     vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::AccessFlags::SHADER_READ,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
                 ),
                 (vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL) => (
@@ -645,7 +624,6 @@ impl GfaestusVk {
                         | vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::PipelineStageFlags::TOP_OF_PIPE,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 ),
                 _ => panic!(
@@ -853,7 +831,6 @@ impl GfaestusVk {
                     device.cmd_copy_image_to_buffer(
                         cmd_buf,
                         image,
-                        // vk::ImageLayout::GENERAL,
                         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                         buffer,
                         &regions,
@@ -1550,14 +1527,11 @@ impl SwapchainSupportDetails {
     fn choose_swapchain_surface_present_mode(
         available_present_modes: &[vk::PresentModeKHR],
     ) -> vk::PresentModeKHR {
-        if available_present_modes.contains(&vk::PresentModeKHR::FIFO) {
-            vk::PresentModeKHR::FIFO
-        } else if available_present_modes.contains(&vk::PresentModeKHR::MAILBOX)
-        {
-            vk::PresentModeKHR::MAILBOX
-        } else {
-            vk::PresentModeKHR::IMMEDIATE
-        }
+        let checkit = |v| available_present_modes.contains(&v).then(|| v);
+
+        checkit(vk::PresentModeKHR::FIFO)
+            .or(checkit(vk::PresentModeKHR::MAILBOX))
+            .unwrap_or(vk::PresentModeKHR::IMMEDIATE)
     }
 
     /// Choose the swapchain extent.

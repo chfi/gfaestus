@@ -20,14 +20,12 @@ pub struct SelectionOutlineEdgePipeline {
 }
 
 impl SelectionOutlineEdgePipeline {
-    pub fn new(
-        app: &GfaestusVk,
-        image_count: u32,
-        render_pass: vk::RenderPass,
-        mask_resolve_image: Texture,
-    ) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, image_count: u32) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = vk_context.device();
+
+        let render_pass = app.render_passes.selection_edge_detect;
+        let mask_resolve_image = app.node_attachments.mask_resolve;
 
         let layout = Self::create_descriptor_set_layout(device)?;
 
@@ -265,14 +263,12 @@ pub struct SelectionOutlineBlurPipeline {
 }
 
 impl SelectionOutlineBlurPipeline {
-    pub fn new(
-        app: &GfaestusVk,
-        image_count: u32,
-        render_pass: vk::RenderPass,
-        offscreen_image: Texture,
-    ) -> Result<Self> {
+    pub fn new(app: &GfaestusVk, image_count: u32) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = vk_context.device();
+
+        let render_pass = app.render_passes.selection_blur;
+        let offscreen_image = app.node_attachments.mask_resolve;
 
         let layout = Self::create_descriptor_set_layout(device)?;
 

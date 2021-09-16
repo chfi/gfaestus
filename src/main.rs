@@ -337,8 +337,6 @@ fn node_color(id) {
             &gfaestus,
             &graph_query.graph_arc(),
             universe.layout(),
-            gfaestus.msaa_samples,
-            gfaestus.render_passes.edges,
         )
         .unwrap();
 
@@ -347,21 +345,11 @@ fn node_color(id) {
 
     let mut dirty_swapchain = false;
 
-    let mut selection_edge = SelectionOutlineEdgePipeline::new(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_edge_detect,
-        gfaestus.node_attachments.mask_resolve,
-    )
-    .unwrap();
+    let mut selection_edge =
+        SelectionOutlineEdgePipeline::new(&gfaestus, 1).unwrap();
 
-    let mut selection_blur = SelectionOutlineBlurPipeline::new(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_blur,
-        gfaestus.node_attachments.mask_resolve,
-    )
-    .unwrap();
+    let mut selection_blur =
+        SelectionOutlineBlurPipeline::new(&gfaestus, 1).unwrap();
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
 
@@ -864,15 +852,7 @@ fn node_color(id) {
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
                         log::trace!("In draw_frame_from callback");
-                        // let size = window.inner_size();
                         let size = swapchain_dims;
-
-                        // let dims: [u32; 2] = swapchain_dims.into();
-
-                        // if [size.width, size.height] != dims {
-                        //     return;
-                        // }
-
 
                         debug::begin_cmd_buf_label(
                             debug_utils,
@@ -1138,7 +1118,6 @@ fn node_color(id) {
                     *control_flow = ControlFlow::Exit;
                 }
                 WindowEvent::Resized { .. } => {
-                    // log::trace!("WindowEvent::Resized");
                     dirty_swapchain = true;
                 }
                 _ => (),

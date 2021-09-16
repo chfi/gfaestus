@@ -518,32 +518,13 @@ fn device_supports_features(
     macro_rules! mandatory {
         ($path:tt) => {
             if features.$path == vk::FALSE {
-                error!(
-                    "Device is missing the mandatory feature: {}",
-                    stringify!($path)
-                );
                 result = false;
             }
         };
     }
 
-    macro_rules! optional {
-        ($path:tt) => {
-            if features.$path == vk::FALSE {
-                warn!(
-                    "Device is missing the optional feature: {}",
-                    stringify!($path)
-                );
-            }
-        };
-    }
-
     mandatory!(sampler_anisotropy);
-    optional!(tessellation_shader);
     mandatory!(independent_blend);
-
-    // optional features
-    optional!(wide_lines);
 
     Ok(result)
 }

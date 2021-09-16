@@ -314,13 +314,12 @@ impl EdgeRenderer {
         app: &GfaestusVk,
         graph: &PackedGraph,
         layout: &FlatLayout,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
     ) -> Result<Self> {
         let vk_context = app.vk_context();
         let device = app.vk_context().device();
 
-        let renderer_type = vk_context.renderer_config.edges;
+        let msaa_samples = app.msaa_samples;
+        let render_pass = app.render_passes.edges;
 
         let ubo = EdgesUBOBuffer::new(app)?;
 
@@ -379,16 +378,10 @@ impl EdgeRenderer {
 
         let layouts = [desc_set_layout];
 
-        let features = unsafe {
-            let instance = app.vk_context().instance();
-            let p_device = app.vk_context().physical_device();
+        let renderer_config = vk_context.renderer_config;
+        let wide_lines = renderer_config.supported_features.wide_lines;
 
-            instance.get_physical_device_features(p_device)
-        };
-
-        let wide_lines = features.wide_lines == vk::TRUE;
-
-        let (pipeline, pipeline_layout) = match renderer_type {
+        let (pipeline, pipeline_layout) = match renderer_config.edges {
             crate::vulkan::context::EdgeRendererType::TessellationIsolines => {
                 Self::create_isoline_pipeline(
                     device,

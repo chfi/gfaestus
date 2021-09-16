@@ -100,24 +100,12 @@ impl VkContext {
 
         let mut result = SupportedFeatures {
             sampler_anisotropy: true,
-            tessellation_shader: true,
             independent_blend: true,
-            wide_lines: true,
 
+            wide_lines: true,
+            tessellation_shader: true,
             tessellation_isolines: true,
         };
-
-        macro_rules! mandatory {
-            ($path:tt) => {
-                if features.$path == vk::FALSE {
-                    log::error!(
-                        "Device is missing the mandatory feature: {}",
-                        stringify!($path)
-                    );
-                    result.$path = false;
-                }
-            };
-        }
 
         macro_rules! optional {
             ($path:tt) => {
@@ -131,11 +119,7 @@ impl VkContext {
             };
         }
 
-        mandatory!(sampler_anisotropy);
-        mandatory!(tessellation_shader);
-        mandatory!(independent_blend);
-
-        // optional features
+        optional!(tessellation_shader);
         optional!(wide_lines);
 
         if portability_subset {
@@ -151,14 +135,6 @@ impl VkContext {
 
         Ok(result)
     }
-
-    /*
-    pub fn supported_features(&self) -> anyhow::Result<SupportedFeatures> {
-        let instance = &self.instance;
-        let phys_device = self.physical_device;
-
-    }
-    */
 
     pub fn portability_features(
         physical_device: vk::PhysicalDevice,
