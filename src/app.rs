@@ -368,17 +368,12 @@ impl App {
             }
 
             AppMsg::RequestData { type_, key, sender } => {
-                use std::any::{Any, TypeId};
+                use std::any::TypeId;
 
-                // type ReqResult = std::result::Result<
-                type ReqResult = Result<
-                    rhai::Dynamic,
-                    // Box<dyn std::error::Error + Send + 'static>,
-                >;
+                type ReqResult = Result<rhai::Dynamic>;
 
                 let boxed: ReqResult =
                     if type_ == TypeId::of::<Arc<Gff3Records>>() {
-                        // let records = self.annotations.get_gff3(key)
                         if let Some(records) = self.annotations.get_gff3(&key) {
                             let result = records.clone();
                             Ok(rhai::Dynamic::from(result))

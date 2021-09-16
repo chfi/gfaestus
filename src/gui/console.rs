@@ -1103,6 +1103,51 @@ impl ConsoleShared {
         });
     }
 
+    fn error_helper<T: Clone + 'static>(
+        result: &std::result::Result<
+            Result<rhai::Dynamic>,
+            Box<dyn std::any::Any + Send>,
+        >,
+    ) -> std::result::Result<T, Box<EvalAltResult>> {
+        let out = match result {
+            Ok(Ok(success)) => {
+                if success.type_id() == TypeId::of::<T>() {
+                    let success = success.clone();
+                    let result = success.cast::<T>();
+                    Ok(result)
+                } else {
+                    let err: std::result::Result<
+                            T,
+                            Box<EvalAltResult>,
+                        > = Err(Box::new(EvalAltResult::ErrorSystem(
+                            "Received incorrect type from App; this shouldn't happen!!!".to_string(),
+                            "Received incorrect type from App; this shouldn't happen!!!".to_string().into(),
+                        )));
+                    err
+                }
+            }
+            Ok(Err(req_err)) => {
+                let err = Err(Box::new(EvalAltResult::ErrorSystem(
+                    "Error when retrieving results from app request thread"
+                        .to_string(),
+                    "Error when retrieving results from app request thread"
+                        .into(),
+                    // req_err.into(),
+                )));
+                err
+            }
+            Err(_spawn_err) => {
+                let err = Err(Box::new(EvalAltResult::ErrorSystem(
+                    "Error when spawning app request thread".to_string(),
+                    "Error when spawning app request thread".into(),
+                )));
+                err
+            }
+        };
+
+        out
+    }
+
     fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
         // TODO get the collection kind from the extension in c_name
         // TODO also add these functions in bulk/semi-automatically, like the getset stuff
@@ -1125,43 +1170,23 @@ impl ConsoleShared {
 
             let result = std::thread::spawn(move || rx.recv().unwrap()).join();
 
-            let out = match result {
-                Ok(Ok(success)) => {
-                    if success.type_id() == TypeId::of::<Arc<Gff3Records>>() {
-                        Ok(success)
-                    } else if success.type_id()
-                        == TypeId::of::<Arc<BedRecords>>()
-                    {
-                        Ok(success)
-                    } else {
-                        let err: std::result::Result<
-                            rhai::Dynamic,
-                            Box<EvalAltResult>,
-                        > = Err(Box::new(EvalAltResult::ErrorSystem(
-                            "this shouldn't happen!!!".to_string(),
-                            "this shouldn't happen!!!".to_string().into(),
-                        )));
-                        err
-                    }
+            match Self::error_helper::<Arc<BedRecords>>(&result) {
+                Ok(records) => {
+                    return Ok(rhai::Dynamic::from(records));
                 }
-                Ok(Err(req_err)) => {
-                    let err = Err(Box::new(EvalAltResult::ErrorSystem(
-                        "Error when retrieving results from app request thread"
-                            .to_string(),
-                        req_err.into(),
-                    )));
-                    err
-                }
-                Err(_spawn_err) => {
-                    let err = Err(Box::new(EvalAltResult::ErrorSystem(
-                        "Error when spawning app request thread".to_string(),
-                        "Error when spawning app request thread".into(),
-                    )));
-                    err
-                }
-            };
+                Err(_) => {}
+            }
 
-            out
+            match Self::error_helper::<Arc<Gff3Records>>(&result) {
+                Ok(records) => {
+                    return Ok(rhai::Dynamic::from(records));
+                }
+                Err(err) => Err(err),
+            }
+
+            // let out = Self::error_helper::<Arc<BedRecords>>(result);
+
+            // out
         });
     }
 
