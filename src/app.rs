@@ -18,11 +18,14 @@ use anyhow::Result;
 
 use argh::FromArgs;
 
+use std::sync::Arc;
+
 use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
     Gff3Records,
 };
+use crate::app::selection::NodeSelection;
 use crate::gui::GuiMsg;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
@@ -108,6 +111,16 @@ pub enum AppMsg {
     },
 
     RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
+
+    RequestData {
+        type_: std::any::TypeId,
+        key: String,
+        sender: crossbeam::channel::Sender<
+            Result<rhai::Dynamic>,
+            // std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>,
+        >,
+        // sender: crossbeam::channel::Sender<Box<dyn std::any::Any + Send + Sync + 'static>,
+    },
 }
 
 impl App {
@@ -352,6 +365,46 @@ impl App {
                     .unwrap_or(Rect::default());
 
                 sender.send((rect, selection)).unwrap();
+            }
+
+            AppMsg::RequestData { type_, key, sender } => {
+                use std::any::{Any, TypeId};
+
+                // type ReqResult = std::result::Result<
+                type ReqResult = Result<
+                    rhai::Dynamic,
+                    // Box<dyn std::error::Error + Send + 'static>,
+                >;
+
+                let boxed: ReqResult =
+                    if type_ == TypeId::of::<Arc<Gff3Records>>() {
+                        // let records = self.annotations.get_gff3(key)
+                        if let Some(records) = self.annotations.get_gff3(&key) {
+                            let result = records.clone();
+                            Ok(rhai::Dynamic::from(result))
+                        } else {
+                            let err = anyhow::anyhow!(
+                            "Couldn't find the requested annotation collection"
+                        );
+                            Err(err) as ReqResult
+                        }
+                    } else if type_ == TypeId::of::<Arc<BedRecords>>() {
+                        if let Some(records) = self.annotations.get_bed(&key) {
+                            let result = records.clone();
+                            Ok(rhai::Dynamic::from(result))
+                        } else {
+                            let err = anyhow::anyhow!(
+                            "Couldn't find the requested annotation collection"
+                        );
+                            Err(err) as ReqResult
+                        }
+                    } else {
+                        let err =
+                            anyhow::anyhow!("Requested invalid type from App!");
+                        Err(err) as ReqResult
+                    };
+
+                sender.send(boxed).unwrap();
             }
         }
     }

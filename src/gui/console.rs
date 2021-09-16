@@ -19,7 +19,10 @@ use crossbeam::atomic::AtomicCell;
 use rhai::plugin::*;
 use rustc_hash::FxHashSet;
 
-use crate::overlays::OverlayKind;
+use crate::{
+    annotations::{BedRecords, Gff3Records},
+    overlays::OverlayKind,
+};
 use crate::{
     app::{
         selection::NodeSelection, AppChannels, AppMsg, OverlayCreatorMsg,
@@ -1100,6 +1103,68 @@ impl ConsoleShared {
         });
     }
 
+    fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
+        // TODO get the collection kind from the extension in c_name
+        // TODO also add these functions in bulk/semi-automatically, like the getset stuff
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_result_fn("get_collection", move |c_name: &str| {
+            use crossbeam::channel;
+
+            let type_ = TypeId::of::<Arc<Gff3Records>>();
+            let key = c_name.to_string();
+
+            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
+
+            let msg: AppMsg = AppMsg::RequestData {
+                type_,
+                key,
+                sender: tx,
+            };
+
+            app_msg_tx.send(msg).unwrap();
+
+            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+
+            let out = match result {
+                Ok(Ok(success)) => {
+                    if success.type_id() == TypeId::of::<Arc<Gff3Records>>() {
+                        Ok(success)
+                    } else if success.type_id()
+                        == TypeId::of::<Arc<BedRecords>>()
+                    {
+                        Ok(success)
+                    } else {
+                        let err: std::result::Result<
+                            rhai::Dynamic,
+                            Box<EvalAltResult>,
+                        > = Err(Box::new(EvalAltResult::ErrorSystem(
+                            "this shouldn't happen!!!".to_string(),
+                            "this shouldn't happen!!!".to_string().into(),
+                        )));
+                        err
+                    }
+                }
+                Ok(Err(req_err)) => {
+                    let err = Err(Box::new(EvalAltResult::ErrorSystem(
+                        "Error when retrieving results from app request thread"
+                            .to_string(),
+                        req_err.into(),
+                    )));
+                    err
+                }
+                Err(_spawn_err) => {
+                    let err = Err(Box::new(EvalAltResult::ErrorSystem(
+                        "Error when spawning app request thread".to_string(),
+                        "Error when spawning app request thread".into(),
+                    )));
+                    err
+                }
+            };
+
+            out
+        });
+    }
+
     pub fn create_engine(&self) -> rhai::Engine {
         use rhai::plugin::*;
 
@@ -1110,6 +1175,8 @@ impl ConsoleShared {
         engine.set_max_expr_depths(0, 0);
 
         engine.register_type::<Point>();
+
+        self.add_annotation_fns(&mut engine);
 
         let label_map = self.label_map.clone();
         engine.register_fn(
@@ -1165,7 +1232,7 @@ impl ConsoleShared {
         engine.register_fn("get_selection", move || {
             use crossbeam::channel;
 
-            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(16);
+            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
             let msg = AppMsg::RequestSelection(tx);
 
             app_msg_tx.send(msg).unwrap();
