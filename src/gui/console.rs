@@ -19,8 +19,13 @@ use crossbeam::atomic::AtomicCell;
 use rhai::plugin::*;
 use rustc_hash::FxHashSet;
 
+use bstr::ByteSlice;
+
 use crate::{
-    annotations::{BedRecords, Gff3Records},
+    annotations::{
+        AnnotationCollection, AnnotationFileType, AnnotationRecord, BedRecords,
+        Gff3Column, Gff3Record, Gff3Records,
+    },
     overlays::OverlayKind,
 };
 use crate::{
@@ -1151,6 +1156,61 @@ impl ConsoleShared {
     fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
         // TODO get the collection kind from the extension in c_name
         // TODO also add these functions in bulk/semi-automatically, like the getset stuff
+
+        engine.register_result_fn(
+            "get_record",
+            move |coll: Arc<Gff3Records>, ix: i64| {
+                if let Some(record) = coll.records().get(ix as usize).cloned() {
+                    Ok(record)
+                } else {
+                    Err(Box::new(EvalAltResult::ErrorArrayBounds(
+                        coll.records().len(),
+                        ix as i64,
+                        rhai::Position::NONE,
+                    )))
+                }
+            },
+        );
+
+        engine.register_result_fn(
+            "get_record",
+            move |coll: &mut Arc<BedRecords>, ix: i64| {
+                if let Some(record) = coll.records().get(ix as usize).cloned() {
+                    Ok(record)
+                } else {
+                    Err(Box::new(EvalAltResult::ErrorArrayBounds(
+                        coll.records().len(),
+                        ix as i64,
+                        rhai::Position::NONE,
+                    )))
+                }
+            },
+        );
+
+        engine.register_fn("gff3_column", |key: &str| match key {
+            "SeqId" => Gff3Column::SeqId,
+            "Source" => Gff3Column::Source,
+            "Type" => Gff3Column::Type,
+            "Start" => Gff3Column::Start,
+            "End" => Gff3Column::End,
+            "Score" => Gff3Column::Score,
+            "Strand" => Gff3Column::Strand,
+            "Frame" => Gff3Column::Frame,
+            attr => Gff3Column::Attribute(attr.as_bytes().to_owned()),
+        });
+
+        engine.register_fn(
+            "get",
+            move |record: &mut Gff3Record, column: Gff3Column| {
+                let bytes = record.get_first(&column);
+                if let Some(bytes) = bytes {
+                    format!("{}", bytes.as_bstr())
+                } else {
+                    "".to_string()
+                }
+            },
+        );
+
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("get_collection", move |c_name: &str| {
             use crossbeam::channel;
@@ -1187,6 +1247,68 @@ impl ConsoleShared {
             // let out = Self::error_helper::<Arc<BedRecords>>(result);
 
             // out
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_result_fn("load_collection", move |path: &str| {
+            use crossbeam::channel;
+
+            let file = PathBuf::from(path);
+
+            let ext = file.extension().and_then(|ext| ext.to_str()).map_or(
+                Err(Box::new(EvalAltResult::ErrorSystem(
+                    "Missing file extension".to_string(),
+                    "Missing file extension".into(),
+                ))),
+                |ext| Ok(ext),
+            )?;
+
+            if ext == "gff3" {
+                let records = Gff3Records::parse_gff3_file(&file);
+                match records {
+                    Ok(records) => {
+                        let file_name = records.file_name().to_string();
+
+                        app_msg_tx
+                            .send(AppMsg::AddGff3Records(records))
+                            .unwrap();
+
+                        return Ok(());
+                    }
+                    Err(err) => {
+                        return Err(Box::new(EvalAltResult::ErrorSystem(
+                            "Error parsing GFF3 file".to_string(),
+                            "Error parsing GFF3 file".into(),
+                        )))
+                    }
+                }
+            } else if ext == "bed" {
+                let records = BedRecords::parse_bed_file(&file);
+                match records {
+                    Ok(records) => {
+                        let file_name = records.file_name().to_string();
+
+                        app_msg_tx
+                            .send(AppMsg::AddBedRecords(records))
+                            .unwrap();
+
+                        return Ok(());
+                    }
+                    Err(err) => {
+                        return Err(Box::new(EvalAltResult::ErrorSystem(
+                            "Error parsing BED file".to_string(),
+                            "Error parsing BED file".into(),
+                        )))
+                    }
+                }
+            } else {
+                return Err(Box::new(EvalAltResult::ErrorSystem(
+                    "Invalid file extension".to_string(),
+                    "Invalid file extension".into(),
+                )));
+            }
+
+            Ok(())
         });
     }
 

@@ -223,7 +223,6 @@ impl AnnotationFileList {
                     running_msg("Loading BED");
 
                     let records = BedRecords::parse_bed_file(&file);
-
                     match records {
                         Ok(records) => {
                             let file_name = records.file_name().to_string();
