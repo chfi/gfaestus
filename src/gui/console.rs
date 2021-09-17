@@ -1184,6 +1184,14 @@ impl ConsoleShared {
             },
         );
 
+        engine.register_fn("len", move |coll: &mut Arc<Gff3Records>| {
+            coll.len() as i64
+        });
+
+        engine.register_fn("len", move |coll: &mut Arc<BedRecords>| {
+            coll.len() as i64
+        });
+
         engine.register_fn("gff3_column", |key: &str| match key {
             "SeqId" => Gff3Column::SeqId,
             "Source" => Gff3Column::Source,
@@ -1198,14 +1206,20 @@ impl ConsoleShared {
 
         engine.register_fn(
             "get",
-            move |record: &mut Gff3Record, column: Gff3Column| {
-                let fields = record.get_all(&column);
-                fields
-                    .into_iter()
-                    .map(|val| {
-                        rhai::Dynamic::from(format!("{}", val.as_bstr()))
-                    })
-                    .collect::<Vec<_>>()
+            move |record: &mut Gff3Record, column: Gff3Column| match column {
+                Gff3Column::Start => rhai::Dynamic::from(record.start() as i64),
+                Gff3Column::End => rhai::Dynamic::from(record.end() as i64),
+                column => {
+                    let fields = record.get_all(&column);
+                    let dyn_fields = fields
+                        .into_iter()
+                        .map(|val| {
+                            rhai::Dynamic::from(format!("{}", val.as_bstr()))
+                        })
+                        .collect::<Vec<_>>();
+
+                    rhai::Dynamic::from(dyn_fields)
+                }
             },
         );
 
@@ -1259,6 +1273,7 @@ impl ConsoleShared {
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
+        let result_tx = self.result_tx.clone();
         engine.register_result_fn("load_collection", move |path: &str| {
             let file = PathBuf::from(path);
 
@@ -1278,6 +1293,10 @@ impl ConsoleShared {
                             .send(AppMsg::AddGff3Records(records))
                             .unwrap();
 
+                        result_tx
+                            .send(Ok(rhai::Dynamic::from("Loaded GFF3 file")))
+                            .unwrap();
+
                         return Ok(());
                     }
                     Err(_err) => {
@@ -1293,6 +1312,10 @@ impl ConsoleShared {
                     Ok(records) => {
                         app_msg_tx
                             .send(AppMsg::AddBedRecords(records))
+                            .unwrap();
+
+                        result_tx
+                            .send(Ok(rhai::Dynamic::from("Loaded BED file")))
                             .unwrap();
 
                         return Ok(());
