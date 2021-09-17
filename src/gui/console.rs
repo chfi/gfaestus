@@ -1204,6 +1204,21 @@ impl ConsoleShared {
             attr => Gff3Column::Attribute(attr.as_bytes().to_owned()),
         });
 
+        // TODO this should also work with named columns when applicable
+        /*
+        engine.register_fn("bed_column", |ix: i64| match key {
+            "SeqId" => Gff3Column::SeqId,
+            "Source" => Gff3Column::Source,
+            "Type" => Gff3Column::Type,
+            "Start" => Gff3Column::Start,
+            "End" => Gff3Column::End,
+            "Score" => Gff3Column::Score,
+            "Strand" => Gff3Column::Strand,
+            "Frame" => Gff3Column::Frame,
+            attr => Gff3Column::Attribute(attr.as_bytes().to_owned()),
+        });
+        */
+
         engine.register_fn(
             "get",
             move |record: &mut Gff3Record, column: Gff3Column| match column {
@@ -1334,6 +1349,69 @@ impl ConsoleShared {
                 )));
             }
         });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        let graph = self.graph.clone();
+        engine.register_fn(
+            "create_label_set",
+            move |annots: &mut Arc<Gff3Records>,
+                  record_indices: Vec<rhai::Dynamic>,
+                  path_id: PathId,
+                  column: Gff3Column,
+                  label_set_name: &str| {
+                log::warn!("in create_label_set");
+                let record_indices = record_indices
+                    .into_iter()
+                    .filter_map(|i| {
+                        let i = i.as_int().ok()?;
+
+                        Some(i as usize)
+                    })
+                    .collect::<Vec<_>>();
+
+                let path_name = graph.graph.get_path_name_vec(path_id).unwrap();
+                let path_name = path_name.to_str().unwrap();
+
+                log::warn!("calling calculate_annotation_set");
+                let label_set =
+                    crate::gui::windows::annotations::calculate_annotation_set(
+                        &graph,
+                        annots.as_ref(),
+                        &record_indices,
+                        path_id,
+                        path_name,
+                        &column,
+                        label_set_name,
+                    );
+
+                if let Some(label_set) = label_set {
+                    log::warn!("label set calculated");
+                    let name = label_set_name.to_string();
+
+                    app_msg_tx
+                        .send(AppMsg::NewNodeLabels { name, label_set })
+                        .unwrap();
+                } else {
+                    log::warn!("error calculating the label set");
+                }
+            },
+        );
+
+        /*
+        engine.register_fn(
+            "create_label_set",
+            move |annots: &mut Arc<Gff3Records>,
+                  column: Gff3Column,
+                  label_set_name: &str,
+                  path_id: PathId,
+                  record_indices: Vec<i64>| {
+                // nodes: Vec<NodeId>| {
+                //
+            },
+        );
+        */
+
+        // engine.register_result_fn("load_collection", move |path: &str| {
     }
 
     pub fn create_engine(&self) -> rhai::Engine {
