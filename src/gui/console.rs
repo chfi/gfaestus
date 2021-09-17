@@ -1154,12 +1154,9 @@ impl ConsoleShared {
     }
 
     fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
-        // TODO get the collection kind from the extension in c_name
-        // TODO also add these functions in bulk/semi-automatically, like the getset stuff
-
         engine.register_result_fn(
             "get_record",
-            move |coll: Arc<Gff3Records>, ix: i64| {
+            move |coll: &mut Arc<Gff3Records>, ix: i64| {
                 if let Some(record) = coll.records().get(ix as usize).cloned() {
                     Ok(record)
                 } else {
@@ -1202,12 +1199,13 @@ impl ConsoleShared {
         engine.register_fn(
             "get",
             move |record: &mut Gff3Record, column: Gff3Column| {
-                let bytes = record.get_first(&column);
-                if let Some(bytes) = bytes {
-                    format!("{}", bytes.as_bstr())
-                } else {
-                    "".to_string()
-                }
+                let fields = record.get_all(&column);
+                fields
+                    .into_iter()
+                    .map(|val| {
+                        rhai::Dynamic::from(format!("{}", val.as_bstr()))
+                    })
+                    .collect::<Vec<_>>()
             },
         );
 
@@ -1230,29 +1228,38 @@ impl ConsoleShared {
 
             let result = std::thread::spawn(move || rx.recv().unwrap()).join();
 
-            match Self::error_helper::<Arc<BedRecords>>(&result) {
+            match Self::error_helper::<Arc<Gff3Records>>(&result) {
                 Ok(records) => {
                     return Ok(rhai::Dynamic::from(records));
                 }
                 Err(_) => {}
             }
 
-            match Self::error_helper::<Arc<Gff3Records>>(&result) {
+            let type_ = TypeId::of::<Arc<BedRecords>>();
+            let key = c_name.to_string();
+
+            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
+
+            let msg: AppMsg = AppMsg::RequestData {
+                type_,
+                key,
+                sender: tx,
+            };
+
+            app_msg_tx.send(msg).unwrap();
+
+            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+
+            match Self::error_helper::<Arc<BedRecords>>(&result) {
                 Ok(records) => {
                     return Ok(rhai::Dynamic::from(records));
                 }
                 Err(err) => Err(err),
             }
-
-            // let out = Self::error_helper::<Arc<BedRecords>>(result);
-
-            // out
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("load_collection", move |path: &str| {
-            use crossbeam::channel;
-
             let file = PathBuf::from(path);
 
             let ext = file.extension().and_then(|ext| ext.to_str()).map_or(
@@ -1267,15 +1274,13 @@ impl ConsoleShared {
                 let records = Gff3Records::parse_gff3_file(&file);
                 match records {
                     Ok(records) => {
-                        let file_name = records.file_name().to_string();
-
                         app_msg_tx
                             .send(AppMsg::AddGff3Records(records))
                             .unwrap();
 
                         return Ok(());
                     }
-                    Err(err) => {
+                    Err(_err) => {
                         return Err(Box::new(EvalAltResult::ErrorSystem(
                             "Error parsing GFF3 file".to_string(),
                             "Error parsing GFF3 file".into(),
@@ -1286,15 +1291,13 @@ impl ConsoleShared {
                 let records = BedRecords::parse_bed_file(&file);
                 match records {
                     Ok(records) => {
-                        let file_name = records.file_name().to_string();
-
                         app_msg_tx
                             .send(AppMsg::AddBedRecords(records))
                             .unwrap();
 
                         return Ok(());
                     }
-                    Err(err) => {
+                    Err(_err) => {
                         return Err(Box::new(EvalAltResult::ErrorSystem(
                             "Error parsing BED file".to_string(),
                             "Error parsing BED file".into(),
@@ -1307,8 +1310,6 @@ impl ConsoleShared {
                     "Invalid file extension".into(),
                 )));
             }
-
-            Ok(())
         });
     }
 
