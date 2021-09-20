@@ -103,7 +103,9 @@ pub struct Console<'a> {
     label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
     rayon_pool: Arc<rayon::ThreadPool>,
 
-    window_defs: Vec<ConsoleGuiDsl>,
+    // TODO this shouldn't be a Vec, and it should probably use an
+    // RwLock or something inside
+    window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
 }
 
 impl Console<'static> {
@@ -274,7 +276,7 @@ impl Console<'static> {
             .callbacks
             .insert("button_callback".to_string(), Box::new(callback) as _);
 
-        let window_defs = vec![window_test];
+        let window_defs = Arc::new(Mutex::new(vec![window_test]));
 
         Self {
             input_line: String::new(),
@@ -492,6 +494,8 @@ impl Console<'static> {
             },
         );
 
+        self.add_gui_dsl_fns(&mut engine);
+
         {
             let modules = self.modules.lock();
 
@@ -501,6 +505,100 @@ impl Console<'static> {
         }
 
         engine
+    }
+
+    fn add_gui_dsl_fns(&self, engine: &mut rhai::Engine) {
+        let window_defs = self.window_defs.clone();
+        engine.register_fn("new_window", move |title: &str| {
+            let mut win_defs = window_defs.lock();
+
+            let ix = win_defs.len();
+            let window = ConsoleGuiDsl::new(
+                title,
+                egui::Id::new(format!("{}-win_def_dsl-{}", title, ix,)),
+            );
+
+            win_defs.push(window);
+
+            ix as i64
+        });
+
+        let window_defs = self.window_defs.clone();
+        engine.register_fn("add_label", move |ix: i64, text: &str| {
+            let mut win_defs = window_defs.lock();
+
+            if let Some(window) = win_defs.get_mut(ix as usize) {
+                window.elements.push(ConsoleGuiElem::Label {
+                    text: text.to_string(),
+                });
+            }
+        });
+
+        let window_defs = self.window_defs.clone();
+        engine.register_fn(
+            "add_button",
+            move |ix: i64, text: &str, callback_id: &str| {
+                let mut win_defs = window_defs.lock();
+
+                if let Some(window) = win_defs.get_mut(ix as usize) {
+                    window.elements.push(ConsoleGuiElem::Button {
+                        text: text.to_string(),
+                        callback_id: callback_id.to_string(),
+                    });
+                }
+            },
+        );
+
+        let window_defs = self.window_defs.clone();
+        let shared = self.shared();
+        let modules = self.modules.clone();
+        engine.register_fn(
+            "add_callback",
+            move |ix: i64, callback_id: &str, fn_name: &str| {
+                let mut win_defs = window_defs.lock();
+
+                if let Some(window) = win_defs.get_mut(ix as usize) {
+                    let scope = Self::create_scope();
+                    let mut engine = shared.create_engine();
+                    {
+                        let modules = modules.lock();
+                        for module in modules.iter() {
+                            engine.register_global_module(module.clone());
+                        }
+                    }
+
+                    let script =
+                        format!("fn a_function() {{\n{}();\n}}", fn_name);
+                    let ast = engine.compile_with_scope(&scope, &script);
+
+                    match ast {
+                        Ok(ast) => {
+                            let function =
+                                rhai::Func::<(), ()>::create_from_ast(
+                                    engine,
+                                    ast,
+                                    "a_function",
+                                );
+
+                            let callback = Box::new(move || match function() {
+                                Ok(_) => (),
+                                Err(err) => log::warn!(
+                                    "gui dsl callback error: {:?}",
+                                    err
+                                ),
+                            }) as _;
+
+                            window
+                                .callbacks
+                                .insert(callback_id.to_string(), callback);
+                        }
+                        Err(err) => {
+                            log::warn!("compilation error: {:?}", err);
+                        }
+                    }
+                }
+            },
+        );
     }
 
     pub fn eval_file(
@@ -759,8 +857,12 @@ impl Console<'static> {
         is_down: bool,
         reactor: &mut Reactor,
     ) {
-        for win_def in self.window_defs.iter_mut() {
-            win_def.show(ctx);
+        {
+            let mut win_defs = self.window_defs.lock();
+
+            for win_def in win_defs.iter_mut() {
+                win_def.show(ctx);
+            }
         }
 
         if !is_down {
