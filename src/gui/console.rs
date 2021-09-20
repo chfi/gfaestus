@@ -102,6 +102,8 @@ pub struct Console<'a> {
     // and be more generic
     label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
     rayon_pool: Arc<rayon::ThreadPool>,
+
+    window_defs: Vec<ConsoleGuiDsl>,
 }
 
 impl Console<'static> {
@@ -254,6 +256,26 @@ impl Console<'static> {
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
         let label_map = Arc::new(Mutex::new(HashMap::default()));
 
+        let mut window_test =
+            ConsoleGuiDsl::new("test window", egui::Id::new("window dsl test"));
+        window_test.elements.push(ConsoleGuiElem::Label {
+            text: "hello world".to_string(),
+        });
+        window_test.elements.push(ConsoleGuiElem::Button {
+            text: "im a button".to_string(),
+            callback_id: "button_callback".to_string(),
+        });
+
+        let callback = || {
+            println!("button clicked!");
+        };
+
+        window_test
+            .callbacks
+            .insert("button_callback".to_string(), Box::new(callback) as _);
+
+        let window_defs = vec![window_test];
+
         Self {
             input_line: String::new(),
 
@@ -288,6 +310,8 @@ impl Console<'static> {
             overlay_list,
             label_map,
             rayon_pool,
+
+            window_defs,
         }
     }
 
@@ -735,6 +759,10 @@ impl Console<'static> {
         is_down: bool,
         reactor: &mut Reactor,
     ) {
+        for win_def in self.window_defs.iter_mut() {
+            win_def.show(ctx);
+        }
+
         if !is_down {
             return;
         }
@@ -1784,4 +1812,54 @@ fn virtual_key_code_map() -> HashMap<String, winit::event::VirtualKeyCode> {
     .collect();
 
     keys
+}
+
+pub enum ConsoleGuiElem {
+    Label { text: String },
+    Button { text: String, callback_id: String },
+    Row { fields: Vec<String> },
+}
+
+pub struct ConsoleGuiDsl {
+    window_title: String,
+    id: egui::Id,
+    elements: Vec<ConsoleGuiElem>,
+    callbacks: HashMap<String, Box<dyn Fn() + Send + Sync + 'static>>,
+}
+
+impl ConsoleGuiDsl {
+    pub fn new(window_title: &str, id: egui::Id) -> Self {
+        Self {
+            window_title: window_title.to_string(),
+            id,
+            elements: Vec::new(),
+            callbacks: HashMap::default(),
+        }
+    }
+
+    pub fn show(&mut self, ctx: &egui::CtxRef) {
+        egui::Window::new(&self.window_title)
+            .id(self.id)
+            .show(ctx, |ui| {
+                for elem in self.elements.iter() {
+                    match elem {
+                        ConsoleGuiElem::Label { text } => {
+                            ui.label(text);
+                        }
+                        ConsoleGuiElem::Button { text, callback_id } => {
+                            if ui.button(text).clicked() {
+                                if let Some(callback) =
+                                    self.callbacks.get(callback_id)
+                                {
+                                    callback();
+                                }
+                            }
+                        }
+                        ConsoleGuiElem::Row { fields } => {
+                            // TODO
+                        }
+                    }
+                }
+            });
+    }
 }
