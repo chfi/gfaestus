@@ -1451,6 +1451,13 @@ impl ConsoleShared {
         engine.set_max_call_levels(16);
         engine.set_max_expr_depths(0, 0);
 
+        let result_tx = self.result_tx.clone();
+        engine.on_print(move |x| {
+            result_tx
+                .send(Ok(rhai::Dynamic::from(x.to_string())))
+                .unwrap();
+        });
+
         engine.register_type::<Point>();
 
         self.add_annotation_fns(&mut engine);
