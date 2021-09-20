@@ -550,6 +550,45 @@ impl Console<'static> {
         );
 
         let window_defs = self.window_defs.clone();
+        engine.register_fn(
+            "add_text_edit",
+            // move |ix: i64, label: &str, data_id: &str| {
+            move |ix: i64, data_id: &str| {
+                let mut win_defs = window_defs.lock();
+
+                if let Some(window) = win_defs.get_mut(ix as usize) {
+                    window.elements.push(ConsoleGuiElem::TextInput {
+                        label: "".to_string(),
+                        data_id: data_id.to_string(),
+                    });
+
+                    window
+                        .text_data
+                        .insert(data_id.to_string(), "".to_string());
+                }
+            },
+        );
+
+        let window_defs = self.window_defs.clone();
+        engine.register_result_fn(
+            "text_edit_value",
+            move |ix: i64, data_id: &str| {
+                let mut win_defs = window_defs.lock();
+
+                if let Some(window) = win_defs.get_mut(ix as usize) {
+                    if let Some(contents) = window.get_text_data(data_id) {
+                        return Ok(rhai::Dynamic::from(contents.to_string()));
+                    }
+                }
+
+                Err(Box::new(EvalAltResult::ErrorSystem(
+                    "Text box does not exist".to_string(),
+                    "Text box does not exist".into(),
+                )))
+            },
+        );
+
+        let window_defs = self.window_defs.clone();
         let shared = self.shared();
         let modules = self.modules.clone();
         engine.register_fn(
@@ -1732,6 +1771,11 @@ impl ConsoleShared {
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);
 
+        engine.register_fn("sleep", |ms: i64| {
+            let dur = std::time::Duration::from_millis(ms as u64);
+            std::thread::sleep(dur);
+        });
+
         engine.register_fn("test_wait", || {
             println!("sleeping 2 seconds...");
             std::thread::sleep(std::time::Duration::from_millis(2000));
@@ -1926,6 +1970,7 @@ fn virtual_key_code_map() -> HashMap<String, winit::event::VirtualKeyCode> {
 pub enum ConsoleGuiElem {
     Label { text: String },
     Button { text: String, callback_id: String },
+    TextInput { label: String, data_id: String },
     Row { fields: Vec<String> },
 }
 
@@ -1934,6 +1979,8 @@ pub struct ConsoleGuiDsl {
     id: egui::Id,
     elements: Vec<ConsoleGuiElem>,
     callbacks: HashMap<String, Box<dyn Fn() + Send + Sync + 'static>>,
+
+    text_data: HashMap<String, String>,
 }
 
 impl ConsoleGuiDsl {
@@ -1943,16 +1990,23 @@ impl ConsoleGuiDsl {
             id,
             elements: Vec::new(),
             callbacks: HashMap::default(),
+
+            text_data: HashMap::default(),
         }
+    }
+
+    pub fn get_text_data(&self, data_id: &str) -> Option<&str> {
+        self.text_data.get(data_id).map(|s| s.as_str())
     }
 
     pub fn show(&mut self, ctx: &egui::CtxRef) {
         egui::Window::new(&self.window_title)
             .id(self.id)
             .show(ctx, |ui| {
-                for elem in self.elements.iter() {
+                for elem in self.elements.iter_mut() {
                     match elem {
                         ConsoleGuiElem::Label { text } => {
+                            let text: &str = text;
                             ui.label(text);
                         }
                         ConsoleGuiElem::Button { text, callback_id } => {
@@ -1963,6 +2017,19 @@ impl ConsoleGuiDsl {
                                     callback();
                                 }
                             }
+                        }
+                        ConsoleGuiElem::TextInput { label, data_id } => {
+                            let data_id: &str = data_id;
+
+                            if let Some(contents) =
+                                self.text_data.get_mut(data_id)
+                            {
+                                let text_edit =
+                                    egui::TextEdit::singleline(contents);
+                                ui.add(text_edit);
+                            }
+
+                            //
                         }
                         ConsoleGuiElem::Row { fields } => {
                             // TODO
