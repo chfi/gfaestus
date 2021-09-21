@@ -1,10 +1,102 @@
-use handlegraph::handle::NodeId;
+use handlegraph::handle::{Handle, NodeId};
+
+use nalgebra_glm as glm;
 
 use crate::{
     geometry::{Point, Rect},
     universe::Node,
     view::View,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum LabelPos {
+    World { point: Point, offset: Option<Point> },
+    // Screen(Point),
+    Handle { handle: Handle },
+}
+
+impl LabelPos {
+    /*
+    pub fn try_offset(&self) -> Option<Point> {
+        match *self {
+            LabelPos::World { offset, .. } => offset,
+            LabelPos::Handle { .. } => None,
+        }
+    }
+    */
+
+    pub fn offset(&self, nodes: &[Node]) -> Option<Point> {
+        match *self {
+            LabelPos::World { offset, .. } => offset,
+            LabelPos::Handle { handle, .. } => {
+                let id = handle.id();
+                let ix = id.0 - 1;
+                let node = nodes[ix as usize];
+
+                let start_p = node.p0;
+                let end_p = node.p1;
+
+                let start_v = glm::vec2(start_p.x, start_p.y);
+                let end_v = glm::vec2(end_p.x, end_p.y);
+
+                let del = end_v - start_v;
+                let rot_del =
+                    glm::rotate_vec2(&del, std::f32::consts::PI / 2.0);
+
+                let rot_del_norm = rot_del.normalize();
+
+                let offset = Point::new(rot_del_norm[0], rot_del_norm[1]);
+
+                Some(offset)
+            }
+        }
+    }
+
+    pub fn try_world(&self) -> Option<Point> {
+        if let LabelPos::World { point, .. } = *self {
+            Some(point)
+        } else {
+            None
+        }
+    }
+
+    pub fn world(&self, nodes: &[Node]) -> Point {
+        match *self {
+            LabelPos::World { point, .. } => point,
+            LabelPos::Handle { handle, .. } => {
+                let id = handle.id();
+                let ix = id.0 - 1;
+                let node = nodes[ix as usize];
+                node.center()
+            }
+        }
+    }
+
+    pub fn anchor(&self, nodes: &[Node]) -> egui::Align2 {
+        let dir = if let Some(offset) = self.offset(nodes) {
+            offset
+        } else {
+            return egui::Align2::CENTER_CENTER;
+        };
+
+        let norm = dir / dir.length();
+
+        let align_for = |v: f32| {
+            if v > 0.67 {
+                egui::Align::Max
+            } else if v < -0.67 {
+                egui::Align::Min
+            } else {
+                egui::Align::Center
+            }
+        };
+
+        let hor_align = align_for(norm.x);
+        let ver_align = align_for(norm.y);
+
+        egui::Align2([hor_align, ver_align])
+    }
+}
 
 pub fn offset_align(dir: &Point) -> egui::Align2 {
     let norm = *dir / dir.length();
