@@ -80,6 +80,50 @@ impl LabelSet {
     }
 }
 
+pub struct QuadTree<T: Clone> {
+    boundary: Rect,
+
+    points: Vec<Point>,
+    data: Vec<T>,
+
+    north_west: Option<Box<QuadTree<T>>>,
+    north_east: Option<Box<QuadTree<T>>>,
+
+    south_west: Option<Box<QuadTree<T>>>,
+    south_east: Option<Box<QuadTree<T>>>,
+}
+
+
+/*
+pub struct QuadTree<const N: usize> {
+    boundary: Rect,
+
+    points: [Point; N],
+
+    north_west: Option<Box<QuadTree<N>>>,
+    north_east: Option<Box<QuadTree<N>>>,
+
+    south_west: Option<Box<QuadTree<N>>>,
+    south_east: Option<Box<QuadTree<N>>>,
+}
+
+impl<const N: usize> QuadTree<N> {
+    pub fn new() -> Self {
+        Self {
+            boundary: Rect::default(),
+            points: [
+        }
+    }
+}
+*/
+
+// pub enum ClusterTreeNode {
+//     Leaf {
+// }
+
+// pub struct ClusterTree {
+
+// }
 
 impl LabelSet {
     pub fn cluster(&self) -> Vec<LabelCluster> {
@@ -101,8 +145,31 @@ pub struct LabelSets {
     // counter: usize,
 }
 
+#[derive(Debug, Clone)]
 pub struct LabelCluster {
-    // pub
+    pub anchor_world: Point,
+    pub offset: Option<Point>,
+
+    pub text_indices: Vec<usize>,
+}
+
+pub struct LabelClusterCache {
+    pub label_set: Arc<LabelSet>,
+
+    pub clusters: Vec<LabelCluster>,
+
+    pub view_scale: f32,
+    pub radius: f32,
+}
+pub struct SuperCache {
+    pub sub_caches: Vec<LabelClusterCache>,
+    pub clusters: Vec<LabelCluster>,
+}
+
+impl SuperCache {
+    pub fn merge_clusters(&mut self) {
+        todo!();
+    }
 }
 
 // pub struct LabelSet
