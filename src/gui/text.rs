@@ -99,6 +99,51 @@ impl LabelPos {
 
         egui::Align2([hor_align, ver_align])
     }
+
+    pub fn draw_text_at(
+        &self,
+        ctx: &egui::CtxRef,
+        node_positions: &[Node],
+        view: View,
+        text: &str,
+    ) -> Option<Rect> {
+        let world = self.world(node_positions);
+
+        let screen_offset = self.offset(node_positions).unwrap_or(Point::ZERO);
+        let anchor = self.anchor(node_positions);
+
+        let screen_rect = ctx.input().screen_rect();
+
+        let painter = ctx.layer_painter(painter_layer());
+
+        let screen_pos = view.world_point_to_screen(world);
+
+        let dims = Point::new(screen_rect.width(), screen_rect.height());
+
+        let mut screen_pos = screen_pos + dims / 2.0;
+        screen_pos += screen_offset;
+
+        // hacky way to ensure that the text is only being rendered when
+        // (more or less) on the screen, without being cut off if the
+        // center of the text is just outside the visible area
+        if screen_pos.x > -screen_rect.width()
+            && screen_pos.x < 2.0 * screen_rect.width()
+            && screen_pos.y > -screen_rect.height()
+            && screen_pos.y < 2.0 * screen_rect.height()
+        {
+            let rect = painter.text(
+                screen_pos.into(),
+                anchor,
+                text,
+                egui::TextStyle::Body,
+                ctx.style().visuals.text_color(),
+            );
+
+            return Some(rect.into());
+        }
+
+        None
+    }
 }
 
 pub fn offset_align(dir: &Point) -> egui::Align2 {
