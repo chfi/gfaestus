@@ -14,7 +14,6 @@ pub enum LabelPos {
         point: Point,
         offset: Option<Point>,
     },
-    // Screen(Point),
     Handle {
         handle: Handle,
         offset: Option<Point>,
@@ -22,15 +21,6 @@ pub enum LabelPos {
 }
 
 impl LabelPos {
-    /*
-    pub fn try_offset(&self) -> Option<Point> {
-        match *self {
-            LabelPos::World { offset, .. } => offset,
-            LabelPos::Handle { .. } => None,
-        }
-    }
-    */
-
     pub fn offset(&self, nodes: &[Node]) -> Option<Point> {
         match *self {
             LabelPos::World { offset, .. } => offset,

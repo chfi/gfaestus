@@ -14,6 +14,7 @@ use bstr::ByteSlice;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::gui::text::LabelPos;
 use crate::{geometry::*, universe::Node, view::*};
 
 use nalgebra_glm as glm;
@@ -23,6 +24,88 @@ pub mod gff;
 
 pub use bed::*;
 pub use gff::*;
+
+#[derive(Debug, Default, Clone)]
+pub struct LabelSet {
+    positions: Vec<LabelPos>,
+    // positions: Vec<(LabelPos, Vec<usize>)>,
+    label_strings: Vec<String>,
+}
+
+impl LabelSet {
+    pub fn add_at_world_point(
+        &mut self,
+        point: Point,
+        text: &str,
+        offset: Option<Point>,
+    ) {
+        let pos = LabelPos::World { point, offset };
+
+        self.positions.push(pos);
+        self.label_strings.push(text.to_string());
+    }
+
+    pub fn add_at_handle(&mut self, handle: Handle, text: &str) {
+        let pos = LabelPos::Handle {
+            handle,
+            offset: None,
+        };
+
+        self.positions.push(pos);
+        self.label_strings.push(text.to_string());
+    }
+
+    pub fn add_at_node(&mut self, node: NodeId, text: &str) {
+        let handle = Handle::pack(node, false);
+        self.add_at_handle(handle, text);
+    }
+
+    pub fn add_many_at<'a, 'b>(
+        &'a mut self,
+        pos: LabelPos,
+        strings: impl Iterator<Item = &'b str>,
+    ) {
+        for text in strings {
+            self.positions.push(pos);
+            self.label_strings.push(text.to_string());
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.positions.is_empty()
+    }
+}
+
+
+impl LabelSet {
+    pub fn cluster(&self) -> Vec<LabelCluster> {
+        // TODO this should be done using a spatial data structure/querying
+
+        let mut clusters = Vec::new();
+
+        // for
+
+        clusters
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LabelSets {
+    pub label_sets: HashMap<String, Arc<LabelSet>>,
+    // names: Vec<String>,
+    // label_sets: Vec<LabelSet>,
+    // counter: usize,
+}
+
+pub struct LabelCluster {
+    // pub
+}
+
+// pub struct LabelSet
 
 #[derive(Debug, Clone)]
 pub struct AnnotationLabelSet {
@@ -401,7 +484,6 @@ pub struct ClusterIndices {
 }
 
 pub struct ClusterCache {
-    // labels: Vec<String>,
     pub label_set: Arc<AnnotationLabelSet>,
     pub cluster_offsets: Vec<Point>,
 
