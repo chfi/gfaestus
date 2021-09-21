@@ -10,9 +10,15 @@ use crate::{
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LabelPos {
-    World { point: Point, offset: Option<Point> },
+    World {
+        point: Point,
+        offset: Option<Point>,
+    },
     // Screen(Point),
-    Handle { handle: Handle },
+    Handle {
+        handle: Handle,
+        offset: Option<Point>,
+    },
 }
 
 impl LabelPos {
@@ -28,7 +34,14 @@ impl LabelPos {
     pub fn offset(&self, nodes: &[Node]) -> Option<Point> {
         match *self {
             LabelPos::World { offset, .. } => offset,
-            LabelPos::Handle { handle, .. } => {
+            LabelPos::Handle { handle, offset } => {
+                // if the offset field isn't set, we use the handle
+                // orientation and node position to figure it out
+
+                if let Some(offset) = offset {
+                    return Some(offset);
+                }
+
                 let id = handle.id();
                 let ix = id.0 - 1;
                 let node = nodes[ix as usize];
