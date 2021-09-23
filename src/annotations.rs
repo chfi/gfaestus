@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use anyhow::Result;
 
@@ -158,17 +161,25 @@ impl<T: Clone> QuadTree<T> {
         point: Point,
         data: T,
     ) -> std::result::Result<(), T> {
+        log::warn!(
+            "inserting data into quad tree at ({}, {})",
+            point.x,
+            point.y
+        );
         if !self.boundary.contains(point) {
+            log::warn!("point is outside tree bounds, aborting");
             return Err(data);
         }
 
         if self.node_len() < Self::NODE_CAPACITY && self.is_leaf() {
+            log::warn!("in leaf below capacity, adding to node");
             self.points.push(point);
             self.data.push(data);
             return Ok(());
         }
 
         if self.is_leaf() {
+            log::warn!("subdividing node");
             self.subdivide();
         }
 
@@ -182,8 +193,14 @@ impl<T: Clone> QuadTree<T> {
         let mut data = data;
         for child in children {
             match Self::insert_child(child, point, data) {
-                Ok(_) => return Ok(()),
-                Err(d) => data = d,
+                Ok(_) => {
+                    log::warn!("inserting point into child");
+                    return Ok(());
+                }
+                Err(d) => {
+                    log::warn!("skipping child");
+                    data = d;
+                }
             }
         }
 
@@ -271,6 +288,26 @@ impl<T: Clone> QuadTree<T> {
                 }
             },
         )
+    }
+
+    pub fn rects(&self) -> Vec<Rect> {
+        let mut result = Vec::new();
+
+        let mut queue = VecDeque::new();
+
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            result.push(node.boundary);
+
+            if let Some(children) = node.children() {
+                for child in children {
+                    queue.push_back(child);
+                }
+            }
+        }
+
+        result
     }
 }
 

@@ -382,6 +382,7 @@ impl Gui {
         channels: &AppChannels,
         settings: AppSettings,
         graph_query: &Arc<GraphQuery>,
+        boundary: Rect,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -476,6 +477,7 @@ impl Gui {
             channels.clone(),
             settings.to_owned(),
             shared_state.to_owned(),
+            boundary,
         );
 
         let gui = Self {
