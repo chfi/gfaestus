@@ -261,10 +261,14 @@ pub fn draw_point_world(ctx: &egui::CtxRef, view: View, point: Point) {
     let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
 
     painter.circle_stroke(point.into(), 2.0, stroke);
-    // painter.rect_stroke(Rect::new(s0, s1).into(), 0.0, stroke);
 }
 
-pub fn draw_rect_world(ctx: &egui::CtxRef, view: View, rect: Rect) {
+pub fn draw_rect_world(
+    ctx: &egui::CtxRef,
+    view: View,
+    rect: Rect,
+    color: Option<rgb::RGBA<f32>>,
+) {
     let screen_rect = ctx.input().screen_rect();
 
     let p0 = rect.min();
@@ -280,7 +284,17 @@ pub fn draw_rect_world(ctx: &egui::CtxRef, view: View, rect: Rect) {
 
     let painter = ctx.layer_painter(painter_layer());
 
-    let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
+    let color = color
+        .map(|c| {
+            let r = (c.r * 255.0) as u8;
+            let g = (c.g * 255.0) as u8;
+            let b = (c.b * 255.0) as u8;
+            let a = (c.a * 255.0) as u8;
+            egui::Color32::from_rgba_unmultiplied(r, g, b, a)
+        })
+        .unwrap_or(egui::Color32::from_rgb(128, 128, 128));
+
+    let stroke = egui::Stroke::new(2.0, color);
 
     painter.rect_stroke(Rect::new(s0, s1).into(), 0.0, stroke);
 }

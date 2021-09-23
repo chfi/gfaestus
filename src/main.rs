@@ -689,10 +689,21 @@ fn node_color(id) {
                     let view = app.shared_state().view();
                     let rects = gui.console.tree_rects();
                     for rect in rects {
-                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect);
+                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect, None);
                     }
 
                     let lock = gui.console.tree_test.lock();
+
+                    let s = app.shared_state().mouse_pos();
+                    let dims = app.dims();
+                    let w = view.screen_point_to_world(dims, s);
+
+                    if let Some(closest) = lock.closest_leaf(w) {
+                        let rect = closest.boundary();
+                        let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);
+                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect, Some(color));
+                    }
+
                     for leaf in lock.leaves() {
                         let points = leaf.points();
                         let data = leaf.data();

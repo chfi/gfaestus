@@ -84,6 +84,31 @@ impl LabelSet {
     }
 }
 
+#[derive(Debug, Default, Clone)]
+struct Cluster {
+    offset: Option<Point>,
+    lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClusterTree {
+    clusters: QuadTree<Cluster>,
+}
+
+/*
+impl ClusterTree {
+    pub fn from_label_tree<L>(tree: &QuadTree<L>) -> Self
+    where
+        L: Clone + ToString,
+    {
+        let mut clusters: QuadTree<Cluster> = QuadTree::new(tree.boundary());
+
+        unimplemented!();
+    }
+}
+*/
+
+/*
 impl LabelSet {
     pub fn cluster(&self) -> Vec<LabelCluster> {
         let mut clusters = Vec::new();
@@ -102,6 +127,8 @@ pub struct LabelSets {
     // counter: usize,
 }
 
+*/
+/*
 #[derive(Debug, Clone)]
 pub struct LabelCluster {
     pub anchor_world: Point,
@@ -128,6 +155,7 @@ impl SuperCache {
         todo!();
     }
 }
+*/
 
 // pub struct LabelSet
 

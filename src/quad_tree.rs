@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{geometry::*, universe::Node, view::*};
 
+#[derive(Debug, Clone)]
 pub struct QuadTree<T: Clone> {
     boundary: Rect,
 
@@ -33,6 +34,10 @@ impl<T: Clone> QuadTree<T> {
         }
     }
 
+    pub fn boundary(&self) -> Rect {
+        self.boundary
+    }
+
     pub fn points(&self) -> &[Point] {
         &self.points
     }
@@ -47,40 +52,6 @@ impl<T: Clone> QuadTree<T> {
 
     pub fn is_leaf(&self) -> bool {
         self.north_west.is_none()
-    }
-
-    fn insert_child(
-        child: Option<&mut Self>,
-        point: Point,
-        data: T,
-    ) -> std::result::Result<(), T> {
-        if let Some(child) = child {
-            return child.insert(point, data);
-        }
-
-        Err(data)
-    }
-
-    fn children(&self) -> Option<[&QuadTree<T>; 4]> {
-        let nw = self.north_west.as_deref()?;
-        let ne = self.north_east.as_deref()?;
-        let sw = self.south_west.as_deref()?;
-        let se = self.south_east.as_deref()?;
-
-        let children = [nw, ne, sw, se];
-
-        Some(children)
-    }
-
-    fn children_mut(&mut self) -> Option<[&mut QuadTree<T>; 4]> {
-        let nw = self.north_west.as_deref_mut()?;
-        let ne = self.north_east.as_deref_mut()?;
-        let sw = self.south_west.as_deref_mut()?;
-        let se = self.south_east.as_deref_mut()?;
-
-        let children = [nw, ne, sw, se];
-
-        Some(children)
     }
 
     pub fn insert(
@@ -134,6 +105,93 @@ impl<T: Clone> QuadTree<T> {
         Err(data)
     }
 
+    pub fn query_range(&self, range: Rect) -> Vec<(Point, &T)> {
+        let mut results = Vec::new();
+
+        if !self.boundary.intersects(range) {
+            return results;
+        }
+
+        for (&point, data) in self.points.iter().zip(self.data.iter()) {
+            if range.contains(point) {
+                results.push((point, data));
+            }
+        }
+
+        if let Some(children) = self.children() {
+            for child in children {
+                results.extend(Self::child_range(child, range));
+            }
+        }
+
+        results
+    }
+
+    pub fn closest_leaf(&self, p: Point) -> Option<&QuadTree<T>> {
+        if !self.boundary.contains(p) {
+            return None;
+        }
+
+        let mut queue: VecDeque<&QuadTree<T>> = VecDeque::new();
+
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            if node.is_leaf() {
+                if node.boundary.contains(p) {
+                    return Some(node);
+                }
+            } else {
+                if let Some(children) = node.children() {
+                    for child in children {
+                        queue.push_back(child);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    /*
+    pub fn closest(&self, p: Point) -> Option<(Point, &T)> {
+        if !self.boundary.contains(p) {
+            return None;
+        }
+
+        if self.is_leaf() {
+            let mut closest: Option<(Point, &T)> = None;
+            let mut prev_dist: Option<f32> = None;
+
+            for (&point, data) in self.points.iter().zip(self.data.iter()) {
+                let dist = point.dist_sqr(p);
+
+                if let Some(prev) = prev_dist {
+                    if dist < prev {
+                        closest = Some((point, data));
+                        prev_dist = Some(dist);
+                    }
+                } else {
+                    closest = Some((point, data));
+                    prev_dist = Some(dist);
+                }
+            }
+
+            closest
+        } else {
+            let children = self.children()?;
+
+            for child in children {
+                if child.boundary().contains(p) {
+
+                }
+            }
+
+
+        }
+    }
+    */
+
     fn subdivide(&mut self) {
         let min = self.boundary.min();
         let max = self.boundary.max();
@@ -180,26 +238,38 @@ impl<T: Clone> QuadTree<T> {
         self.south_east = Some(Box::new(btm_right));
     }
 
-    pub fn query_range(&self, range: Rect) -> Vec<(Point, &T)> {
-        let mut results = Vec::new();
-
-        if !self.boundary.intersects(range) {
-            return results;
+    fn insert_child(
+        child: Option<&mut Self>,
+        point: Point,
+        data: T,
+    ) -> std::result::Result<(), T> {
+        if let Some(child) = child {
+            return child.insert(point, data);
         }
 
-        for (&point, data) in self.points.iter().zip(self.data.iter()) {
-            if range.contains(point) {
-                results.push((point, data));
-            }
-        }
+        Err(data)
+    }
 
-        if let Some(children) = self.children() {
-            for child in children {
-                results.extend(Self::child_range(child, range));
-            }
-        }
+    fn children(&self) -> Option<[&QuadTree<T>; 4]> {
+        let nw = self.north_west.as_deref()?;
+        let ne = self.north_east.as_deref()?;
+        let sw = self.south_west.as_deref()?;
+        let se = self.south_east.as_deref()?;
 
-        results
+        let children = [nw, ne, sw, se];
+
+        Some(children)
+    }
+
+    fn children_mut(&mut self) -> Option<[&mut QuadTree<T>; 4]> {
+        let nw = self.north_west.as_deref_mut()?;
+        let ne = self.north_east.as_deref_mut()?;
+        let sw = self.south_west.as_deref_mut()?;
+        let se = self.south_east.as_deref_mut()?;
+
+        let children = [nw, ne, sw, se];
+
+        Some(children)
     }
 
     fn child_range<'a>(
@@ -274,6 +344,14 @@ impl<'a, T: Clone> Leaves<'a, T> {
         self.done = true;
 
         None
+    }
+}
+
+impl<'a, T: Clone> Iterator for Leaves<'a, T> {
+    type Item = &'a QuadTree<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Leaves::next(self)
     }
 }
 
