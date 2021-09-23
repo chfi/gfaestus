@@ -218,6 +218,23 @@ impl Rect {
         Self { min, max }
     }
 
+    pub fn intersection(&self, other: Self) -> Self {
+        let min_x = self.min.x.max(other.min.x);
+        let min_y = self.min.y.max(other.min.y);
+
+        let max_x = self.max.x.min(other.max.x);
+        let max_y = self.max.y.min(other.max.y);
+
+        Self::new(Point::new(min_x, min_y), Point::new(max_x, max_y))
+    }
+
+    pub fn intersects(&self, other: Self) -> bool {
+        self.min.x <= other.max.x
+            && other.min.x <= self.max.x
+            && self.min.y <= other.max.y
+            && other.min.y <= self.max.y
+    }
+
     #[inline]
     pub fn resize(&self, factor: f32) -> Self {
         let center = self.center();
