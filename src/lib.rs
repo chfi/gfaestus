@@ -9,6 +9,7 @@ pub mod gui;
 pub mod overlays;
 
 pub mod gfa;
+pub mod quad_tree;
 pub mod universe;
 
 pub mod input;

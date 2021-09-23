@@ -24,7 +24,7 @@ use bstr::ByteSlice;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationFileType, AnnotationRecord, BedRecords,
-        Gff3Column, Gff3Record, Gff3Records, QuadTree,
+        Gff3Column, Gff3Record, Gff3Records,
     },
     overlays::OverlayKind,
 };
@@ -34,6 +34,7 @@ use crate::{
         Select,
     },
     geometry::*,
+    quad_tree::*,
     reactor::Reactor,
     script::{overlay_colors_tgt_ast, ScriptConfig, ScriptTarget},
     view::View,
@@ -329,7 +330,6 @@ impl Console<'static> {
 
     pub fn tree_rects(&self) -> Vec<Rect> {
         let tree = self.tree_test.lock();
-        // log::warn!("tree has children: {}", !tree.is_leaf());
         tree.rects()
     }
 
@@ -411,6 +411,19 @@ impl Console<'static> {
                     );
                     false
                 }
+            }
+        });
+
+        let tree = self.tree_test.clone();
+        let count = self.tree_count.clone();
+        engine.register_fn("tree_iter_test", move || {
+            let lock = tree.lock();
+            let iter = lock.iter();
+
+            log::warn!("there should be {} nodes", count.load());
+
+            for (ix, (point, data)) in iter.enumerate() {
+                log::warn!("{} - ({}, {}) -> {}", ix, point.x, point.y, data);
             }
         });
     }

@@ -686,14 +686,10 @@ fn node_color(id) {
 
 
                 {
-                    let rects = gui.console.tree_rects();
-                    log::warn!("drawing {} rects", rects.len());
-
                     let view = app.shared_state().view();
-
+                    let rects = gui.console.tree_rects();
                     for rect in rects {
                         gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect);
-                        // gfaestus::gui::text::draw_rect(&gui.ctx, rect);
                     }
                 }
 
