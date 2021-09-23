@@ -93,6 +93,111 @@ pub struct QuadTree<T: Clone> {
     south_east: Option<Box<QuadTree<T>>>,
 }
 
+impl<T: Clone> QuadTree<T> {
+    pub const NODE_CAPACITY: usize = 4;
+
+    pub fn new(boundary: Rect) -> Self {
+        Self {
+            boundary,
+
+            points: Vec::new(),
+            data: Vec::new(),
+
+            north_west: None,
+            north_east: None,
+
+            south_west: None,
+            south_east: None,
+        }
+    }
+
+    pub fn node_len(&self) -> usize {
+        self.points.len()
+    }
+
+    pub fn is_leaf(&self) -> bool {
+        self.north_west.is_none()
+    }
+
+    fn insert_child(
+        child: Option<&mut Self>,
+        point: Point,
+        data: T,
+    ) -> std::result::Result<(), T> {
+        if let Some(child) = child {
+            return child.insert(point, data);
+        }
+
+        Err(data)
+    }
+
+    fn children(&self) -> Option<[&QuadTree<T>; 4]> {
+        let nw = self.north_west.as_deref()?;
+        let ne = self.north_east.as_deref()?;
+        let sw = self.south_west.as_deref()?;
+        let se = self.south_east.as_deref()?;
+
+        let children = [nw, ne, sw, se];
+
+        Some(children)
+    }
+
+    fn children_mut(&mut self) -> Option<[&mut QuadTree<T>; 4]> {
+        let nw = self.north_west.as_deref_mut()?;
+        let ne = self.north_east.as_deref_mut()?;
+        let sw = self.south_west.as_deref_mut()?;
+        let se = self.south_east.as_deref_mut()?;
+
+        let children = [nw, ne, sw, se];
+
+        Some(children)
+    }
+
+    pub fn insert(
+        &mut self,
+        point: Point,
+        data: T,
+    ) -> std::result::Result<(), T> {
+        if !self.boundary.contains(point) {
+            return Err(data);
+        }
+
+        if self.node_len() < Self::NODE_CAPACITY && self.is_leaf() {
+            self.points.push(point);
+            self.data.push(data);
+            return Ok(());
+        }
+
+        if self.is_leaf() {
+            self.subdivide();
+        }
+
+        let children = [
+            self.north_west.as_deref_mut(),
+            self.north_east.as_deref_mut(),
+            self.south_west.as_deref_mut(),
+            self.south_east.as_deref_mut(),
+        ];
+
+        let mut data = data;
+        for child in children {
+            match Self::insert_child(child, point, data) {
+                Ok(_) => return Ok(()),
+                Err(d) => data = d,
+            }
+        }
+
+        Err(data)
+    }
+
+    pub fn subdivide(&mut self) {
+        todo!();
+    }
+
+    pub fn query_range(&self, range: Rect) -> Vec<(Point, T)> {
+        todo!();
+    }
+}
 
 /*
 pub struct QuadTree<const N: usize> {
