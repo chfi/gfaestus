@@ -24,7 +24,7 @@ use bstr::ByteSlice;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationFileType, AnnotationRecord, BedRecords,
-        Gff3Column, Gff3Record, Gff3Records,
+        Gff3Column, Gff3Record, Gff3Records, QuadTree,
     },
     overlays::OverlayKind,
 };
@@ -106,6 +106,9 @@ pub struct Console<'a> {
     // TODO this shouldn't be a Vec, and it should probably use an
     // RwLock or something inside
     window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
+
+    tree_test: Arc<Mutex<QuadTree<usize>>>,
+    tree_count: Arc<AtomicCell<usize>>,
 }
 
 impl Console<'static> {
@@ -118,6 +121,7 @@ impl Console<'static> {
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
+        boundary: Rect,
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
@@ -278,6 +282,9 @@ impl Console<'static> {
 
         let window_defs = Arc::new(Mutex::new(vec![window_test]));
 
+        log::warn!("creating quad tree with boundary {:?}", boundary);
+        let tree_test = Arc::new(Mutex::new(QuadTree::new(boundary)));
+
         Self {
             input_line: String::new(),
 
@@ -314,7 +321,16 @@ impl Console<'static> {
             rayon_pool,
 
             window_defs,
+
+            tree_test,
+            tree_count: Default::default(),
         }
+    }
+
+    pub fn tree_rects(&self) -> Vec<Rect> {
+        let tree = self.tree_test.lock();
+        // log::warn!("tree has children: {}", !tree.is_leaf());
+        tree.rects()
     }
 
     pub fn shared(&self) -> ConsoleShared {
@@ -358,6 +374,47 @@ impl Console<'static> {
         scope
     }
 
+    fn add_tree_test_fns(&self, engine: &mut rhai::Engine) {
+        let tree = self.tree_test.clone();
+        let count = self.tree_count.clone();
+
+        let mouse_pos = self.shared_state.mouse_pos.clone();
+        let view = self.shared_state.view.clone();
+        let screen_dims = self.shared_state.screen_dims.clone();
+
+        engine.register_fn("add_tree_point", move || {
+            let mut lock = tree.lock();
+
+            let id = count.fetch_add(1);
+
+            let point = {
+                let screen = mouse_pos.load();
+                let view = view.load();
+                let dims = screen_dims.load();
+                view.screen_point_to_world(dims, screen)
+            };
+
+            // let point = mouse_pos.load();
+
+            let result = lock.insert(point, id);
+
+            match result {
+                Ok(_) => {
+                    log::info!("added point ({}, {})", point.x, point.y);
+                    true
+                }
+                Err(_id) => {
+                    log::warn!(
+                        "couldn't add the point at ({}, {})",
+                        point.x,
+                        point.y
+                    );
+                    false
+                }
+            }
+        });
+    }
+
     pub fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
 
@@ -367,6 +424,8 @@ impl Console<'static> {
         let binds_tx = self.channels.binds_tx.clone();
 
         let mut engine = shared.create_engine();
+
+        self.add_tree_test_fns(&mut engine);
 
         engine.register_fn(
             "bind_key",

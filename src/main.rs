@@ -246,6 +246,18 @@ fn main() {
     )
     .unwrap();
 
+    let tree_bounding_box = {
+        let height = (bottom_right.x - top_left.x) / 4.0;
+
+        let mut tl = top_left;
+        let mut br = bottom_right;
+
+        tl.y = -height;
+        br.y = height;
+
+        Rect::new(tl, br)
+    };
+
     let mut gui = Gui::new(
         &gfaestus,
         &mut reactor,
@@ -253,6 +265,7 @@ fn main() {
         app.channels(),
         app.settings.clone(),
         &graph_query,
+        tree_bounding_box,
     )
     .unwrap();
 
@@ -671,8 +684,21 @@ fn node_color(id) {
                     app.annotations(),
                 );
 
-                let annotations = app.annotations();
 
+                {
+                    let rects = gui.console.tree_rects();
+                    log::warn!("drawing {} rects", rects.len());
+
+                    let view = app.shared_state().view();
+
+                    for rect in rects {
+                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect);
+                        // gfaestus::gui::text::draw_rect(&gui.ctx, rect);
+                    }
+                }
+
+
+                let annotations = app.annotations();
 
                 log::trace!("Drawing label sets");
                 for label_set in annotations.visible_label_sets() {

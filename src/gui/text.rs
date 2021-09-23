@@ -250,6 +250,27 @@ fn painter_layer() -> egui::LayerId {
     )
 }
 
+pub fn draw_rect_world(ctx: &egui::CtxRef, view: View, rect: Rect) {
+    let screen_rect = ctx.input().screen_rect();
+
+    let p0 = rect.min();
+    let p1 = rect.max();
+
+    let mut s0 = view.world_point_to_screen(p0);
+    let mut s1 = view.world_point_to_screen(p1);
+
+    let offset = Point::new(screen_rect.width(), screen_rect.height()) / 2.0;
+
+    s0 += offset;
+    s1 += offset;
+
+    let painter = ctx.layer_painter(painter_layer());
+
+    let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(128, 128, 128));
+
+    painter.rect_stroke(Rect::new(s0, s1).into(), 0.0, stroke);
+}
+
 pub fn draw_rect<R: Into<egui::Rect>>(ctx: &egui::CtxRef, rect: R) {
     let painter = ctx.layer_painter(painter_layer());
 
