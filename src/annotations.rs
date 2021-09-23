@@ -95,7 +95,6 @@ pub struct ClusterTree {
     clusters: QuadTree<Cluster>,
 }
 
-/*
 impl ClusterTree {
     pub fn from_label_tree<L>(tree: &QuadTree<L>) -> Self
     where
@@ -103,10 +102,11 @@ impl ClusterTree {
     {
         let mut clusters: QuadTree<Cluster> = QuadTree::new(tree.boundary());
 
+        for leaf in tree.leaves() {}
+
         unimplemented!();
     }
 }
-*/
 
 /*
 impl LabelSet {

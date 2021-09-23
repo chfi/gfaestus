@@ -413,6 +413,30 @@ impl Console<'static> {
                 }
             }
         });
+
+        let tree = self.tree_test.clone();
+
+        let mouse_pos = self.shared_state.mouse_pos.clone();
+        let view = self.shared_state.view.clone();
+        let screen_dims = self.shared_state.screen_dims.clone();
+
+        engine.register_fn("del_tree_point", move || {
+            let mut lock = tree.lock();
+
+            let point = {
+                let screen = mouse_pos.load();
+                let view = view.load();
+                let dims = screen_dims.load();
+                view.screen_point_to_world(dims, screen)
+            };
+
+            let success = lock.delete_closest(point);
+            if success {
+                log::info!("deleted point");
+            } else {
+                log::info!("could not delete point");
+            }
+        });
     }
 
     pub fn create_engine(&self) -> rhai::Engine {

@@ -16,6 +16,27 @@ pub struct QuadTree<T: Clone> {
     south_east: Option<Box<QuadTree<T>>>,
 }
 
+pub struct PointMut<'a, T: Clone> {
+    node: &'a mut QuadTree<T>,
+    ix: usize,
+    point: Point,
+}
+
+impl<'a, T: Clone> PointMut<'a, T> {
+    pub fn point(&self) -> Point {
+        self.point
+    }
+
+    pub fn data(&self) -> &T {
+        &self.node.data[self.ix]
+    }
+
+    pub fn delete(self) {
+        self.node.points.remove(self.ix);
+        self.node.data.remove(self.ix);
+    }
+}
+
 impl<T: Clone> QuadTree<T> {
     pub const NODE_CAPACITY: usize = 4;
 
@@ -127,6 +148,15 @@ impl<T: Clone> QuadTree<T> {
         results
     }
 
+    pub fn delete_closest(&mut self, p: Point) -> bool {
+        if let Some(closest) = self.closest_mut(p) {
+            closest.delete();
+            true
+        } else {
+            false
+        }
+    }
+
     pub fn closest_leaf(&self, p: Point) -> Option<&QuadTree<T>> {
         if !self.boundary.contains(p) {
             return None;
@@ -143,6 +173,32 @@ impl<T: Clone> QuadTree<T> {
                 }
             } else {
                 if let Some(children) = node.children() {
+                    for child in children {
+                        queue.push_back(child);
+                    }
+                }
+            }
+        }
+
+        None
+    }
+
+    pub fn closest_leaf_mut(&mut self, p: Point) -> Option<&mut QuadTree<T>> {
+        if !self.boundary.contains(p) {
+            return None;
+        }
+
+        let mut queue: VecDeque<&mut QuadTree<T>> = VecDeque::new();
+
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            if node.is_leaf() {
+                if node.boundary.contains(p) {
+                    return Some(node);
+                }
+            } else {
+                if let Some(children) = node.children_mut() {
                     for child in children {
                         queue.push_back(child);
                     }
@@ -174,6 +230,36 @@ impl<T: Clone> QuadTree<T> {
         }
 
         closest
+    }
+
+    pub fn closest_mut(&mut self, p: Point) -> Option<PointMut<'_, T>> {
+        let leaf = self.closest_leaf_mut(p)?;
+
+        let mut closest: Option<usize> = None;
+        let mut prev_dist: Option<f32> = None;
+
+        for (ix, &point) in leaf.points.iter().enumerate() {
+            let dist = point.dist_sqr(p);
+
+            if let Some(prev) = prev_dist {
+                if dist < prev {
+                    closest = Some(ix);
+                    prev_dist = Some(dist);
+                }
+            } else {
+                closest = Some(ix);
+                prev_dist = Some(dist);
+            }
+        }
+
+        let ix = closest?;
+        let point = leaf.points[ix];
+
+        Some(PointMut {
+            node: leaf,
+            ix,
+            point,
+        })
     }
 
     pub fn rects(&self) -> Vec<Rect> {
