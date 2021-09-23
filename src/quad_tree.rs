@@ -153,44 +153,52 @@ impl<T: Clone> QuadTree<T> {
         None
     }
 
-    /*
     pub fn closest(&self, p: Point) -> Option<(Point, &T)> {
-        if !self.boundary.contains(p) {
-            return None;
-        }
+        let leaf = self.closest_leaf(p)?;
 
-        if self.is_leaf() {
-            let mut closest: Option<(Point, &T)> = None;
-            let mut prev_dist: Option<f32> = None;
+        let mut closest: Option<(Point, &T)> = None;
+        let mut prev_dist: Option<f32> = None;
 
-            for (&point, data) in self.points.iter().zip(self.data.iter()) {
-                let dist = point.dist_sqr(p);
+        for (&point, data) in leaf.points.iter().zip(leaf.data.iter()) {
+            let dist = point.dist_sqr(p);
 
-                if let Some(prev) = prev_dist {
-                    if dist < prev {
-                        closest = Some((point, data));
-                        prev_dist = Some(dist);
-                    }
-                } else {
+            if let Some(prev) = prev_dist {
+                if dist < prev {
                     closest = Some((point, data));
                     prev_dist = Some(dist);
                 }
+            } else {
+                closest = Some((point, data));
+                prev_dist = Some(dist);
             }
+        }
 
-            closest
-        } else {
-            let children = self.children()?;
+        closest
+    }
 
-            for child in children {
-                if child.boundary().contains(p) {
+    pub fn rects(&self) -> Vec<Rect> {
+        let mut result = Vec::new();
 
+        let mut queue = VecDeque::new();
+
+        queue.push_back(self);
+
+        while let Some(node) = queue.pop_front() {
+            result.push(node.boundary);
+
+            if let Some(children) = node.children() {
+                for child in children {
+                    queue.push_back(child);
                 }
             }
-
-
         }
+
+        result
     }
-    */
+
+    pub fn leaves(&self) -> Leaves<'_, T> {
+        Leaves::new(self)
+    }
 
     fn subdivide(&mut self) {
         let min = self.boundary.min();
@@ -285,30 +293,6 @@ impl<T: Clone> QuadTree<T> {
                 }
             },
         )
-    }
-
-    pub fn rects(&self) -> Vec<Rect> {
-        let mut result = Vec::new();
-
-        let mut queue = VecDeque::new();
-
-        queue.push_back(self);
-
-        while let Some(node) = queue.pop_front() {
-            result.push(node.boundary);
-
-            if let Some(children) = node.children() {
-                for child in children {
-                    queue.push_back(child);
-                }
-            }
-        }
-
-        result
-    }
-
-    pub fn leaves(&self) -> Leaves<'_, T> {
-        Leaves::new(self)
     }
 }
 

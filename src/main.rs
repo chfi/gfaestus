@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
+use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
@@ -13,7 +14,9 @@ use winit::event_loop::ControlFlow;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
+use gfaestus::app::{
+    mainview::*, Args, OverlayCreatorMsg, Select, SharedState,
+};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -686,36 +689,8 @@ fn node_color(id) {
 
 
                 {
-                    let view = app.shared_state().view();
-                    let rects = gui.console.tree_rects();
-                    for rect in rects {
-                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect, None);
-                    }
-
                     let lock = gui.console.tree_test.lock();
-
-                    let s = app.shared_state().mouse_pos();
-                    let dims = app.dims();
-                    let w = view.screen_point_to_world(dims, s);
-
-                    if let Some(closest) = lock.closest_leaf(w) {
-                        let rect = closest.boundary();
-                        let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);
-                        gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect, Some(color));
-                    }
-
-                    for leaf in lock.leaves() {
-                        let points = leaf.points();
-                        let data = leaf.data();
-                        for (point, val) in points.into_iter().zip(data.into_iter()) {
-                            gfaestus::gui::text::draw_text_at_world_point(
-                                &gui.ctx,
-                                view,
-                                *point,
-                                &val.to_string()
-                            );
-                        }
-                    }
+                    draw_tree(&gui.ctx, &lock, &app);
                 }
 
 
@@ -1262,4 +1237,35 @@ fn create_overlay(
     }
 
     Ok(())
+}
+
+fn draw_tree<T>(ctx: &egui::CtxRef, tree: &QuadTree<T>, app: &App)
+where
+    T: Clone + ToString,
+{
+    let view = app.shared_state().view();
+    let s = app.shared_state().mouse_pos();
+    let dims = app.dims();
+    let w = view.screen_point_to_world(dims, s);
+
+    for leaf in tree.leaves() {
+        gfaestus::gui::text::draw_rect_world(ctx, view, leaf.boundary(), None);
+
+        let points = leaf.points();
+        let data = leaf.data();
+        for (point, val) in points.into_iter().zip(data.into_iter()) {
+            gfaestus::gui::text::draw_text_at_world_point(
+                ctx,
+                view,
+                *point,
+                &val.to_string(),
+            );
+        }
+    }
+
+    if let Some(closest) = tree.closest_leaf(w) {
+        let rect = closest.boundary();
+        let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);
+        gfaestus::gui::text::draw_rect_world(ctx, view, rect, Some(color));
+    }
 }
