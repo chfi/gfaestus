@@ -194,8 +194,41 @@ impl<T: Clone> QuadTree<T> {
         todo!();
     }
 
-    pub fn query_range(&self, range: Rect) -> Vec<(Point, T)> {
-        todo!();
+    pub fn query_range(&self, range: Rect) -> Vec<(Point, &T)> {
+        let mut results = Vec::new();
+
+        if !self.boundary.intersects(range) {
+            return results;
+        }
+
+        for (&point, data) in self.points.iter().zip(self.data.iter()) {
+            if range.contains(point) {
+                results.push((point, data));
+            }
+        }
+
+        if let Some(children) = self.children() {
+            for child in children {
+                results.extend(Self::child_range(child, range));
+            }
+        }
+
+        results
+    }
+
+    fn child_range<'a>(
+        child: &'a Self,
+        range: Rect,
+    ) -> impl Iterator<Item = (Point, &'a T)> {
+        child.points.iter().zip(child.data.iter()).filter_map(
+            move |(&point, data)| {
+                if range.contains(point) {
+                    Some((point, data))
+                } else {
+                    None
+                }
+            },
+        )
     }
 }
 
