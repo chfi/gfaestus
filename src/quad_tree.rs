@@ -157,30 +157,78 @@ impl<T: Clone> QuadTree<T> {
         }
     }
 
-    pub fn closest_leaf(&self, p: Point) -> Option<&QuadTree<T>> {
-        if !self.boundary.contains(p) {
-            return None;
-        }
+    pub fn nearest_leaf(&self, tgt: Point) -> Option<&QuadTree<T>> {
+        let mut best_dist: Option<f32> = None;
+        let mut best_leaf: Option<&QuadTree<T>> = None;
+        let mut best_point: Option<(Point, &T)> = None;
 
-        let mut queue: VecDeque<&QuadTree<T>> = VecDeque::new();
+        let rect_dist = |rect: Rect| {
+            let l = rect.min().x;
+            let r = rect.max().x;
+            let t = rect.min().y;
+            let b = rect.max().y;
 
-        queue.push_back(self);
+            let l_ = (l - tgt.x).abs();
+            let r_ = (r - tgt.x).abs();
+            let t_ = (t - tgt.y).abs();
+            let b_ = (b - tgt.y).abs();
 
-        while let Some(node) = queue.pop_front() {
+            l_.min(r_).min(t_).min(b_)
+        };
+
+        let mut stack: VecDeque<&QuadTree<T>> = VecDeque::new();
+        stack.push_back(self);
+
+        while let Some(node) = stack.pop_back() {
+            let bound = node.boundary();
+
+            if let Some(dist) = best_dist {
+                if (tgt.x < bound.min().x - dist)
+                    || (tgt.x > bound.max().x + dist)
+                    || (tgt.y > bound.min().y - dist)
+                    || (tgt.y > bound.max().y + dist)
+                {
+                    //
+                } else {
+                    continue;
+                }
+            }
+
             if node.is_leaf() {
-                if node.boundary.contains(p) {
-                    return Some(node);
+                // we know it's close enough to check
+
+                for (&point, data) in node.points().into_iter().zip(node.data())
+                {
+                    let dist = point.dist(tgt);
+
+                    if let Some(best) = best_dist {
+                        if dist < best {
+                            best_dist = Some(dist);
+                            best_leaf = Some(node);
+                            best_point = Some((point, data));
+                        }
+                    } else {
+                        best_dist = Some(dist);
+                        best_leaf = Some(node);
+                        best_point = Some((point, data));
+                    }
                 }
             } else {
-                if let Some(children) = node.children() {
+                if let Some(mut children) = node.children() {
+                    children.sort_by(|a, b| {
+                        let da = rect_dist(a.boundary());
+                        let db = rect_dist(b.boundary());
+                        da.partial_cmp(&db).unwrap()
+                    });
+
                     for child in children {
-                        queue.push_back(child);
+                        stack.push_back(child);
                     }
                 }
             }
         }
 
-        None
+        best_leaf
     }
 
     pub fn closest_leaf_mut(&mut self, p: Point) -> Option<&mut QuadTree<T>> {
@@ -210,7 +258,7 @@ impl<T: Clone> QuadTree<T> {
     }
 
     pub fn closest(&self, p: Point) -> Option<(Point, &T)> {
-        let leaf = self.closest_leaf(p)?;
+        let leaf = self.nearest_leaf(p)?;
 
         let mut closest: Option<(Point, &T)> = None;
         let mut prev_dist: Option<f32> = None;
@@ -233,7 +281,7 @@ impl<T: Clone> QuadTree<T> {
     }
 
     pub fn closest_mut(&mut self, p: Point) -> Option<PointMut<'_, T>> {
-        let leaf = self.closest_leaf_mut(p)?;
+        let leaf = self.nearest_leaf_mut(p)?;
 
         let mut closest: Option<usize> = None;
         let mut prev_dist: Option<f32> = None;
