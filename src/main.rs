@@ -1263,7 +1263,6 @@ where
         }
     }
 
-    // if let Some(closest) = tree.closest_leaf(w) {
     if let Some(closest) = tree.nearest_leaf(w) {
         let rect = closest.boundary();
         let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);

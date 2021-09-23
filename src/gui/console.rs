@@ -430,7 +430,7 @@ impl Console<'static> {
                 view.screen_point_to_world(dims, screen)
             };
 
-            let success = lock.delete_closest(point);
+            let success = lock.delete_nearest(point);
             if success {
                 log::info!("deleted point");
             } else {
