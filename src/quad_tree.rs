@@ -33,6 +33,14 @@ impl<T: Clone> QuadTree<T> {
         }
     }
 
+    pub fn points(&self) -> &[Point] {
+        &self.points
+    }
+
+    pub fn data(&self) -> &[T] {
+        &self.data
+    }
+
     pub fn node_len(&self) -> usize {
         self.points.len()
     }
@@ -229,170 +237,43 @@ impl<T: Clone> QuadTree<T> {
         result
     }
 
-    pub fn iter(&self) -> Iter<'_, T> {
-        Iter::new(self)
+    pub fn leaves(&self) -> Leaves<'_, T> {
+        Leaves::new(self)
     }
 }
 
-struct IterHelper<'a, T: Clone> {
-    node: &'a QuadTree<T>,
-    points: std::slice::Iter<'a, Point>,
-    data: std::slice::Iter<'a, T>,
-
+pub struct Leaves<'a, T: Clone> {
+    stack: VecDeque<&'a QuadTree<T>>,
     done: bool,
 }
 
-impl<'a, T: Clone> IterHelper<'a, T> {
-    fn next(&mut self) -> Option<(Point, &'a T)> {
-        if self.done {
-            return None;
-        }
-
-        let point = self.points.next();
-        let data = self.data.next();
-
-        if let (Some(p), Some(d)) = (point, data) {
-            Some((*p, d))
-        } else {
-            self.done = true;
-            None
-        }
-    }
-}
-
-pub struct Iter<'a, T: Clone> {
-    queue: VecDeque<&'a QuadTree<T>>,
-
-    current: IterHelper<'a, T>,
-    done: bool,
-
-    count: usize,
-}
-
-impl<'a, T: Clone> Iter<'a, T> {
+impl<'a, T: Clone> Leaves<'a, T> {
     fn new(tree: &'a QuadTree<T>) -> Self {
-        let mut queue = VecDeque::new();
-
-        let current = IterHelper {
-            node: tree,
-            points: tree.points.iter(),
-            data: tree.data.iter(),
-
-            done: false,
-        };
-
-        if let Some(children) = tree.children() {
-            for child in children {
-                queue.push_back(child);
-            }
-        }
-
-        Self {
-            queue,
-            current,
-            done: false,
-
-            count: 0,
-        }
+        let mut stack = VecDeque::new();
+        stack.push_back(tree);
+        Self { stack, done: false }
     }
 
-    fn next(&mut self) -> Option<(Point, &'a T)> {
+    fn next(&mut self) -> Option<&'a QuadTree<T>> {
         if self.done {
             return None;
         }
 
-        self.count += 1;
+        while let Some(next) = self.stack.pop_back() {
+            if next.is_leaf() {
+                return Some(next);
+            }
 
-        let result = self.current.next();
-
-        if result.is_some() {
-            return result;
-        }
-
-        // the current node is done
-        assert!(self.current.done);
-
-        let next_node = self.queue.pop_front();
-
-        if next_node.is_none() {
-            log::warn!("done after {} steps", self.count);
-            self.done = true;
-            return None;
-        }
-
-        let current = next_node?;
-
-        if let Some(children) = current.children() {
-            for child in children {
-                self.queue.push_back(child);
+            if let Some(children) = next.children() {
+                for child in children {
+                    self.stack.push_back(child);
+                }
             }
         }
 
-        let current = IterHelper {
-            node: current,
-            points: current.points.iter(),
-            data: current.data.iter(),
+        self.done = true;
 
-            done: false,
-        };
-
-        self.current = current;
-        self.next()
-    }
-
-    /*
-    fn next(&mut self) -> Option<(Point, &'a T)> {
-        // if self.finished {
-        //     return None;
-        // }
-
-        let result = self.current.as_mut().and_then(|cur| cur.next());
-        if result.is_some() {
-            return result;
-        }
-
-        let next = self.queue.pop_front();
-        // if next.is_none() {
-        // self.finished = true;
-        //     return None;
-        // }
-
-        let current = next?;
-
-        if let Some(children) = current.children() {
-            for child in children {
-                self.queue.push_back(child);
-            }
-        }
-
-        let mut result;
-        loop {
-            let mut current = IterHelper {
-                node: current,
-                points: current.points.iter(),
-                data: current.data.iter(),
-                done: false,
-            };
-
-            result = current.next();
-            let done = current.done;
-            self.current = Some(current);
-
-            if result.is_some() || done {
-                break;
-            }
-        }
-
-        result
-    }
-    */
-}
-
-impl<'a, T: Clone> Iterator for Iter<'a, T> {
-    type Item = (Point, &'a T);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        Iter::next(self)
+        None
     }
 }
 

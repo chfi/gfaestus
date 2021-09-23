@@ -693,8 +693,17 @@ fn node_color(id) {
                     }
 
                     let lock = gui.console.tree_test.lock();
-                    for (point, val) in lock.iter() {
-                        gfaestus::gui::text::draw_text_at_world_point(&gui.ctx, view, point, &val.to_string());
+                    for leaf in lock.leaves() {
+                        let points = leaf.points();
+                        let data = leaf.data();
+                        for (point, val) in points.into_iter().zip(data.into_iter()) {
+                            gfaestus::gui::text::draw_text_at_world_point(
+                                &gui.ctx,
+                                view,
+                                *point,
+                                &val.to_string()
+                            );
+                        }
                     }
                 }
 

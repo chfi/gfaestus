@@ -413,19 +413,6 @@ impl Console<'static> {
                 }
             }
         });
-
-        let tree = self.tree_test.clone();
-        let count = self.tree_count.clone();
-        engine.register_fn("tree_iter_test", move || {
-            let lock = tree.lock();
-            let iter = lock.iter();
-
-            log::warn!("there should be {} nodes", count.load());
-
-            for (ix, (point, data)) in iter.enumerate() {
-                log::warn!("{} - ({}, {}) -> {}", ix, point.x, point.y, data);
-            }
-        });
     }
 
     pub fn create_engine(&self) -> rhai::Engine {
