@@ -108,7 +108,7 @@ pub struct Console<'a> {
     // RwLock or something inside
     window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
 
-    tree_test: Arc<Mutex<QuadTree<usize>>>,
+    pub tree_test: Arc<Mutex<QuadTree<usize>>>,
     tree_count: Arc<AtomicCell<usize>>,
 }
 

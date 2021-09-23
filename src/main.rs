@@ -691,6 +691,11 @@ fn node_color(id) {
                     for rect in rects {
                         gfaestus::gui::text::draw_rect_world(&gui.ctx, view, rect);
                     }
+
+                    let lock = gui.console.tree_test.lock();
+                    for (point, val) in lock.iter() {
+                        gfaestus::gui::text::draw_text_at_world_point(&gui.ctx, view, point, &val.to_string());
+                    }
                 }
 
 
