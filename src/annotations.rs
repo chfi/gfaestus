@@ -190,8 +190,50 @@ impl<T: Clone> QuadTree<T> {
         Err(data)
     }
 
-    pub fn subdivide(&mut self) {
-        todo!();
+    fn subdivide(&mut self) {
+        let min = self.boundary.min();
+        let max = self.boundary.max();
+
+        let pt = |x, y| Point::new(x, y);
+
+        let mid_x = min.x + ((max.x - min.x) / 2.0);
+        let mid_y = min.y + ((max.y - min.y) / 2.0);
+
+        // calculate the boundary rectangles for the children
+        let top_left_bnd = Rect::new(pt(min.x, min.y), pt(mid_x, mid_y));
+        let top_right_bnd = Rect::new(pt(mid_x, min.y), pt(max.x, mid_y));
+
+        let btm_left_bnd = Rect::new(pt(min.x, mid_y), pt(mid_x, max.y));
+        let btm_right_bnd = Rect::new(pt(mid_x, mid_y), pt(max.x, max.y));
+
+        let mut top_left = Self::new(top_left_bnd);
+        let mut top_right = Self::new(top_right_bnd);
+        let mut btm_left = Self::new(btm_left_bnd);
+        let mut btm_right = Self::new(btm_right_bnd);
+
+        let move_to_child = |child: &mut Self| {
+            let bnd = child.boundary;
+
+            // TODO this should be done without cloning, but the data
+            // will probably be Copy in most cases so it doesn't
+            // matter for now
+            for (point, data) in self.query_range(bnd) {
+                if let Err(_) = child.insert(point, data.clone()) {
+                    panic!("unexpected error when subdividing quadtree");
+                }
+            }
+        };
+
+        move_to_child(&mut top_left);
+        move_to_child(&mut top_right);
+        move_to_child(&mut btm_left);
+        move_to_child(&mut btm_right);
+
+        self.north_west = Some(Box::new(top_left));
+        self.north_east = Some(Box::new(top_right));
+
+        self.south_west = Some(Box::new(btm_left));
+        self.south_east = Some(Box::new(btm_right));
     }
 
     pub fn query_range(&self, range: Rect) -> Vec<(Point, &T)> {
