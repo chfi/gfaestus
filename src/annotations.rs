@@ -122,7 +122,7 @@ impl ClusterTree {
     ) where
         L: Clone + ToString,
     {
-        let radius = 50.0 * scale;
+        let radius = 150.0 * scale;
 
         let clusters = &mut self.clusters;
 
@@ -169,7 +169,8 @@ impl ClusterTree {
                             view,
                             origin,
                             offset + Point::new(0.0, y_offset),
-                            text,
+                            &format!("{} labels here", lines.len()),
+                            // text,
                         );
 
                     if let Some(rect) = rect {
@@ -223,10 +224,11 @@ impl ClusterTree {
     }
 
     pub fn draw_clusters(&self, ctx: &egui::CtxRef, view: View) {
+        let radius = 150.0;
         for leaf in self.clusters.leaves() {
             for (point, _cluster) in leaf.elems() {
                 crate::gui::text::draw_circle_world(
-                    ctx, view, point, 50.0, None,
+                    ctx, view, point, radius, None,
                 );
             }
         }
@@ -348,12 +350,17 @@ impl AnnotationLabelSet {
 
         let mut labels = LabelSet::default();
 
+        let mut count = 0;
         for (node, label_indices) in self.labels.iter() {
             for &ix in label_indices.iter() {
                 let text = &self.label_strings[ix];
                 labels.add_at_node(*node, text);
+                count += 1;
             }
         }
+        log::warn!("added {} labels", count);
+        log::warn!("contains {} label positions", labels.positions.len());
+        log::warn!("contains {} label strings", labels.label_strings.len());
 
         labels
     }

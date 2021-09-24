@@ -71,25 +71,25 @@ impl<T: Clone> QuadTree<T> {
         point: Point,
         data: T,
     ) -> std::result::Result<(), T> {
-        log::debug!(
+        log::trace!(
             "inserting data into quad tree at ({}, {})",
             point.x,
             point.y
         );
         if !self.boundary.contains(point) {
-            log::debug!("point is outside tree bounds, aborting");
+            log::trace!("point is outside tree bounds, aborting");
             return Err(data);
         }
 
         if self.node_len() < Self::NODE_CAPACITY && self.is_leaf() {
-            log::debug!("in leaf below capacity, adding to node");
+            log::trace!("in leaf below capacity, adding to node");
             self.points.push(point);
             self.data.push(data);
             return Ok(());
         }
 
         if self.is_leaf() {
-            log::debug!("subdividing node");
+            log::trace!("subdividing node");
             self.subdivide();
         }
 
