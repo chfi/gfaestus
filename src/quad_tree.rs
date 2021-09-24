@@ -58,6 +58,14 @@ impl<T: Clone> QuadTree<T> {
         self.north_west.is_none()
     }
 
+    fn can_insert(&self, point: Point) -> bool {
+        if !self.boundary.contains(point) {
+            return false;
+        }
+
+        true
+    }
+
     pub fn insert(
         &mut self,
         point: Point,
@@ -85,6 +93,8 @@ impl<T: Clone> QuadTree<T> {
             self.subdivide();
         }
 
+        let mut deque: VecDeque<&mut Self> = VecDeque::new();
+
         let children = [
             self.north_west.as_deref_mut(),
             self.north_east.as_deref_mut(),
@@ -92,21 +102,47 @@ impl<T: Clone> QuadTree<T> {
             self.south_east.as_deref_mut(),
         ];
 
-        let mut data = data;
         for child in children {
-            match Self::insert_child(child, point, data) {
-                Ok(_) => {
-                    log::debug!("inserting point into child");
-                    return Ok(());
-                }
-                Err(d) => {
-                    log::debug!("skipping child");
-                    data = d;
+            if let Some(child) = child {
+                deque.push_back(child);
+            }
+        }
+
+        let mut data = Some(data);
+
+        while let Some(node) = deque.pop_back() {
+            if node.can_insert(point) {
+                if node.node_len() < Self::NODE_CAPACITY && node.is_leaf() {
+                    if let Some(data_) = data {
+                        // since we've already checked that the point
+                        // can be inserted into the node, this
+                        // recursive call won't actually do any
+                        // further recursion
+                        //
+                        // lol
+                        match node.insert(point, data_) {
+                            Ok(_) => {
+                                data = None;
+                                break;
+                            }
+                            Err(d) => data = Some(d),
+                        }
+                    }
+                } else {
+                    if let Some(children) = node.children_mut() {
+                        for child in children {
+                            deque.push_back(child);
+                        }
+                    }
                 }
             }
         }
 
-        Err(data)
+        if let Some(data) = data {
+            Err(data)
+        } else {
+            Ok(())
+        }
     }
 
     pub fn query_range(&self, range: Rect) -> Vec<(Point, &T)> {
