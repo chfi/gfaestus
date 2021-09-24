@@ -127,6 +127,14 @@ impl ClusterTree {
         Self { clusters }
     }
 
+    pub fn draw_clusters(&self, ctx: &egui::CtxRef, view: View) {
+        for leaf in self.clusters.leaves() {
+            for (point, _cluster) in leaf.elems() {
+                crate::gui::text::draw_circle_world(
+                    ctx, view, point, 50.0, None,
+                );
+            }
+        }
     }
 }
 

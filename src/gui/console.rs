@@ -24,7 +24,7 @@ use bstr::ByteSlice;
 use crate::{
     annotations::{
         AnnotationCollection, AnnotationFileType, AnnotationRecord, BedRecords,
-        Gff3Column, Gff3Record, Gff3Records,
+        ClusterTree, Gff3Column, Gff3Record, Gff3Records,
     },
     overlays::OverlayKind,
 };
@@ -284,7 +284,20 @@ impl Console<'static> {
         let window_defs = Arc::new(Mutex::new(vec![window_test]));
 
         log::warn!("creating quad tree with boundary {:?}", boundary);
-        let tree_test = Arc::new(Mutex::new(QuadTree::new(boundary)));
+        let mut tree = QuadTree::new(boundary);
+
+        use rand::prelude::*;
+
+        let mut rng = thread_rng();
+
+        for ix in 0..200 {
+            let x = rng.gen_range((boundary.min().x)..(boundary.max().x));
+            let y = rng.gen_range((boundary.min().y)..(boundary.max().y));
+
+            let _ = tree.insert(Point::new(x, y), ix);
+        }
+
+        let tree_test = Arc::new(Mutex::new(tree));
 
         Self {
             input_line: String::new(),
@@ -331,6 +344,12 @@ impl Console<'static> {
     pub fn tree_rects(&self) -> Vec<Rect> {
         let tree = self.tree_test.lock();
         tree.rects()
+    }
+
+    pub fn cluster_tree(&self) -> ClusterTree {
+        let tree = self.tree_test.lock();
+        let view = self.shared_state.view();
+        ClusterTree::from_label_tree(&tree, view.scale)
     }
 
     pub fn shared(&self) -> ConsoleShared {

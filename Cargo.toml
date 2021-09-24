@@ -50,6 +50,8 @@ log = "0.4"
 flexi_logger = { version = "0.18", features = ["async"] }
 argh = "0.1.5"
 
+rand = "0.8"
+
 [profile.dev]
 opt-level = 2
 

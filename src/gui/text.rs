@@ -263,6 +263,44 @@ pub fn draw_point_world(ctx: &egui::CtxRef, view: View, point: Point) {
     painter.circle_stroke(point.into(), 2.0, stroke);
 }
 
+pub fn draw_circle_world(
+    ctx: &egui::CtxRef,
+    view: View,
+    origin: Point,
+    radius: f32,
+    color: Option<rgb::RGBA<f32>>,
+) {
+    let screen_rect = ctx.input().screen_rect();
+
+    // let screen_radius = radius * view.scale;
+    let screen_radius = radius;
+
+    let p = origin;
+
+    let mut s = view.world_point_to_screen(p);
+
+    let offset = Point::new(screen_rect.width(), screen_rect.height()) / 2.0;
+
+    s += offset;
+
+    let painter = ctx.layer_painter(painter_layer());
+
+    let color = color
+        .map(|c| {
+            let r = (c.r * 255.0) as u8;
+            let g = (c.g * 255.0) as u8;
+            let b = (c.b * 255.0) as u8;
+            let a = (c.a * 255.0) as u8;
+            egui::Color32::from_rgba_unmultiplied(r, g, b, a)
+        })
+        .unwrap_or(egui::Color32::from_rgb(128, 128, 128));
+
+    let stroke = egui::Stroke::new(2.0, color);
+
+    painter.circle_stroke(s.into(), screen_radius, stroke);
+    // painter.rect_stroke(Rect::new(s0, s1).into(), 0.0, stroke);
+}
+
 pub fn draw_rect_world(
     ctx: &egui::CtxRef,
     view: View,

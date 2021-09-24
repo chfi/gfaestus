@@ -693,6 +693,11 @@ fn node_color(id) {
                     draw_tree(&gui.ctx, &lock, &app);
                 }
 
+                {
+                    let tree = gui.console.cluster_tree();
+                    tree.draw_clusters(&gui.ctx, app.shared_state().view());
+                }
+
 
                 let annotations = app.annotations();
 
