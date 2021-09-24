@@ -100,10 +100,20 @@ impl ClusterTree {
     where
         L: Clone + ToString,
     {
-        let mut clusters: QuadTree<Cluster> = QuadTree::new(tree.boundary());
+        let mut result = Self {
+            clusters: QuadTree::new(tree.boundary()),
+        };
+        result.insert_label_tree(tree, scale);
+        result
+    }
 
-        // TODO should be configurable, obviously
+    pub fn insert_label_tree<L>(&mut self, tree: &QuadTree<L>, scale: f32)
+    where
+        L: Clone + ToString,
+    {
         let radius = 50.0 * scale;
+
+        let clusters = &mut self.clusters;
 
         for leaf in tree.leaves() {
             for (point, text) in leaf.elems() {
@@ -123,8 +133,6 @@ impl ClusterTree {
                 }
             }
         }
-
-        Self { clusters }
     }
 
     pub fn draw_clusters(&self, ctx: &egui::CtxRef, view: View) {
