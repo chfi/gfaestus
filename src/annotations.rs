@@ -15,6 +15,7 @@ use handlegraph::packedgraph::paths::StepPtr;
 
 use bstr::ByteSlice;
 
+use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::gui::text::LabelPos;
@@ -96,13 +97,17 @@ pub struct ClusterTree {
 }
 
 impl ClusterTree {
+    pub fn from_boundary(boundary: Rect) -> Self {
+        Self {
+            clusters: QuadTree::new(boundary),
+        }
+    }
+
     pub fn from_label_tree<L>(tree: &QuadTree<L>, scale: f32) -> Self
     where
         L: Clone + ToString,
     {
-        let mut result = Self {
-            clusters: QuadTree::new(tree.boundary()),
-        };
+        let mut result = Self::from_boundary(tree.boundary());
         result.insert_label_tree(tree, scale);
         result
     }
@@ -285,6 +290,46 @@ pub enum AnnotationFileType {
 pub enum AnnotationColumn {
     Gff3(Gff3Column),
     Bed(BedColumn),
+}
+
+#[derive(Default, Clone)]
+pub struct Labels {
+    label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
+}
+
+impl Labels {
+    pub fn add_label_set(
+        &mut self,
+        boundary: Rect,
+        nodes: &[Node],
+        name: &str,
+        labels: &LabelSet,
+    ) {
+        let name = name.to_string();
+
+        let mut label_tree: QuadTree<String> = QuadTree::new(boundary);
+
+        for (&label_pos, text) in
+            labels.positions.iter().zip(labels.label_strings.iter())
+        {
+            let world = label_pos.world(nodes);
+            let _result = label_tree.insert(world, text.to_string());
+        }
+
+        self.label_trees
+            .insert(name, Arc::new(Mutex::new(label_tree)));
+    }
+
+    pub fn cluster(&self, boundary: Rect, scale: f32) -> ClusterTree {
+        let mut clusters = ClusterTree::from_boundary(boundary);
+
+        for (_name, label_tree) in self.label_trees.iter() {
+            let tree = label_tree.lock();
+            let _result = clusters.insert_label_tree(&tree, scale);
+        }
+
+        clusters
+    }
 }
 
 #[derive(Default, Clone)]
