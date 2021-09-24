@@ -263,6 +263,7 @@ impl Console<'static> {
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
         let label_map = Arc::new(Mutex::new(HashMap::default()));
 
+        /*
         let mut window_test =
             ConsoleGuiDsl::new("test window", egui::Id::new("window dsl test"));
         window_test.elements.push(ConsoleGuiElem::Label {
@@ -280,8 +281,10 @@ impl Console<'static> {
         window_test
             .callbacks
             .insert("button_callback".to_string(), Box::new(callback) as _);
-
         let window_defs = Arc::new(Mutex::new(vec![window_test]));
+        */
+
+        let window_defs = Arc::new(Mutex::new(vec![]));
 
         log::warn!("creating quad tree with boundary {:?}", boundary);
         let mut tree = QuadTree::new(boundary);
