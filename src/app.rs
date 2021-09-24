@@ -23,7 +23,7 @@ use std::sync::Arc;
 use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
-    Gff3Records,
+    Gff3Records, Labels,
 };
 use crate::app::selection::NodeSelection;
 use crate::gui::GuiMsg;
@@ -45,6 +45,8 @@ pub struct App {
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
     annotations: Annotations,
+
+    labels: Labels,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -139,6 +141,8 @@ impl App {
             settings: AppSettings::default(),
 
             annotations: Annotations::default(),
+
+            labels: Labels::default(),
         })
     }
 
@@ -174,6 +178,14 @@ impl App {
 
     pub fn annotations(&self) -> &Annotations {
         &self.annotations
+    }
+
+    pub fn labels(&self) -> &Labels {
+        &self.labels
+    }
+
+    pub fn labels_mut(&mut self) -> &mut Labels {
+        &mut self.labels
     }
 
     pub fn dims(&self) -> ScreenDims {

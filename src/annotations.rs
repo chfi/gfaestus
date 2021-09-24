@@ -103,7 +103,10 @@ impl ClusterTree {
         }
     }
 
-    pub fn from_label_tree<L>(tree: &QuadTree<L>, scale: f32) -> Self
+    pub fn from_label_tree<L>(
+        tree: &QuadTree<(Option<Point>, L)>,
+        scale: f32,
+    ) -> Self
     where
         L: Clone + ToString,
     {
@@ -112,8 +115,11 @@ impl ClusterTree {
         result
     }
 
-    pub fn insert_label_tree<L>(&mut self, tree: &QuadTree<L>, scale: f32)
-    where
+    pub fn insert_label_tree<L>(
+        &mut self,
+        tree: &QuadTree<(Option<Point>, L)>,
+        scale: f32,
+    ) where
         L: Clone + ToString,
     {
         let radius = 50.0 * scale;
@@ -121,7 +127,7 @@ impl ClusterTree {
         let clusters = &mut self.clusters;
 
         for leaf in tree.leaves() {
-            for (point, text) in leaf.elems() {
+            for (point, (offset, text)) in leaf.elems() {
                 // use the closest cluster if it exists and is within the radius
                 if let Some(mut cluster) = clusters
                     .nearest_mut(point)
@@ -131,10 +137,58 @@ impl ClusterTree {
                     cmut.lines.push(text.to_string());
                 } else {
                     let new_cluster = Cluster {
-                        offset: None,
+                        offset: *offset,
                         lines: vec![text.to_string()],
                     };
                     let result = clusters.insert(point, new_cluster);
+                }
+            }
+        }
+    }
+
+    pub fn draw_labels(&self, ctx: &egui::CtxRef, view: View) {
+        for leaf in self.clusters.leaves() {
+            for (origin, cluster) in leaf.elems() {
+                let mut y_offset = 0.0;
+                let mut count = 0;
+
+                let offset = cluster.offset.unwrap_or_default();
+
+                let anchor_dir = Point::new(-offset.x, -offset.y);
+                let offset = offset * 20.0;
+
+                let lines = &cluster.lines;
+
+                for text in cluster.lines.iter() {
+                    let rect =
+                        crate::gui::text::draw_text_at_world_point_offset(
+                            ctx,
+                            view,
+                            origin,
+                            offset + Point::new(0.0, y_offset),
+                            text,
+                        );
+
+                    y_offset += 15.0;
+                    count += 1;
+
+                    if count > 10 {
+                        let count = count.min(lines.len());
+                        let rem = lines.len() - count;
+
+                        if rem > 0 {
+                            let more_label = format!("and {} more", rem);
+
+                            crate::gui::text::draw_text_at_world_point_offset(
+                                ctx,
+                                view,
+                                origin,
+                                offset + Point::new(0.0, y_offset),
+                                &more_label,
+                            );
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -148,6 +202,48 @@ impl ClusterTree {
                 );
             }
         }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Labels {
+    // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
+    label_trees: HashMap<String, QuadTree<(Option<Point>, String)>>,
+}
+
+impl Labels {
+    pub fn add_label_set(
+        &mut self,
+        boundary: Rect,
+        nodes: &[Node],
+        name: &str,
+        labels: &LabelSet,
+    ) {
+        let name = name.to_string();
+
+        let mut label_tree: QuadTree<(Option<Point>, String)> =
+            QuadTree::new(boundary);
+
+        for (&label_pos, text) in
+            labels.positions.iter().zip(labels.label_strings.iter())
+        {
+            let world = label_pos.world(nodes);
+            let offset = label_pos.offset(nodes);
+            let _result = label_tree.insert(world, (offset, text.to_string()));
+        }
+
+        self.label_trees.insert(name, label_tree);
+        // .insert(name, Arc::new(Mutex::new(label_tree)));
+    }
+
+    pub fn cluster(&self, boundary: Rect, scale: f32) -> ClusterTree {
+        let mut clusters = ClusterTree::from_boundary(boundary);
+
+        for (_name, tree) in self.label_trees.iter() {
+            let _result = clusters.insert_label_tree(&tree, scale);
+        }
+
+        clusters
     }
 }
 
@@ -218,6 +314,22 @@ pub struct AnnotationLabelSet {
 }
 
 impl AnnotationLabelSet {
+    pub fn label_set(&self) -> LabelSet {
+        // steps: &[(Handle, StepPtr, usize)],
+        // nodes: &[Node]) -> LabelSet {
+
+        let mut labels = LabelSet::default();
+
+        for (node, label_indices) in self.labels.iter() {
+            for &ix in label_indices.iter() {
+                let text = &self.label_strings[ix];
+                labels.add_at_node(*node, text);
+            }
+        }
+
+        labels
+    }
+
     pub fn new<C, R, K>(
         annotations: &C,
         path_id: PathId,
@@ -290,46 +402,6 @@ pub enum AnnotationFileType {
 pub enum AnnotationColumn {
     Gff3(Gff3Column),
     Bed(BedColumn),
-}
-
-#[derive(Default, Clone)]
-pub struct Labels {
-    label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
-}
-
-impl Labels {
-    pub fn add_label_set(
-        &mut self,
-        boundary: Rect,
-        nodes: &[Node],
-        name: &str,
-        labels: &LabelSet,
-    ) {
-        let name = name.to_string();
-
-        let mut label_tree: QuadTree<String> = QuadTree::new(boundary);
-
-        for (&label_pos, text) in
-            labels.positions.iter().zip(labels.label_strings.iter())
-        {
-            let world = label_pos.world(nodes);
-            let _result = label_tree.insert(world, text.to_string());
-        }
-
-        self.label_trees
-            .insert(name, Arc::new(Mutex::new(label_tree)));
-    }
-
-    pub fn cluster(&self, boundary: Rect, scale: f32) -> ClusterTree {
-        let mut clusters = ClusterTree::from_boundary(boundary);
-
-        for (_name, label_tree) in self.label_trees.iter() {
-            let tree = label_tree.lock();
-            let _result = clusters.insert_label_tree(&tree, scale);
-        }
-
-        clusters
-    }
 }
 
 #[derive(Default, Clone)]
