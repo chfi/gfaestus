@@ -406,8 +406,8 @@ fn node_color(id) {
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
     let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
-    let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
-        FxHashMap::default();
+    // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
+    //     FxHashMap::default();
 
     if let Some(script_file) = args.run_script.as_ref() {
         warn!("executing script file {}", script_file);
@@ -534,6 +534,7 @@ fn node_color(id) {
                     }
 
                     app.apply_app_msg(
+                        tree_bounding_box,
                         main_view.main_view_msg_tx(),
                         &gui_msg_tx,
                         universe.layout().nodes(),
@@ -688,6 +689,7 @@ fn node_color(id) {
                 );
 
 
+                /*
                 {
                     let lock = gui.console.tree_test.lock();
                     draw_tree(&gui.ctx, &lock, &app);
@@ -697,8 +699,21 @@ fn node_color(id) {
                     let tree = gui.console.cluster_tree();
                     tree.draw_clusters(&gui.ctx, app.shared_state().view());
                 }
+                */
+
+                {
+                    let shared_state = app.shared_state();
+                    let view = shared_state.view();
+                    let labels = app.labels();
+                    // log::debug!("Clustering label sets");
+                    let cluster_tree = labels.cluster(tree_bounding_box, view.scale);
+                    // log::debug!("Drawing label sets");
+                    cluster_tree.draw_clusters(&gui.ctx, view);
+                    cluster_tree.draw_labels(&gui.ctx, shared_state);
+                }
 
 
+                /*
                 let annotations = app.annotations();
 
                 log::trace!("Drawing label sets");
@@ -839,6 +854,7 @@ fn node_color(id) {
                         }
                     }
                 }
+                */
 
 
                 let meshes = gui.end_frame();

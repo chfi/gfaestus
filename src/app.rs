@@ -202,6 +202,7 @@ impl App {
 
     pub fn apply_app_msg(
         &mut self,
+        boundary: Rect,
         main_view_msg_tx: &Sender<MainViewMsg>,
         gui_msg: &Sender<GuiMsg>,
         node_positions: &[Node],
@@ -364,6 +365,13 @@ impl App {
                 self.annotations.insert_bed(&file_name, records);
             }
             AppMsg::NewNodeLabels { name, label_set } => {
+                let label_set_ = label_set.label_set();
+                self.labels.add_label_set(
+                    boundary,
+                    node_positions,
+                    &name,
+                    &label_set_,
+                );
                 self.annotations.insert_label_set(&name, label_set);
             }
             AppMsg::ToggleDarkMode => {

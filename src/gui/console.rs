@@ -349,11 +349,13 @@ impl Console<'static> {
         tree.rects()
     }
 
+    /*
     pub fn cluster_tree(&self) -> ClusterTree {
         let tree = self.tree_test.lock();
         let view = self.shared_state.view();
         ClusterTree::from_label_tree(&tree, view.scale)
     }
+    */
 
     pub fn shared(&self) -> ConsoleShared {
         ConsoleShared {

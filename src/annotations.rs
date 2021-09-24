@@ -18,8 +18,8 @@ use bstr::ByteSlice;
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::gui::text::LabelPos;
 use crate::quad_tree::QuadTree;
+use crate::{app::SharedState, gui::text::LabelPos};
 use crate::{geometry::*, universe::Node, view::*};
 
 use nalgebra_glm as glm;
@@ -146,7 +146,10 @@ impl ClusterTree {
         }
     }
 
-    pub fn draw_labels(&self, ctx: &egui::CtxRef, view: View) {
+    pub fn draw_labels(&self, ctx: &egui::CtxRef, shared_state: &SharedState) {
+        let view = shared_state.view();
+        let mouse_pos = shared_state.mouse_pos();
+
         for leaf in self.clusters.leaves() {
             for (origin, cluster) in leaf.elems() {
                 let mut y_offset = 0.0;
@@ -168,6 +171,31 @@ impl ClusterTree {
                             offset + Point::new(0.0, y_offset),
                             text,
                         );
+
+                    if let Some(rect) = rect {
+                        let rect = rect.resize(0.98);
+                        if rect.contains(mouse_pos) {
+                            crate::gui::text::draw_rect(ctx, rect);
+
+                            // TODO need some form of configurable callback here
+                            /*
+                            if gui.ctx.input().pointer.any_click() {
+                                match column {
+                                    AnnotationColumn::Gff3(col) => {
+                                        if let Some(gff) = records.downcast_ref::<Gff3Records>() {
+                                            gui.scroll_to_gff_record(gff, col, label.as_bytes());
+                                        }
+                                    }
+                                    AnnotationColumn::Bed(col) => {
+                                        if let Some(bed) = records.downcast_ref::<BedRecords>() {
+                                            gui.scroll_to_bed_record(bed, col, label.as_bytes());
+                                        }
+                                    }
+                                }
+                            }
+                            */
+                        }
+                    }
 
                     y_offset += 15.0;
                     count += 1;
