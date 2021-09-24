@@ -16,27 +16,6 @@ pub struct QuadTree<T: Clone> {
     south_east: Option<Box<QuadTree<T>>>,
 }
 
-pub struct PointMut<'a, T: Clone> {
-    node: &'a mut QuadTree<T>,
-    ix: usize,
-    point: Point,
-}
-
-impl<'a, T: Clone> PointMut<'a, T> {
-    pub fn point(&self) -> Point {
-        self.point
-    }
-
-    pub fn data(&self) -> &T {
-        &self.node.data[self.ix]
-    }
-
-    pub fn delete(self) {
-        self.node.points.remove(self.ix);
-        self.node.data.remove(self.ix);
-    }
-}
-
 impl<T: Clone> QuadTree<T> {
     pub const NODE_CAPACITY: usize = 4;
 
@@ -65,6 +44,10 @@ impl<T: Clone> QuadTree<T> {
 
     pub fn data(&self) -> &[T] {
         &self.data
+    }
+
+    pub fn elems<'a>(&'a self) -> impl Iterator<Item = (Point, &'a T)> {
+        self.points.iter().copied().zip(self.data.iter())
     }
 
     pub fn node_len(&self) -> usize {
@@ -133,7 +116,7 @@ impl<T: Clone> QuadTree<T> {
             return results;
         }
 
-        for (&point, data) in self.points.iter().zip(self.data.iter()) {
+        for (point, data) in self.elems() {
             if range.contains(point) {
                 results.push((point, data));
             }
@@ -196,8 +179,7 @@ impl<T: Clone> QuadTree<T> {
             if node.is_leaf() {
                 // we know it's close enough to check
 
-                for (&point, data) in node.points().into_iter().zip(node.data())
-                {
+                for &point in node.points() {
                     let dist = point.dist(tgt);
 
                     if let Some(best) = best_dist {
@@ -309,7 +291,7 @@ impl<T: Clone> QuadTree<T> {
         let mut closest: Option<(Point, &T)> = None;
         let mut prev_dist: Option<f32> = None;
 
-        for (&point, data) in leaf.points.iter().zip(leaf.data.iter()) {
+        for (point, data) in leaf.elems() {
             let dist = point.dist_sqr(p);
 
             if let Some(prev) = prev_dist {
@@ -473,6 +455,31 @@ impl<T: Clone> QuadTree<T> {
                 }
             },
         )
+    }
+}
+
+pub struct PointMut<'a, T: Clone> {
+    node: &'a mut QuadTree<T>,
+    ix: usize,
+    point: Point,
+}
+
+impl<'a, T: Clone> PointMut<'a, T> {
+    pub fn point(&self) -> Point {
+        self.point
+    }
+
+    pub fn data(&self) -> &T {
+        &self.node.data[self.ix]
+    }
+
+    pub fn data_mut(&mut self) -> &mut T {
+        &mut self.node.data[self.ix]
+    }
+
+    pub fn delete(self) {
+        self.node.points.remove(self.ix);
+        self.node.data.remove(self.ix);
     }
 }
 

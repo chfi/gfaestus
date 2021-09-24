@@ -96,15 +96,37 @@ pub struct ClusterTree {
 }
 
 impl ClusterTree {
-    pub fn from_label_tree<L>(tree: &QuadTree<L>) -> Self
+    pub fn from_label_tree<L>(tree: &QuadTree<L>, scale: f32) -> Self
     where
         L: Clone + ToString,
     {
         let mut clusters: QuadTree<Cluster> = QuadTree::new(tree.boundary());
 
-        for leaf in tree.leaves() {}
+        // TODO should be configurable, obviously
+        let radius = 50.0 * scale;
 
-        unimplemented!();
+        for leaf in tree.leaves() {
+            for (point, text) in leaf.elems() {
+                // use the closest cluster if it exists and is within the radius
+                if let Some(mut cluster) = clusters
+                    .nearest_mut(point)
+                    .filter(|c| c.point().dist(point) <= radius)
+                {
+                    let cmut = cluster.data_mut();
+                    cmut.lines.push(text.to_string());
+                } else {
+                    let new_cluster = Cluster {
+                        offset: None,
+                        lines: vec![text.to_string()],
+                    };
+                    let result = clusters.insert(point, new_cluster);
+                }
+            }
+        }
+
+        Self { clusters }
+    }
+
     }
 }
 
