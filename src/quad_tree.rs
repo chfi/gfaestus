@@ -112,7 +112,7 @@ impl<T: Clone> QuadTree<T> {
 
         while let Some(node) = deque.pop_back() {
             if node.can_insert(point) {
-                if node.node_len() < Self::NODE_CAPACITY && node.is_leaf() {
+                if node.is_leaf() {
                     if let Some(data_) = data {
                         // since we've already checked that the point
                         // can be inserted into the node, this
