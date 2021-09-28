@@ -105,24 +105,26 @@ impl ClusterTree {
 
     pub fn from_label_tree<L>(
         tree: &QuadTree<(Option<Point>, L)>,
+        label_radius: f32,
         scale: f32,
     ) -> Self
     where
         L: Clone + ToString,
     {
         let mut result = Self::from_boundary(tree.boundary());
-        result.insert_label_tree(tree, scale);
+        result.insert_label_tree(tree, label_radius, scale);
         result
     }
 
     pub fn insert_label_tree<L>(
         &mut self,
         tree: &QuadTree<(Option<Point>, L)>,
+        label_radius: f32,
         scale: f32,
     ) where
         L: Clone + ToString,
     {
-        let radius = 150.0 * scale;
+        let radius = label_radius * scale;
 
         let clusters = &mut self.clusters;
 
@@ -222,12 +224,20 @@ impl ClusterTree {
         }
     }
 
-    pub fn draw_clusters(&self, ctx: &egui::CtxRef, view: View) {
-        let radius = 150.0;
+    pub fn draw_clusters(
+        &self,
+        ctx: &egui::CtxRef,
+        view: View,
+        label_radius: f32,
+    ) {
         for leaf in self.clusters.leaves() {
             for (point, _cluster) in leaf.elems() {
                 crate::gui::text::draw_circle_world(
-                    ctx, view, point, radius, None,
+                    ctx,
+                    view,
+                    point,
+                    label_radius,
+                    None,
                 );
             }
         }
@@ -265,11 +275,17 @@ impl Labels {
         // .insert(name, Arc::new(Mutex::new(label_tree)));
     }
 
-    pub fn cluster(&self, boundary: Rect, scale: f32) -> ClusterTree {
+    pub fn cluster(
+        &self,
+        boundary: Rect,
+        label_radius: f32,
+        view: View,
+    ) -> ClusterTree {
         let mut clusters = ClusterTree::from_boundary(boundary);
 
         for (_name, tree) in self.label_trees.iter() {
-            let _result = clusters.insert_label_tree(&tree, scale);
+            let _result =
+                clusters.insert_label_tree(&tree, label_radius, view.scale);
         }
 
         clusters
