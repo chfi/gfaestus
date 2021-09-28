@@ -23,8 +23,9 @@ use bstr::ByteSlice;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationFileType, AnnotationRecord, BedRecords,
-        ClusterTree, Gff3Column, Gff3Record, Gff3Records,
+        AnnotationCollection, AnnotationFileType, AnnotationRecord, BedColumn,
+        BedRecord, BedRecords, ClusterTree, Gff3Column, Gff3Record,
+        Gff3Records,
     },
     overlays::OverlayKind,
 };
@@ -688,10 +689,7 @@ impl Console<'static> {
                     }
                 }
 
-                Err(Box::new(EvalAltResult::ErrorSystem(
-                    "Text box does not exist".to_string(),
-                    "Text box does not exist".into(),
-                )))
+                Err("Text box does not exist".into())
             },
         );
 
@@ -1480,26 +1478,50 @@ impl ConsoleShared {
             attr => Gff3Column::Attribute(attr.as_bytes().to_owned()),
         });
 
-        // TODO this should also work with named columns when applicable
-        /*
-        engine.register_fn("bed_column", |ix: i64| match key {
-            "SeqId" => Gff3Column::SeqId,
-            "Source" => Gff3Column::Source,
-            "Type" => Gff3Column::Type,
-            "Start" => Gff3Column::Start,
-            "End" => Gff3Column::End,
-            "Score" => Gff3Column::Score,
-            "Strand" => Gff3Column::Strand,
-            "Frame" => Gff3Column::Frame,
-            attr => Gff3Column::Attribute(attr.as_bytes().to_owned()),
+        engine
+            .register_fn("bed_column", |ix: i64| BedColumn::Index(ix as usize));
+        engine.register_result_fn(
+            "bed_column",
+            |coll: &mut Arc<BedRecords>, header: &str| {
+                if let Some(col) = coll.header_to_column(header.as_bytes()) {
+                    Ok(col)
+                } else {
+                    Err("Header not found in provided BED file".into())
+                }
+            },
+        );
+        engine.register_result_fn("bed_column", |key: &str| match key {
+            "Chr" => Ok(BedColumn::Chr),
+            "Start" => Ok(BedColumn::Start),
+            "End" => Ok(BedColumn::End),
+            "Name" => Ok(BedColumn::Name),
+            _ => Err("Only headers \"name\", \"start\", \"end\", and \"name\" can be referred to without a BED record context".into()),
         });
-        */
 
         engine.register_fn(
             "get",
             move |record: &mut Gff3Record, column: Gff3Column| match column {
                 Gff3Column::Start => rhai::Dynamic::from(record.start() as i64),
                 Gff3Column::End => rhai::Dynamic::from(record.end() as i64),
+                column => {
+                    let fields = record.get_all(&column);
+                    let dyn_fields = fields
+                        .into_iter()
+                        .map(|val| {
+                            rhai::Dynamic::from(format!("{}", val.as_bstr()))
+                        })
+                        .collect::<Vec<_>>();
+
+                    rhai::Dynamic::from(dyn_fields)
+                }
+            },
+        );
+
+        engine.register_fn(
+            "get",
+            move |record: &mut BedRecord, column: BedColumn| match column {
+                BedColumn::Start => rhai::Dynamic::from(record.start() as i64),
+                BedColumn::End => rhai::Dynamic::from(record.end() as i64),
                 column => {
                     let fields = record.get_all(&column);
                     let dyn_fields = fields
@@ -1673,21 +1695,53 @@ impl ConsoleShared {
             },
         );
 
-        /*
+        let app_msg_tx = self.channels.app_tx.clone();
+        let graph = self.graph.clone();
+
         engine.register_fn(
             "create_label_set",
-            move |annots: &mut Arc<Gff3Records>,
-                  column: Gff3Column,
-                  label_set_name: &str,
+            move |annots: &mut Arc<BedRecords>,
+                  record_indices: Vec<rhai::Dynamic>,
                   path_id: PathId,
-                  record_indices: Vec<i64>| {
-                // nodes: Vec<NodeId>| {
-                //
+                  column: BedColumn,
+                  label_set_name: &str| {
+                log::warn!("in create_label_set");
+                let record_indices = record_indices
+                    .into_iter()
+                    .filter_map(|i| {
+                        let i = i.as_int().ok()?;
+
+                        Some(i as usize)
+                    })
+                    .collect::<Vec<_>>();
+
+                let path_name = graph.graph.get_path_name_vec(path_id).unwrap();
+                let path_name = path_name.to_str().unwrap();
+
+                log::warn!("calling calculate_annotation_set");
+                let label_set =
+                    crate::gui::windows::annotations::calculate_annotation_set(
+                        &graph,
+                        annots.as_ref(),
+                        &record_indices,
+                        path_id,
+                        path_name,
+                        &column,
+                        label_set_name,
+                    );
+
+                if let Some(label_set) = label_set {
+                    log::warn!("label set calculated");
+                    let name = label_set_name.to_string();
+
+                    app_msg_tx
+                        .send(AppMsg::NewNodeLabels { name, label_set })
+                        .unwrap();
+                } else {
+                    log::warn!("error calculating the label set");
+                }
             },
         );
-        */
-
-        // engine.register_result_fn("load_collection", move |path: &str| {
     }
 
     pub fn create_engine(&self) -> rhai::Engine {
