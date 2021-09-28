@@ -1699,7 +1699,7 @@ impl ConsoleShared {
                 let (tx, rx) =
                     crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
 
-                let msg: AppMsg = AppMsg::RequestData_ {
+                let msg: AppMsg = AppMsg::RequestData {
                     key,
                     index,
                     sender: tx,
@@ -1721,15 +1721,15 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("list_collections", move || {
-            let type_ = TypeId::of::<Annotations>();
             let key = "annotation_names".to_string();
+            let index = "".to_string();
 
             let (tx, rx) =
                 crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
 
             let msg: AppMsg = AppMsg::RequestData {
-                type_,
                 key,
+                index,
                 sender: tx,
             };
 
@@ -1803,15 +1803,14 @@ impl ConsoleShared {
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("get_collection", move |c_name: &str| {
             use crossbeam::channel;
-
-            let type_ = TypeId::of::<Arc<Gff3Records>>();
-            let key = c_name.to_string();
+            let key = "annotation_file".to_string();
+            let index = c_name.to_string();
 
             let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
 
             let msg: AppMsg = AppMsg::RequestData {
-                type_,
                 key,
+                index,
                 sender: tx,
             };
 
@@ -1819,34 +1818,19 @@ impl ConsoleShared {
 
             let result = std::thread::spawn(move || rx.recv().unwrap()).join();
 
-            match Self::error_helper::<Arc<Gff3Records>>(&result) {
-                Ok(records) => {
-                    return Ok(rhai::Dynamic::from(records));
-                }
-                Err(_) => {}
+            if let Err(_) = &result {
+                return Err("Error spawning console request thread".into());
             }
 
-            let type_ = TypeId::of::<Arc<BedRecords>>();
-            let key = c_name.to_string();
+            let result = result.unwrap().unwrap();
 
-            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                type_,
-                key,
-                sender: tx,
-            };
-
-            app_msg_tx.send(msg).unwrap();
-
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
-
-            match Self::error_helper::<Arc<BedRecords>>(&result) {
-                Ok(records) => {
-                    return Ok(rhai::Dynamic::from(records));
-                }
-                Err(err) => Err(err),
+            if result.type_id() == TypeId::of::<Arc<Gff3Records>>()
+                || result.type_id() == TypeId::of::<Arc<BedRecords>>()
+            {
+                return Ok(result);
             }
+
+            Err("Error retrieving data".into())
         });
 
         fn create_label_set_impl<C, K>(

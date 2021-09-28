@@ -116,13 +116,6 @@ pub enum AppMsg {
     RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
 
     RequestData {
-        type_: std::any::TypeId,
-        key: String,
-        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
-    },
-
-    // TODO use this in all cases where RequestData is currently used
-    RequestData_ {
         key: String,
         index: String,
         sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
@@ -397,58 +390,7 @@ impl App {
                 sender.send((rect, selection)).unwrap();
             }
 
-            AppMsg::RequestData { type_, key, sender } => {
-                use std::any::TypeId;
-
-                type ReqResult = Result<rhai::Dynamic>;
-
-                macro_rules! handle {
-                    ($expr:expr, $err:literal) => {
-                        if let Some(result) = $expr {
-                            Ok(rhai::Dynamic::from(result.clone()))
-                        } else {
-                            let err = anyhow::anyhow!($err);
-                            Err(err) as ReqResult
-                        }
-                    };
-                }
-
-                let boxed: ReqResult =
-                    if type_ == TypeId::of::<Arc<Gff3Records>>() {
-                        handle!(
-                            self.annotations.get_gff3(&key),
-                            "Couldn't find the requested annotation collection"
-                        )
-                    } else if type_ == TypeId::of::<Arc<BedRecords>>() {
-                        handle!(
-                            self.annotations.get_bed(&key),
-                            "Couldn't find the requested annotation collection"
-                        )
-                    } else if type_ == TypeId::of::<Annotations>() {
-                        if key == "annotation_names" {
-                            let names = self
-                                .annotations
-                                .annot_names()
-                                .iter()
-                                .map(|(name, _)| name.to_string())
-                                .collect::<Vec<_>>();
-
-                            Ok(rhai::Dynamic::from(names))
-                        } else {
-                            let err = anyhow::anyhow!(
-                            "Requested invalid key for Annotations from App"
-                        );
-                            Err(err) as ReqResult
-                        }
-                    } else {
-                        let err =
-                            anyhow::anyhow!("Requested invalid type from App!");
-                        Err(err) as ReqResult
-                    };
-
-                sender.send(boxed).unwrap();
-            }
-            AppMsg::RequestData_ { key, index, sender } => {
+            AppMsg::RequestData { key, index, sender } => {
                 type ReqResult = Result<rhai::Dynamic>;
 
                 macro_rules! handle {
@@ -463,6 +405,31 @@ impl App {
                 }
 
                 let boxed = match key.as_str() {
+                    "annotation_file" => {
+                        if let Some(records) = self.annotations.get_gff3(&index)
+                        {
+                            Ok(rhai::Dynamic::from(records.clone()))
+                        } else if let Some(records) =
+                            self.annotations.get_bed(&index)
+                        {
+                            Ok(rhai::Dynamic::from(records.clone()))
+                        } else {
+                            Err(anyhow::anyhow!(
+                                "Annotation file not loaded: {}",
+                                index
+                            ))
+                        }
+                    }
+                    "annotation_names" => {
+                        let names = self
+                            .annotations
+                            .annot_names()
+                            .iter()
+                            .map(|(name, _)| name.to_string())
+                            .collect::<Vec<_>>();
+
+                        Ok(rhai::Dynamic::from(names))
+                    }
                     "annotation_ref_path" => {
                         if let Some(path) =
                             self.annotations.get_default_ref_path(&index)
