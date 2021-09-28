@@ -416,6 +416,15 @@ fn node_color(id) {
             .unwrap();
     }
 
+    if let Some(annot_path) = &args.annotation_file {
+        warn!("loading annotation file {}", annot_path);
+        let annot_path_buf = std::path::PathBuf::from(annot_path);
+        if annot_path_buf.exists() {
+            let script = format!("load_collection(\"{}\")", annot_path);
+            gui.console.eval_line(&mut reactor, true, &script).unwrap();
+        }
+    }
+
     event_loop.run(move |event, _, control_flow| {
 
         *control_flow = ControlFlow::Poll;

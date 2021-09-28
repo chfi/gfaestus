@@ -500,4 +500,8 @@ pub struct Args {
     /// if a device name is provided, use that instead of the default graphics device
     #[argh(option)]
     pub force_graphics_device: Option<String>,
+
+    /// list of .gff3 and/or .bed files to load at startup
+    #[argh(option)]
+    pub annotation_file: Option<String>,
 }
