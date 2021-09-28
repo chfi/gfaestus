@@ -407,10 +407,24 @@ fn node_color(id) {
     //     FxHashMap::default();
 
     if let Some(script_file) = args.run_script.as_ref() {
-        warn!("executing script file {}", script_file);
-        gui.console
-            .eval_file(&mut reactor, true, script_file)
-            .unwrap();
+        if script_file == "-" {
+            use bstr::ByteSlice;
+            use std::io::prelude::*;
+
+            let mut stdin = std::io::stdin();
+            let mut script_bytes = Vec::new();
+            let read = stdin.read_to_end(&mut script_bytes).unwrap();
+
+            if let Ok(script) = script_bytes[0..read].to_str() {
+                warn!("executing script {}", script_file);
+                gui.console.eval_line(&mut reactor, true, script).unwrap();
+            }
+        } else {
+            warn!("executing script file {}", script_file);
+            gui.console
+                .eval_file(&mut reactor, true, script_file)
+                .unwrap();
+        }
     }
 
     {
