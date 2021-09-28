@@ -23,8 +23,8 @@ use bstr::ByteSlice;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationRecord, BedColumn, BedRecord,
-        BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
+        AnnotationCollection, AnnotationRecord, Annotations, BedColumn,
+        BedRecord, BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
     },
     overlays::OverlayKind,
 };
@@ -1018,15 +1018,29 @@ impl Console<'static> {
 
                 let input = {
                     let line_count = self.input_line.lines().count().max(1);
-                    ui.add(
-                        egui::TextEdit::multiline(&mut self.input_line)
-                            .id(egui::Id::new(Self::ID_TEXT))
-                            .desired_rows(line_count)
-                            .code_editor()
-                            .lock_focus(true)
-                            .enabled(!scope_locked)
-                            .desired_width(ui.available_width()),
-                    )
+
+                    if scope_locked {
+                        let mut empty = "> Executing...".to_string();
+                        ui.add(
+                            egui::TextEdit::multiline(&mut empty)
+                                .id(egui::Id::new(Self::ID_TEXT))
+                                .desired_rows(line_count)
+                                .code_editor()
+                                .lock_focus(true)
+                                .enabled(false)
+                                .desired_width(ui.available_width()),
+                        )
+                    } else {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut self.input_line)
+                                .id(egui::Id::new(Self::ID_TEXT))
+                                .desired_rows(line_count)
+                                .code_editor()
+                                .lock_focus(true)
+                                .enabled(true)
+                                .desired_width(ui.available_width()),
+                        )
+                    }
                 };
 
                 // hack to keep input
