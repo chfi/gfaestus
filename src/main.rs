@@ -5,18 +5,18 @@ use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
-use gfaestus::vulkan::texture::Gradients_;
+use gfaestus::vulkan::texture::{Gradients, Gradients_};
+
 use rustc_hash::FxHashMap;
-use texture::Gradients;
+use std::collections::HashMap;
+
 use winit::event::{Event, WindowEvent};
 use winit::event_loop::ControlFlow;
 
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use gfaestus::app::{
-    mainview::*, Args, OverlayCreatorMsg, Select, SharedState,
-};
+use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -51,7 +51,6 @@ use ash::{vk, Device};
 #[allow(unused_imports)]
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[allow(unused_imports)]
@@ -268,7 +267,6 @@ fn main() {
         app.channels(),
         app.settings.clone(),
         &graph_query,
-        tree_bounding_box,
     )
     .unwrap();
 
@@ -326,7 +324,6 @@ fn node_color(id) {
     let mut initialized_view = false;
 
     let new_overlay_rx = app.channels().new_overlay_rx.clone();
-    // let new_overlay_rx = reactor.overlay_create_rx.clone();
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),

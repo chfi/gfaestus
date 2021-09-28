@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 
-use crate::{geometry::*, universe::Node, view::*};
+use crate::geometry::*;
 
 #[derive(Debug, Clone)]
 pub struct QuadTree<T: Clone> {
@@ -444,18 +444,6 @@ impl<T: Clone> QuadTree<T> {
         self.south_east = Some(Box::new(btm_right));
     }
 
-    fn insert_child(
-        child: Option<&mut Self>,
-        point: Point,
-        data: T,
-    ) -> std::result::Result<(), T> {
-        if let Some(child) = child {
-            return child.insert(point, data);
-        }
-
-        Err(data)
-    }
-
     fn children(&self) -> Option<[&QuadTree<T>; 4]> {
         let nw = self.north_west.as_deref()?;
         let ne = self.north_east.as_deref()?;
@@ -561,17 +549,3 @@ impl<'a, T: Clone> Iterator for Leaves<'a, T> {
         Leaves::next(self)
     }
 }
-
-/*
-pub struct QuadTree<const N: usize> {
-    boundary: Rect,
-
-    points: [Point; N],
-
-    north_west: Option<Box<QuadTree<N>>>,
-    north_east: Option<Box<QuadTree<N>>>,
-
-    south_west: Option<Box<QuadTree<N>>>,
-    south_east: Option<Box<QuadTree<N>>>,
-}
-*/

@@ -23,9 +23,8 @@ use bstr::ByteSlice;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationFileType, AnnotationRecord, BedColumn,
-        BedRecord, BedRecords, ClusterTree, Gff3Column, Gff3Record,
-        Gff3Records,
+        AnnotationCollection, AnnotationRecord, BedColumn, BedRecord,
+        BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
     },
     overlays::OverlayKind,
 };
@@ -108,9 +107,6 @@ pub struct Console<'a> {
     // TODO this shouldn't be a Vec, and it should probably use an
     // RwLock or something inside
     window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
-
-    pub tree_test: Arc<Mutex<QuadTree<usize>>>,
-    tree_count: Arc<AtomicCell<usize>>,
 }
 
 impl Console<'static> {
@@ -123,7 +119,6 @@ impl Console<'static> {
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
-        boundary: Rect,
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
@@ -287,22 +282,6 @@ impl Console<'static> {
 
         let window_defs = Arc::new(Mutex::new(vec![]));
 
-        log::warn!("creating quad tree with boundary {:?}", boundary);
-        let mut tree = QuadTree::new(boundary);
-
-        use rand::prelude::*;
-
-        let mut rng = thread_rng();
-
-        for ix in 0..200 {
-            let x = rng.gen_range((boundary.min().x)..(boundary.max().x));
-            let y = rng.gen_range((boundary.min().y)..(boundary.max().y));
-
-            let _ = tree.insert(Point::new(x, y), ix);
-        }
-
-        let tree_test = Arc::new(Mutex::new(tree));
-
         Self {
             input_line: String::new(),
 
@@ -339,24 +318,8 @@ impl Console<'static> {
             rayon_pool,
 
             window_defs,
-
-            tree_test,
-            tree_count: Default::default(),
         }
     }
-
-    pub fn tree_rects(&self) -> Vec<Rect> {
-        let tree = self.tree_test.lock();
-        tree.rects()
-    }
-
-    /*
-    pub fn cluster_tree(&self) -> ClusterTree {
-        let tree = self.tree_test.lock();
-        let view = self.shared_state.view();
-        ClusterTree::from_label_tree(&tree, view.scale)
-    }
-    */
 
     pub fn shared(&self) -> ConsoleShared {
         ConsoleShared {
@@ -399,71 +362,6 @@ impl Console<'static> {
         scope
     }
 
-    fn add_tree_test_fns(&self, engine: &mut rhai::Engine) {
-        let tree = self.tree_test.clone();
-        let count = self.tree_count.clone();
-
-        let mouse_pos = self.shared_state.mouse_pos.clone();
-        let view = self.shared_state.view.clone();
-        let screen_dims = self.shared_state.screen_dims.clone();
-
-        engine.register_fn("add_tree_point", move || {
-            let mut lock = tree.lock();
-
-            let id = count.fetch_add(1);
-
-            let point = {
-                let screen = mouse_pos.load();
-                let view = view.load();
-                let dims = screen_dims.load();
-                view.screen_point_to_world(dims, screen)
-            };
-
-            // let point = mouse_pos.load();
-
-            let result = lock.insert(point, id);
-
-            match result {
-                Ok(_) => {
-                    log::info!("added point ({}, {})", point.x, point.y);
-                    true
-                }
-                Err(_id) => {
-                    log::warn!(
-                        "couldn't add the point at ({}, {})",
-                        point.x,
-                        point.y
-                    );
-                    false
-                }
-            }
-        });
-
-        let tree = self.tree_test.clone();
-
-        let mouse_pos = self.shared_state.mouse_pos.clone();
-        let view = self.shared_state.view.clone();
-        let screen_dims = self.shared_state.screen_dims.clone();
-
-        engine.register_fn("del_tree_point", move || {
-            let mut lock = tree.lock();
-
-            let point = {
-                let screen = mouse_pos.load();
-                let view = view.load();
-                let dims = screen_dims.load();
-                view.screen_point_to_world(dims, screen)
-            };
-
-            let success = lock.delete_nearest(point);
-            if success {
-                log::info!("deleted point");
-            } else {
-                log::info!("could not delete point");
-            }
-        });
-    }
-
     pub fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
 
@@ -473,8 +371,6 @@ impl Console<'static> {
         let binds_tx = self.channels.binds_tx.clone();
 
         let mut engine = shared.create_engine();
-
-        self.add_tree_test_fns(&mut engine);
 
         engine.register_fn(
             "bind_key",
@@ -923,19 +819,22 @@ impl Console<'static> {
     ) -> Result<()> {
         match result {
             Ok(result) => {
-                use std::any::Any;
-
                 if print {
                     let rtype = result.type_id();
+                    let type_name = result.type_name();
 
                     if let Ok(_) = result.as_unit() {
                         // don't log unit
-                    } else if rtype == rgb::RGB::<f32>::default().type_id() {
+                    } else if rtype == TypeId::of::<rgb::RGB<f32>>() {
                         let color = result.cast::<rgb::RGB<f32>>();
                         self.append_output(&format!("{}", color))
-                    } else if rtype == rgb::RGBA::<f32>::default().type_id() {
+                    } else if rtype == TypeId::of::<rgb::RGBA<f32>>() {
                         let color = result.cast::<rgb::RGBA<f32>>();
                         self.append_output(&format!("{}", color));
+                    } else if type_name == "string" {
+                        if let Ok(result) = result.as_string() {
+                            self.append_output(&result);
+                        }
                     } else {
                         self.append_output(&format!("{:?}", result));
                     }
@@ -1308,11 +1207,6 @@ impl ConsoleShared {
             "overlay_id",
             move |overlay: (usize, OverlayKind, String)| (overlay.0, overlay.1),
         );
-        // engine
-        //     .register_fn("get_overlays", move || overlays.as_slice().to_vec());
-
-        // engine.register_fn(
-        // "evaluate_overlay_script")
     }
 
     fn add_view_fns(&self, engine: &mut Engine) {
@@ -1395,32 +1289,15 @@ impl ConsoleShared {
                     let result = success.cast::<T>();
                     Ok(result)
                 } else {
-                    let err: std::result::Result<
-                            T,
-                            Box<EvalAltResult>,
-                        > = Err(Box::new(EvalAltResult::ErrorSystem(
-                            "Received incorrect type from App; this shouldn't happen!!!".to_string(),
-                            "Received incorrect type from App; this shouldn't happen!!!".to_string().into(),
-                        )));
-                    err
+                    Err("Received incorrect type from App; this shouldn't happen!!!".into())
                 }
             }
-            Ok(Err(req_err)) => {
-                let err = Err(Box::new(EvalAltResult::ErrorSystem(
-                    "Error when retrieving results from app request thread"
-                        .to_string(),
-                    "Error when retrieving results from app request thread"
-                        .into(),
-                    // req_err.into(),
-                )));
-                err
+            Ok(Err(_req_err)) => {
+                Err("Error when retrieving results from app request thread"
+                    .into())
             }
             Err(_spawn_err) => {
-                let err = Err(Box::new(EvalAltResult::ErrorSystem(
-                    "Error when spawning app request thread".to_string(),
-                    "Error when spawning app request thread".into(),
-                )));
-                err
+                Err("Error when spawning app request thread".into())
             }
         };
 
@@ -1591,10 +1468,8 @@ impl ConsoleShared {
             let file = PathBuf::from(path);
 
             let ext = file.extension().and_then(|ext| ext.to_str()).map_or(
-                Err(Box::new(EvalAltResult::ErrorSystem(
-                    "Missing file extension".to_string(),
-                    "Missing file extension".into(),
-                ))),
+                Err("Missing file extension".into())
+                    as std::result::Result<_, Box<EvalAltResult>>,
                 |ext| Ok(ext),
             )?;
 
@@ -1613,10 +1488,7 @@ impl ConsoleShared {
                         return Ok(());
                     }
                     Err(_err) => {
-                        return Err(Box::new(EvalAltResult::ErrorSystem(
-                            "Error parsing GFF3 file".to_string(),
-                            "Error parsing GFF3 file".into(),
-                        )))
+                        return Err("Error parsing GFF3 file".into());
                     }
                 }
             } else if ext == "bed" {
@@ -1634,19 +1506,63 @@ impl ConsoleShared {
                         return Ok(());
                     }
                     Err(_err) => {
-                        return Err(Box::new(EvalAltResult::ErrorSystem(
-                            "Error parsing BED file".to_string(),
-                            "Error parsing BED file".into(),
-                        )))
+                        return Err("Error parsing BED file".into());
                     }
                 }
             } else {
-                return Err(Box::new(EvalAltResult::ErrorSystem(
-                    "Invalid file extension".to_string(),
-                    "Invalid file extension".into(),
-                )));
+                return Err("Invalid file extension".into());
             }
         });
+
+        fn create_label_set_impl<C, K>(
+            app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
+            graph: &Arc<GraphQuery>,
+
+            annots: &mut Arc<C>,
+            record_indices: Vec<rhai::Dynamic>,
+            path_id: PathId,
+            column: K,
+            label_set_name: &str,
+        ) where
+            C: AnnotationCollection<ColumnKey = K> + Send + Sync + 'static,
+            K: ColumnKey,
+        {
+            log::warn!("in create_label_set");
+            let record_indices = record_indices
+                .into_iter()
+                .filter_map(|i| {
+                    let i = i.as_int().ok()?;
+
+                    Some(i as usize)
+                })
+                .collect::<Vec<_>>();
+
+            let path_name = graph.graph.get_path_name_vec(path_id).unwrap();
+            let path_name = path_name.to_str().unwrap();
+
+            log::warn!("calling calculate_annotation_set");
+            let label_set =
+                crate::gui::windows::annotations::calculate_annotation_set(
+                    graph,
+                    annots.as_ref(),
+                    &record_indices,
+                    path_id,
+                    path_name,
+                    &column,
+                    label_set_name,
+                );
+
+            if let Some(label_set) = label_set {
+                log::warn!("label set calculated");
+                let name = label_set_name.to_string();
+
+                app_msg_tx
+                    .send(AppMsg::NewNodeLabels { name, label_set })
+                    .unwrap();
+            } else {
+                log::warn!("error calculating the label set");
+            }
+        }
 
         let app_msg_tx = self.channels.app_tx.clone();
         let graph = self.graph.clone();
@@ -1657,47 +1573,20 @@ impl ConsoleShared {
                   path_id: PathId,
                   column: Gff3Column,
                   label_set_name: &str| {
-                log::warn!("in create_label_set");
-                let record_indices = record_indices
-                    .into_iter()
-                    .filter_map(|i| {
-                        let i = i.as_int().ok()?;
-
-                        Some(i as usize)
-                    })
-                    .collect::<Vec<_>>();
-
-                let path_name = graph.graph.get_path_name_vec(path_id).unwrap();
-                let path_name = path_name.to_str().unwrap();
-
-                log::warn!("calling calculate_annotation_set");
-                let label_set =
-                    crate::gui::windows::annotations::calculate_annotation_set(
-                        &graph,
-                        annots.as_ref(),
-                        &record_indices,
-                        path_id,
-                        path_name,
-                        &column,
-                        label_set_name,
-                    );
-
-                if let Some(label_set) = label_set {
-                    log::warn!("label set calculated");
-                    let name = label_set_name.to_string();
-
-                    app_msg_tx
-                        .send(AppMsg::NewNodeLabels { name, label_set })
-                        .unwrap();
-                } else {
-                    log::warn!("error calculating the label set");
-                }
+                create_label_set_impl(
+                    &app_msg_tx,
+                    &graph,
+                    annots,
+                    record_indices,
+                    path_id,
+                    column,
+                    label_set_name,
+                )
             },
         );
 
         let app_msg_tx = self.channels.app_tx.clone();
         let graph = self.graph.clone();
-
         engine.register_fn(
             "create_label_set",
             move |annots: &mut Arc<BedRecords>,
@@ -1705,41 +1594,15 @@ impl ConsoleShared {
                   path_id: PathId,
                   column: BedColumn,
                   label_set_name: &str| {
-                log::warn!("in create_label_set");
-                let record_indices = record_indices
-                    .into_iter()
-                    .filter_map(|i| {
-                        let i = i.as_int().ok()?;
-
-                        Some(i as usize)
-                    })
-                    .collect::<Vec<_>>();
-
-                let path_name = graph.graph.get_path_name_vec(path_id).unwrap();
-                let path_name = path_name.to_str().unwrap();
-
-                log::warn!("calling calculate_annotation_set");
-                let label_set =
-                    crate::gui::windows::annotations::calculate_annotation_set(
-                        &graph,
-                        annots.as_ref(),
-                        &record_indices,
-                        path_id,
-                        path_name,
-                        &column,
-                        label_set_name,
-                    );
-
-                if let Some(label_set) = label_set {
-                    log::warn!("label set calculated");
-                    let name = label_set_name.to_string();
-
-                    app_msg_tx
-                        .send(AppMsg::NewNodeLabels { name, label_set })
-                        .unwrap();
-                } else {
-                    log::warn!("error calculating the label set");
-                }
+                create_label_set_impl(
+                    &app_msg_tx,
+                    &graph,
+                    annots,
+                    record_indices,
+                    path_id,
+                    column,
+                    label_set_name,
+                )
             },
         );
     }
