@@ -316,6 +316,18 @@ pub mod graph_plugin {
         graph.sequence_vec(handle)
     }
 
+    // `PathId` can't (and shouldn't be able to) be created in
+    // isolation by the console, meaning all instances of `path` here
+    // must be valid path identifiers in a graph, and because we only
+    // have one graph, they must always refer to valid paths in the
+    // provided graph
+    #[rhai_fn(pure)]
+    pub fn get_path_name(graph: &mut Arc<PackedGraph>, path: PathId) -> String {
+        use bstr::ByteSlice;
+        let name_vec = graph.get_path_name_vec(path).unwrap();
+        format!("{}", name_vec.as_bstr())
+    }
+
     #[rhai_fn(pure, return_raw)]
     pub fn get_path_id(
         graph: &mut Arc<PackedGraph>,
