@@ -611,11 +611,6 @@ impl Gui {
 
         self.console.ui(&self.ctx, self.console_down, reactor);
 
-        let view = self.shared_state.view();
-        for (pt, label) in self.console.labels().into_iter() {
-            draw_text_at_world_point(&self.ctx, view, pt, &label);
-        }
-
         self.view_state.apply_received();
 
         let scr = self.ctx.input().screen_rect();

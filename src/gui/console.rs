@@ -49,25 +49,10 @@ use parking_lot::Mutex;
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
 
-#[allow(dead_code)]
-pub struct ConsoleShared {
-    settings: AppSettings,
-    shared_state: SharedState,
-    channels: AppChannels,
-    get_set: Arc<GetSetTruth>,
-    key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
-
-    graph: Arc<GraphQuery>,
-
-    overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
-    label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
-
-    // is this a bad idea? i should probably just use a global pool
-    rayon_pool: Arc<rayon::ThreadPool>,
-
-    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
-}
-
+/// The main console that is available in the GUI, and directly
+/// interacted with by the user.
+///
+/// Holds both GUI-related state, and all of the state the Rhai API requires.
 pub struct Console<'a> {
     input_line: String,
 
@@ -97,16 +82,35 @@ pub struct Console<'a> {
 
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
-    // overlay_list: Arc<Vec<(usize, OverlayKind, String)>>,
 
-    // TODO this thing should probably move somewhere else in the GUI,
-    // and be more generic
-    label_map: Arc<Mutex<HashMap<String, (Point, String)>>>,
     rayon_pool: Arc<rayon::ThreadPool>,
 
     // TODO this shouldn't be a Vec, and it should probably use an
     // RwLock or something inside
     window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
+}
+
+/// A "subconsole", spawned from one of the console commands (such as
+/// keybinds).
+///
+/// It's more limited than the main console, in that it cannot create
+/// new modules (and thus functions), yet.
+#[allow(dead_code)]
+pub struct ConsoleShared {
+    settings: AppSettings,
+    shared_state: SharedState,
+    channels: AppChannels,
+    get_set: Arc<GetSetTruth>,
+    key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
+
+    graph: Arc<GraphQuery>,
+
+    overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
+
+    // is this a bad idea? i should probably just use a global pool
+    rayon_pool: Arc<rayon::ThreadPool>,
+
+    result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 }
 
 impl Console<'static> {
@@ -125,6 +129,7 @@ impl Console<'static> {
 
         let rayon_pool = reactor.rayon_pool.clone();
 
+        // These macros add to the keys available with the `get` and `set` console functions
         let mut get_set = GetSetTruth::default();
 
         macro_rules! add_t {
@@ -257,7 +262,6 @@ impl Console<'static> {
         let key_code_map = Arc::new(virtual_key_code_map());
 
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
-        let label_map = Arc::new(Mutex::new(HashMap::default()));
 
         /*
         let mut window_test =
@@ -314,13 +318,14 @@ impl Console<'static> {
             key_code_map,
 
             overlay_list,
-            label_map,
             rayon_pool,
 
             window_defs,
         }
     }
 
+    /// Create a subconsole that shares state with the main console
+    /// where applicable
     pub fn shared(&self) -> ConsoleShared {
         ConsoleShared {
             settings: self.settings.clone(),
@@ -334,7 +339,6 @@ impl Console<'static> {
             result_tx: self.result_tx.clone(),
 
             overlay_list: self.overlay_list.clone(),
-            label_map: self.label_map.clone(),
             rayon_pool: self.rayon_pool.clone(),
         }
     }
@@ -343,11 +347,8 @@ impl Console<'static> {
         self.output_history.extend(output.lines().map(String::from));
     }
 
-    pub fn labels(&self) -> Vec<(Point, String)> {
-        let labels = self.label_map.lock();
-        labels.values().cloned().collect()
-    }
-
+    // NB: this shouldn't be handled this way (it shouldn't be a
+    // function called from main), but works for now
     pub fn populate_overlay_list(
         &mut self,
         names: &[(usize, OverlayKind, &str)],
@@ -362,6 +363,12 @@ impl Console<'static> {
         scope
     }
 
+    /// Creates the Rhai engine, adding all types, modules, and
+    /// functions available in the console, and special features such
+    /// as binding keys.
+    ///
+    /// See [`ConsoleShared::create_engine`] for the bulk of the
+    /// features.
     pub fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
 
@@ -372,6 +379,16 @@ impl Console<'static> {
 
         let mut engine = shared.create_engine();
 
+        // Bind a Rhai function to execute when the given key is
+        // pressed. See the virtual_key_code_map() function below for
+        // which keys are available.
+        //
+        // `fn_name` must be the name of a function that is part of
+        // the console API, or is in a module that has been imported
+        // using the `:import <src>` console command (for now)
+        //
+        // the same applies to the other functions here that take a
+        // function name as parameter
         engine.register_fn(
             "bind_key",
             move |key: &str, fn_name: rhai::Dynamic| {
@@ -512,6 +529,9 @@ impl Console<'static> {
     }
 
     fn add_gui_dsl_fns(&self, engine: &mut rhai::Engine) {
+        // create a new window with the provided title, and return the index of the window
+        //
+        // NB: there's no way yet to remove or hide windows created here
         let window_defs = self.window_defs.clone();
         engine.register_fn("new_window", move |title: &str| {
             let mut win_defs = window_defs.lock();
@@ -527,6 +547,7 @@ impl Console<'static> {
             ix as i64
         });
 
+        // add a label to the window with the provided index
         let window_defs = self.window_defs.clone();
         engine.register_fn("add_label", move |ix: i64, text: &str| {
             let mut win_defs = window_defs.lock();
@@ -554,24 +575,18 @@ impl Console<'static> {
         );
 
         let window_defs = self.window_defs.clone();
-        engine.register_fn(
-            "add_text_edit",
-            // move |ix: i64, label: &str, data_id: &str| {
-            move |ix: i64, data_id: &str| {
-                let mut win_defs = window_defs.lock();
+        engine.register_fn("add_text_edit", move |ix: i64, data_id: &str| {
+            let mut win_defs = window_defs.lock();
 
-                if let Some(window) = win_defs.get_mut(ix as usize) {
-                    window.elements.push(ConsoleGuiElem::TextInput {
-                        label: "".to_string(),
-                        data_id: data_id.to_string(),
-                    });
+            if let Some(window) = win_defs.get_mut(ix as usize) {
+                window.elements.push(ConsoleGuiElem::TextInput {
+                    label: "".to_string(),
+                    data_id: data_id.to_string(),
+                });
 
-                    window
-                        .text_data
-                        .insert(data_id.to_string(), "".to_string());
-                }
-            },
-        );
+                window.text_data.insert(data_id.to_string(), "".to_string());
+            }
+        });
 
         let window_defs = self.window_defs.clone();
         engine.register_result_fn(
@@ -589,6 +604,7 @@ impl Console<'static> {
             },
         );
 
+        // `fn_name` here has the same limitations as seen in create_engine above
         let window_defs = self.window_defs.clone();
         let shared = self.shared();
         let modules = self.modules.clone();
@@ -639,6 +655,24 @@ impl Console<'static> {
                 }
             },
         );
+    }
+
+    pub fn eval_input(
+        &mut self,
+        reactor: &mut Reactor,
+        print: bool,
+    ) -> Result<()> {
+        debug!("evaluating: {}", &self.input_line);
+
+        let input = self.input_line.to_owned();
+        let executed_command = self.exec_console_command(reactor, &input)?;
+        if executed_command {
+            self.input_line.clear();
+            return Ok(());
+        }
+        self.eval(reactor, print)?;
+
+        Ok(())
     }
 
     pub fn eval_file(
@@ -718,16 +752,21 @@ impl Console<'static> {
         self.remote_handles.remove(handle_name);
     }
 
+    // NB: edit this to add new console commands that do *not* use the Rhai engine
     fn exec_console_command(
         &mut self,
         reactor: &mut Reactor,
         input: &str,
     ) -> Result<bool> {
         if input.starts_with(":clear") {
-            self.output_history.clear();
+            // Clears the output history visible in the console GUI
 
+            self.output_history.clear();
             return Ok(true);
         } else if input.starts_with(":reset") {
+            // Clears both the input and output history, and forgets all state and imported modules
+            // applies to all ConsoleShareds created from this Console as well!
+
             self.scope = Arc::new(Mutex::new(Self::create_scope()));
 
             self.input_history.clear();
@@ -739,6 +778,7 @@ impl Console<'static> {
 
             return Ok(true);
         } else if input.starts_with(":exec ") {
+            // Execute the provided script, without importing any functions from it
             let file_path = &self.input_line[6..].to_string();
             let result = self.eval_file(reactor, true, &file_path);
 
@@ -751,6 +791,7 @@ impl Console<'static> {
 
             return Ok(true);
         } else if input.starts_with(":import ") {
+            // Import the provided script module
             log::debug!("importing file");
             let file_path = &self.input_line[8..].to_string();
             let result = self.import_file(&file_path);
@@ -771,6 +812,8 @@ impl Console<'static> {
 
             return Ok(true);
         } else if input.starts_with(":start_interval ") {
+            // run the provided script every 30ms
+            // the handle can be used with `:end_interval` to stop it
             let mut fields = self.input_line.split_ascii_whitespace();
 
             fields.next();
@@ -785,6 +828,7 @@ impl Console<'static> {
 
             return Ok(true);
         } else if input.starts_with(":end_interval ") {
+            // see `:start_interval`
             let handle = &self.input_line[":end_interval ".len()..].to_string();
             self.stop_interval(&handle);
 
@@ -792,24 +836,6 @@ impl Console<'static> {
         }
 
         Ok(false)
-    }
-
-    pub fn eval_input(
-        &mut self,
-        reactor: &mut Reactor,
-        print: bool,
-    ) -> Result<()> {
-        debug!("evaluating: {}", &self.input_line);
-
-        let input = self.input_line.to_owned();
-        let executed_command = self.exec_console_command(reactor, &input)?;
-        if executed_command {
-            self.input_line.clear();
-            return Ok(());
-        }
-        self.eval(reactor, print)?;
-
-        Ok(())
     }
 
     fn handle_eval_result(
@@ -823,6 +849,7 @@ impl Console<'static> {
                     let rtype = result.type_id();
                     let type_name = result.type_name();
 
+                    // Handle printing the result to the console output as appropriate
                     if let Ok(_) = result.as_unit() {
                         // don't log unit
                     } else if rtype == TypeId::of::<rgb::RGB<f32>>() {
@@ -908,12 +935,12 @@ impl Console<'static> {
             }
         }
 
-        if !is_down {
-            return;
-        }
-
         while let Ok(result) = self.result_rx.try_recv() {
             self.handle_eval_result(true, result).unwrap();
+        }
+
+        if !is_down {
+            return;
         }
 
         egui::Window::new(Self::ID)
@@ -1099,6 +1126,9 @@ impl Console<'static> {
     }
 }
 
+/// Holds both the closures used with the `get` and `set` commands
+/// (defined in [`ConsoleShared::create_engine`]), and the generic
+/// console variable map, accessible via (`get_var` and `set_var`).
 #[derive(Default)]
 pub struct GetSetTruth {
     getters:
@@ -1164,6 +1194,212 @@ impl GetSetTruth {
 }
 
 impl ConsoleShared {
+    /// Creates the Rhai engine, adding all types, modules, and
+    /// functions available in the console.
+    pub fn create_engine(&self) -> rhai::Engine {
+        use rhai::plugin::*;
+
+        let mut engine = crate::script::create_engine();
+
+        // TODO this should be configurable in the app options
+        engine.set_max_call_levels(16);
+        engine.set_max_expr_depths(0, 0);
+
+        let result_tx = self.result_tx.clone();
+        engine.on_print(move |x| {
+            result_tx
+                .send(Ok(rhai::Dynamic::from(x.to_string())))
+                .unwrap();
+        });
+
+        engine.register_type::<Point>();
+
+        self.add_annotation_fns(&mut engine);
+
+        // Constructor and getters & setters for the Point struct
+        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
+        engine.register_get_set(
+            "x",
+            |p: &mut Point| p.x,
+            |p: &mut Point, x| p.x = x,
+        );
+        engine.register_get_set(
+            "y",
+            |p: &mut Point| p.y,
+            |p: &mut Point, y| p.y = y,
+        );
+
+        // Not really necessary, as you can use the built-in `print`
+        // function, but this one does a bit more logic with how the
+        // input is printed (see handle_eval_result())
+        let result_tx = self.result_tx.clone();
+        engine.register_fn("log", move |v: rhai::Dynamic| {
+            result_tx.send(Ok(v)).unwrap();
+        });
+
+        // the cloned Arc containing the graph is moved into the
+        // closure, which is registered as a regular function in Rhai
+        let graph = self.graph.clone();
+        engine.register_fn("get_graph", move || graph.graph.clone());
+
+        let graph = self.graph.clone();
+        engine.register_fn("get_path_positions", move || {
+            graph.path_positions.clone()
+        });
+
+        self.add_view_fns(&mut engine);
+
+        self.add_overlay_fns(&mut engine);
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection", move || {
+            use crossbeam::channel;
+
+            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
+            let msg = AppMsg::RequestSelection(tx);
+
+            app_msg_tx.send(msg).unwrap();
+
+            let (_rect, result) = rx
+                .recv()
+                .expect("Console error when retrieving the current selection");
+
+            NodeSelection { nodes: result }
+        });
+
+        // TODO probably... don't do it like this
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection_center", move || {
+            use crossbeam::channel;
+
+            let (tx, rx) = channel::unbounded::<(Rect, FxHashSet<NodeId>)>();
+            let msg = AppMsg::RequestSelection(tx.clone());
+
+            app_msg_tx.send(msg).unwrap();
+
+            let (rect, _result) =
+                std::thread::spawn(move || rx.recv().unwrap())
+                    .join()
+                    .unwrap();
+
+            rect.center()
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |selection: NodeSelection| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        // this version is used if the input is a single node
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |node: NodeId| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: Some(node).into_iter().collect(),
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("pan_to_active_selection", move || {
+            let msg = AppMsg::GotoSelection;
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let graph = self.graph.graph.clone();
+        engine.register_fn(
+            "path_selection",
+            move |path: PathId| -> NodeSelection {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                selection
+            },
+        );
+
+        // variant of the above that takes a path name instead of ID, for convenience
+        let graph = self.graph.graph.clone();
+        engine.register_result_fn("path_selection", move |path_name: &str| {
+            if let Some(path) = graph.get_path_id(path_name.as_bytes()) {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                Ok(selection)
+            } else {
+                Err("The provided path does not exist".into())
+            }
+        });
+
+        let arc = self.shared_state.hover_node.clone();
+        engine.register_fn("get_hover_node", move || arc.load());
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("toggle_dark_mode", move || {
+            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
+        });
+
+        // Actually add the `get` and `set` functions, see Console::new as well
+        let get_set = self.get_set.clone();
+        engine.register_result_fn("get", move |name: &str| {
+            get_set
+                .getters
+                .get(name)
+                .map(|get| get())
+                .ok_or(format!("Setting `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+
+        engine.register_result_fn(
+            "set",
+            move |name: &str, val: rhai::Dynamic| {
+                get_set
+                    .setters
+                    .get(name)
+                    .map(|set| set(val))
+                    .ok_or(format!("Setting `{}` not found", name).into())
+            },
+        );
+
+        let get_set = self.get_set.clone();
+        engine.register_result_fn("get_var", move |name: &str| {
+            let lock = get_set.console_vars.try_lock();
+            let val = lock.and_then(|l| l.get(name).cloned());
+            val.ok_or(format!("Global variable `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
+            let mut lock = get_set.console_vars.lock();
+            lock.insert(name.to_string(), val);
+        });
+
+        let handle = exported_module!(crate::script::plugins::handle_plugin);
+
+        // TODO it's probably a bad idea to have this without a way to
+        // cancel/abort running scripts
+        engine.register_fn("sleep", |ms: i64| {
+            let dur = std::time::Duration::from_millis(ms as u64);
+            std::thread::sleep(dur);
+        });
+
+        engine.register_global_module(handle.into());
+
+        engine
+    }
+
     fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
         engine.register_type_with_name::<(usize, OverlayKind)>("OverlayHandle");
 
@@ -1375,44 +1611,47 @@ impl ConsoleShared {
             _ => Err("Only headers \"name\", \"start\", \"end\", and \"name\" can be referred to without a BED record context".into()),
         });
 
+        fn get_impl<R, K>(record: &mut R, column: K) -> rhai::Dynamic
+        where
+            R: AnnotationRecord<ColumnKey = K>,
+            K: ColumnKey,
+        {
+            if column == K::seq_id() {
+                let seq_id = record.seq_id();
+                rhai::Dynamic::from(seq_id.to_str().unwrap().to_string())
+            } else if column == K::start() {
+                rhai::Dynamic::from(record.start())
+            } else if column == K::end() {
+                rhai::Dynamic::from(record.end())
+            } else {
+                let fields = record.get_all(&column);
+                let dyn_fields = fields
+                    .into_iter()
+                    .map(|val| {
+                        rhai::Dynamic::from(format!("{}", val.as_bstr()))
+                    })
+                    .collect::<Vec<_>>();
+
+                rhai::Dynamic::from(dyn_fields)
+            }
+        }
+
         engine.register_fn(
             "get",
-            move |record: &mut Gff3Record, column: Gff3Column| match column {
-                Gff3Column::Start => rhai::Dynamic::from(record.start() as i64),
-                Gff3Column::End => rhai::Dynamic::from(record.end() as i64),
-                column => {
-                    let fields = record.get_all(&column);
-                    let dyn_fields = fields
-                        .into_iter()
-                        .map(|val| {
-                            rhai::Dynamic::from(format!("{}", val.as_bstr()))
-                        })
-                        .collect::<Vec<_>>();
-
-                    rhai::Dynamic::from(dyn_fields)
-                }
+            move |record: &mut Gff3Record, column: Gff3Column| {
+                get_impl(record, column)
             },
         );
 
         engine.register_fn(
             "get",
-            move |record: &mut BedRecord, column: BedColumn| match column {
-                BedColumn::Start => rhai::Dynamic::from(record.start() as i64),
-                BedColumn::End => rhai::Dynamic::from(record.end() as i64),
-                column => {
-                    let fields = record.get_all(&column);
-                    let dyn_fields = fields
-                        .into_iter()
-                        .map(|val| {
-                            rhai::Dynamic::from(format!("{}", val.as_bstr()))
-                        })
-                        .collect::<Vec<_>>();
-
-                    rhai::Dynamic::from(dyn_fields)
-                }
+            move |record: &mut BedRecord, column: BedColumn| {
+                get_impl(record, column)
             },
         );
 
+        // this one's messy, there should be a better system in place
+        // for requesting data like this
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("get_collection", move |c_name: &str| {
             use crossbeam::channel;
@@ -1605,214 +1844,6 @@ impl ConsoleShared {
                 )
             },
         );
-    }
-
-    pub fn create_engine(&self) -> rhai::Engine {
-        use rhai::plugin::*;
-
-        let mut engine = crate::script::create_engine();
-
-        // TODO this should be configurable in the app options
-        engine.set_max_call_levels(16);
-        engine.set_max_expr_depths(0, 0);
-
-        let result_tx = self.result_tx.clone();
-        engine.on_print(move |x| {
-            result_tx
-                .send(Ok(rhai::Dynamic::from(x.to_string())))
-                .unwrap();
-        });
-
-        engine.register_type::<Point>();
-
-        self.add_annotation_fns(&mut engine);
-
-        let label_map = self.label_map.clone();
-        engine.register_fn(
-            "add_label",
-            move |id: &str, label: &str, at: Point| {
-                let mut labels = label_map.lock();
-                labels.insert(id.to_string(), (at, label.to_string()));
-            },
-        );
-
-        let label_map = self.label_map.clone();
-        engine.register_fn("remove_label", move |id: &str| {
-            let mut labels = label_map.lock();
-            labels.remove(id);
-        });
-
-        let label_map = self.label_map.clone();
-        engine.register_fn("remove_all_labels", move || {
-            let mut labels = label_map.lock();
-            labels.clear();
-        });
-
-        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
-        engine.register_get_set(
-            "x",
-            |p: &mut Point| p.x,
-            |p: &mut Point, x| p.x = x,
-        );
-        engine.register_get_set(
-            "y",
-            |p: &mut Point| p.y,
-            |p: &mut Point, y| p.y = y,
-        );
-
-        let result_tx = self.result_tx.clone();
-        engine.register_fn("log", move |v: rhai::Dynamic| {
-            result_tx.send(Ok(v)).unwrap();
-        });
-
-        let graph = self.graph.clone();
-        engine.register_fn("get_graph", move || graph.graph.clone());
-
-        let graph = self.graph.clone();
-        engine.register_fn("get_path_positions", move || {
-            graph.path_positions.clone()
-        });
-
-        self.add_view_fns(&mut engine);
-
-        self.add_overlay_fns(&mut engine);
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("get_selection", move || {
-            use crossbeam::channel;
-
-            let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
-            let msg = AppMsg::RequestSelection(tx);
-
-            app_msg_tx.send(msg).unwrap();
-
-            let (_rect, result) = rx
-                .recv()
-                .expect("Console error when retrieving the current selection");
-
-            NodeSelection { nodes: result }
-        });
-
-        // TODO probably... don't do it like this
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("get_selection_center", move || {
-            use crossbeam::channel;
-
-            let (tx, rx) = channel::unbounded::<(Rect, FxHashSet<NodeId>)>();
-            let msg = AppMsg::RequestSelection(tx.clone());
-
-            app_msg_tx.send(msg).unwrap();
-
-            let (rect, _result) =
-                std::thread::spawn(move || rx.recv().unwrap())
-                    .join()
-                    .unwrap();
-
-            rect.center()
-        });
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("set_selection", move |selection: NodeSelection| {
-            let msg = AppMsg::Selection(Select::Many {
-                nodes: selection.nodes,
-                clear: true,
-            });
-            app_msg_tx.send(msg).unwrap();
-        });
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("set_selection", move |node: NodeId| {
-            let msg = AppMsg::Selection(Select::Many {
-                nodes: Some(node).into_iter().collect(),
-                clear: true,
-            });
-            app_msg_tx.send(msg).unwrap();
-        });
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("pan_to_active_selection", move || {
-            let msg = AppMsg::GotoSelection;
-            app_msg_tx.send(msg).unwrap();
-        });
-
-        let graph = self.graph.graph.clone();
-        engine.register_fn(
-            "path_selection",
-            move |path: PathId| -> NodeSelection {
-                let mut selection = NodeSelection::default();
-                if let Some(steps) = graph.path_steps(path) {
-                    for step in steps {
-                        let id = step.handle().id();
-                        selection.add_one(false, id);
-                    }
-                }
-                selection
-            },
-        );
-
-        let arc = self.shared_state.hover_node.clone();
-        engine.register_fn("get_hover_node", move || arc.load());
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("toggle_dark_mode", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_result_fn("get", move |name: &str| {
-            get_set
-                .getters
-                .get(name)
-                .map(|get| get())
-                .ok_or(format!("Setting `{}` not found", name).into())
-        });
-
-        let get_set = self.get_set.clone();
-
-        engine.register_result_fn(
-            "set",
-            move |name: &str, val: rhai::Dynamic| {
-                get_set
-                    .setters
-                    .get(name)
-                    .map(|set| set(val))
-                    .ok_or(format!("Setting `{}` not found", name).into())
-            },
-        );
-
-        let get_set = self.get_set.clone();
-        engine.register_result_fn("get_var", move |name: &str| {
-            let lock = get_set.console_vars.try_lock();
-            let val = lock.and_then(|l| l.get(name).cloned());
-            val.ok_or(format!("Global variable `{}` not found", name).into())
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
-            let mut lock = get_set.console_vars.lock();
-            lock.insert(name.to_string(), val);
-        });
-
-        let handle = exported_module!(crate::script::plugins::handle_plugin);
-
-        engine.register_fn("sleep", |ms: i64| {
-            let dur = std::time::Duration::from_millis(ms as u64);
-            std::thread::sleep(dur);
-        });
-
-        engine.register_fn("test_wait", || {
-            println!("sleeping 2 seconds...");
-            std::thread::sleep(std::time::Duration::from_millis(2000));
-            println!("waking up!");
-        });
-
-        engine.register_global_module(handle.into());
-
-        engine.register_fn("print_test", || {
-            println!("hello world");
-        });
-
-        engine
     }
 }
 
