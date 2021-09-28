@@ -416,12 +416,15 @@ fn node_color(id) {
             .unwrap();
     }
 
-    if let Some(annot_path) = &args.annotation_file {
-        warn!("loading annotation file {}", annot_path);
-        let annot_path_buf = std::path::PathBuf::from(annot_path);
-        if annot_path_buf.exists() {
-            let script = format!("load_collection(\"{}\")", annot_path);
-            gui.console.eval_line(&mut reactor, true, &script).unwrap();
+    {
+        for annot_path in &args.annotation_files {
+            if annot_path.exists() {
+                if let Some(path_str) = annot_path.to_str() {
+                    let script = format!("load_collection(\"{}\");", path_str);
+                    log::warn!("executing script: {}", script);
+                    gui.console.eval_line(&mut reactor, true, &script).unwrap();
+                }
+            }
         }
     }
 

@@ -501,7 +501,20 @@ pub struct Args {
     #[argh(option)]
     pub force_graphics_device: Option<String>,
 
-    /// list of .gff3 and/or .bed files to load at startup
-    #[argh(option)]
-    pub annotation_file: Option<String>,
+    /// path .gff3 and/or .bed file to load at startup, can be used multiple times to load several files
+    #[argh(option, from_str_fn(annotation_files_to_str))]
+    pub annotation_files: Vec<std::path::PathBuf>,
+}
+
+fn annotation_files_to_str(input: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+    println!("parsing annotation file path: {}", input);
+    let path = PathBuf::from(input.trim());
+    match path.canonicalize() {
+        Ok(canon) => Ok(canon),
+        Err(err) => Err(format!(
+            "Error when parsing annotation file list: {:?}",
+            err
+        )),
+    }
 }
