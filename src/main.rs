@@ -709,8 +709,8 @@ fn node_color(id) {
                     // log::debug!("Clustering label sets");
                     let cluster_tree = labels.cluster(tree_bounding_box, view.scale);
                     // log::debug!("Drawing label sets");
-                    cluster_tree.draw_clusters(&gui.ctx, view);
                     cluster_tree.draw_labels(&gui.ctx, shared_state);
+                    // cluster_tree.draw_clusters(&gui.ctx, view);
                 }
 
 

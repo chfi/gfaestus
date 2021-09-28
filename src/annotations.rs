@@ -169,8 +169,7 @@ impl ClusterTree {
                             view,
                             origin,
                             offset + Point::new(0.0, y_offset),
-                            &format!("{} labels here", lines.len()),
-                            // text,
+                            text,
                         );
 
                     if let Some(rect) = rect {
@@ -358,9 +357,6 @@ impl AnnotationLabelSet {
                 count += 1;
             }
         }
-        log::warn!("added {} labels", count);
-        log::warn!("contains {} label positions", labels.positions.len());
-        log::warn!("contains {} label strings", labels.label_strings.len());
 
         labels
     }
