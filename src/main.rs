@@ -243,7 +243,6 @@ fn main() {
         app.clone_channels(),
         app.settings.clone(),
         app.shared_state().clone(),
-        // app.settings.node_width().clone(),
         graph_query.node_count(),
     )
     .unwrap();

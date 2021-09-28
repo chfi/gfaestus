@@ -392,24 +392,41 @@ impl App {
 
                 type ReqResult = Result<rhai::Dynamic>;
 
-                let boxed: ReqResult =
-                    if type_ == TypeId::of::<Arc<Gff3Records>>() {
-                        if let Some(records) = self.annotations.get_gff3(&key) {
-                            let result = records.clone();
-                            Ok(rhai::Dynamic::from(result))
+                macro_rules! handle {
+                    ($expr:expr, $err:literal) => {
+                        if let Some(result) = $expr {
+                            Ok(rhai::Dynamic::from(result.clone()))
                         } else {
-                            let err = anyhow::anyhow!(
-                            "Couldn't find the requested annotation collection"
-                        );
+                            let err = anyhow::anyhow!($err);
                             Err(err) as ReqResult
                         }
+                    };
+                }
+
+                let boxed: ReqResult =
+                    if type_ == TypeId::of::<Arc<Gff3Records>>() {
+                        handle!(
+                            self.annotations.get_gff3(&key),
+                            "Couldn't find the requested annotation collection"
+                        )
                     } else if type_ == TypeId::of::<Arc<BedRecords>>() {
-                        if let Some(records) = self.annotations.get_bed(&key) {
-                            let result = records.clone();
-                            Ok(rhai::Dynamic::from(result))
+                        handle!(
+                            self.annotations.get_bed(&key),
+                            "Couldn't find the requested annotation collection"
+                        )
+                    } else if type_ == TypeId::of::<Annotations>() {
+                        if key == "annotation_names" {
+                            let names = self
+                                .annotations
+                                .annot_names()
+                                .iter()
+                                .map(|(name, _)| name.to_string())
+                                .collect::<Vec<_>>();
+
+                            Ok(rhai::Dynamic::from(names))
                         } else {
                             let err = anyhow::anyhow!(
-                            "Couldn't find the requested annotation collection"
+                            "Requested invalid key for Annotations from App"
                         );
                             Err(err) as ReqResult
                         }
@@ -502,7 +519,11 @@ pub struct Args {
     pub force_graphics_device: Option<String>,
 
     /// path .gff3 and/or .bed file to load at startup, can be used multiple times to load several files
-    #[argh(option, from_str_fn(annotation_files_to_str))]
+    #[argh(
+        option,
+        long = "annotation-file",
+        from_str_fn(annotation_files_to_str)
+    )]
     pub annotation_files: Vec<std::path::PathBuf>,
 }
 

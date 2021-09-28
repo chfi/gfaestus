@@ -1650,38 +1650,13 @@ impl ConsoleShared {
             },
         );
 
-        // this one's messy, there should be a better system in place
-        // for requesting data like this
         let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_result_fn("get_collection", move |c_name: &str| {
-            use crossbeam::channel;
+        engine.register_fn("list_collections", move || {
+            let type_ = TypeId::of::<Annotations>();
+            let key = "annotation_names".to_string();
 
-            let type_ = TypeId::of::<Arc<Gff3Records>>();
-            let key = c_name.to_string();
-
-            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                type_,
-                key,
-                sender: tx,
-            };
-
-            app_msg_tx.send(msg).unwrap();
-
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
-
-            match Self::error_helper::<Arc<Gff3Records>>(&result) {
-                Ok(records) => {
-                    return Ok(rhai::Dynamic::from(records));
-                }
-                Err(_) => {}
-            }
-
-            let type_ = TypeId::of::<Arc<BedRecords>>();
-            let key = c_name.to_string();
-
-            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
+            let (tx, rx) =
+                crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
 
             let msg: AppMsg = AppMsg::RequestData {
                 type_,
@@ -1692,13 +1667,14 @@ impl ConsoleShared {
             app_msg_tx.send(msg).unwrap();
 
             let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+            let result = Self::error_helper::<Vec<String>>(&result).unwrap();
 
-            match Self::error_helper::<Arc<BedRecords>>(&result) {
-                Ok(records) => {
-                    return Ok(rhai::Dynamic::from(records));
-                }
-                Err(err) => Err(err),
-            }
+            let result = result
+                .into_iter()
+                .map(rhai::Dynamic::from)
+                .collect::<Vec<_>>();
+
+            result
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
@@ -1750,6 +1726,57 @@ impl ConsoleShared {
                 }
             } else {
                 return Err("Invalid file extension".into());
+            }
+        });
+
+        // this one's messy, there should be a better system in place
+        // for requesting data like this
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_result_fn("get_collection", move |c_name: &str| {
+            use crossbeam::channel;
+
+            let type_ = TypeId::of::<Arc<Gff3Records>>();
+            let key = c_name.to_string();
+
+            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
+
+            let msg: AppMsg = AppMsg::RequestData {
+                type_,
+                key,
+                sender: tx,
+            };
+
+            app_msg_tx.send(msg).unwrap();
+
+            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+
+            match Self::error_helper::<Arc<Gff3Records>>(&result) {
+                Ok(records) => {
+                    return Ok(rhai::Dynamic::from(records));
+                }
+                Err(_) => {}
+            }
+
+            let type_ = TypeId::of::<Arc<BedRecords>>();
+            let key = c_name.to_string();
+
+            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
+
+            let msg: AppMsg = AppMsg::RequestData {
+                type_,
+                key,
+                sender: tx,
+            };
+
+            app_msg_tx.send(msg).unwrap();
+
+            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+
+            match Self::error_helper::<Arc<BedRecords>>(&result) {
+                Ok(records) => {
+                    return Ok(rhai::Dynamic::from(records));
+                }
+                Err(err) => Err(err),
             }
         });
 
