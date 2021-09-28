@@ -405,7 +405,7 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
+    // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
     //     FxHashMap::default();
 
@@ -689,18 +689,6 @@ fn node_color(id) {
                 );
 
 
-
-                /*
-                {
-                    let lock = gui.console.tree_test.lock();
-                    draw_tree(&gui.ctx, &lock, &app);
-                }
-
-                {
-                    let tree = gui.console.cluster_tree();
-                    tree.draw_clusters(&gui.ctx, app.shared_state().view());
-                }
-                */
 
                 {
                     let shared_state = app.shared_state();
