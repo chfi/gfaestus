@@ -292,57 +292,6 @@ impl Labels {
     }
 }
 
-/*
-impl LabelSet {
-    pub fn cluster(&self) -> Vec<LabelCluster> {
-        let mut clusters = Vec::new();
-
-        // for
-
-        clusters
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct LabelSets {
-    pub label_sets: HashMap<String, Arc<LabelSet>>,
-    // names: Vec<String>,
-    // label_sets: Vec<LabelSet>,
-    // counter: usize,
-}
-
-*/
-/*
-#[derive(Debug, Clone)]
-pub struct LabelCluster {
-    pub anchor_world: Point,
-    pub offset: Option<Point>,
-
-    pub text_indices: Vec<usize>,
-}
-
-pub struct LabelClusterCache {
-    pub label_set: Arc<LabelSet>,
-
-    pub clusters: Vec<LabelCluster>,
-
-    pub view_scale: f32,
-    pub radius: f32,
-}
-pub struct SuperCache {
-    pub sub_caches: Vec<LabelClusterCache>,
-    pub clusters: Vec<LabelCluster>,
-}
-
-impl SuperCache {
-    pub fn merge_clusters(&mut self) {
-        todo!();
-    }
-}
-*/
-
-// pub struct LabelSet
-
 #[derive(Debug, Clone)]
 pub struct AnnotationLabelSet {
     pub annotation_name: String,
@@ -360,17 +309,12 @@ pub struct AnnotationLabelSet {
 
 impl AnnotationLabelSet {
     pub fn label_set(&self) -> LabelSet {
-        // steps: &[(Handle, StepPtr, usize)],
-        // nodes: &[Node]) -> LabelSet {
-
         let mut labels = LabelSet::default();
 
-        let mut count = 0;
         for (node, label_indices) in self.labels.iter() {
             for &ix in label_indices.iter() {
                 let text = &self.label_strings[ix];
                 labels.add_at_node(*node, text);
-                count += 1;
             }
         }
 
@@ -425,7 +369,6 @@ impl AnnotationLabelSet {
         &self.label_strings
     }
 
-    // pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
     pub fn labels(&self) -> &FxHashMap<NodeId, Vec<usize>> {
         &self.labels
     }
@@ -459,11 +402,26 @@ pub struct Annotations {
     bed_annotations: HashMap<String, Arc<BedRecords>>,
 
     label_sets: HashMap<String, Arc<AnnotationLabelSet>>,
+
+    annotation_default_ref_path: HashMap<String, PathId>,
 }
 
 impl Annotations {
     pub fn annot_names(&self) -> &[(String, AnnotationFileType)] {
         &self.annot_names
+    }
+
+    pub fn get_default_ref_path(&self, annot: &str) -> Option<PathId> {
+        self.annotation_default_ref_path.get(annot).copied()
+    }
+
+    pub fn set_default_ref_path(&mut self, annot: &str, path: Option<PathId>) {
+        if let Some(path) = path {
+            self.annotation_default_ref_path
+                .insert(annot.to_string(), path);
+        } else {
+            self.annotation_default_ref_path.remove(annot);
+        }
     }
 
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {

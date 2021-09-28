@@ -1665,6 +1665,61 @@ impl ConsoleShared {
         );
 
         let app_msg_tx = self.channels.app_tx.clone();
+        let graph = self.graph.graph.clone();
+        engine.register_fn(
+            "set_collection_ref_path",
+            move |name: &str, path_name: &str| {
+                let key = "annotation_ref_path".to_string();
+                let index = name.to_string();
+
+                let path_id =
+                    if let Some(id) = graph.get_path_id(path_name.as_bytes()) {
+                        id
+                    } else {
+                        return ();
+                    };
+
+                let msg: AppMsg = AppMsg::SetData {
+                    key,
+                    index,
+                    value: rhai::Dynamic::from(path_id),
+                };
+
+                app_msg_tx.send(msg).unwrap();
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_result_fn(
+            "get_collection_ref_path",
+            move |name: &str| {
+                let key = "annotation_ref_path".to_string();
+                let index = name.to_string();
+
+                let (tx, rx) =
+                    crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
+
+                let msg: AppMsg = AppMsg::RequestData_ {
+                    key,
+                    index,
+                    sender: tx,
+                };
+
+                app_msg_tx.send(msg).unwrap();
+
+                let result =
+                    std::thread::spawn(move || rx.recv().unwrap()).join();
+
+                if let Ok(_) = Self::error_helper::<()>(&result) {
+                    return Ok(rhai::Dynamic::from(false));
+                }
+                let result = Self::error_helper::<PathId>(&result)?;
+
+                Ok(rhai::Dynamic::from(result))
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("list_collections", move || {
             let type_ = TypeId::of::<Annotations>();
             let key = "annotation_names".to_string();

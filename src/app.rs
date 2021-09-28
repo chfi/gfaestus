@@ -5,6 +5,7 @@ pub mod settings;
 pub mod shared_state;
 
 pub use channels::*;
+use handlegraph::pathhandlegraph::PathId;
 pub use settings::*;
 pub use shared_state::*;
 
@@ -117,11 +118,20 @@ pub enum AppMsg {
     RequestData {
         type_: std::any::TypeId,
         key: String,
-        sender: crossbeam::channel::Sender<
-            Result<rhai::Dynamic>,
-            // std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>,
-        >,
-        // sender: crossbeam::channel::Sender<Box<dyn std::any::Any + Send + Sync + 'static>,
+        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+    },
+
+    // TODO use this in all cases where RequestData is currently used
+    RequestData_ {
+        key: String,
+        index: String,
+        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+    },
+
+    SetData {
+        key: String,
+        index: String,
+        value: rhai::Dynamic,
     },
 }
 
@@ -438,6 +448,53 @@ impl App {
 
                 sender.send(boxed).unwrap();
             }
+            AppMsg::RequestData_ { key, index, sender } => {
+                type ReqResult = Result<rhai::Dynamic>;
+
+                macro_rules! handle {
+                    ($expr:expr, $err:literal) => {
+                        if let Some(result) = $expr {
+                            Ok(rhai::Dynamic::from(result.clone()))
+                        } else {
+                            let err = anyhow::anyhow!($err);
+                            Err(err) as ReqResult
+                        }
+                    };
+                }
+
+                let boxed = match key.as_str() {
+                    "annotation_ref_path" => {
+                        if let Some(path) =
+                            self.annotations.get_default_ref_path(&index)
+                        {
+                            Ok(rhai::Dynamic::from(path))
+                        } else {
+                            Ok(rhai::Dynamic::from(()))
+                        }
+                    }
+                    _ => {
+                        let err =
+                            anyhow::anyhow!("Requested unknown key from App");
+                        Err(err) as ReqResult
+                    }
+                };
+
+                sender.send(boxed).unwrap();
+            }
+            AppMsg::SetData { key, index, value } => match key.as_str() {
+                "annotation_ref_path" => {
+                    if value.as_unit().is_ok() {
+                        self.annotations.set_default_ref_path(&index, None);
+                    } else if value.type_id()
+                        == std::any::TypeId::of::<PathId>()
+                    {
+                        let path = value.cast::<PathId>();
+                        self.annotations
+                            .set_default_ref_path(&index, Some(path));
+                    }
+                }
+                _ => (),
+            },
         }
     }
 
