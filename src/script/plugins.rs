@@ -339,7 +339,35 @@ pub mod graph_plugin {
     }
 
     #[rhai_fn(pure)]
-    pub fn get_path_id_prefix(
+    pub fn get_path_ids_by_prefix(
+        graph: &mut Arc<PackedGraph>,
+        path_name_prefix: &str,
+    ) -> Vec<rhai::Dynamic> {
+        use bstr::ByteSlice;
+
+        let graph: &PackedGraph = graph.as_ref();
+
+        let mut result: Vec<rhai::Dynamic> = Vec::new();
+
+        let path_name_prefix = path_name_prefix.as_bytes();
+        let mut path_name_buf: Vec<u8> = Vec::new();
+
+        for path_id in graph.path_ids() {
+            if let Some(path_name) = graph.get_path_name(path_id) {
+                path_name_buf.clear();
+                path_name_buf.extend(path_name);
+
+                if path_name_buf.starts_with(path_name_prefix) {
+                    result.push(rhai::Dynamic::from(path_id));
+                }
+            }
+        }
+
+        result
+    }
+
+    #[rhai_fn(pure)]
+    pub fn get_path_names_by_prefix(
         graph: &mut Arc<PackedGraph>,
         path_name_prefix: &str,
     ) -> Vec<rhai::Dynamic> {
