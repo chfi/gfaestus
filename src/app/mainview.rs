@@ -11,10 +11,13 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::view::{ScreenDims, View};
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
     vulkan::texture::GradientTexture,
+};
+use crate::{
+    context::ContextEntry,
+    view::{ScreenDims, View},
 };
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
@@ -312,6 +315,20 @@ impl MainView {
             mouse_world,
         ) {
             self.anim_handler.send_anim_def(anim_def);
+        }
+    }
+
+    pub fn send_context<Dims: Into<ScreenDims>>(
+        &self,
+        mouse_pos: Point,
+        tx: &Sender<ContextEntry>,
+    ) {
+        let hover_node = self
+            .read_node_id_at(mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
+
+        if let Some(node) = hover_node {
+            tx.send(ContextEntry::Node(node)).unwrap();
         }
     }
 
