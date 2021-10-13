@@ -91,28 +91,26 @@ impl ContextMenu {
                 .order(egui::Order::Foreground)
                 .fixed_pos(screen_pos)
                 .show(egui_ctx, |ui| {
-                    // ui.set_clip_rect(parent_clip_rect); // for when the combo-box is in a scroll area.
                     let frame = egui::Frame::popup(ui.style());
                     let frame_margin = frame.margin;
                     frame.show(ui, |ui| {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
-                                /*
-                                ui.set_width(
-                                    widget_response.rect.width()
-                                        - 2.0 * frame_margin.x,
-                                );
-                                add_contents(ui)
-                                */
                                 ui.label("hello contexts");
                             },
                         );
                     });
                 });
+
+            let popup_response = popup_response.response;
+
+            if egui_ctx.input().key_pressed(egui::Key::Escape)
+                || popup_response.clicked()
+                || popup_response.clicked_elsewhere()
+            {
+                egui_ctx.memory().close_popup();
+            }
         }
-        // else {
-        //     log::warn!("context menu CLOSED");
-        // }
     }
 }
