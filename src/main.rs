@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
+use gfaestus::context::ContextMenu;
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::context::EdgeRendererType;
@@ -10,7 +11,7 @@ use gfaestus::vulkan::texture::{Gradients, Gradients_};
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
-use winit::event::{Event, WindowEvent};
+use winit::event::{ElementState, Event, MouseButton, WindowEvent};
 use winit::event_loop::ControlFlow;
 
 #[allow(unused_imports)]
@@ -401,6 +402,8 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
+    let context_menu = ContextMenu::default();
+
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
     //     FxHashMap::default();
@@ -452,6 +455,24 @@ fn node_color(id) {
         } else {
             return;
         };
+
+        // let mut open_ctx = false;
+
+        if let Event::WindowEvent { event, .. } = &event {
+            if let WindowEvent::MouseInput { state, button, .. } = event {
+                if *state == ElementState::Pressed &&
+                    *button == MouseButton::Right {
+
+                        log::warn!("right button pressed");
+                        // open_ctx = true;
+
+                        // if open_ctx {
+                        context_menu.open_context_menu(&gui.ctx);
+                        context_menu.set_position(app.shared_state().mouse_pos());
+                        // }
+                }
+            }
+        }
 
         if let Event::WindowEvent { event, .. } = &event {
             let ev = event.clone();
@@ -710,6 +731,9 @@ fn node_color(id) {
                     app.annotations(),
                 );
 
+
+
+                context_menu.show_test(&gui.ctx);
 
 
                 {
