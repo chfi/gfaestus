@@ -57,33 +57,17 @@ impl ContextMenu {
         &self.tx
     }
 
-    pub fn show_at(&self, egui_ctx: &egui::CtxRef, screen_pos: Point) {
-        let mut contexts: HashSet<ContextEntry> = HashSet::default();
+    pub fn show(&self, egui_ctx: &egui::CtxRef) {
+        let mut contexts: Vec<ContextEntry> = Vec::new();
 
         // TODO add combining step, maybe?
         while let Ok(ctx) = self.rx.try_recv() {
-            contexts.insert(ctx);
+            contexts.push(ctx);
         }
 
-        // TODO use a popup
-        egui::Window::new(Self::ID).show(egui_ctx, |ui| {
-            // todo actually do the thing
-            for ctx in contexts {
-                ui.label(&format!("{:?}", ctx));
-            }
-        });
-    }
+        contexts.sort();
+        contexts.dedup();
 
-    pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
-        log::warn!("opening context menu");
-        ctx.memory().open_popup(Self::popup_id());
-    }
-
-    pub fn set_position(&self, pos: Point) {
-        self.position.store(pos);
-    }
-
-    pub fn show_test(&self, egui_ctx: &egui::CtxRef) {
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();
 
@@ -97,7 +81,9 @@ impl ContextMenu {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
-                                ui.label("hello contexts");
+                                for ctx in &contexts {
+                                    ui.label(&format!("{:?}", ctx));
+                                }
                             },
                         );
                     });
@@ -112,5 +98,14 @@ impl ContextMenu {
                 egui_ctx.memory().close_popup();
             }
         }
+    }
+
+    pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
+        log::warn!("opening context menu");
+        ctx.memory().open_popup(Self::popup_id());
+    }
+
+    pub fn set_position(&self, pos: Point) {
+        self.position.store(pos);
     }
 }

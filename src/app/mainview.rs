@@ -318,11 +318,9 @@ impl MainView {
         }
     }
 
-    pub fn send_context<Dims: Into<ScreenDims>>(
-        &self,
-        mouse_pos: Point,
-        tx: &Sender<ContextEntry>,
-    ) {
+    pub fn send_context(&self, tx: &Sender<ContextEntry>) {
+        let mouse_pos = self.shared_state.mouse_pos();
+
         let hover_node = self
             .read_node_id_at(mouse_pos)
             .map(|nid| NodeId::from(nid as u64));

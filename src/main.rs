@@ -732,8 +732,9 @@ fn node_color(id) {
                 );
 
 
+                main_view.send_context(context_menu.tx());
 
-                context_menu.show_test(&gui.ctx);
+                context_menu.show(&gui.ctx);
 
 
                 {
