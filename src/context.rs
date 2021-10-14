@@ -31,6 +31,7 @@ pub struct ContextMenu {
     tx: channel::Sender<ContextEntry>,
 
     position: Arc<AtomicCell<Point>>,
+    contexts: Vec<ContextEntry>,
 }
 
 impl std::default::Default for ContextMenu {
@@ -40,6 +41,7 @@ impl std::default::Default for ContextMenu {
             tx,
             rx,
             position: Arc::new(Point::ZERO.into()),
+            contexts: Vec::new(),
         }
     }
 }
@@ -57,17 +59,19 @@ impl ContextMenu {
         &self.tx
     }
 
-    pub fn show(&self, egui_ctx: &egui::CtxRef) {
-        let mut contexts: Vec<ContextEntry> = Vec::new();
+    pub fn recv_contexts(&mut self) {
+        self.contexts.clear();
 
         // TODO add combining step, maybe?
         while let Ok(ctx) = self.rx.try_recv() {
-            contexts.push(ctx);
+            self.contexts.push(ctx);
         }
 
-        contexts.sort();
-        contexts.dedup();
+        self.contexts.sort();
+        self.contexts.dedup();
+    }
 
+    pub fn show(&self, egui_ctx: &egui::CtxRef) {
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();
 
@@ -81,7 +85,7 @@ impl ContextMenu {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
-                                for ctx in &contexts {
+                                for ctx in &self.contexts {
                                     ui.label(&format!("{:?}", ctx));
                                 }
                             },

@@ -402,7 +402,7 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let context_menu = ContextMenu::default();
+    let mut context_menu = ContextMenu::default();
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
@@ -467,6 +467,7 @@ fn node_color(id) {
                         // open_ctx = true;
 
                         // if open_ctx {
+                        context_menu.recv_contexts();
                         context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
                         // }
