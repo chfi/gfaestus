@@ -33,6 +33,12 @@ struct Contexts {
     has_selection: bool,
 }
 
+impl Contexts {
+    fn is_not_empty(&self) -> bool {
+        self.node.is_some() || self.path.is_some() || self.has_selection
+    }
+}
+
 #[derive(Debug)]
 pub struct ContextMenu {
     rx: channel::Receiver<ContextEntry>,
@@ -126,8 +132,12 @@ impl ContextMenu {
     }
 
     pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
-        log::warn!("opening context menu");
-        ctx.memory().open_popup(Self::popup_id());
+        if self.contexts.is_not_empty() {
+            ctx.memory().open_popup(Self::popup_id());
+        } else {
+            // NB this might prove to be a problem later
+            ctx.memory().close_popup()
+        }
     }
 
     pub fn set_position(&self, pos: Point) {
