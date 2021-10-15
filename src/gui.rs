@@ -23,6 +23,7 @@ use crate::{
         Gff3Records,
     },
     app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
+    context::ContextEntry,
     graph_query::GraphQueryWorker,
     reactor::Reactor,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
@@ -574,6 +575,7 @@ impl Gui {
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         annotations: &Annotations,
+        ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -760,6 +762,7 @@ impl Gui {
                     &self.app_msg_tx,
                     node_details,
                     graph_query,
+                    ctx_tx,
                 );
             }
 

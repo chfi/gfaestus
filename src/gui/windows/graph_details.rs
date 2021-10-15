@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 
-use crate::{app::AppMsg, geometry::*};
+use crate::{app::AppMsg, context::ContextEntry, geometry::*};
 use crate::{graph_query::GraphQuery, gui::util::grid_row_label};
 
 #[derive(Debug, Clone)]
@@ -410,6 +410,7 @@ impl NodeList {
         app_msg_tx: &Sender<AppMsg>,
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let filter = self.apply_filter.load();
 
@@ -586,6 +587,16 @@ impl NodeList {
                                         node_id_cell.store(Some(slot.node_id));
 
                                         *open_node_details = true;
+                                    }
+
+                                    if row.clicked_by(
+                                        egui::PointerButton::Secondary,
+                                    ) {
+                                        ctx_tx
+                                            .send(ContextEntry::Node(
+                                                slot.node_id,
+                                            ))
+                                            .unwrap();
                                     }
                                 }
                             }

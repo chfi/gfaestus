@@ -461,8 +461,12 @@ fn node_color(id) {
                 if *state == ElementState::Pressed &&
                     *button == MouseButton::Right {
 
+                        let focus = &app.shared_state().gui_focus_state;
+
                         // this whole thing should be handled better
-                        main_view.send_context(context_menu.tx());
+                        if !focus.mouse_over_gui() {
+                            main_view.send_context(context_menu.tx());
+                        }
 
                         context_menu.recv_contexts();
                         context_menu.open_context_menu(&gui.ctx);
@@ -726,6 +730,7 @@ fn node_color(id) {
                     &graph_query,
                     &graph_query_worker,
                     app.annotations(),
+                    context_menu.tx(),
                 );
 
 
