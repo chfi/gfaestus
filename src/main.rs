@@ -456,21 +456,17 @@ fn node_color(id) {
             return;
         };
 
-        // let mut open_ctx = false;
-
         if let Event::WindowEvent { event, .. } = &event {
             if let WindowEvent::MouseInput { state, button, .. } = event {
                 if *state == ElementState::Pressed &&
                     *button == MouseButton::Right {
 
-                        log::warn!("right button pressed");
-                        // open_ctx = true;
+                        // this whole thing should be handled better
+                        main_view.send_context(context_menu.tx());
 
-                        // if open_ctx {
                         context_menu.recv_contexts();
                         context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
-                        // }
                 }
             }
         }
@@ -732,8 +728,6 @@ fn node_color(id) {
                     app.annotations(),
                 );
 
-
-                main_view.send_context(context_menu.tx());
 
                 context_menu.show(&gui.ctx);
 

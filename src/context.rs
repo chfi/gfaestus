@@ -25,13 +25,23 @@ pub enum ContextEntry {
     // HasSelection(bool),
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+struct Contexts {
+    node: Option<NodeId>,
+    path: Option<PathId>,
+
+    has_selection: bool,
+}
+
 #[derive(Debug)]
 pub struct ContextMenu {
     rx: channel::Receiver<ContextEntry>,
     tx: channel::Sender<ContextEntry>,
 
     position: Arc<AtomicCell<Point>>,
-    contexts: Vec<ContextEntry>,
+
+    contexts: Contexts,
+    // contexts: Vec<ContextEntry>,
 }
 
 impl std::default::Default for ContextMenu {
@@ -41,7 +51,7 @@ impl std::default::Default for ContextMenu {
             tx,
             rx,
             position: Arc::new(Point::ZERO.into()),
-            contexts: Vec::new(),
+            contexts: Default::default(),
         }
     }
 }
@@ -60,15 +70,18 @@ impl ContextMenu {
     }
 
     pub fn recv_contexts(&mut self) {
-        self.contexts.clear();
+        self.contexts = Default::default();
 
         // TODO add combining step, maybe?
         while let Ok(ctx) = self.rx.try_recv() {
-            self.contexts.push(ctx);
+            match ctx {
+                ContextEntry::Node(node) => self.contexts.node = Some(node),
+                ContextEntry::Path(path) => self.contexts.path = Some(path),
+                ContextEntry::HasSelection => {
+                    self.contexts.has_selection = true
+                }
+            }
         }
-
-        self.contexts.sort();
-        self.contexts.dedup();
     }
 
     pub fn show(&self, egui_ctx: &egui::CtxRef) {
@@ -85,8 +98,16 @@ impl ContextMenu {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
-                                for ctx in &self.contexts {
-                                    ui.label(&format!("{:?}", ctx));
+                                if let Some(node) = self.contexts.node {
+                                    ui.label(&format!("Node {:?}", node));
+                                }
+
+                                if let Some(path) = self.contexts.path {
+                                    ui.label(&format!("Path {:?}", path));
+                                }
+
+                                if self.contexts.has_selection {
+                                    ui.label("has selection");
                                 }
                             },
                         );
