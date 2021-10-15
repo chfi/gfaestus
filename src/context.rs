@@ -4,6 +4,7 @@ use std::{
     sync::Arc,
 };
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
@@ -92,7 +93,12 @@ impl ContextMenu {
         }
     }
 
-    pub fn show(&self, egui_ctx: &egui::CtxRef, reactor: &Reactor) {
+    pub fn show(
+        &self,
+        egui_ctx: &egui::CtxRef,
+        reactor: &Reactor,
+        clipboard: &mut ClipboardContext,
+    ) {
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();
 
@@ -109,12 +115,11 @@ impl ContextMenu {
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
                                 if let Some(node) = self.contexts.node {
-                                    // TODO need to provide the clipboard context
                                     if ui.button("Copy node ID").clicked() {
-                                        log::warn!(
-                                            "should copy node {:?}",
-                                            node
-                                        );
+                                        let contents = node.0.to_string();
+                                        let _ =
+                                            clipboard.set_contents(contents);
+
                                         should_close = true;
                                     }
                                     if ui.button("Copy node sequence").clicked()
@@ -125,10 +130,12 @@ impl ContextMenu {
                                             .sequence_vec(Handle::pack(
                                                 node, false,
                                             ));
-                                        log::warn!(
-                                            "should copy sequence {}",
-                                            sequence.as_bstr()
-                                        );
+
+                                        let contents =
+                                            format!("{}", sequence.as_bstr());
+                                        let _ =
+                                            clipboard.set_contents(contents);
+
                                         should_close = true;
                                     }
                                 }

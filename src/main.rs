@@ -734,7 +734,13 @@ fn node_color(id) {
                 );
 
 
-                context_menu.show(&gui.ctx, &reactor);
+                {
+                    let ctx = &gui.ctx;
+                    let clipboard = &mut gui.clipboard_ctx;
+
+                    context_menu.show(ctx, &reactor, clipboard);
+                }
+
 
 
                 {

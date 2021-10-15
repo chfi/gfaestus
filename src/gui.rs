@@ -87,7 +87,7 @@ pub struct Gui {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    clipboard_ctx: ClipboardContext,
+    pub clipboard_ctx: ClipboardContext,
 
     gff3_list: RecordList<Gff3Records>,
     bed_list: RecordList<BedRecords>,
