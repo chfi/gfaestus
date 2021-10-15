@@ -734,7 +734,7 @@ fn node_color(id) {
                 );
 
 
-                context_menu.show(&gui.ctx);
+                context_menu.show(&gui.ctx, &reactor);
 
 
                 {

@@ -15,7 +15,9 @@ use handlegraph::{
     pathhandlegraph::*,
 };
 
-use crate::geometry::Point;
+use bstr::ByteSlice;
+
+use crate::{geometry::Point, reactor::Reactor};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ContextEntry {
@@ -90,9 +92,11 @@ impl ContextMenu {
         }
     }
 
-    pub fn show(&self, egui_ctx: &egui::CtxRef) {
+    pub fn show(&self, egui_ctx: &egui::CtxRef, reactor: &Reactor) {
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();
+
+            let mut should_close = false;
 
             let popup_response = egui::Area::new(Self::ID)
                 .order(egui::Order::Foreground)
@@ -105,7 +109,28 @@ impl ContextMenu {
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
                                 if let Some(node) = self.contexts.node {
-                                    ui.label(&format!("Node {:?}", node));
+                                    // TODO need to provide the clipboard context
+                                    if ui.button("Copy node ID").clicked() {
+                                        log::warn!(
+                                            "should copy node {:?}",
+                                            node
+                                        );
+                                        should_close = true;
+                                    }
+                                    if ui.button("Copy node sequence").clicked()
+                                    {
+                                        let sequence = reactor
+                                            .graph_query
+                                            .graph
+                                            .sequence_vec(Handle::pack(
+                                                node, false,
+                                            ));
+                                        log::warn!(
+                                            "should copy sequence {}",
+                                            sequence.as_bstr()
+                                        );
+                                        should_close = true;
+                                    }
                                 }
 
                                 if let Some(path) = self.contexts.path {
@@ -125,6 +150,7 @@ impl ContextMenu {
             if egui_ctx.input().key_pressed(egui::Key::Escape)
                 || popup_response.clicked()
                 || popup_response.clicked_elsewhere()
+                || should_close
             {
                 egui_ctx.memory().close_popup();
             }
