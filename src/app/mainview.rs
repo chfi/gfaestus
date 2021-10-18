@@ -328,6 +328,12 @@ impl MainView {
         if let Some(node) = hover_node {
             tx.send(ContextEntry::Node(node)).unwrap();
         }
+
+        let nodes = self.selection_buffer.selection_set().to_owned();
+
+        if !nodes.is_empty() {
+            tx.send(ContextEntry::Selection { nodes }).unwrap();
+        }
     }
 
     pub fn apply_input<Dims: Into<ScreenDims>>(

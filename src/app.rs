@@ -165,10 +165,32 @@ impl App {
         self.shared_state.hover_node.load()
     }
 
+    pub fn has_selection(&self) -> bool {
+        !self.selected_nodes.is_empty()
+    }
+
     pub fn selection_changed(&self) -> bool {
         self.selection_changed
     }
 
+    pub fn selected_nodes_(&self) -> Option<(Rect, &FxHashSet<NodeId>)> {
+        log::warn!(
+            "self.selected_nodes.is_empty() = {}",
+            self.selected_nodes.is_empty()
+        );
+        if self.selected_nodes.is_empty() {
+            None
+        } else {
+            let rect = self
+                .selected_nodes_bounding_box
+                .map(|(p0, p1)| Rect::new(p0, p1))
+                .unwrap_or(Rect::default());
+            log::warn!("got a bounding box");
+            Some((rect, &self.selected_nodes))
+        }
+    }
+
+    // not even sure where selection_changed is used anymore, if at all
     pub fn selected_nodes(&mut self) -> Option<&FxHashSet<NodeId>> {
         if self.selected_nodes.is_empty() {
             self.selection_changed = false;

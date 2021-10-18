@@ -17,14 +17,23 @@ use handlegraph::{
 };
 
 use bstr::ByteSlice;
+use rustc_hash::FxHashSet;
 
-use crate::{geometry::Point, reactor::Reactor};
+use crate::{
+    app::{selection::NodeSelection, AppMsg},
+    geometry::{Point, Rect},
+    reactor::Reactor,
+};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone)]
 pub enum ContextEntry {
     Node(NodeId),
     Path(PathId),
-    HasSelection,
+    Selection {
+        // rect: Rect,
+        nodes: FxHashSet<NodeId>,
+    },
+    // HasSelection,
     // HasSelection(bool),
 }
 
@@ -34,16 +43,20 @@ pub enum ContextAction {
     CopyNodeId,
     CopyNodeSeq,
     CopyPathName,
+    CopySubgraphGfa,
     // CopySelection,
     // CopyPathNames,
 }
 
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 struct Contexts {
     node: Option<NodeId>,
     path: Option<PathId>,
 
     has_selection: bool,
+
+    // selection_rect: Option<Rect>,
+    selection_nodes: Option<FxHashSet<NodeId>>,
 }
 
 impl Contexts {
@@ -96,8 +109,9 @@ impl ContextMenu {
             match ctx {
                 ContextEntry::Node(node) => self.contexts.node = Some(node),
                 ContextEntry::Path(path) => self.contexts.path = Some(path),
-                ContextEntry::HasSelection => {
-                    self.contexts.has_selection = true
+                ContextEntry::Selection { nodes } => {
+                    self.contexts.selection_nodes = Some(nodes);
+                    self.contexts.has_selection = true;
                 }
             }
         }
@@ -105,10 +119,11 @@ impl ContextMenu {
 
     fn process(
         &self,
+        app_msg_tx: &channel::Sender<AppMsg>,
         reactor: &Reactor,
         clipboard: &mut ClipboardContext,
         action: ContextAction,
-        contexts: Contexts,
+        contexts: &Contexts,
     ) {
         match action {
             ContextAction::CopyNodeId => {
@@ -138,12 +153,30 @@ impl ContextMenu {
                     }
                 }
             }
+            ContextAction::CopySubgraphGfa => {
+                if let Some(nodes) = &contexts.selection_nodes {
+                    log::warn!("selection has {} nodes", nodes.len());
+                }
+                // let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
+                // let msg = AppMsg::RequestSelection(tx);
+
+                // app_msg_tx.send(msg).unwrap();
+
+                // let (_rect, result) = rx.recv().expect(
+                //     "Console error when retrieving the current selection",
+                // );
+
+                // let selection = NodeSelection { nodes: result };
+
+                // log::warn!("selection has {} nodes", selection.nodes.len());
+            }
         }
     }
 
     pub fn show(
         &self,
         egui_ctx: &egui::CtxRef,
+        app_msg_tx: &channel::Sender<AppMsg>,
         reactor: &Reactor,
         clipboard: &mut ClipboardContext,
     ) {
@@ -165,20 +198,22 @@ impl ContextMenu {
                                 if let Some(_node) = self.contexts.node {
                                     if ui.button("Copy node ID").clicked() {
                                         self.process(
+                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyNodeId,
-                                            self.contexts,
+                                            &self.contexts,
                                         );
                                         should_close = true;
                                     }
                                     if ui.button("Copy node sequence").clicked()
                                     {
                                         self.process(
+                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyNodeSeq,
-                                            self.contexts,
+                                            &self.contexts,
                                         );
                                         should_close = true;
                                     }
@@ -187,17 +222,30 @@ impl ContextMenu {
                                 if let Some(_path) = self.contexts.path {
                                     if ui.button("Copy path name").clicked() {
                                         self.process(
+                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyPathName,
-                                            self.contexts,
+                                            &self.contexts,
                                         );
                                         should_close = true;
                                     }
                                 }
 
                                 if self.contexts.has_selection {
-                                    should_close = true;
+                                    if ui
+                                        .button("Copy subgraph as GFA")
+                                        .clicked()
+                                    {
+                                        self.process(
+                                            app_msg_tx,
+                                            reactor,
+                                            clipboard,
+                                            ContextAction::CopySubgraphGfa,
+                                            &self.contexts,
+                                        );
+                                        should_close = true;
+                                    }
                                 }
                             },
                         );

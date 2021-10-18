@@ -2,7 +2,7 @@
 use compute::EdgePreprocess;
 use crossbeam::atomic::AtomicCell;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::context::ContextMenu;
+use gfaestus::context::{ContextEntry, ContextMenu};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::Reactor;
 use gfaestus::vulkan::context::EdgeRendererType;
@@ -470,6 +470,8 @@ fn node_color(id) {
                             main_view.send_context(context_menu.tx());
                         }
 
+
+
                         open_context.store(true);
                         // context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
@@ -509,6 +511,13 @@ fn node_color(id) {
 
                 if app.selection_changed() {
                     if let Some(selected) = app.selected_nodes() {
+
+                        log::warn!("sending selection");
+                        context_menu
+                            .tx()
+                            .send(ContextEntry::Selection { nodes: selected.to_owned() })
+                            .unwrap();
+
                         let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                         nodes.sort();
 
@@ -517,6 +526,8 @@ fn node_color(id) {
                             .send(NodeListMsg::SetFiltered(nodes));
 
                         main_view.update_node_selection(selected).unwrap();
+
+
                     } else {
                         gui.app_view_state()
                             .node_list()
@@ -746,7 +757,7 @@ fn node_color(id) {
                         open_context.store(false);
                     }
 
-                    context_menu.show(ctx, &reactor, clipboard);
+                    context_menu.show(ctx, &app.channels().app_tx, &reactor, clipboard);
                 }
 
 
