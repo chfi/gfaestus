@@ -19,6 +19,7 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
+    context::ContextEntry,
     gui::util::grid_row_label,
     reactor::{Host, Outbox, Reactor},
 };
@@ -138,6 +139,7 @@ impl PathDetails {
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
         app_msg_tx: &Sender<AppMsg>,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         self.path_details.fetch(graph_query)?;
 
@@ -207,6 +209,7 @@ impl PathDetails {
                         graph_query,
                         node_details_id_cell,
                         open_node_details,
+                        ctx_tx,
                     );
 
                     ui.shrink_width_to_current();
@@ -226,6 +229,7 @@ impl PathList {
         _app_msg_tx: &Sender<AppMsg>,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let paths = &self.all_paths;
 
@@ -328,6 +332,14 @@ impl PathList {
                                     if row.clicked() {
                                         path_id_cell.store(Some(path_id));
                                         *open_path_details = true;
+                                    }
+
+                                    if row.clicked_by(
+                                        egui::PointerButton::Secondary,
+                                    ) {
+                                        ctx_tx
+                                            .send(ContextEntry::Path(path_id))
+                                            .unwrap();
                                     }
                                 }
                             }
@@ -539,6 +551,7 @@ impl StepList {
         _graph_query: &GraphQuery,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> egui::InnerResponse<()> {
         if let Some(result) = self.steps_host.take() {
             if let Ok((_path, path_base_len, steps)) = &result {
@@ -720,6 +733,12 @@ impl StepList {
                         if row.clicked() {
                             node_details_id_cell.store(Some(handle.id()));
                             *open_node_details = true;
+                        }
+
+                        if row.clicked_by(egui::PointerButton::Secondary) {
+                            ctx_tx
+                                .send(ContextEntry::Node(handle.id()))
+                                .unwrap();
                         }
                     }
                 })

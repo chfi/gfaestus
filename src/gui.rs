@@ -773,6 +773,7 @@ impl Gui {
                     &self.ctx,
                     path_details_id_cell,
                     path_details,
+                    ctx_tx,
                 );
             }
         }
@@ -791,6 +792,7 @@ impl Gui {
                     &self.app_msg_tx,
                     path_details,
                     graph_query,
+                    ctx_tx,
                 );
             }
 
@@ -802,6 +804,7 @@ impl Gui {
                     node_details_id_cell,
                     node_details,
                     &self.app_msg_tx,
+                    ctx_tx,
                 );
             }
         }
