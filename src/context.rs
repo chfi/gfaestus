@@ -155,20 +155,40 @@ impl ContextMenu {
             }
             ContextAction::CopySubgraphGfa => {
                 if let Some(nodes) = &contexts.selection_nodes {
+                    let mut nodes = nodes.iter().copied().collect::<Vec<_>>();
+                    nodes.sort();
+
+                    let mut contents = String::new();
+
+                    for node in &nodes {
+                        let handle = Handle::pack(*node, false);
+                        let sequence =
+                            reactor.graph_query.graph.sequence_vec(handle);
+
+                        contents.push_str(&format!(
+                            "{}\t{}\n",
+                            node.0,
+                            sequence.as_bstr()
+                        ));
+                    }
+
+                    /*
+                    for node in &nodes {
+                        let left = reactor
+                            .graph_query
+                            .graph
+                            .neighbors(handle, Direction::Left);
+                        let right = reactor
+                            .graph_query
+                            .graph
+                            .neighbors(handle, Direction::Right);
+                    }
+                    */
+
+                    let _ = clipboard.set_contents(contents);
+
                     log::warn!("selection has {} nodes", nodes.len());
                 }
-                // let (tx, rx) = channel::bounded::<(Rect, FxHashSet<NodeId>)>(1);
-                // let msg = AppMsg::RequestSelection(tx);
-
-                // app_msg_tx.send(msg).unwrap();
-
-                // let (_rect, result) = rx.recv().expect(
-                //     "Console error when retrieving the current selection",
-                // );
-
-                // let selection = NodeSelection { nodes: result };
-
-                // log::warn!("selection has {} nodes", selection.nodes.len());
             }
         }
     }
