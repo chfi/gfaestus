@@ -1,5 +1,6 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
+use crossbeam::atomic::AtomicCell;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::context::ContextMenu;
 use gfaestus::quad_tree::QuadTree;
@@ -403,6 +404,7 @@ fn node_color(id) {
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
     let mut context_menu = ContextMenu::default();
+    let open_context = AtomicCell::new(false);
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
@@ -468,8 +470,8 @@ fn node_color(id) {
                             main_view.send_context(context_menu.tx());
                         }
 
-                        context_menu.recv_contexts();
-                        context_menu.open_context_menu(&gui.ctx);
+                        open_context.store(true);
+                        // context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
                 }
             }
@@ -737,6 +739,12 @@ fn node_color(id) {
                 {
                     let ctx = &gui.ctx;
                     let clipboard = &mut gui.clipboard_ctx;
+
+                    if open_context.load() {
+                        context_menu.recv_contexts();
+                        context_menu.open_context_menu(&gui.ctx);
+                        open_context.store(false);
+                    }
 
                     context_menu.show(ctx, &reactor, clipboard);
                 }
