@@ -33,6 +33,7 @@ pub enum ContextEntry {
 pub enum ContextAction {
     CopyNodeId,
     CopyNodeSeq,
+    CopyPathName,
     // CopySelection,
     // CopyPathNames,
 }
@@ -127,6 +128,16 @@ impl ContextMenu {
                     let _ = clipboard.set_contents(contents);
                 }
             }
+            ContextAction::CopyPathName => {
+                if let Some(path) = contexts.path {
+                    if let Some(name) =
+                        reactor.graph_query.graph.get_path_name_vec(path)
+                    {
+                        let contents = format!("{}", name.as_bstr());
+                        let _ = clipboard.set_contents(contents);
+                    }
+                }
+            }
         }
     }
 
@@ -151,7 +162,7 @@ impl ContextMenu {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
-                                if let Some(node) = self.contexts.node {
+                                if let Some(_node) = self.contexts.node {
                                     if ui.button("Copy node ID").clicked() {
                                         self.process(
                                             reactor,
@@ -173,12 +184,20 @@ impl ContextMenu {
                                     }
                                 }
 
-                                if let Some(path) = self.contexts.path {
-                                    ui.label(&format!("Path {:?}", path));
+                                if let Some(_path) = self.contexts.path {
+                                    if ui.button("Copy path name").clicked() {
+                                        self.process(
+                                            reactor,
+                                            clipboard,
+                                            ContextAction::CopyPathName,
+                                            self.contexts,
+                                        );
+                                        should_close = true;
+                                    }
                                 }
 
                                 if self.contexts.has_selection {
-                                    ui.label("has selection");
+                                    should_close = true;
                                 }
                             },
                         );
