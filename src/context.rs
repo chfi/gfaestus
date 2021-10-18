@@ -28,6 +28,15 @@ pub enum ContextEntry {
     // HasSelection(bool),
 }
 
+// TODO this should be handled dynamically
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ContextAction {
+    CopyNodeId,
+    CopyNodeSeq,
+    // CopySelection,
+    // CopyPathNames,
+}
+
 #[derive(Debug, Default, Clone, Copy)]
 struct Contexts {
     node: Option<NodeId>,
@@ -93,6 +102,34 @@ impl ContextMenu {
         }
     }
 
+    fn process(
+        &self,
+        reactor: &Reactor,
+        clipboard: &mut ClipboardContext,
+        action: ContextAction,
+        contexts: Contexts,
+    ) {
+        match action {
+            ContextAction::CopyNodeId => {
+                if let Some(node) = contexts.node {
+                    let contents = node.0.to_string();
+                    let _ = clipboard.set_contents(contents);
+                }
+            }
+            ContextAction::CopyNodeSeq => {
+                if let Some(node) = contexts.node {
+                    let sequence = reactor
+                        .graph_query
+                        .graph
+                        .sequence_vec(Handle::pack(node, false));
+
+                    let contents = format!("{}", sequence.as_bstr());
+                    let _ = clipboard.set_contents(contents);
+                }
+            }
+        }
+    }
+
     pub fn show(
         &self,
         egui_ctx: &egui::CtxRef,
@@ -116,26 +153,22 @@ impl ContextMenu {
                             |ui| {
                                 if let Some(node) = self.contexts.node {
                                     if ui.button("Copy node ID").clicked() {
-                                        let contents = node.0.to_string();
-                                        let _ =
-                                            clipboard.set_contents(contents);
-
+                                        self.process(
+                                            reactor,
+                                            clipboard,
+                                            ContextAction::CopyNodeId,
+                                            self.contexts,
+                                        );
                                         should_close = true;
                                     }
                                     if ui.button("Copy node sequence").clicked()
                                     {
-                                        let sequence = reactor
-                                            .graph_query
-                                            .graph
-                                            .sequence_vec(Handle::pack(
-                                                node, false,
-                                            ));
-
-                                        let contents =
-                                            format!("{}", sequence.as_bstr());
-                                        let _ =
-                                            clipboard.set_contents(contents);
-
+                                        self.process(
+                                            reactor,
+                                            clipboard,
+                                            ContextAction::CopyNodeSeq,
+                                            self.contexts,
+                                        );
                                         should_close = true;
                                     }
                                 }
