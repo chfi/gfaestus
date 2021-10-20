@@ -326,6 +326,34 @@ fn node_color(id) {
 
     let new_overlay_rx = app.channels().new_overlay_rx.clone();
 
+    {
+        let (tx, rx) = crossbeam::channel::unbounded::<String>();
+
+        let fut1 = async move {
+            log::warn!("spawning first future");
+            let mut counter = 0;
+
+            loop {
+                let delay = futures_timer::Delay::new(
+                    std::time::Duration::from_millis(3000),
+                );
+                delay.await;
+                tx.send(counter.to_string()).unwrap();
+                counter += 1;
+            }
+        };
+
+        let fut2 = async move {
+            log::warn!("spawning second future");
+            while let Ok(msg) = rx.recv() {
+                log::warn!("received {}", msg);
+            }
+        };
+
+        let _ = reactor.spawn_forget(fut1);
+        let _ = reactor.spawn_forget(fut2);
+    }
+
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
         edge_count: Some(stats.edge_count),
