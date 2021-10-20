@@ -1,3 +1,4 @@
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
@@ -21,6 +22,14 @@ pub struct Reactor {
 
     pub overlay_create_tx: Sender<OverlayCreatorMsg>,
     pub overlay_create_rx: Receiver<OverlayCreatorMsg>,
+
+    pub future_tx:
+        Sender<Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
+    // pub future_tx: Sender<Box<dyn Future<Output = ()> + 'static>>,
+
+    // pub future_tx: Sender<Box<dyn FnOnce() + Send + Sync + 'static>>,
+    // pub task_rx: Receiver<Box<dyn FnOnce() + Send + Sync + 'static>>,
+    _task_thread: std::thread::JoinHandle<()>,
 }
 
 impl Reactor {
@@ -32,6 +41,18 @@ impl Reactor {
     ) -> Self {
         let rayon_pool = Arc::new(rayon_pool);
 
+        let (task_tx, task_rx) = crossbeam::channel::unbounded();
+
+        let thread_pool_ = thread_pool.clone();
+
+        let _task_thread = std::thread::spawn(move || {
+            let thread_pool = thread_pool_;
+
+            while let Ok(task) = task_rx.recv() {
+                thread_pool.spawn(task).unwrap();
+            }
+        });
+
         Self {
             thread_pool,
             rayon_pool,
@@ -40,6 +61,10 @@ impl Reactor {
 
             overlay_create_tx: channels.new_overlay_tx.clone(),
             overlay_create_rx: channels.new_overlay_rx.clone(),
+
+            future_tx: task_tx,
+            // task_rx,
+            _task_thread,
         }
     }
 
@@ -138,5 +163,14 @@ impl Reactor {
     {
         let handle = self.thread_pool.spawn_with_handle(fut)?;
         Ok(handle)
+    }
+
+    pub fn spawn_forget<F>(&self, fut: F) -> anyhow::Result<()>
+    where
+        F: Future<Output = ()> + Send + Sync + 'static,
+    {
+        let fut = Box::pin(fut) as _;
+        self.future_tx.send(fut)?;
+        Ok(())
     }
 }

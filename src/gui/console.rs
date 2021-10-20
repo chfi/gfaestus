@@ -1,6 +1,6 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
 
-use futures::future::RemoteHandle;
+use futures::{future::RemoteHandle, Future};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -88,6 +88,10 @@ pub struct Console<'a> {
     // TODO this shouldn't be a Vec, and it should probably use an
     // RwLock or something inside
     window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
+
+    future_tx: crossbeam::channel::Sender<
+        Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>,
+    >,
 }
 
 /// A "subconsole", spawned from one of the console commands (such as
@@ -111,6 +115,10 @@ pub struct ConsoleShared {
     rayon_pool: Arc<rayon::ThreadPool>,
 
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
+
+    future_tx: crossbeam::channel::Sender<
+        Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>,
+    >,
 }
 
 impl Console<'static> {
@@ -126,6 +134,8 @@ impl Console<'static> {
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
+
+        let future_tx = reactor.future_tx.clone();
 
         let rayon_pool = reactor.rayon_pool.clone();
 
@@ -321,6 +331,8 @@ impl Console<'static> {
             rayon_pool,
 
             window_defs,
+
+            future_tx,
         }
     }
 
@@ -340,6 +352,8 @@ impl Console<'static> {
 
             overlay_list: self.overlay_list.clone(),
             rayon_pool: self.rayon_pool.clone(),
+
+            future_tx: self.future_tx.clone(),
         }
     }
 
