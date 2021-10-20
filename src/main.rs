@@ -1,6 +1,7 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use crossbeam::atomic::AtomicCell;
+use futures::SinkExt;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::context::{ContextEntry, ContextMenu};
 use gfaestus::quad_tree::QuadTree;
@@ -357,16 +358,14 @@ fn node_color(id) {
 
     let mut modal_handler = ModalHandler::default();
 
-    let mut store = Arc::new(RwLock::new("hello world".to_string()));
+    let store = Arc::new(RwLock::new("hello world".to_string()));
 
     let receiver = modal_handler.set_active(
         |text: &mut String, ui: &mut egui::Ui| {
-            //
-
             let ok_btn = ui.button("OK");
             let cancel_btn = ui.button("cancel");
 
-            let text_box = ui.text_edit_singleline(text);
+            let _text_box = ui.text_edit_singleline(text);
 
             if ok_btn.clicked() {
                 return Ok(ModalSuccess::Success);

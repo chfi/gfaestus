@@ -1,3 +1,4 @@
+use crossbeam::atomic::AtomicCell;
 use futures::{future::RemoteHandle, SinkExt};
 use parking_lot::{
     Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
@@ -28,16 +29,9 @@ pub enum ModalError {
 
 #[derive(Default)]
 pub struct ModalHandler {
-    // active_modal: Option<Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>>,
     active_modal: Option<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
-    // active_modal: Option<
-    //     Box<
-    //         dyn FnMut(&mut egui::Ui) -> Result<ModalSuccess, ModalError>
-    //             + Send
-    //             + Sync
-    //             + 'static,
-    //     >,
-    // >,
+
+    show_modal: Arc<AtomicCell<bool>>,
 }
 
 impl ModalHandler {
@@ -45,15 +39,13 @@ impl ModalHandler {
         &mut self,
         callback: F,
         store: &Arc<RwLock<T>>,
-        // ) -> anyhow::Result<RemoteHandle<T>>
-        // ) -> anyhow::Result<futures::channel::oneshot::Receiver<Option<T>>>
     ) -> anyhow::Result<futures::channel::mpsc::Receiver<Option<T>>>
     where
         F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
             + Send
             + Sync
             + 'static,
-        T: Clone + Send + Sync + 'static,
+        T: std::fmt::Debug + Clone + Send + Sync + 'static,
     {
         // let store = store.to_owned();
 
@@ -67,6 +59,8 @@ impl ModalHandler {
         let (res_tx, res_rx) = futures::channel::mpsc::channel::<Option<T>>(1);
         // futures::channel::oneshot::channel::<Option<T>>();
 
+        let show_modal = self.show_modal.clone();
+
         let wrapped = Box::new(move |ui: &mut egui::Ui| {
             // let value = value;
 
@@ -79,49 +73,58 @@ impl ModalHandler {
 
             match result {
                 Ok(ModalSuccess::Success) => {
+                    log::warn!("ModalSuccess::Success");
                     // replace the stored value
                     let output = {
                         let lock = value.lock();
                         lock.to_owned()
                     };
-                    let _ = res_tx.send(Some(output));
+                    log::warn!("sending value: {:?}", output);
+                    let _ = res_tx.try_send(Some(output));
+
+                    show_modal.store(false);
                 }
                 Ok(ModalSuccess::Cancel) => {
+                    log::warn!("ModalSuccess::Cancel");
                     // don't replace the stored value
                     // so basically don't do anything
                     let output = {
                         let lock = store.read();
                         lock.to_owned()
                     };
-                    let _ = res_tx.send(Some(output));
+                    log::warn!("sending value: {:?}", output);
+                    let _ = res_tx.try_send(Some(output));
+                    show_modal.store(false);
+                }
+                Err(ModalError::Continue) => {
+                    // log::warn!("ModalError::Continue");
+                    // don't do anything in this case
                 }
                 Err(error) => {
+                    log::warn!("ModalError {:?}", error);
                     // update modal UI error/feedback message state
-                    let _ = res_tx.send(None);
+                    let _ = res_tx.try_send(None);
                 }
             };
-            // let mut value = value;
-            // let value =
-
-            // unimplemented!();
         })
             as Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
-        // as Box<dyn FnOnce(&mut egui::Ui) + Send + Sync + 'static>;
-        // as Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>;
-        // as Box<dyn for<'r> FnMut(&'r mut egui::Ui) + Send + Sync + 'static>;
 
         self.active_modal = Some(wrapped);
+
+        self.show_modal.store(true);
 
         Ok(res_rx)
     }
 
-    pub fn show(&self, ctx: &egui::CtxRef) {
+    pub fn show(&mut self, ctx: &egui::CtxRef) {
         if let Some(wrapped) = &self.active_modal {
-            egui::Window::new("Modal")
-                .id(egui::Id::new("modal_window"))
-                .show(ctx, |mut ui| {
-                    wrapped(&mut ui);
-                });
+            if self.show_modal.load() {
+                egui::Window::new("Modal")
+                    .id(egui::Id::new("modal_window"))
+                    .show(ctx, |mut ui| {
+                        wrapped(&mut ui);
+                    });
+            }
         }
     }
 }
