@@ -1,3 +1,4 @@
+use futures::{future::RemoteHandle, SinkExt};
 use parking_lot::{
     Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
@@ -39,7 +40,13 @@ pub struct ModalHandler {
 }
 
 impl ModalHandler {
-    pub fn set_active<F, T>(&mut self, callback: F, store: &Arc<RwLock<T>>)
+    pub fn set_active<F, T>(
+        &mut self,
+        callback: F,
+        store: &Arc<RwLock<T>>,
+        // ) -> anyhow::Result<RemoteHandle<T>>
+        // ) -> anyhow::Result<futures::channel::oneshot::Receiver<Option<T>>>
+    ) -> anyhow::Result<futures::channel::mpsc::Receiver<Option<T>>>
     where
         F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
             + Send
@@ -54,8 +61,15 @@ impl ModalHandler {
             Arc::new(Mutex::new(lock.clone()))
         };
 
+        let store = store.to_owned();
+
+        let (res_tx, res_rx) = futures::channel::mpsc::channel::<Option<T>>(1);
+        // futures::channel::oneshot::channel::<Option<T>>();
+
         let wrapped = Box::new(move |ui: &mut egui::Ui| {
             // let value = value;
+
+            let mut res_tx = res_tx.clone();
             let result = {
                 let mut lock = value.lock();
                 let result = callback(&mut lock, ui);
@@ -63,11 +77,26 @@ impl ModalHandler {
             };
 
             match result {
-                Ok(success) => {
-                    // todo
+                Ok(ModalSuccess::Success) => {
+                    // replace the stored value
+                    let output = {
+                        let lock = value.lock();
+                        lock.to_owned()
+                    };
+                    let _ = res_tx.send(Some(output));
+                }
+                Ok(ModalSuccess::Cancel) => {
+                    // don't replace the stored value
+                    // so basically don't do anything
+                    let output = {
+                        let lock = store.read();
+                        lock.to_owned()
+                    };
+                    let _ = res_tx.send(Some(output));
                 }
                 Err(error) => {
-                    // todo
+                    // update modal UI error/feedback message state
+                    let _ = res_tx.send(None);
                 }
             };
             // let mut value = value;
@@ -75,12 +104,14 @@ impl ModalHandler {
 
             // unimplemented!();
         })
-            as Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>;
+            as Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
         // as Box<dyn FnOnce(&mut egui::Ui) + Send + Sync + 'static>;
         // as Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>;
         // as Box<dyn for<'r> FnMut(&'r mut egui::Ui) + Send + Sync + 'static>;
 
         self.active_modal = Some(wrapped);
+
+        Ok(res_rx)
     }
 }
 
