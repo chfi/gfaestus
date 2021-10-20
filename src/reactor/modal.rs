@@ -22,6 +22,7 @@ pub enum ModalSuccess {
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum ModalError {
+    Continue,
     Error(String),
 }
 
@@ -112,6 +113,16 @@ impl ModalHandler {
         self.active_modal = Some(wrapped);
 
         Ok(res_rx)
+    }
+
+    pub fn show(&self, ctx: &egui::CtxRef) {
+        if let Some(wrapped) = &self.active_modal {
+            egui::Window::new("Modal")
+                .id(egui::Id::new("modal_window"))
+                .show(ctx, |mut ui| {
+                    wrapped(&mut ui);
+                });
+        }
     }
 }
 

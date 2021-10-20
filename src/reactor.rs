@@ -7,9 +7,9 @@ use futures::{future::RemoteHandle, task::SpawnExt, Future};
 mod modal;
 mod paired;
 
+pub use modal::*;
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
-use modal::*;
 use paired::*;
 
 use crate::app::channels::OverlayCreatorMsg;

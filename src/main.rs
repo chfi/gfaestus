@@ -4,11 +4,12 @@ use crossbeam::atomic::AtomicCell;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::context::{ContextEntry, ContextMenu};
 use gfaestus::quad_tree::QuadTree;
-use gfaestus::reactor::Reactor;
+use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use gfaestus::vulkan::texture::{Gradients, Gradients_};
 
+use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
 use std::collections::HashMap;
 
@@ -352,6 +353,41 @@ fn node_color(id) {
 
         let _ = reactor.spawn_forget(fut1);
         let _ = reactor.spawn_forget(fut2);
+    }
+
+    let mut modal_handler = ModalHandler::default();
+
+    let mut store = Arc::new(RwLock::new("hello world".to_string()));
+
+    let receiver = modal_handler.set_active(
+        |text: &mut String, ui: &mut egui::Ui| {
+            //
+
+            let ok_btn = ui.button("OK");
+            let cancel_btn = ui.button("cancel");
+
+            let text_box = ui.text_edit_singleline(text);
+
+            if ok_btn.clicked() {
+                return Ok(ModalSuccess::Success);
+            }
+
+            if cancel_btn.clicked() {
+                return Ok(ModalSuccess::Cancel);
+            }
+
+            Err(ModalError::Continue)
+        },
+        &store,
+    );
+
+    if let Ok(mut recv) = receiver {
+        let _ = reactor.spawn_forget(async move {
+            use futures::stream::StreamExt;
+            log::warn!("awaiting modal result");
+            let val = recv.next().await;
+            log::warn!("result: {:?}", val);
+        });
     }
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
@@ -774,6 +810,7 @@ fn node_color(id) {
                     context_menu.tx(),
                 );
 
+                modal_handler.show(&gui.ctx);
 
                 {
                     let ctx = &gui.ctx;
