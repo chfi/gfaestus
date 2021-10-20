@@ -4,10 +4,12 @@ use std::sync::Arc;
 use crossbeam::channel::{Receiver, Sender};
 use futures::{future::RemoteHandle, task::SpawnExt, Future};
 
+mod modal;
 mod paired;
 
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
+use modal::*;
 use paired::*;
 
 use crate::app::channels::OverlayCreatorMsg;
