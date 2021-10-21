@@ -358,9 +358,13 @@ fn node_color(id) {
 
     let mut modal_handler = ModalHandler::default();
 
+    let receiver = modal_handler.get_string();
+
+    /*
     let store = Arc::new(RwLock::new("hello world".to_string()));
 
     let receiver = modal_handler.set_active(
+        &store,
         |text: &mut String, ui: &mut egui::Ui| {
             let ok_btn = ui.button("OK");
             let cancel_btn = ui.button("cancel");
@@ -377,8 +381,8 @@ fn node_color(id) {
 
             Err(ModalError::Continue)
         },
-        &store,
     );
+    */
 
     if let Ok(mut recv) = receiver {
         let _ = reactor.spawn_forget(async move {

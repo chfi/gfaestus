@@ -35,10 +35,39 @@ pub struct ModalHandler {
 }
 
 impl ModalHandler {
+    pub fn get_string(
+        &mut self,
+    ) -> anyhow::Result<futures::channel::mpsc::Receiver<Option<String>>> {
+        let store = Arc::new(RwLock::new(String::new()));
+
+        self.set_active(&store, |text, ui| {
+            let _text_box = ui.text_edit_singleline(text);
+
+            let resp = ui.horizontal(|ui| {
+                let ok_btn = ui.button("OK");
+                let cancel_btn = ui.button("cancel");
+
+                (ok_btn, cancel_btn)
+            });
+
+            let (ok_btn, cancel_btn) = resp.inner;
+
+            if ok_btn.clicked() {
+                return Ok(ModalSuccess::Success);
+            }
+
+            if cancel_btn.clicked() {
+                return Ok(ModalSuccess::Cancel);
+            }
+
+            Err(ModalError::Continue)
+        })
+    }
+
     pub fn set_active<F, T>(
         &mut self,
-        callback: F,
         store: &Arc<RwLock<T>>,
+        callback: F,
     ) -> anyhow::Result<futures::channel::mpsc::Receiver<Option<T>>>
     where
         F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
@@ -47,6 +76,9 @@ impl ModalHandler {
             + 'static,
         T: std::fmt::Debug + Clone + Send + Sync + 'static,
     {
+        if self.active_modal.is_some() {
+            anyhow::bail!("Tried adding a modal when one was already active")
+        }
         // let store = store.to_owned();
 
         let value: Arc<Mutex<T>> = {
@@ -125,6 +157,12 @@ impl ModalHandler {
                         wrapped(&mut ui);
                     });
             }
+        }
+
+        // kinda hacky but this should make sure there only is an
+        // active modal when it should be rendered
+        if !self.show_modal.load() && self.active_modal.is_some() {
+            self.active_modal.take();
         }
     }
 }
