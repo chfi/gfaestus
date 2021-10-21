@@ -13,6 +13,77 @@ impl<T, U> CallbackTrait<T> for U where
 {
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ModalSuccess {
+    Success,
+    Cancel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ModalError {
+    Error(String),
+}
+
+#[derive(Default)]
+pub struct ModalHandler {
+    // active_modal: Option<Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>>,
+    active_modal: Option<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
+    // active_modal: Option<
+    //     Box<
+    //         dyn FnMut(&mut egui::Ui) -> Result<ModalSuccess, ModalError>
+    //             + Send
+    //             + Sync
+    //             + 'static,
+    //     >,
+    // >,
+}
+
+impl ModalHandler {
+    pub fn set_active<F, T>(&mut self, callback: F, store: &Arc<RwLock<T>>)
+    where
+        F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
+            + Send
+            + Sync
+            + 'static,
+        T: Clone + Send + Sync + 'static,
+    {
+        // let store = store.to_owned();
+
+        let value: Arc<Mutex<T>> = {
+            let lock = store.read();
+            Arc::new(Mutex::new(lock.clone()))
+        };
+
+        let wrapped = Box::new(move |ui: &mut egui::Ui| {
+            // let value = value;
+            let result = {
+                let mut lock = value.lock();
+                let result = callback(&mut lock, ui);
+                result
+            };
+
+            match result {
+                Ok(success) => {
+                    // todo
+                }
+                Err(error) => {
+                    // todo
+                }
+            };
+            // let mut value = value;
+            // let value =
+
+            // unimplemented!();
+        })
+            as Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>;
+        // as Box<dyn FnOnce(&mut egui::Ui) + Send + Sync + 'static>;
+        // as Box<dyn FnMut(&mut egui::Ui) + Send + Sync + 'static>;
+        // as Box<dyn for<'r> FnMut(&'r mut egui::Ui) + Send + Sync + 'static>;
+
+        self.active_modal = Some(wrapped);
+    }
+}
+
 pub type ModalCallback<T> = Box<dyn CallbackTrait<T>>;
 
 pub struct ModalValue<T>
