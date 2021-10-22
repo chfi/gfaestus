@@ -64,6 +64,87 @@ impl ModalHandler {
         })
     }
 
+    pub fn prepare_callback<F, T>(
+        &self,
+        value: T,
+        callback: F,
+        res_tx: futures::channel::mpsc::Sender<Option<T>>,
+    ) -> Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>
+    where
+        F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
+            + Send
+            + Sync
+            + 'static,
+        T: std::fmt::Debug + Clone + Send + Sync + 'static,
+    {
+        let store = Arc::new(Mutex::new(value));
+
+        let show_modal = self.show_modal.clone();
+
+        let wrapped = Box::new(move |ui: &mut egui::Ui| {
+            // let value = value;
+
+            let mut res_tx = res_tx.clone();
+            let result = {
+                let mut lock = store.lock();
+                let result = callback(&mut lock, ui);
+                result
+            };
+
+            match result {
+                Ok(ModalSuccess::Success) => {
+                    log::warn!("ModalSuccess::Success");
+                    // replace the stored value
+                    let output = {
+                        let lock = store.lock();
+                        lock.to_owned()
+                    };
+                    log::warn!("sending value: {:?}", output);
+                    let _ = res_tx.try_send(Some(output));
+
+                    show_modal.store(false);
+                }
+                Ok(ModalSuccess::Cancel) => {
+                    log::warn!("ModalSuccess::Cancel");
+                    // don't replace the stored value
+                    // so basically don't do anything
+                    let output = {
+                        let lock = store.lock();
+                        lock.to_owned()
+                    };
+                    log::warn!("sending value: {:?}", output);
+                    let _ = res_tx.try_send(Some(output));
+                    show_modal.store(false);
+                }
+                Err(ModalError::Continue) => {
+                    // log::warn!("ModalError::Continue");
+                    // don't do anything in this case
+                }
+                Err(error) => {
+                    log::warn!("ModalError {:?}", error);
+                    // update modal UI error/feedback message state
+                    let _ = res_tx.try_send(None);
+                }
+            };
+        })
+            as Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
+
+        wrapped
+    }
+
+    pub fn set_prepared_active(
+        &mut self,
+        callback: Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
+    ) -> anyhow::Result<()> {
+        if self.active_modal.is_some() {
+            anyhow::bail!("Tried adding a modal when one was already active")
+        }
+
+        self.active_modal = Some(callback);
+        self.show_modal.store(true);
+        Ok(())
+    }
+
     pub fn set_active<F, T>(
         &mut self,
         store: &Arc<RwLock<T>>,
