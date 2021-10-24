@@ -356,20 +356,21 @@ fn node_color(id) {
         let _ = reactor.spawn_forget(fut2);
     }
 
+    let (modal_tx, modal_rx) = crossbeam::channel::unbounded::<
+        Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
+    >();
+
     let mut modal_handler = ModalHandler::default();
 
-    let receiver = modal_handler.get_string();
+    let mut receiver = {
+        let (res_tx, res_rx) =
+            futures::channel::mpsc::channel::<Option<String>>(2);
 
-    /*
-    let store = Arc::new(RwLock::new("hello world".to_string()));
+        let callback = move |text: &mut String, ui: &mut egui::Ui| {
+            let _text_box = ui.text_edit_singleline(text);
 
-    let receiver = modal_handler.set_active(
-        &store,
-        |text: &mut String, ui: &mut egui::Ui| {
             let ok_btn = ui.button("OK");
             let cancel_btn = ui.button("cancel");
-
-            let _text_box = ui.text_edit_singleline(text);
 
             if ok_btn.clicked() {
                 return Ok(ModalSuccess::Success);
@@ -380,15 +381,21 @@ fn node_color(id) {
             }
 
             Err(ModalError::Continue)
-        },
-    );
-    */
+        };
 
-    if let Ok(mut recv) = receiver {
+        let prepared =
+            modal_handler.prepare_callback(String::new(), callback, res_tx);
+
+        modal_tx.send(prepared).unwrap();
+
+        res_rx
+    };
+
+    {
         let _ = reactor.spawn_forget(async move {
             use futures::stream::StreamExt;
             log::warn!("awaiting modal result");
-            let val = recv.next().await;
+            let val = receiver.next().await;
             log::warn!("result: {:?}", val);
         });
     }
@@ -537,13 +544,15 @@ fn node_color(id) {
                             main_view.send_context(context_menu.tx());
                         }
 
-
-
                         open_context.store(true);
                         // context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
                 }
             }
+        }
+
+        while let Ok(callback) = modal_rx.try_recv() {
+            let _ = modal_handler.set_prepared_active(callback);
         }
 
         if let Event::WindowEvent { event, .. } = &event {
