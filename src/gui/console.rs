@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
 
-use futures::{future::RemoteHandle, Future};
+use futures::{future::RemoteHandle, Future, StreamExt};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -27,6 +27,7 @@ use crate::{
         BedRecord, BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
     },
     overlays::OverlayKind,
+    reactor::{ModalError, ModalHandler, ModalSuccess},
 };
 use crate::{
     app::{
@@ -1278,6 +1279,53 @@ impl ConsoleShared {
         self.add_view_fns(&mut engine);
 
         self.add_overlay_fns(&mut engine);
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+        engine.register_fn("get_string_modal", move || {
+            let (result_tx, mut result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
+
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                let _text_box = ui.text_edit_singleline(text);
+
+                let ok_btn = ui.button("OK");
+                let cancel_btn = ui.button("cancel");
+
+                if ok_btn.clicked() {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                if cancel_btn.clicked() {
+                    return Ok(ModalSuccess::Cancel);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = std::thread::spawn(move || {
+                let val = futures::executor::block_on(async move {
+                    result_rx.next().await
+                })
+                .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(Some(text)) => text,
+                _ => String::new(),
+            }
+        });
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {

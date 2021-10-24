@@ -31,10 +31,17 @@ pub enum ModalError {
 pub struct ModalHandler {
     active_modal: Option<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
 
-    show_modal: Arc<AtomicCell<bool>>,
+    pub show_modal: Arc<AtomicCell<bool>>,
 }
 
 impl ModalHandler {
+    pub fn new(show_modal: Arc<AtomicCell<bool>>) -> Self {
+        Self {
+            show_modal,
+            ..Self::default()
+        }
+    }
+
     pub fn get_string(
         &mut self,
     ) -> anyhow::Result<futures::channel::mpsc::Receiver<Option<String>>> {
@@ -65,7 +72,8 @@ impl ModalHandler {
     }
 
     pub fn prepare_callback<F, T>(
-        &self,
+        // &self,
+        show_modal: &Arc<AtomicCell<bool>>,
         value: T,
         callback: F,
         res_tx: futures::channel::mpsc::Sender<Option<T>>,
@@ -79,7 +87,7 @@ impl ModalHandler {
     {
         let store = Arc::new(Mutex::new(value));
 
-        let show_modal = self.show_modal.clone();
+        let show_modal = show_modal.clone();
 
         let wrapped = Box::new(move |ui: &mut egui::Ui| {
             // let value = value;

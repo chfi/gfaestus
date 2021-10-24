@@ -31,6 +31,9 @@ pub struct AppChannels {
 
     pub new_overlay_tx: Sender<OverlayCreatorMsg>,
     pub new_overlay_rx: Receiver<OverlayCreatorMsg>,
+
+    pub modal_tx: Sender<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
+    pub modal_rx: Receiver<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
 }
 
 impl AppChannels {
@@ -41,6 +44,8 @@ impl AppChannels {
         let (binds_tx, binds_rx) = channel::unbounded::<BindMsg>();
         let (new_overlay_tx, new_overlay_rx) =
             channel::unbounded::<OverlayCreatorMsg>();
+
+        let (modal_tx, modal_rx) = channel::unbounded();
 
         Self {
             app_tx,
@@ -57,6 +62,9 @@ impl AppChannels {
 
             new_overlay_tx,
             new_overlay_rx,
+
+            modal_tx,
+            modal_rx,
         }
     }
 }

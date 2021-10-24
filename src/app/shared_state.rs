@@ -24,6 +24,8 @@ pub struct SharedState {
     pub edges_enabled: Arc<AtomicCell<bool>>,
 
     pub dark_mode: Arc<AtomicCell<bool>>,
+
+    pub show_modal: Arc<AtomicCell<bool>>,
 }
 
 impl SharedState {
@@ -44,6 +46,7 @@ impl SharedState {
 
             edges_enabled: Arc::new(true.into()),
             dark_mode: Arc::new(false.into()),
+            show_modal: Arc::new(false.into()),
         }
     }
 

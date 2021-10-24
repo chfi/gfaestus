@@ -356,11 +356,12 @@ fn node_color(id) {
         let _ = reactor.spawn_forget(fut2);
     }
 
-    let (modal_tx, modal_rx) = crossbeam::channel::unbounded::<
-        Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
-    >();
+    // let (modal_tx, modal_rx) = crossbeam::channel::unbounded::<
+    //     Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
+    // >();
 
-    let mut modal_handler = ModalHandler::default();
+    let mut modal_handler =
+        ModalHandler::new(app.shared_state().show_modal.to_owned());
 
     let mut receiver = {
         let (res_tx, res_rx) =
@@ -383,10 +384,14 @@ fn node_color(id) {
             Err(ModalError::Continue)
         };
 
-        let prepared =
-            modal_handler.prepare_callback(String::new(), callback, res_tx);
+        let prepared = ModalHandler::prepare_callback(
+            &app.shared_state().show_modal,
+            String::new(),
+            callback,
+            res_tx,
+        );
 
-        modal_tx.send(prepared).unwrap();
+        app.channels().modal_tx.send(prepared).unwrap();
 
         res_rx
     };
@@ -551,7 +556,7 @@ fn node_color(id) {
             }
         }
 
-        while let Ok(callback) = modal_rx.try_recv() {
+        while let Ok(callback) = app.channels().modal_rx.try_recv() {
             let _ = modal_handler.set_prepared_active(callback);
         }
 
