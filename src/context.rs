@@ -228,21 +228,20 @@ impl ContextMenu {
                 let graph = reactor.graph_query.graph.clone();
                 let app_tx = self.channels.app_tx.clone();
 
-                std::thread::spawn(move || {
-                    let value = futures::executor::block_on(async move {
-                        result_rx.next().await
-                    })
-                    .flatten();
+                reactor
+                    .spawn_forget(async move {
+                        let value = result_rx.next().await.flatten();
 
-                    if let Some(parsed) =
-                        value.and_then(|v| v.parse::<u64>().ok())
-                    {
-                        let node_id = NodeId::from(parsed);
-                        if graph.has_node(node_id) {
-                            app_tx.send(AppMsg::GotoNode(node_id)).unwrap();
+                        if let Some(parsed) =
+                            value.and_then(|v| v.parse::<u64>().ok())
+                        {
+                            let node_id = NodeId::from(parsed);
+                            if graph.has_node(node_id) {
+                                app_tx.send(AppMsg::GotoNode(node_id)).unwrap();
+                            }
                         }
-                    }
-                });
+                    })
+                    .unwrap();
             }
         }
     }
@@ -250,56 +249,42 @@ impl ContextMenu {
     pub fn show(
         &self,
         egui_ctx: &egui::CtxRef,
-        app_msg_tx: &channel::Sender<AppMsg>,
         reactor: &Reactor,
         clipboard: &mut ClipboardContext,
     ) {
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();
 
-            let mut should_close = false;
+            let should_close = AtomicCell::new(false);
+
+            let mut process = |action: ContextAction| {
+                self.process(reactor, clipboard, action, &self.contexts);
+                should_close.store(true);
+            };
 
             let popup_response = egui::Area::new(Self::ID)
                 .order(egui::Order::Foreground)
                 .fixed_pos(screen_pos)
                 .show(egui_ctx, |ui| {
                     let frame = egui::Frame::popup(ui.style());
-                    let frame_margin = frame.margin;
+                    // let frame_margin = frame.margin;
                     frame.show(ui, |ui| {
                         ui.with_layout(
                             egui::Layout::top_down_justified(egui::Align::LEFT),
                             |ui| {
                                 if let Some(_node) = self.contexts.node {
                                     if ui.button("Copy node ID").clicked() {
-                                        self.process(
-                                            reactor,
-                                            clipboard,
-                                            ContextAction::CopyNodeId,
-                                            &self.contexts,
-                                        );
-                                        should_close = true;
+                                        process(ContextAction::CopyNodeId);
                                     }
                                     if ui.button("Copy node sequence").clicked()
                                     {
-                                        self.process(
-                                            reactor,
-                                            clipboard,
-                                            ContextAction::CopyNodeSeq,
-                                            &self.contexts,
-                                        );
-                                        should_close = true;
+                                        process(ContextAction::CopyNodeSeq);
                                     }
                                 }
 
                                 if let Some(_path) = self.contexts.path {
                                     if ui.button("Copy path name").clicked() {
-                                        self.process(
-                                            reactor,
-                                            clipboard,
-                                            ContextAction::CopyPathName,
-                                            &self.contexts,
-                                        );
-                                        should_close = true;
+                                        process(ContextAction::CopyPathName);
                                     }
                                 }
 
@@ -308,24 +293,12 @@ impl ContextMenu {
                                         .button("Copy subgraph as GFA")
                                         .clicked()
                                     {
-                                        self.process(
-                                            reactor,
-                                            clipboard,
-                                            ContextAction::CopySubgraphGfa,
-                                            &self.contexts,
-                                        );
-                                        should_close = true;
+                                        process(ContextAction::CopySubgraphGfa);
                                     }
                                 }
 
                                 if ui.button("Pan to node").clicked() {
-                                    self.process(
-                                        reactor,
-                                        clipboard,
-                                        ContextAction::PanToNode,
-                                        &self.contexts,
-                                    );
-                                    should_close = true;
+                                    process(ContextAction::PanToNode);
                                 }
                             },
                         );
@@ -337,7 +310,7 @@ impl ContextMenu {
             if egui_ctx.input().key_pressed(egui::Key::Escape)
                 || popup_response.clicked()
                 || popup_response.clicked_elsewhere()
-                || should_close
+                || should_close.load()
             {
                 egui_ctx.memory().close_popup();
             }

@@ -809,7 +809,7 @@ fn node_color(id) {
                         open_context.store(false);
                     }
 
-                    context_menu.show(ctx, &app.channels().app_tx, &reactor, clipboard);
+                    context_menu.show(ctx, &reactor, clipboard);
                 }
 
 

@@ -130,35 +130,29 @@ impl ModalHandler {
 
             match result {
                 Ok(ModalSuccess::Success) => {
-                    log::warn!("ModalSuccess::Success");
                     // replace the stored value
                     let output = {
                         let lock = store.lock();
                         lock.to_owned()
                     };
-                    log::warn!("sending value: {:?}", output);
                     let _ = res_tx.try_send(Some(output));
 
                     show_modal.store(false);
                 }
                 Ok(ModalSuccess::Cancel) => {
-                    log::warn!("ModalSuccess::Cancel");
                     // don't replace the stored value
                     // so basically don't do anything
                     let output = {
                         let lock = store.lock();
                         lock.to_owned()
                     };
-                    log::warn!("sending value: {:?}", output);
                     let _ = res_tx.try_send(Some(output));
                     show_modal.store(false);
                 }
                 Err(ModalError::Continue) => {
-                    // log::warn!("ModalError::Continue");
                     // don't do anything in this case
                 }
                 Err(error) => {
-                    log::warn!("ModalError {:?}", error);
                     // update modal UI error/feedback message state
                     let _ = res_tx.try_send(None);
                 }
@@ -223,35 +217,29 @@ impl ModalHandler {
 
             match result {
                 Ok(ModalSuccess::Success) => {
-                    log::warn!("ModalSuccess::Success");
                     // replace the stored value
                     let output = {
                         let lock = value.lock();
                         lock.to_owned()
                     };
-                    log::warn!("sending value: {:?}", output);
                     let _ = res_tx.try_send(Some(output));
 
                     show_modal.store(false);
                 }
                 Ok(ModalSuccess::Cancel) => {
-                    log::warn!("ModalSuccess::Cancel");
                     // don't replace the stored value
                     // so basically don't do anything
                     let output = {
                         let lock = store.read();
                         lock.to_owned()
                     };
-                    log::warn!("sending value: {:?}", output);
                     let _ = res_tx.try_send(Some(output));
                     show_modal.store(false);
                 }
                 Err(ModalError::Continue) => {
-                    // log::warn!("ModalError::Continue");
                     // don't do anything in this case
                 }
                 Err(error) => {
-                    log::warn!("ModalError {:?}", error);
                     // update modal UI error/feedback message state
                     let _ = res_tx.try_send(None);
                 }
