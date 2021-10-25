@@ -5,6 +5,8 @@ use parking_lot::{
 };
 use std::sync::Arc;
 
+use crate::geometry::Point;
+
 pub trait CallbackTrait<T>:
     Fn(&mut T, &mut egui::Ui) -> anyhow::Result<()> + Send + Sync + 'static
 {
@@ -269,6 +271,10 @@ impl ModalHandler {
             if self.show_modal.load() {
                 egui::Window::new("Modal")
                     .id(egui::Id::new("modal_window"))
+                    .anchor(egui::Align2::CENTER_CENTER, Point::ZERO)
+                    // .anchor(egui::Align2::CENTER_TOP, Point::new(0.0, 50.0))
+                    .title_bar(false)
+                    .collapsible(false)
                     .show(ctx, |mut ui| {
                         wrapped(&mut ui);
                     });

@@ -1292,6 +1292,7 @@ impl ConsoleShared {
             let first_run = AtomicCell::new(true);
 
             let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter string");
                 let text_box = ui.text_edit_singleline(text);
 
                 if first_run.fetch_and(false) {
