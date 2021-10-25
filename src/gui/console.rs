@@ -1288,18 +1288,6 @@ impl ConsoleShared {
 
             let callback = move |text: &mut String, ui: &mut egui::Ui| {
                 let _text_box = ui.text_edit_singleline(text);
-
-                let ok_btn = ui.button("OK");
-                let cancel_btn = ui.button("cancel");
-
-                if ok_btn.clicked() {
-                    return Ok(ModalSuccess::Success);
-                }
-
-                if cancel_btn.clicked() {
-                    return Ok(ModalSuccess::Cancel);
-                }
-
                 Err(ModalError::Continue)
             };
 

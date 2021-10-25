@@ -89,6 +89,23 @@ impl ModalHandler {
 
         let show_modal = show_modal.clone();
 
+        let callback = move |val: &mut T, ui: &mut egui::Ui| {
+            let _ = callback(val, ui);
+
+            let ok_btn = ui.button("OK");
+            let cancel_btn = ui.button("cancel");
+
+            if ok_btn.clicked() {
+                return Ok(ModalSuccess::Success);
+            }
+
+            if cancel_btn.clicked() {
+                return Ok(ModalSuccess::Cancel);
+            }
+
+            Err(ModalError::Continue)
+        };
+
         let wrapped = Box::new(move |ui: &mut egui::Ui| {
             // let value = value;
 
