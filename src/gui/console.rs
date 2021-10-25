@@ -1286,8 +1286,24 @@ impl ConsoleShared {
             let (result_tx, mut result_rx) =
                 futures::channel::mpsc::channel::<Option<String>>(1);
 
+            // using an atomic bool we can easily check if it's the
+            // first time this specific modal is opened, and give
+            // focus to the text box
+            let first_run = AtomicCell::new(true);
+
             let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                let _text_box = ui.text_edit_singleline(text);
+                let text_box = ui.text_edit_singleline(text);
+
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
+                }
+
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
                 Err(ModalError::Continue)
             };
 
