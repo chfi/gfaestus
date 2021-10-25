@@ -1280,57 +1280,7 @@ impl ConsoleShared {
 
         self.add_overlay_fns(&mut engine);
 
-        let modal_tx = self.channels.modal_tx.clone();
-        let show_modal = self.shared_state.show_modal.clone();
-        engine.register_fn("get_string_modal", move || {
-            let (result_tx, mut result_rx) =
-                futures::channel::mpsc::channel::<Option<String>>(1);
-
-            // using an atomic bool we can easily check if it's the
-            // first time this specific modal is opened, and give
-            // focus to the text box
-            let first_run = AtomicCell::new(true);
-
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter string");
-                let text_box = ui.text_edit_singleline(text);
-
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
-
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
-
-                Err(ModalError::Continue)
-            };
-
-            let prepared = ModalHandler::prepare_callback(
-                &show_modal,
-                String::new(),
-                callback,
-                result_tx,
-            );
-
-            modal_tx.send(prepared).unwrap();
-
-            let result = std::thread::spawn(move || {
-                let val = futures::executor::block_on(async move {
-                    result_rx.next().await
-                })
-                .flatten();
-                val
-            })
-            .join();
-
-            match result {
-                Ok(Some(text)) => text,
-                _ => String::new(),
-            }
-        });
+        self.add_modal_fns(&mut engine);
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {
@@ -1479,6 +1429,116 @@ impl ConsoleShared {
         engine.register_global_module(handle.into());
 
         engine
+    }
+
+    pub fn add_modal_fns(&self, engine: &mut rhai::Engine) {
+        fn futures_helper<T: Send + Sync + 'static>(
+            mut rx: futures::channel::mpsc::Receiver<Option<T>>,
+        ) -> Option<T> {
+            let result = std::thread::spawn(move || {
+                let val =
+                    futures::executor::block_on(async move { rx.next().await })
+                        .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(v) => v,
+                _ => None,
+            }
+        }
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+        engine.register_fn("get_string_modal", move || {
+            let (result_tx, result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
+
+            // using an atomic bool we can easily check if it's the
+            // first time this specific modal is opened, and give
+            // focus to the text box
+            let first_run = AtomicCell::new(true);
+
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter string");
+                let text_box = ui.text_edit_singleline(text);
+
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
+                }
+
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = futures_helper(result_rx);
+            result.unwrap_or_default()
+        });
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+        let graph = self.graph.clone();
+        engine.register_result_fn("get_node_modal", move || {
+            let (result_tx, result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
+
+            let first_run = AtomicCell::new(true);
+
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter node ID");
+                let text_box = ui.text_edit_singleline(text);
+
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
+                }
+
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result_str = futures_helper(result_rx).unwrap_or_default();
+
+            match result_str.parse::<u64>() {
+                Ok(raw) => {
+                    let node_id = NodeId::from(raw);
+                    if graph.graph.has_node(node_id) {
+                        Ok(node_id)
+                    } else {
+                        Err("Node not found".into())
+                    }
+                }
+                _ => Err("Could not parse node ID".into()),
+            }
+        });
     }
 
     fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
