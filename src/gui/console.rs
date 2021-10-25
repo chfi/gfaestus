@@ -1059,7 +1059,7 @@ impl Console<'static> {
                 };
 
                 // hack to keep input
-                if self.request_focus {
+                if self.request_focus && !scope_locked {
                     if input.has_focus() {
                         self.request_focus = false;
                     }
