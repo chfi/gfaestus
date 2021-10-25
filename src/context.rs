@@ -8,6 +8,7 @@ use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
+use futures::StreamExt;
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
     handlegraph::*,
@@ -20,9 +21,9 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    app::{selection::NodeSelection, AppMsg},
+    app::{selection::NodeSelection, App, AppChannels, AppMsg, SharedState},
     geometry::{Point, Rect},
-    reactor::Reactor,
+    reactor::{ModalError, ModalHandler, ModalSuccess, Reactor},
 };
 
 #[derive(Debug, Clone)]
@@ -33,8 +34,6 @@ pub enum ContextEntry {
         // rect: Rect,
         nodes: FxHashSet<NodeId>,
     },
-    // HasSelection,
-    // HasSelection(bool),
 }
 
 // TODO this should be handled dynamically
@@ -46,6 +45,7 @@ pub enum ContextAction {
     CopySubgraphGfa,
     // CopySelection,
     // CopyPathNames,
+    PanToNode,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -55,7 +55,6 @@ struct Contexts {
 
     has_selection: bool,
 
-    // selection_rect: Option<Rect>,
     selection_nodes: Option<FxHashSet<NodeId>>,
 }
 
@@ -65,33 +64,38 @@ impl Contexts {
     }
 }
 
-#[derive(Debug)]
 pub struct ContextMenu {
     rx: channel::Receiver<ContextEntry>,
     tx: channel::Sender<ContextEntry>,
 
+    channels: AppChannels,
+    shared_state: SharedState,
     position: Arc<AtomicCell<Point>>,
 
     contexts: Contexts,
-    // contexts: Vec<ContextEntry>,
-}
-
-impl std::default::Default for ContextMenu {
-    fn default() -> Self {
-        let (tx, rx) = channel::unbounded();
-        Self {
-            tx,
-            rx,
-            position: Arc::new(Point::ZERO.into()),
-            contexts: Default::default(),
-        }
-    }
 }
 
 impl ContextMenu {
     const ID: &'static str = "context_menu";
 
     const POPUP_ID: &'static str = "context_menu_popup_id";
+
+    pub fn new(app: &App) -> Self {
+        let (tx, rx) = channel::unbounded();
+
+        // let modal_tx = channels.modal_tx.clone();
+        let channels = app.channels().clone();
+        let shared_state = app.shared_state().clone();
+
+        Self {
+            tx,
+            rx,
+            channels,
+            shared_state,
+            position: Arc::new(Point::ZERO.into()),
+            contexts: Default::default(),
+        }
+    }
 
     fn popup_id() -> egui::Id {
         egui::Id::new(Self::POPUP_ID)
@@ -119,7 +123,6 @@ impl ContextMenu {
 
     fn process(
         &self,
-        app_msg_tx: &channel::Sender<AppMsg>,
         reactor: &Reactor,
         clipboard: &mut ClipboardContext,
         action: ContextAction,
@@ -190,6 +193,57 @@ impl ContextMenu {
                     log::warn!("selection has {} nodes", nodes.len());
                 }
             }
+            ContextAction::PanToNode => {
+                let (result_tx, mut result_rx) =
+                    futures::channel::mpsc::channel::<Option<String>>(1);
+
+                let first_run = AtomicCell::new(true);
+
+                let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
+
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
+
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
+
+                    Err(ModalError::Continue)
+                };
+
+                let prepared = ModalHandler::prepare_callback(
+                    &self.shared_state.show_modal,
+                    String::new(),
+                    callback,
+                    result_tx,
+                );
+
+                self.channels.modal_tx.send(prepared).unwrap();
+
+                let graph = reactor.graph_query.graph.clone();
+                let app_tx = self.channels.app_tx.clone();
+
+                std::thread::spawn(move || {
+                    let value = futures::executor::block_on(async move {
+                        result_rx.next().await
+                    })
+                    .flatten();
+
+                    if let Some(parsed) =
+                        value.and_then(|v| v.parse::<u64>().ok())
+                    {
+                        let node_id = NodeId::from(parsed);
+                        if graph.has_node(node_id) {
+                            app_tx.send(AppMsg::GotoNode(node_id)).unwrap();
+                        }
+                    }
+                });
+            }
         }
     }
 
@@ -218,7 +272,6 @@ impl ContextMenu {
                                 if let Some(_node) = self.contexts.node {
                                     if ui.button("Copy node ID").clicked() {
                                         self.process(
-                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyNodeId,
@@ -229,7 +282,6 @@ impl ContextMenu {
                                     if ui.button("Copy node sequence").clicked()
                                     {
                                         self.process(
-                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyNodeSeq,
@@ -242,7 +294,6 @@ impl ContextMenu {
                                 if let Some(_path) = self.contexts.path {
                                     if ui.button("Copy path name").clicked() {
                                         self.process(
-                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopyPathName,
@@ -258,7 +309,6 @@ impl ContextMenu {
                                         .clicked()
                                     {
                                         self.process(
-                                            app_msg_tx,
                                             reactor,
                                             clipboard,
                                             ContextAction::CopySubgraphGfa,
@@ -266,6 +316,16 @@ impl ContextMenu {
                                         );
                                         should_close = true;
                                     }
+                                }
+
+                                if ui.button("Pan to node").clicked() {
+                                    self.process(
+                                        reactor,
+                                        clipboard,
+                                        ContextAction::PanToNode,
+                                        &self.contexts,
+                                    );
+                                    should_close = true;
                                 }
                             },
                         );
@@ -285,12 +345,7 @@ impl ContextMenu {
     }
 
     pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
-        if self.contexts.is_not_empty() {
-            ctx.memory().open_popup(Self::popup_id());
-        } else {
-            // NB this might prove to be a problem later
-            ctx.memory().close_popup()
-        }
+        ctx.memory().open_popup(Self::popup_id());
     }
 
     pub fn set_position(&self, pos: Point) {

@@ -452,7 +452,7 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let mut context_menu = ContextMenu::default();
+    let mut context_menu = ContextMenu::new(&app);
     let open_context = AtomicCell::new(false);
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
