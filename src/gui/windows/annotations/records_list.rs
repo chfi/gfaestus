@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bstr::ByteSlice;
-use crossbeam::channel::Sender;
 use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::FxHashSet;
 
@@ -14,10 +13,7 @@ use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
     app::AppMsg,
     graph_query::{GraphQuery, GraphQueryWorker},
-    gui::{
-        util::grid_row_label,
-        windows::{graph_picker::PathPicker, overlays::OverlayCreatorMsg},
-    },
+    gui::{util::grid_row_label, windows::graph_picker::PathPicker},
 };
 
 use super::{filter::RecordFilter, ColumnPickerMany, OverlayLabelSetCreator};

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 
-use crate::{app::AppMsg, geometry::*};
+use crate::{app::AppMsg, context::ContextEntry, geometry::*};
 use crate::{graph_query::GraphQuery, gui::util::grid_row_label};
 
 #[derive(Debug, Clone)]
@@ -122,6 +122,7 @@ impl NodeDetails {
         ctx: &egui::CtxRef,
         path_details_id_cell: &AtomicCell<Option<PathId>>,
         open_path_details: &mut bool,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         if self.need_fetch() {
             self.fetch(graph_query);
@@ -136,7 +137,15 @@ impl NodeDetails {
                     ui.set_min_height(200.0);
                     ui.set_max_width(200.0);
 
-                    ui.label(format!("Node {}", node_id));
+                    let node_label = ui.add(
+                        egui::Label::new(format!("Node {}", node_id))
+                            .sense(egui::Sense::click()),
+                    );
+
+                    if node_label.clicked_by(egui::PointerButton::Secondary) {
+                        ctx_tx.send(ContextEntry::Node(node_id)).unwrap();
+                    }
+                    // let node_label = ui.label(format!("Node {}", node_id));
 
                     ui.separator();
 
@@ -207,6 +216,14 @@ impl NodeDetails {
                                         path_details_id_cell
                                             .store(Some(*path_id));
                                         *open_path_details = true;
+                                    }
+
+                                    if row.clicked_by(
+                                        egui::PointerButton::Secondary,
+                                    ) {
+                                        ctx_tx
+                                            .send(ContextEntry::Path(*path_id))
+                                            .unwrap();
                                     }
                                 }
                             });
@@ -410,6 +427,7 @@ impl NodeList {
         app_msg_tx: &Sender<AppMsg>,
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let filter = self.apply_filter.load();
 
@@ -586,6 +604,16 @@ impl NodeList {
                                         node_id_cell.store(Some(slot.node_id));
 
                                         *open_node_details = true;
+                                    }
+
+                                    if row.clicked_by(
+                                        egui::PointerButton::Secondary,
+                                    ) {
+                                        ctx_tx
+                                            .send(ContextEntry::Node(
+                                                slot.node_id,
+                                            ))
+                                            .unwrap();
                                     }
                                 }
                             }

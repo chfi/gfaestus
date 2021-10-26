@@ -11,11 +11,13 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::view::{ScreenDims, View};
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
-    overlays::OverlayKind,
     vulkan::texture::GradientTexture,
+};
+use crate::{
+    context::ContextEntry,
+    view::{ScreenDims, View},
 };
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
@@ -66,23 +68,16 @@ impl MainView {
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
-        // node_width: Arc<NodeWidth>,
         node_count: usize,
     ) -> Result<Self> {
         let selection_buffer = SelectionBuffer::new(app, node_count)?;
 
         let swapchain_props = app.swapchain_props;
-        let msaa_samples = app.msaa_samples;
-        let render_pass = app.render_passes.nodes;
 
         let node_width = settings.node_width().clone();
 
-        let node_draw_system = NodePipelines::new(
-            app,
-            msaa_samples,
-            render_pass,
-            selection_buffer.buffer,
-        )?;
+        let node_draw_system =
+            NodePipelines::new(app, selection_buffer.buffer)?;
 
         let screen_dims = {
             let extent = swapchain_props.extent;
@@ -215,9 +210,8 @@ impl MainView {
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
         offset: Point,
-        overlay: Option<(usize, OverlayKind)>,
+        overlay_id: Option<usize>,
         color_scheme: &GradientTexture,
-        use_overlay: bool,
     ) -> Result<()> {
         let view = self.shared_state.view();
 
@@ -250,34 +244,27 @@ impl MainView {
             self.settings.background_color_light().load()
         };
 
-        if use_overlay {
-            if let Some(overlay) = overlay {
-                self.node_draw_system.draw_overlay_new(
-                    cmd_buf,
-                    render_pass,
-                    framebuffers,
-                    screen_dims,
-                    node_width,
-                    view,
-                    offset,
-                    background_color,
-                    overlay,
-                    color_scheme,
-                )?;
+        if let Some(overlay_id) = overlay_id {
+            self.node_draw_system.draw(
+                cmd_buf,
+                render_pass,
+                framebuffers,
+                screen_dims,
+                node_width,
+                view,
+                offset,
+                background_color,
+                overlay_id,
+                color_scheme,
+            )?;
 
-                return Ok(());
-            }
+            Ok(())
+        } else {
+            log::error!("No overlay found");
+
+            // should be an error but the output of this function is just unwrapped at this point
+            Ok(())
         }
-        self.node_draw_system.draw_themed(
-            cmd_buf,
-            render_pass,
-            framebuffers,
-            screen_dims,
-            node_width,
-            view,
-            offset,
-            background_color,
-        )
     }
 
     pub fn update_node_selection(
@@ -328,6 +315,24 @@ impl MainView {
             mouse_world,
         ) {
             self.anim_handler.send_anim_def(anim_def);
+        }
+    }
+
+    pub fn send_context(&self, tx: &Sender<ContextEntry>) {
+        let mouse_pos = self.shared_state.mouse_pos();
+
+        let hover_node = self
+            .read_node_id_at(mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
+
+        if let Some(node) = hover_node {
+            tx.send(ContextEntry::Node(node)).unwrap();
+        }
+
+        let nodes = self.selection_buffer.selection_set().to_owned();
+
+        if !nodes.is_empty() {
+            tx.send(ContextEntry::Selection { nodes }).unwrap();
         }
     }
 

@@ -6,11 +6,10 @@ use ash::{vk, Device};
 use anyhow::Result;
 use handlegraph::handle::Handle;
 
-// use nalgebra_glm as glm;
-
-use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
-
-use crate::vulkan::draw_system::edges::PreprocessPushConstants;
+use crate::vulkan::{
+    draw_system::{edges::PreprocessPushConstants, nodes::NodeVertices},
+    GfaestusVk,
+};
 
 use super::ComputePipeline;
 
@@ -104,7 +103,7 @@ impl EdgePreprocess {
     pub fn preprocess_cmd(
         &self,
         cmd_buf: vk::CommandBuffer,
-        edges: &EdgeIndices,
+        _edges: &EdgeIndices,
         view: View,
         viewport_dims: [f32; 2],
     ) -> Result<()> {
@@ -392,12 +391,13 @@ impl EdgeBuffers {
         let edge_count_mem_usage = vk_mem::MemoryUsage::CpuOnly;
 
         let (edge_count_buf, edge_count_alloc, edge_count_alloc_info) = app
-            .create_buffer_with_data::<u32, _>(
-            edge_count_usage,
-            edge_count_mem_usage,
-            false,
-            &edge_count_data,
-        )?;
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(
+                edge_count_usage,
+                edge_count_mem_usage,
+                false,
+                &edge_count_data,
+            )?;
 
         Ok(Self {
             edges_by_id_buf,
@@ -438,7 +438,8 @@ impl EdgeBuffers2 {
         let memory_usage = vk_mem::MemoryUsage::GpuOnly;
 
         let (edges_output_buf, edges_output_alloc, edges_output_alloc_info) =
-            app.create_buffer_with_data::<u32, _>(
+            // app.create_buffer_with_data::<u32, _>(
+            app.create_buffer_with_data(
                 usage,
                 memory_usage,
                 false,
@@ -452,12 +453,13 @@ impl EdgeBuffers2 {
         let edge_count_data = [0];
 
         let (edge_count_buf, edge_count_alloc, edge_count_alloc_info) = app
-            .create_buffer_with_data::<u32, _>(
-            usage,
-            memory_usage,
-            true,
-            &edge_count_data,
-        )?;
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(
+                usage,
+                memory_usage,
+                true,
+                &edge_count_data,
+            )?;
 
         Ok(Self {
             edges_output_buf,

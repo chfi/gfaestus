@@ -2,16 +2,21 @@ use ash::version::DeviceV1_0;
 use ash::{vk, Device};
 use rustc_hash::FxHashMap;
 
-use anyhow::Result;
+use anyhow::*;
 
+use crate::vulkan::context::NodeRendererType;
 use crate::vulkan::texture::GradientTexture;
 use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
+
+use super::NodePipelineConfig;
 
 pub struct OverlayPipelines {
     pipeline_rgb: OverlayPipelineRGB,
     pipeline_value: OverlayPipelineValue,
 
-    pub(super) overlay_set_id: Option<(usize, OverlayKind)>,
+    pub(super) overlay_set_id: Option<usize>,
+
+    pub(super) overlays: FxHashMap<usize, Overlay>,
 
     next_overlay_id: usize,
 
@@ -22,23 +27,14 @@ pub struct OverlayPipelines {
 impl OverlayPipelines {
     pub(super) fn new(
         app: &GfaestusVk,
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
-        let pipeline_rgb = OverlayPipelineRGB::new(
-            app,
-            device,
-            msaa_samples,
-            render_pass,
-            selection_set_layout,
-        )?;
+        let pipeline_rgb =
+            OverlayPipelineRGB::new(app, renderer_type, selection_set_layout)?;
         let pipeline_value = OverlayPipelineValue::new(
             app,
-            device,
-            msaa_samples,
-            render_pass,
+            renderer_type,
             selection_set_layout,
         )?;
 
@@ -47,11 +43,21 @@ impl OverlayPipelines {
             pipeline_value,
 
             overlay_set_id: None,
+            overlays: Default::default(),
 
             next_overlay_id: 0,
 
-            device: device.clone(),
+            device: app.vk_context().device().clone(),
         })
+    }
+
+    pub fn destroy(&self, allocator: &vk_mem::Allocator) -> Result<()> {
+        self.pipeline_rgb.destroy();
+        self.pipeline_value.destroy();
+        for overlay in self.overlays.values() {
+            allocator.destroy_buffer(overlay.buffer, &overlay.alloc)?;
+        }
+        Ok(())
     }
 
     pub(super) fn bind_pipeline(
@@ -88,21 +94,25 @@ impl OverlayPipelines {
 
     pub(super) fn write_overlay(
         &mut self,
-        overlay: (usize, OverlayKind),
+        overlay_id: usize,
         color_scheme: &GradientTexture,
     ) -> Result<()> {
-        // if self.overlay_set_id != Some(overlay) {
-        match overlay.1 {
+        let overlay = self.overlays.get(&overlay_id).ok_or(anyhow!(
+            "Tried to write nonexistent overlay ID {}",
+            overlay_id
+        ))?;
+
+        match overlay.kind {
             OverlayKind::RGB => {
-                self.pipeline_rgb.write_active_overlay(overlay.0)?;
+                self.pipeline_rgb.write_active_overlay(overlay)?;
             }
             OverlayKind::Value => {
                 self.pipeline_value
-                    .write_active_overlay(color_scheme, overlay.0)?;
+                    .write_active_overlay(color_scheme, overlay)?;
             }
         }
-        self.overlay_set_id = Some(overlay);
-        // }
+
+        self.overlay_set_id = Some(overlay_id);
 
         Ok(())
     }
@@ -111,11 +121,14 @@ impl OverlayPipelines {
         &self,
         device: &Device,
         cmd_buf: vk::CommandBuffer,
-        overlay: (usize, OverlayKind),
+        overlay_id: usize,
+        // overlay: (usize, OverlayKind),
         selection_descriptor: vk::DescriptorSet,
     ) -> Result<()> {
+        let overlay = self.overlays.get(&overlay_id).unwrap();
+
         unsafe {
-            let (desc_sets, layout) = match overlay.1 {
+            let (desc_sets, layout) = match overlay.kind {
                 OverlayKind::RGB => {
                     let sets =
                         [self.pipeline_rgb.overlay_set, selection_descriptor];
@@ -145,18 +158,13 @@ impl OverlayPipelines {
     }
 
     pub fn overlay_names(&self) -> Vec<(usize, OverlayKind, &str)> {
-        let mut overlays = Vec::with_capacity(
-            self.pipeline_rgb.overlays.len()
-                + self.pipeline_value.overlays.len(),
+        let mut overlays = Vec::with_capacity(self.overlays.len());
+
+        overlays.extend(
+            self.overlays.iter().map(|(id, overlay)| {
+                (*id, overlay.kind, overlay.name.as_str())
+            }),
         );
-
-        overlays.extend(self.pipeline_rgb.overlays.iter().map(
-            |(id, overlay)| (*id, OverlayKind::RGB, overlay.name.as_str()),
-        ));
-
-        overlays.extend(self.pipeline_value.overlays.iter().map(
-            |(id, overlay)| (*id, OverlayKind::Value, overlay.name.as_str()),
-        ));
 
         overlays.sort_by_key(|(id, _, _)| *id);
 
@@ -167,32 +175,13 @@ impl OverlayPipelines {
         let overlay_id = self.next_overlay_id;
         self.next_overlay_id += 1;
 
-        match overlay {
-            Overlay::RGB(o) => self.update_rgb_overlay(overlay_id, o),
-            Overlay::Value(o) => self.update_value_overlay(overlay_id, o),
-        }
+        self.update_overlay(overlay_id, overlay);
 
         overlay_id
     }
 
-    fn update_rgb_overlay(&mut self, overlay_id: usize, overlay: NodeOverlay) {
-        if self.pipeline_value.overlays.contains_key(&overlay_id) {
-            panic!("Tried to update a Value overlay ID with an RGB overlay");
-        }
-
-        self.pipeline_rgb.overlays.insert(overlay_id, overlay);
-    }
-
-    fn update_value_overlay(
-        &mut self,
-        overlay_id: usize,
-        overlay: NodeOverlayValue,
-    ) {
-        if self.pipeline_rgb.overlays.contains_key(&overlay_id) {
-            panic!("Tried to update an RGB overlay ID with a Value overlay");
-        }
-
-        self.pipeline_value.overlays.insert(overlay_id, overlay);
+    fn update_overlay(&mut self, overlay_id: usize, overlay: Overlay) {
+        self.overlays.insert(overlay_id, overlay);
     }
 }
 
@@ -204,8 +193,6 @@ pub struct OverlayPipelineRGB {
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
-
-    pub(super) overlays: FxHashMap<usize, NodeOverlay>,
 
     pub(super) device: Device,
 }
@@ -221,8 +208,6 @@ pub struct OverlayPipelineValue {
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
 
-    pub(super) overlays: FxHashMap<usize, NodeOverlayValue>,
-
     pub(super) device: Device,
 }
 
@@ -230,16 +215,14 @@ impl OverlayPipelineValue {
     fn write_active_overlay(
         &mut self,
         color_scheme: &GradientTexture,
-        overlay_id: usize,
+        overlay: &Overlay,
     ) -> Result<()> {
-        if let Some(overlay) = self.overlays.get(&overlay_id) {
-            overlay.write_descriptor_set(
-                &self.device,
-                color_scheme,
-                self.sampler,
-                &self.overlay_set,
-            )?;
-        }
+        overlay.write_value_descriptor_set(
+            &self.device,
+            color_scheme,
+            self.sampler,
+            &self.overlay_set,
+        )?;
 
         Ok(())
     }
@@ -280,37 +263,38 @@ impl OverlayPipelineValue {
     }
 
     fn create_pipeline(
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
+        app: &GfaestusVk,
+        renderer_type: NodeRendererType,
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
-    ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_tess_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
+    ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+        let pipeline_config = NodePipelineConfig {
+            kind: super::PipelineKind::OverlayU,
+        };
+
+        super::create_node_pipeline(
+            app,
+            renderer_type,
+            pipeline_config,
             &[descriptor_set_layout, selection_set_layout],
-            crate::include_shader!("nodes/overlay_value.frag.spv"),
         )
     }
 
     pub(super) fn new(
         app: &GfaestusVk,
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
+        let device = app.vk_context().device();
+
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
+            app,
+            renderer_type,
             desc_set_layout,
             selection_set_layout,
-        );
+        )?;
 
         let image_count = 1;
 
@@ -371,13 +355,12 @@ impl OverlayPipelineValue {
             pipeline_layout,
             pipeline,
 
-            overlays: Default::default(),
-
+            // overlays: Default::default(),
             device: device.clone(),
         })
     }
 
-    pub fn destroy(&mut self) {
+    pub fn destroy(&self) {
         unsafe {
             self.device.destroy_descriptor_set_layout(
                 self.descriptor_set_layout,
@@ -395,10 +378,8 @@ impl OverlayPipelineValue {
 }
 
 impl OverlayPipelineRGB {
-    fn write_active_overlay(&mut self, overlay_id: usize) -> Result<()> {
-        if let Some(overlay) = self.overlays.get(&overlay_id) {
-            overlay.write_descriptor_set(&self.device, &self.overlay_set)?;
-        }
+    fn write_active_overlay(&mut self, overlay: &Overlay) -> Result<()> {
+        overlay.write_rgb_descriptor_set(&self.device, &self.overlay_set)?;
 
         Ok(())
     }
@@ -431,37 +412,38 @@ impl OverlayPipelineRGB {
     }
 
     fn create_pipeline(
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
+        app: &GfaestusVk,
+        renderer_type: NodeRendererType,
         descriptor_set_layout: vk::DescriptorSetLayout,
         selection_set_layout: vk::DescriptorSetLayout,
-    ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_tess_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
+    ) -> Result<(vk::Pipeline, vk::PipelineLayout)> {
+        let pipeline_config = NodePipelineConfig {
+            kind: super::PipelineKind::OverlayRgb,
+        };
+
+        super::create_node_pipeline(
+            app,
+            renderer_type,
+            pipeline_config,
             &[descriptor_set_layout, selection_set_layout],
-            crate::include_shader!("nodes/overlay_rgb.frag.spv"),
         )
     }
 
     pub(super) fn new(
         app: &GfaestusVk,
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
+        renderer_type: NodeRendererType,
         selection_set_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
+        let device = app.vk_context().device();
+
         let desc_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
+            app,
+            renderer_type,
             desc_set_layout,
             selection_set_layout,
-        );
+        )?;
 
         let image_count = 1;
 
@@ -511,12 +493,11 @@ impl OverlayPipelineRGB {
             pipeline_layout,
             pipeline,
 
-            overlays: Default::default(),
-
+            // overlays: Default::default(),
             device: device.clone(),
         })
     }
-    pub fn destroy(&mut self) {
+    pub fn destroy(&self) {
         unsafe {
             self.device.destroy_descriptor_set_layout(
                 self.descriptor_set_layout,
@@ -533,251 +514,123 @@ impl OverlayPipelineRGB {
     }
 }
 
-pub struct NodeOverlayPipeline {
-    pub(super) descriptor_pool: vk::DescriptorPool,
+pub struct Overlay {
+    pub name: String,
+    pub kind: OverlayKind,
 
-    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+    pub buffer: vk::Buffer,
+    alloc: vk_mem::Allocation,
+    alloc_info: vk_mem::AllocationInfo,
 
-    pub(super) overlay_set: vk::DescriptorSet,
-    pub(super) overlay_set_id: Option<usize>,
-
-    pub(super) pipeline_layout: vk::PipelineLayout,
-    pub(super) pipeline: vk::Pipeline,
-
-    pub(super) overlays: FxHashMap<usize, NodeOverlay>,
-
-    pub(super) device: Device,
-}
-
-impl NodeOverlayPipeline {
-    pub fn overlay_names(&self) -> impl Iterator<Item = (usize, &str)> + '_ {
-        self.overlays.iter().map(|(id, ov)| (*id, ov.name.as_str()))
-    }
-
-    pub fn set_active_overlay(
-        &mut self,
-        overlay_id: Option<usize>,
-    ) -> Option<()> {
-        if overlay_id.is_none() {
-            self.overlay_set_id = None;
-            return Some(());
-        }
-
-        let overlay_id = overlay_id?;
-
-        if Some(overlay_id) == self.overlay_set_id {
-            return Some(());
-        }
-
-        let overlay = self.overlays.get(&overlay_id)?;
-        self.overlay_set_id = Some(overlay_id);
-
-        overlay
-            .write_descriptor_set(&self.device, &self.overlay_set)
-            .expect(&format!(
-                "Error writing theme {} descriptor set",
-                overlay_id
-            ));
-
-        Some(())
-    }
-
-    pub fn update_overlay(&mut self, overlay_id: usize, overlay: NodeOverlay) {
-        self.overlays.insert(overlay_id, overlay);
-    }
-
-    fn overlay_layout_binding() -> vk::DescriptorSetLayoutBinding {
-        use vk::ShaderStageFlags as Stages;
-
-        vk::DescriptorSetLayoutBinding::builder()
-            .binding(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
-            .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
-            .build()
-    }
-
-    fn create_descriptor_set_layout(
-        device: &Device,
-    ) -> Result<vk::DescriptorSetLayout> {
-        let binding = Self::overlay_layout_binding();
-        let bindings = [binding];
-
-        let layout_info = vk::DescriptorSetLayoutCreateInfo::builder()
-            .bindings(&bindings)
-            .build();
-
-        let layout =
-            unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
-
-        Ok(layout)
-    }
-
-    fn create_pipeline(
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
-        descriptor_set_layout: vk::DescriptorSetLayout,
-        selection_set_layout: vk::DescriptorSetLayout,
-    ) -> (vk::Pipeline, vk::PipelineLayout) {
-        super::create_tess_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
-            &[descriptor_set_layout, selection_set_layout],
-            crate::include_shader!("nodes/overlay_rgb.frag.spv"),
-        )
-    }
-
-    pub(super) fn new(
-        device: &Device,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
-        selection_set_layout: vk::DescriptorSetLayout,
-    ) -> Result<Self> {
-        let desc_set_layout = Self::create_descriptor_set_layout(device)?;
-
-        let (pipeline, pipeline_layout) = Self::create_pipeline(
-            device,
-            msaa_samples,
-            render_pass,
-            desc_set_layout,
-            selection_set_layout,
-        );
-
-        let image_count = 1;
-
-        let descriptor_pool = {
-            let pool_size = vk::DescriptorPoolSize {
-                ty: vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
-                descriptor_count: image_count,
-            };
-
-            let pool_sizes = [pool_size];
-
-            let pool_info = vk::DescriptorPoolCreateInfo::builder()
-                .pool_sizes(&pool_sizes)
-                .max_sets(image_count)
-                .build();
-
-            unsafe { device.create_descriptor_pool(&pool_info, None) }
-        }?;
-
-        let descriptor_sets = {
-            let layouts = vec![desc_set_layout];
-
-            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
-                .descriptor_pool(descriptor_pool)
-                .set_layouts(&layouts)
-                .build();
-
-            unsafe { device.allocate_descriptor_sets(&alloc_info) }
-        }?;
-
-        let overlays = FxHashMap::default();
-
-        Ok(Self {
-            descriptor_pool,
-            descriptor_set_layout: desc_set_layout,
-
-            overlay_set: descriptor_sets[0],
-            overlay_set_id: None,
-
-            overlays,
-
-            pipeline_layout,
-            pipeline,
-
-            device: device.clone(),
-        })
-    }
-
-    pub fn destroy(&mut self) {
-        unsafe {
-            self.device.destroy_descriptor_set_layout(
-                self.descriptor_set_layout,
-                None,
-            );
-
-            self.device
-                .destroy_pipeline_layout(self.pipeline_layout, None);
-            self.device.destroy_pipeline(self.pipeline, None);
-
-            self.device
-                .destroy_descriptor_pool(self.descriptor_pool, None);
-        }
-    }
-}
-
-pub enum Overlay {
-    RGB(NodeOverlay),
-    Value(NodeOverlayValue),
-}
-
-pub struct NodeOverlayValue {
-    name: String,
-
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
-    size: vk::DeviceSize,
+    pub buffer_view: Option<vk::BufferView>,
 
     host_visible: bool,
 }
 
-impl NodeOverlayValue {
+impl Overlay {
     /// Create a new overlay that can be written to by the CPU after construction
     ///
     /// Uses host-visible and host-coherent memory
+    // TODO this needs to be smarter wrt. host coherency/being mapped,
+    // but this should be fine for now
     pub fn new_empty_value(
         name: &str,
         app: &GfaestusVk,
         node_count: usize,
     ) -> Result<Self> {
-        let size = ((node_count * std::mem::size_of::<f32>()) as u32)
-            as vk::DeviceSize;
-
         let usage = vk::BufferUsageFlags::STORAGE_BUFFER
             | vk::BufferUsageFlags::TRANSFER_DST;
 
-        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
-            | vk::MemoryPropertyFlags::HOST_COHERENT;
+        let mem_usage = vk_mem::MemoryUsage::CpuToGpu;
 
-        let (buffer, memory, size) =
-            app.create_buffer(size, usage, mem_props)?;
+        let (buffer, alloc, alloc_info) = app
+            .create_uninitialized_buffer::<f32>(
+                usage, mem_usage, true, node_count,
+            )?;
 
         let obj_name = format!("Overlay (Value) - {}", name);
         app.set_debug_object_name(buffer, &obj_name)?;
 
+        let kind = OverlayKind::Value;
+
         Ok(Self {
             name: name.into(),
+            kind,
 
             buffer,
-            memory,
-            size,
+            alloc,
+            alloc_info,
+
+            buffer_view: None,
+
+            host_visible: true,
+        })
+    }
+
+    pub fn new_empty_rgb(
+        name: &str,
+        app: &GfaestusVk,
+        node_count: usize,
+    ) -> Result<Self> {
+        let usage = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER
+            | vk::BufferUsageFlags::TRANSFER_DST;
+
+        let mem_usage = vk_mem::MemoryUsage::CpuToGpu;
+
+        let (buffer, alloc, alloc_info) = app
+            .create_uninitialized_buffer::<f32>(
+                usage, mem_usage, true, node_count,
+            )?;
+
+        let obj_name = format!("Overlay (RGB) - {}", name);
+        app.set_debug_object_name(buffer, &obj_name)?;
+
+        let bufview_info = vk::BufferViewCreateInfo::builder()
+            .buffer(buffer)
+            .offset(0)
+            .range(vk::WHOLE_SIZE)
+            .format(vk::Format::R8G8B8A8_UNORM)
+            .build();
+
+        let device = app.vk_context().device();
+
+        let buffer_view =
+            unsafe { device.create_buffer_view(&bufview_info, None) }?;
+
+        Ok(Self {
+            name: name.into(),
+            kind: OverlayKind::RGB,
+
+            buffer,
+            alloc,
+            alloc_info,
+
+            buffer_view: Some(buffer_view),
 
             host_visible: true,
         })
     }
 
     /// Update the colors for a host-visible overlay by providing a
-    /// set of node IDs and new colors
-    pub fn update_overlay<I>(
+    /// set of node IDs and new values
+    pub fn update_value_overlay<I>(
         &mut self,
-        device: &Device,
+        // device: &Device,
         new_values: I,
     ) -> Result<()>
     where
         I: IntoIterator<Item = (handlegraph::handle::NodeId, f32)>,
     {
+        if matches!(self.kind, OverlayKind::RGB) {
+            return Err(anyhow!(
+                "Tried to update RGB overlay with single-channel colors"
+            ));
+        }
+
         assert!(self.host_visible);
 
         unsafe {
-            let ptr = device.map_memory(
-                self.memory,
-                0,
-                self.size,
-                vk::MemoryMapFlags::empty(),
-            )?;
+            let ptr = self.alloc_info.get_mapped_data();
 
             for (node, value) in new_values.into_iter() {
                 let val_ptr = ptr as *mut f32;
@@ -786,74 +639,54 @@ impl NodeOverlayValue {
                 let val_ptr = (val_ptr.add(ix)) as *mut f32;
                 val_ptr.write(value);
             }
-
-            device.unmap_memory(self.memory);
         }
 
         Ok(())
     }
 
-    /// Create a new overlay that's filled during construction and immutable afterward
-    ///
-    /// Uses device memory if available
-    pub fn new_static<F>(
-        name: &str,
-        app: &GfaestusVk,
-        graph: &crate::graph_query::GraphQuery,
-        mut overlay_fn: F,
-    ) -> Result<Self>
+    /// Update the colors for a host-visible overlay by providing a
+    /// set of node IDs and new colors
+    pub fn update_rgb_overlay<I>(
+        &mut self,
+        // device: &Device,
+        new_colors: I,
+    ) -> Result<()>
     where
-        F: FnMut(
-            &handlegraph::packedgraph::PackedGraph,
-            handlegraph::handle::NodeId,
-        ) -> f32,
+        I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGBA<f32>)>,
     {
-        use handlegraph::handlegraph::IntoHandles;
+        if matches!(self.kind, OverlayKind::Value) {
+            return Err(anyhow!(
+                "Tried to update single-channel overlay with RGB colors"
+            ));
+        }
 
-        let buffer_size =
-            (graph.node_count() * std::mem::size_of::<f32>()) as vk::DeviceSize;
+        assert!(self.host_visible);
 
-        let mut values: Vec<f32> = Vec::with_capacity(buffer_size as usize);
+        unsafe {
+            let ptr = self.alloc_info.get_mapped_data();
 
-        {
-            let graph = graph.graph();
+            for (node, color) in new_colors.into_iter() {
+                let val_ptr = ptr as *mut u32;
+                let ix = (node.0 - 1) as usize;
 
-            let mut nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+                let val_ptr = (val_ptr.add(ix)) as *mut u8;
+                val_ptr.write((color.r * 255.0) as u8);
 
-            nodes.sort();
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write((color.g * 255.0) as u8);
 
-            for node in nodes {
-                let value = overlay_fn(graph, node);
-                values.push(value);
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write((color.b * 255.0) as u8);
+
+                let val_ptr = val_ptr.add(1);
+                val_ptr.write((color.a * 255.0) as u8);
             }
         }
 
-        let (buffer, memory) = app
-            .create_device_local_buffer_with_data::<f32, _>(
-                vk::BufferUsageFlags::TRANSFER_DST
-                    | vk::BufferUsageFlags::STORAGE_BUFFER,
-                &values,
-            )?;
-
-        Ok(Self {
-            name: name.into(),
-
-            buffer,
-            memory,
-            size: buffer_size,
-
-            host_visible: false,
-        })
+        Ok(())
     }
 
-    pub fn destroy(&self, device: &Device) {
-        unsafe {
-            device.destroy_buffer(self.buffer, None);
-            device.free_memory(self.memory, None);
-        }
-    }
-
-    pub fn write_descriptor_set(
+    fn write_value_descriptor_set(
         &self,
         device: &Device,
         color_scheme: &GradientTexture,
@@ -897,209 +730,29 @@ impl NodeOverlayValue {
 
         Ok(())
     }
-}
 
-pub struct NodeOverlay {
-    name: String,
-
-    buffer: vk::Buffer,
-    memory: vk::DeviceMemory,
-    size: vk::DeviceSize,
-
-    buffer_view: vk::BufferView,
-
-    host_visible: bool,
-}
-
-impl NodeOverlay {
-    /// Create a new overlay that can be written to by the CPU after construction
-    ///
-    /// Uses host-visible and host-coherent memory
-    pub fn new_empty_rgb(
-        name: &str,
-        app: &GfaestusVk,
-        node_count: usize,
-    ) -> Result<Self> {
-        let size = ((node_count * std::mem::size_of::<[u8; 4]>()) as u32)
-            as vk::DeviceSize;
-
-        let usage = vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER
-            | vk::BufferUsageFlags::TRANSFER_DST;
-
-        let mem_props = vk::MemoryPropertyFlags::HOST_VISIBLE
-            | vk::MemoryPropertyFlags::HOST_COHERENT;
-
-        let (buffer, memory, size) =
-            app.create_buffer(size, usage, mem_props)?;
-
-        let obj_name = format!("Overlay (RGB) - {}", name);
-        app.set_debug_object_name(buffer, &obj_name)?;
-
-        let bufview_info = vk::BufferViewCreateInfo::builder()
-            .buffer(buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .build();
-
-        let device = app.vk_context().device();
-
-        let buffer_view =
-            unsafe { device.create_buffer_view(&bufview_info, None) }?;
-
-        Ok(Self {
-            name: name.into(),
-
-            buffer,
-            memory,
-            size,
-
-            buffer_view,
-
-            host_visible: true,
-        })
-    }
-
-    /// Update the colors for a host-visible overlay by providing a
-    /// set of node IDs and new colors
-    pub fn update_overlay<I>(
-        &mut self,
-        device: &Device,
-        new_colors: I,
-    ) -> Result<()>
-    where
-        I: IntoIterator<Item = (handlegraph::handle::NodeId, rgb::RGBA<f32>)>,
-    {
-        assert!(self.host_visible);
-
-        unsafe {
-            let ptr = device.map_memory(
-                self.memory,
-                0,
-                self.size,
-                vk::MemoryMapFlags::empty(),
-            )?;
-
-            for (node, color) in new_colors.into_iter() {
-                let val_ptr = ptr as *mut u32;
-                let ix = (node.0 - 1) as usize;
-
-                let val_ptr = (val_ptr.add(ix)) as *mut u8;
-                val_ptr.write((color.r * 255.0) as u8);
-
-                let val_ptr = val_ptr.add(1);
-                val_ptr.write((color.g * 255.0) as u8);
-
-                let val_ptr = val_ptr.add(1);
-                val_ptr.write((color.b * 255.0) as u8);
-
-                let val_ptr = val_ptr.add(1);
-                val_ptr.write((color.a * 255.0) as u8);
-            }
-
-            device.unmap_memory(self.memory);
-        }
-
-        Ok(())
-    }
-
-    /// Create a new overlay that's filled during construction and immutable afterward
-    ///
-    /// Uses device memory if available
-    pub fn new_static<F>(
-        name: &str,
-        app: &GfaestusVk,
-        graph: &crate::graph_query::GraphQuery,
-        mut overlay_fn: F,
-    ) -> Result<Self>
-    where
-        F: FnMut(
-            &handlegraph::packedgraph::PackedGraph,
-            handlegraph::handle::NodeId,
-        ) -> rgb::RGB<f32>,
-    {
-        use handlegraph::handlegraph::IntoHandles;
-
-        let device = app.vk_context().device();
-
-        let buffer_size = (graph.node_count() * std::mem::size_of::<[u8; 4]>())
-            as vk::DeviceSize;
-
-        let mut pixels: Vec<u8> = Vec::with_capacity(buffer_size as usize);
-
-        {
-            let graph = graph.graph();
-
-            let mut nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
-
-            nodes.sort();
-
-            for node in nodes {
-                let color = overlay_fn(graph, node);
-
-                pixels.push((color.r * 255.0) as u8);
-                pixels.push((color.g * 255.0) as u8);
-                pixels.push((color.b * 255.0) as u8);
-                pixels.push(255);
-            }
-        }
-
-        let (buffer, memory) = app
-            .create_device_local_buffer_with_data::<[u8; 4], _>(
-                vk::BufferUsageFlags::TRANSFER_DST
-                    | vk::BufferUsageFlags::UNIFORM_TEXEL_BUFFER,
-                &pixels,
-            )?;
-
-        let bufview_info = vk::BufferViewCreateInfo::builder()
-            .buffer(buffer)
-            .offset(0)
-            .range(vk::WHOLE_SIZE)
-            .format(vk::Format::R8G8B8A8_UNORM)
-            .build();
-
-        let buffer_view =
-            unsafe { device.create_buffer_view(&bufview_info, None) }?;
-
-        Ok(Self {
-            name: name.into(),
-
-            buffer,
-            memory,
-            size: buffer_size,
-
-            buffer_view,
-
-            host_visible: false,
-        })
-    }
-
-    pub fn destroy(&self, device: &Device) {
-        unsafe {
-            device.destroy_buffer_view(self.buffer_view, None);
-            device.destroy_buffer(self.buffer, None);
-            device.free_memory(self.memory, None);
-        }
-    }
-
-    pub fn write_descriptor_set(
+    fn write_rgb_descriptor_set(
         &self,
         device: &Device,
         descriptor_set: &vk::DescriptorSet,
     ) -> Result<()> {
-        let buf_views = [self.buffer_view];
+        if let Some(buf_view) = self.buffer_view {
+            let buf_views = [buf_view];
 
-        let descriptor_write = vk::WriteDescriptorSet::builder()
-            .dst_set(*descriptor_set)
-            .dst_binding(0)
-            .dst_array_element(0)
-            .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
-            .texel_buffer_view(&buf_views)
-            .build();
+            let descriptor_write = vk::WriteDescriptorSet::builder()
+                .dst_set(*descriptor_set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
+                .texel_buffer_view(&buf_views)
+                .build();
 
-        let descriptor_writes = [descriptor_write];
+            let descriptor_writes = [descriptor_write];
 
-        unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+            unsafe { device.update_descriptor_sets(&descriptor_writes, &[]) };
+        } else {
+            log::warn!("RGB overlay is missing buffer view");
+        }
 
         Ok(())
     }

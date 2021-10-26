@@ -22,7 +22,8 @@ use crate::{
         AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
         Gff3Records,
     },
-    app::{AppChannels, AppMsg, AppSettings, SharedState},
+    app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
+    context::ContextEntry,
     graph_query::GraphQueryWorker,
     reactor::Reactor,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
@@ -40,7 +41,7 @@ use crate::input::binds::{
 
 use crate::vulkan::{draw_system::gui::GuiPipeline, GfaestusVk};
 
-use ash::{extensions::khr::PushDescriptor, vk};
+use ash::vk;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -54,15 +55,19 @@ pub mod windows;
 
 use console::*;
 use debug::*;
+#[allow(unused_imports)]
 use util::*;
 use widgets::*;
 use windows::*;
+
+use self::text::draw_text_at_world_point;
 
 pub struct Gui {
     pub ctx: egui::CtxRef,
     frame_input: FrameInput,
 
     shared_state: SharedState,
+    #[allow(dead_code)]
     settings: AppSettings,
 
     pub draw_system: GuiPipeline,
@@ -82,12 +87,10 @@ pub struct Gui {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    clipboard_ctx: ClipboardContext,
+    pub clipboard_ctx: ClipboardContext,
 
     gff3_list: RecordList<Gff3Records>,
     bed_list: RecordList<BedRecords>,
-
-    path_picker_source: PathPickerSource,
 
     annotation_file_list: AnnotationFileList,
 
@@ -185,7 +188,7 @@ pub struct AppViewState {
 impl AppViewState {
     pub fn new(
         reactor: &mut Reactor,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
@@ -379,7 +382,7 @@ impl Gui {
         shared_state: SharedState,
         channels: &AppChannels,
         settings: AppSettings,
-        graph_query: &GraphQuery,
+        graph_query: &Arc<GraphQuery>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -469,6 +472,7 @@ impl Gui {
         };
 
         let console = Console::new(
+            reactor,
             graph_query,
             channels.clone(),
             settings.to_owned(),
@@ -504,8 +508,6 @@ impl Gui {
             gff3_list,
             bed_list,
 
-            path_picker_source,
-
             annotation_file_list,
 
             console_down: false,
@@ -530,9 +532,21 @@ impl Gui {
     // TODO this should be handled better
     pub fn populate_overlay_list<'a>(
         &mut self,
+        // TODO should be a slice, but this function shouldn't exist, so
         names: impl Iterator<Item = (usize, OverlayKind, &'a str)>,
     ) {
-        self.view_state.overlay_list.state.populate_names(names);
+        let names = names.collect::<Vec<_>>();
+
+        self.view_state
+            .overlay_list
+            .state
+            .populate_names(names.iter().copied());
+
+        self.console.populate_overlay_list(&names);
+
+        self.menu_bar.populate_overlay_list(
+            &self.view_state.overlay_list.state.overlay_names,
+        );
     }
 
     pub fn scroll_to_gff_record(
@@ -561,6 +575,7 @@ impl Gui {
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         annotations: &Annotations,
+        ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -747,6 +762,7 @@ impl Gui {
                     &self.app_msg_tx,
                     node_details,
                     graph_query,
+                    ctx_tx,
                 );
             }
 
@@ -757,6 +773,7 @@ impl Gui {
                     &self.ctx,
                     path_details_id_cell,
                     path_details,
+                    ctx_tx,
                 );
             }
         }
@@ -775,6 +792,7 @@ impl Gui {
                     &self.app_msg_tx,
                     path_details,
                     graph_query,
+                    ctx_tx,
                 );
             }
 
@@ -782,11 +800,11 @@ impl Gui {
                 view_state.path_details.state.ui(
                     path_details,
                     graph_query,
-                    graph_query_worker,
                     &self.ctx,
                     node_details_id_cell,
                     node_details,
                     &self.app_msg_tx,
+                    ctx_tx,
                 );
             }
         }
@@ -841,14 +859,20 @@ impl Gui {
     }
 
     pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+        log::trace!("Gui::upload_texture");
+
         let egui_tex = self.ctx.texture();
         if egui_tex.version != self.draw_system.texture_version() {
+            log::trace!(
+                "Texture version difference, uploading new GUI texture"
+            );
             self.draw_system.upload_texture(
                 app,
                 app.transient_command_pool,
                 app.graphics_queue,
                 &egui_tex,
             )?;
+            log::trace!("Texture upload complete");
         }
 
         Ok(())
@@ -859,6 +883,7 @@ impl Gui {
         app: &GfaestusVk,
         meshes: &[egui::ClippedMesh],
     ) -> Result<()> {
+        log::trace!("Uploading GUI vertices");
         self.draw_system.vertices.upload_meshes(app, meshes)
     }
 
@@ -868,7 +893,6 @@ impl Gui {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
-        push_descriptor: &PushDescriptor,
         gradients: &Gradients,
     ) -> Result<()> {
         self.draw_system.draw(
@@ -876,7 +900,6 @@ impl Gui {
             render_pass,
             framebuffers,
             screen_dims,
-            push_descriptor,
             gradients,
         )
     }

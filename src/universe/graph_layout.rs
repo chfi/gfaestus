@@ -33,6 +33,7 @@ pub struct LayoutQuadtree {
 
 impl LayoutQuadtree {
     pub fn truncated(nodes: &[Point], leaf_capacity: usize) -> Self {
+        /*
         let depth = ((nodes.len() / leaf_capacity) as f64).log2().floor();
         let depth = (depth as usize).max(1);
 
@@ -44,6 +45,7 @@ impl LayoutQuadtree {
 
         let mut data: Vec<u32> = Vec::with_capacity(elements);
         let mut tree_node_offsets: Vec<u32> = Vec::with_capacity(elements);
+        */
 
         unimplemented!();
     }

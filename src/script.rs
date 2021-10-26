@@ -1,15 +1,10 @@
 use rhai::{Engine, EvalAltResult};
 
-use anyhow::Result;
-
 use rayon::prelude::*;
 
 use handlegraph::{
-    handle::{Direction, Handle, NodeId},
+    handle::{Handle, NodeId},
     handlegraph::*,
-    mutablehandlegraph::*,
-    packed::*,
-    packedgraph::index::OneBasedIndex,
     pathhandlegraph::*,
 };
 
@@ -40,16 +35,6 @@ pub fn create_engine() -> Engine {
 
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-
-    engine.register_fn("build_selection2", |nodes: Vec<NodeId>| {
-        log::warn!("in Vec<NodeId>");
-
-        let mut selection = NodeSelection::default();
-
-        selection.add_slice(false, &nodes);
-
-        selection
-    });
 
     engine.register_fn("build_selection", |arr: Vec<rhai::Dynamic>| {
         log::warn!("in Vec<rhai::Dynamic>");
@@ -201,27 +186,14 @@ pub fn cast_overlay_data(data: Vec<rhai::Dynamic>) -> Option<OverlayData> {
     None
 }
 
-pub fn overlay_colors_tgt(
+pub fn overlay_colors_tgt_ast(
     rayon_pool: &rayon::ThreadPool,
     config: &ScriptConfig,
     graph: &GraphQuery,
-    script: &str,
+    engine: &rhai::Engine,
+    scope: rhai::Scope<'_>,
+    node_color_ast: rhai::AST,
 ) -> std::result::Result<OverlayData, Box<EvalAltResult>> {
-    use rhai::Scope;
-
-    let mut scope = Scope::new();
-    scope
-        .push("graph", graph.graph.clone())
-        .push("path_pos", graph.path_positions.clone());
-
-    let mut engine = create_engine();
-
-    let graph_ = graph.graph.clone();
-
-    engine.register_fn("get_graph", move || graph_.clone());
-
-    let node_color_ast = engine.compile(script)?;
-
     match config.target.clone() {
         ScriptTarget::Nodes => {
             let mut node_ids =
@@ -271,7 +243,7 @@ pub fn overlay_colors_tgt(
                 steps
                     .into_par_iter()
                     .map_with(scope, |mut thread_scope, step| {
-                        let (handle, _, pos) = step;
+                        let (handle, _, _pos) = step;
                         let node_id = handle.id();
 
                         let value = engine
@@ -344,14 +316,12 @@ pub fn overlay_colors_tgt(
     }
 }
 
-/*
 pub fn overlay_colors_tgt(
     rayon_pool: &rayon::ThreadPool,
-    config: ScriptConfig,
-    target: &ScriptTarget,
+    config: &ScriptConfig,
     graph: &GraphQuery,
     script: &str,
-) -> std::result::Result<Vec<rgb::RGBA<f32>>, Box<EvalAltResult>> {
+) -> std::result::Result<OverlayData, Box<EvalAltResult>> {
     use rhai::Scope;
 
     let mut scope = Scope::new();
@@ -359,26 +329,27 @@ pub fn overlay_colors_tgt(
         .push("graph", graph.graph.clone())
         .push("path_pos", graph.path_positions.clone());
 
-    let engine = create_engine();
+    let mut engine = create_engine();
+
+    let graph_ = graph.graph.clone();
+
+    engine.register_fn("get_graph", move || graph_.clone());
 
     let node_color_ast = engine.compile(script)?;
 
-    match target {
+    match config.target.clone() {
         ScriptTarget::Nodes => {
             let mut node_ids =
                 graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
             node_ids.sort();
 
-            let colors = rayon_pool.install(|| {
-                // let mut colors: Vec<rgb::RGBA<f32>> =
-                //     Vec::with_capacity(node_ids.len());
-                // let mut colors: Vec<rgb::RGBA<f32>> =
-                let mut colors: Vec<rgb::RGBA<f32>> =
+            let values = rayon_pool.install(|| {
+                let mut values: Vec<rhai::Dynamic> =
                     Vec::with_capacity(node_ids.len());
                 node_ids
                     .into_par_iter()
                     .map_with(scope, |mut thread_scope, node_id| {
-                        let color = engine
+                        let value = engine
                             .call_fn(
                                 &mut thread_scope,
                                 &node_color_ast,
@@ -387,14 +358,17 @@ pub fn overlay_colors_tgt(
                             )
                             .unwrap();
 
-                        color
+                        value
                     })
-                    .collect_into_vec(&mut colors);
+                    .collect_into_vec(&mut values);
 
-                colors
+                values
             });
 
-            Ok(colors)
+            let data = cast_overlay_data(values)
+                .ok_or("Couldn't process overlay data")?;
+
+            Ok(data)
         }
         ScriptTarget::Path { name } => {
             let path_id = graph
@@ -405,17 +379,17 @@ pub fn overlay_colors_tgt(
             let steps =
                 graph.path_pos_steps(path_id).ok_or("Path not found")?;
 
-            let node_color_map = rayon_pool.install(|| {
-                let mut id_colors: Vec<(NodeId, rgb::RGBA<f32>)> =
+            let node_value_map = rayon_pool.install(|| {
+                let mut id_values: Vec<(NodeId, rhai::Dynamic)> =
                     Vec::with_capacity(steps.len());
 
                 steps
                     .into_par_iter()
                     .map_with(scope, |mut thread_scope, step| {
-                        let (handle, _, pos) = step;
+                        let (handle, _, _pos) = step;
                         let node_id = handle.id();
 
-                        let color = engine
+                        let value = engine
                             .call_fn(
                                 &mut thread_scope,
                                 &node_color_ast,
@@ -424,93 +398,65 @@ pub fn overlay_colors_tgt(
                             )
                             .unwrap();
 
-                        color
+                        value
                     })
-                    .collect_into_vec(&mut id_colors);
+                    .collect_into_vec(&mut id_values);
 
-                id_colors
+                id_values
             });
 
-            let node_color_map =
-                node_color_map.into_iter().collect::<FxHashMap<_, _>>();
+            let (nodes, values): (Vec<_>, Vec<_>) =
+                node_value_map.into_iter().unzip();
+
+            let data = cast_overlay_data(values)
+                .ok_or("Couldn't process overlay data")?;
 
             let mut node_ids =
                 graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
             node_ids.sort();
 
-            let node_colors = node_ids
-                .into_iter()
-                .map(|node_id| {
-                    node_color_map
-                        .get(&node_id)
-                        .copied()
-                        .unwrap_or(config.default_color)
-                })
-                .collect();
+            let default_color = config.default_color;
 
-            Ok(node_colors)
+            match data {
+                OverlayData::RGB(rgb) => {
+                    let node_rgb_map: FxHashMap<NodeId, rgb::RGBA<f32>> = nodes
+                        .into_iter()
+                        .zip(rgb.into_iter())
+                        .collect::<FxHashMap<_, _>>();
+
+                    let data = node_ids
+                        .into_iter()
+                        .map(|node_id| {
+                            node_rgb_map
+                                .get(&node_id)
+                                .copied()
+                                .unwrap_or(default_color)
+                        })
+                        .collect();
+
+                    Ok(OverlayData::RGB(data))
+                }
+                OverlayData::Value(val) => {
+                    let node_val_map: FxHashMap<NodeId, f32> = nodes
+                        .into_iter()
+                        .zip(val.into_iter())
+                        .collect::<FxHashMap<_, _>>();
+
+                    let data = node_ids
+                        .into_iter()
+                        .map(|node_id| {
+                            node_val_map
+                                .get(&node_id)
+                                .copied()
+                                .unwrap_or_default()
+                        })
+                        .collect();
+
+                    Ok(OverlayData::Value(data))
+                }
+            }
         }
     }
-}
-*/
-
-pub fn overlay_colors(
-    rayon_pool: &rayon::ThreadPool,
-    graph: &GraphQuery,
-    script: &str,
-) -> std::result::Result<Vec<rgb::RGBA<f32>>, Box<EvalAltResult>> {
-    use rhai::{Func, Scope};
-
-    let mut scope = Scope::new();
-    scope
-        .push("graph", graph.graph.clone())
-        .push("path_pos", graph.path_positions.clone());
-
-    let engine = create_engine();
-
-    let node_color_script = "
-fn node_color(id) {
-  let h = handle(id, false);
-  let seq = graph.sequence(h);
-  let hash = hash_bytes(seq);
-  let color = hash_color(hash);
-  color
-}
-";
-
-    let mut node_ids =
-        graph.graph().handles().map(|h| h.id()).collect::<Vec<_>>();
-    node_ids.sort();
-
-    let node_color_ast = engine.compile(node_color_script)?;
-
-    use std::any::Any;
-
-    println!("node_color_ast type: {:?}", node_color_ast.type_id());
-
-    let colors = rayon_pool.install(|| {
-        let mut colors: Vec<rgb::RGBA<f32>> =
-            Vec::with_capacity(node_ids.len());
-        node_ids
-            .into_par_iter()
-            .map_with(scope, |mut thread_scope, node_id| {
-                let color = engine
-                    .call_fn(
-                        &mut thread_scope,
-                        &node_color_ast,
-                        "node_color",
-                        (node_id,),
-                    )
-                    .unwrap();
-
-                color
-            })
-            .collect_into_vec(&mut colors);
-
-        colors
-    });
-
-    Ok(colors)
 }
 
 pub fn hash_node_seq(graph: &GraphQuery, node_id: NodeId) -> u64 {

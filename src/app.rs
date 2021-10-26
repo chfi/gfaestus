@@ -3,21 +3,30 @@ pub mod mainview;
 pub mod selection;
 pub mod settings;
 pub mod shared_state;
-pub mod theme;
+
+pub use channels::*;
+use handlegraph::pathhandlegraph::PathId;
+pub use settings::*;
+pub use shared_state::*;
 
 use crossbeam::channel::Sender;
 
-use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use handlegraph::handle::NodeId;
 
 use anyhow::Result;
 
+use argh::FromArgs;
+
+use std::sync::Arc;
+
+use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
-    Gff3Records,
+    Gff3Records, Labels,
 };
+use crate::app::selection::NodeSelection;
 use crate::gui::GuiMsg;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
@@ -26,17 +35,7 @@ use crate::{
     universe::Node,
 };
 
-use theme::*;
-
-pub use channels::*;
-pub use settings::*;
-pub use shared_state::*;
-
-use self::mainview::MainViewMsg;
-
 pub struct App {
-    pub themes: AppThemes,
-
     shared_state: SharedState,
     channels: AppChannels,
     pub settings: AppSettings,
@@ -47,13 +46,14 @@ pub struct App {
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
     annotations: Annotations,
+
+    labels: Labels,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
     KeyClearSelection,
     KeyToggleTheme,
-    KeyToggleOverlay,
 }
 
 impl BindableInput for AppInput {
@@ -64,7 +64,6 @@ impl BindableInput for AppInput {
         let key_binds: FxHashMap<Key, Vec<KeyBind<Input>>> = [
             (Key::Escape, Input::KeyClearSelection),
             (Key::F9, Input::KeyToggleTheme),
-            (Key::F10, Input::KeyToggleOverlay),
         ]
         .iter()
         .copied()
@@ -92,16 +91,18 @@ pub enum Select {
     },
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum AppMsg {
     Selection(Select),
     GotoSelection,
+    GotoNode(NodeId),
+
+    // TODO these two should not be here (see how they're handled in main)
     RectSelect(Rect),
     TranslateSelected(Point),
 
     HoverNode(Option<NodeId>),
 
-    ToggleOverlay,
     ToggleDarkMode,
 
     AddGff3Records(Gff3Records),
@@ -111,17 +112,27 @@ pub enum AppMsg {
         name: String,
         label_set: AnnotationLabelSet,
     },
+
+    RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
+
+    RequestData {
+        key: String,
+        index: String,
+        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+    },
+
+    SetData {
+        key: String,
+        index: String,
+        value: rhai::Dynamic,
+    },
 }
 
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Result<Self> {
-        let themes = AppThemes::default_themes();
-
         let shared_state = SharedState::new(screen_dims);
 
         Ok(Self {
-            themes,
-
             shared_state,
             channels: AppChannels::new(),
 
@@ -130,10 +141,11 @@ impl App {
 
             selected_nodes_bounding_box: None,
 
-            // overlay_state: OverlayState::default(),
             settings: AppSettings::default(),
 
             annotations: Annotations::default(),
+
+            labels: Labels::default(),
         })
     }
 
@@ -153,10 +165,32 @@ impl App {
         self.shared_state.hover_node.load()
     }
 
+    pub fn has_selection(&self) -> bool {
+        !self.selected_nodes.is_empty()
+    }
+
     pub fn selection_changed(&self) -> bool {
         self.selection_changed
     }
 
+    pub fn selected_nodes_(&self) -> Option<(Rect, &FxHashSet<NodeId>)> {
+        log::warn!(
+            "self.selected_nodes.is_empty() = {}",
+            self.selected_nodes.is_empty()
+        );
+        if self.selected_nodes.is_empty() {
+            None
+        } else {
+            let rect = self
+                .selected_nodes_bounding_box
+                .map(|(p0, p1)| Rect::new(p0, p1))
+                .unwrap_or(Rect::default());
+            log::warn!("got a bounding box");
+            Some((rect, &self.selected_nodes))
+        }
+    }
+
+    // not even sure where selection_changed is used anymore, if at all
     pub fn selected_nodes(&mut self) -> Option<&FxHashSet<NodeId>> {
         if self.selected_nodes.is_empty() {
             self.selection_changed = false;
@@ -169,6 +203,14 @@ impl App {
 
     pub fn annotations(&self) -> &Annotations {
         &self.annotations
+    }
+
+    pub fn labels(&self) -> &Labels {
+        &self.labels
+    }
+
+    pub fn labels_mut(&mut self) -> &mut Labels {
+        &mut self.labels
     }
 
     pub fn dims(&self) -> ScreenDims {
@@ -185,6 +227,7 @@ impl App {
 
     pub fn apply_app_msg(
         &mut self,
+        boundary: Rect,
         main_view_msg_tx: &Sender<MainViewMsg>,
         gui_msg: &Sender<GuiMsg>,
         node_positions: &[Node],
@@ -209,6 +252,14 @@ impl App {
                         bounds.0,
                         bounds.1,
                     );
+                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
+                }
+            }
+            AppMsg::GotoNode(id) => {
+                if let Some(node_pos) = node_positions.get((id.0 - 1) as usize)
+                {
+                    let mut view = self.shared_state.view();
+                    view.center = node_pos.center();
                     main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
                 }
             }
@@ -339,14 +390,100 @@ impl App {
                 self.annotations.insert_bed(&file_name, records);
             }
             AppMsg::NewNodeLabels { name, label_set } => {
+                let label_set_ = label_set.label_set();
+                self.labels.add_label_set(
+                    boundary,
+                    node_positions,
+                    &name,
+                    &label_set_,
+                );
                 self.annotations.insert_label_set(&name, label_set);
             }
             AppMsg::ToggleDarkMode => {
                 self.toggle_dark_mode(gui_msg);
             }
-            AppMsg::ToggleOverlay => {
-                self.shared_state.overlay_state.toggle_overlay();
+            AppMsg::RequestSelection(sender) => {
+                let selection = self.selected_nodes.to_owned();
+                let rect = self
+                    .selected_nodes_bounding_box
+                    .map(|(p0, p1)| Rect::new(p0, p1))
+                    .unwrap_or(Rect::default());
+
+                sender.send((rect, selection)).unwrap();
             }
+
+            AppMsg::RequestData { key, index, sender } => {
+                type ReqResult = Result<rhai::Dynamic>;
+
+                macro_rules! handle {
+                    ($expr:expr, $err:literal) => {
+                        if let Some(result) = $expr {
+                            Ok(rhai::Dynamic::from(result.clone()))
+                        } else {
+                            let err = anyhow::anyhow!($err);
+                            Err(err) as ReqResult
+                        }
+                    };
+                }
+
+                let boxed = match key.as_str() {
+                    "annotation_file" => {
+                        if let Some(records) = self.annotations.get_gff3(&index)
+                        {
+                            Ok(rhai::Dynamic::from(records.clone()))
+                        } else if let Some(records) =
+                            self.annotations.get_bed(&index)
+                        {
+                            Ok(rhai::Dynamic::from(records.clone()))
+                        } else {
+                            Err(anyhow::anyhow!(
+                                "Annotation file not loaded: {}",
+                                index
+                            ))
+                        }
+                    }
+                    "annotation_names" => {
+                        let names = self
+                            .annotations
+                            .annot_names()
+                            .iter()
+                            .map(|(name, _)| name.to_string())
+                            .collect::<Vec<_>>();
+
+                        Ok(rhai::Dynamic::from(names))
+                    }
+                    "annotation_ref_path" => {
+                        if let Some(path) =
+                            self.annotations.get_default_ref_path(&index)
+                        {
+                            Ok(rhai::Dynamic::from(path))
+                        } else {
+                            Ok(rhai::Dynamic::from(()))
+                        }
+                    }
+                    _ => {
+                        let err =
+                            anyhow::anyhow!("Requested unknown key from App");
+                        Err(err) as ReqResult
+                    }
+                };
+
+                sender.send(boxed).unwrap();
+            }
+            AppMsg::SetData { key, index, value } => match key.as_str() {
+                "annotation_ref_path" => {
+                    if value.as_unit().is_ok() {
+                        self.annotations.set_default_ref_path(&index, None);
+                    } else if value.type_id()
+                        == std::any::TypeId::of::<PathId>()
+                    {
+                        let path = value.cast::<PathId>();
+                        self.annotations
+                            .set_default_ref_path(&index, Some(path));
+                    }
+                }
+                _ => (),
+            },
         }
     }
 
@@ -381,12 +518,70 @@ impl App {
                         self.toggle_dark_mode(gui_msg);
                     }
                 }
-                AppInput::KeyToggleOverlay => {
-                    if state.pressed() {
-                        self.shared_state.overlay_state.toggle_overlay();
-                    }
-                }
             }
         }
+    }
+}
+
+#[derive(FromArgs)]
+/// Gfaestus
+pub struct Args {
+    /// the GFA file to load
+    #[argh(positional)]
+    pub gfa: String,
+
+    /// the layout file to use
+    #[argh(positional)]
+    pub layout: String,
+
+    /// load and run a Rhai script file at startup, e.g. for configuration
+    #[argh(option)]
+    pub run_script: Option<String>,
+
+    #[cfg(target_os = "linux")]
+    /// force use of X11 window (only applicable in Wayland contexts)
+    #[argh(switch)]
+    pub force_x11: bool,
+
+    /// suppress log messages
+    #[argh(switch, short = 'q')]
+    pub quiet: bool,
+
+    /// log debug messages
+    #[argh(switch, short = 'd')]
+    pub debug: bool,
+
+    /// log trace-level debug messages
+    #[argh(switch)]
+    pub trace: bool,
+
+    /*
+    /// whether or not to log to a file in the working directory
+    #[argh(switch)]
+    log_to_file: bool,
+    */
+    /// if a device name is provided, use that instead of the default graphics device
+    #[argh(option)]
+    pub force_graphics_device: Option<String>,
+
+    /// path .gff3 and/or .bed file to load at startup, can be used multiple times to load several files
+    #[argh(
+        option,
+        long = "annotation-file",
+        from_str_fn(annotation_files_to_str)
+    )]
+    pub annotation_files: Vec<std::path::PathBuf>,
+}
+
+fn annotation_files_to_str(input: &str) -> Result<std::path::PathBuf, String> {
+    use std::path::PathBuf;
+    println!("parsing annotation file path: {}", input);
+    let path = PathBuf::from(input.trim());
+    match path.canonicalize() {
+        Ok(canon) => Ok(canon),
+        Err(err) => Err(format!(
+            "Error when parsing annotation file list: {:?}",
+            err
+        )),
     }
 }

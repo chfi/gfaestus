@@ -1,15 +1,20 @@
+use std::pin::Pin;
 use std::sync::Arc;
 
 use crossbeam::channel::{Receiver, Sender};
 use futures::{future::RemoteHandle, task::SpawnExt, Future};
 
+mod modal;
 mod paired;
 
+pub use modal::*;
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
 use paired::*;
 
-use crate::{graph_query::GraphQuery, gui::windows::OverlayCreatorMsg};
+use crate::app::channels::OverlayCreatorMsg;
+use crate::app::AppChannels;
+use crate::graph_query::GraphQuery;
 
 pub struct Reactor {
     thread_pool: futures::executor::ThreadPool,
@@ -19,6 +24,14 @@ pub struct Reactor {
 
     pub overlay_create_tx: Sender<OverlayCreatorMsg>,
     pub overlay_create_rx: Receiver<OverlayCreatorMsg>,
+
+    pub future_tx:
+        Sender<Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
+    // pub future_tx: Sender<Box<dyn Future<Output = ()> + 'static>>,
+
+    // pub future_tx: Sender<Box<dyn FnOnce() + Send + Sync + 'static>>,
+    // pub task_rx: Receiver<Box<dyn FnOnce() + Send + Sync + 'static>>,
+    _task_thread: std::thread::JoinHandle<()>,
 }
 
 impl Reactor {
@@ -26,10 +39,21 @@ impl Reactor {
         thread_pool: futures::executor::ThreadPool,
         rayon_pool: rayon::ThreadPool,
         graph_query: Arc<GraphQuery>,
+        channels: &AppChannels,
     ) -> Self {
-        let overlay = crossbeam::channel::unbounded::<OverlayCreatorMsg>();
-
         let rayon_pool = Arc::new(rayon_pool);
+
+        let (task_tx, task_rx) = crossbeam::channel::unbounded();
+
+        let thread_pool_ = thread_pool.clone();
+
+        let _task_thread = std::thread::spawn(move || {
+            let thread_pool = thread_pool_;
+
+            while let Ok(task) = task_rx.recv() {
+                thread_pool.spawn(task).unwrap();
+            }
+        });
 
         Self {
             thread_pool,
@@ -37,8 +61,12 @@ impl Reactor {
 
             graph_query,
 
-            overlay_create_tx: overlay.0,
-            overlay_create_rx: overlay.1,
+            overlay_create_tx: channels.new_overlay_tx.clone(),
+            overlay_create_rx: channels.new_overlay_rx.clone(),
+
+            future_tx: task_tx,
+            // task_rx,
+            _task_thread,
         }
     }
 
@@ -56,7 +84,6 @@ impl Reactor {
 
         self.thread_pool
             .spawn(async move {
-                eprintln!("spawning reactor task");
                 log::debug!("spawning reactor task");
 
                 loop {
@@ -138,5 +165,14 @@ impl Reactor {
     {
         let handle = self.thread_pool.spawn_with_handle(fut)?;
         Ok(handle)
+    }
+
+    pub fn spawn_forget<F>(&self, fut: F) -> anyhow::Result<()>
+    where
+        F: Future<Output = ()> + Send + Sync + 'static,
+    {
+        let fut = Box::pin(fut) as _;
+        self.future_tx.send(fut)?;
+        Ok(())
     }
 }

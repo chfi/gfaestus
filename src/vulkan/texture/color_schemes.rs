@@ -5,10 +5,129 @@ use ash::{version::DeviceV1_0, vk, Device};
 use anyhow::Result;
 
 use colorous::Gradient;
+use rustc_hash::FxHashMap;
 
 use crate::vulkan::GfaestusVk;
 
+use super::Texture;
 use super::Texture1D;
+
+pub struct Gradients_ {
+    gradient_offsets: FxHashMap<egui::TextureId, usize>,
+    texture: Texture,
+}
+
+impl Gradients_ {
+    pub fn initialize(
+        app: &GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        width: usize,
+    ) -> Result<Self> {
+        assert!(
+            width.is_power_of_two(),
+            "GradientTexture width has to be a power of two"
+        );
+        let gradient_count = Self::GRADIENT_NAMES.len();
+
+        let height = 64usize;
+        let size = width * height;
+        assert!(height.is_power_of_two() && height >= gradient_count);
+
+        // let mut gradients: HashMap<egui::TextureId, GradientTexture> =
+
+        let mut gradient_offsets: FxHashMap<egui::TextureId, usize> =
+            FxHashMap::default();
+
+        let format = vk::Format::R8G8B8A8_UNORM;
+
+        let texture = Texture::allocate(
+            app,
+            command_pool,
+            transition_queue,
+            width,
+            height,
+            format,
+        )?;
+
+        let mut pixels: Vec<u8> =
+            Vec::with_capacity(size * std::mem::size_of::<[u8; 4]>());
+
+        for (gradient_id, name) in Self::GRADIENT_NAMES.iter().enumerate() {
+            let gradient = name.gradient();
+
+            for i in 0..width {
+                let (r, g, b) = gradient.eval_rational(i, width).as_tuple();
+
+                pixels.push(r);
+                pixels.push(g);
+                pixels.push(b);
+                pixels.push(255);
+            }
+
+            let key = name.texture_id();
+            gradient_offsets.insert(key, gradient_id);
+        }
+
+        texture.copy_from_slice(
+            app,
+            command_pool,
+            transition_queue,
+            width,
+            height,
+            &pixels,
+        )?;
+
+        Ok(Self {
+            gradient_offsets,
+            texture,
+        })
+    }
+
+    pub const GRADIENT_NAMES: [GradientName; 38] = {
+        use GradientName::*;
+        [
+            Blues,
+            BlueGreen,
+            BluePurple,
+            BrownGreen,
+            Cividis,
+            Cool,
+            CubeHelix,
+            Greens,
+            GreenBlue,
+            Greys,
+            Inferno,
+            Magma,
+            Oranges,
+            OrangeRed,
+            PinkGreen,
+            Plasma,
+            Purples,
+            PurpleBlue,
+            PurpleBlueGreen,
+            PurpleGreen,
+            PurpleOrange,
+            PurpleRed,
+            Rainbow,
+            Reds,
+            RedBlue,
+            RedGray,
+            RedPurple,
+            RedYellowBlue,
+            RedYellowGreen,
+            Sinebow,
+            Spectral,
+            Turbo,
+            Viridis,
+            Warm,
+            YellowGreen,
+            YellowGreenBlue,
+            YellowOrangeBrown,
+            YellowOrangeRed,
+        ]
+    };
+}
 
 pub struct Gradients {
     gradients: HashMap<egui::TextureId, GradientTexture>,
@@ -248,7 +367,6 @@ impl GradientName {
 
 pub struct GradientTexture {
     pub texture: Texture1D,
-    gradient: Gradient,
 }
 
 impl GradientTexture {
@@ -285,7 +403,7 @@ impl GradientTexture {
             &colors,
         )?;
 
-        Ok(Self { texture, gradient })
+        Ok(Self { texture })
     }
 
     pub fn create_sampler(device: &Device) -> Result<vk::Sampler> {

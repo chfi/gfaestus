@@ -11,104 +11,29 @@ use context::*;
 use init::*;
 use render_pass::*;
 
+use anyhow::Result;
 use ash::{
     extensions::khr::{Surface, Swapchain},
     version::DeviceV1_0,
+    vk, Device, Entry,
 };
-use ash::{vk, Device, Entry};
 
+use bytemuck::{Pod, Zeroable};
+use parking_lot::{Mutex, MutexGuard};
+use std::{mem::size_of, sync::Arc};
 use vk_mem::Allocator;
 
-use winit::window::Window;
-
-use std::{mem::size_of, sync::Arc};
-
-use parking_lot::{Mutex, MutexGuard};
-
-use anyhow::Result;
-
-use render_pass::Framebuffers;
+#[cfg(target_os = "linux")]
+use winit::platform::unix::*;
+use winit::{
+    event_loop::EventLoop,
+    window::{Window, WindowBuilder},
+};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
-use crate::view::ScreenDims;
-
-#[derive(Clone)]
-pub struct Queues {
-    graphics_queue: Arc<Mutex<vk::Queue>>,
-    present_queue: Arc<Mutex<vk::Queue>>,
-    compute_queue: Arc<Mutex<vk::Queue>>,
-}
-
-impl Queues {
-    #[allow(dead_code)]
-    fn new(
-        graphics: vk::Queue,
-        present: vk::Queue,
-        compute: vk::Queue,
-    ) -> Self {
-        let graphics_queue: Arc<Mutex<vk::Queue>>;
-        let present_queue: Arc<Mutex<vk::Queue>>;
-        let compute_queue: Arc<Mutex<vk::Queue>>;
-
-        graphics_queue = Arc::new(Mutex::new(graphics));
-
-        if present == graphics {
-            present_queue = graphics_queue.clone();
-        } else {
-            present_queue = Arc::new(Mutex::new(present));
-        }
-
-        if compute == graphics {
-            compute_queue = graphics_queue.clone();
-        } else {
-            compute_queue = Arc::new(Mutex::new(compute));
-        }
-
-        Self {
-            graphics_queue,
-            present_queue,
-            compute_queue,
-        }
-    }
-
-    pub fn lock_graphics(&self) -> MutexGuard<'_, vk::Queue> {
-        self.graphics_queue.lock()
-    }
-
-    pub fn try_lock_graphics(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.graphics_queue.try_lock()
-    }
-
-    pub fn lock_present(&self) -> MutexGuard<'_, vk::Queue> {
-        self.present_queue.lock()
-    }
-
-    pub fn try_lock_present(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.present_queue.try_lock()
-    }
-
-    pub fn lock_compute(&self) -> MutexGuard<'_, vk::Queue> {
-        self.compute_queue.lock()
-    }
-
-    pub fn try_lock_compute(&self) -> Option<MutexGuard<'_, vk::Queue>> {
-        self.compute_queue.try_lock()
-    }
-
-    pub fn is_graphics_locked(&self) -> bool {
-        self.graphics_queue.is_locked()
-    }
-
-    pub fn is_present_locked(&self) -> bool {
-        self.present_queue.is_locked()
-    }
-
-    pub fn is_compute_locked(&self) -> bool {
-        self.compute_queue.is_locked()
-    }
-}
+use crate::{app::Args, view::ScreenDims};
 
 pub struct GfaestusVk {
     pub allocator: Allocator,
@@ -139,24 +64,74 @@ pub struct GfaestusVk {
 
     pub vk_context: VkContext,
     // dimensions: ScreenDims,
+    // pub supported_features: SupportedFeatures,
 }
 
 impl GfaestusVk {
-    pub fn new(window: &Window) -> Result<Self> {
+    pub fn new(args: &Args) -> Result<(Self, EventLoop<()>, Window)> {
+        log::debug!("Initializing GfaestusVk context");
         let entry = unsafe { Entry::new() }?;
-        let instance = create_instance(&entry, window)?;
+
+        let instance_exts = init::instance_extensions(&entry)?;
+
+        let (event_loop, window) = {
+            let event_loop: EventLoop<()>;
+
+            #[cfg(target_os = "linux")]
+            {
+                event_loop = if args.force_x11 || !instance_exts.wayland_surface
+                {
+                    if let Ok(ev_loop) = EventLoop::new_x11() {
+                        log::debug!("Using X11 event loop");
+                        ev_loop
+                    } else {
+                        error!(
+                            "Error initializing X11 window, falling back to default"
+                        );
+                        EventLoop::new()
+                    }
+                } else {
+                    log::debug!("Using default event loop");
+                    EventLoop::new()
+                };
+            }
+
+            #[cfg(not(target_os = "linux"))]
+            {
+                log::debug!("Using default event loop");
+                event_loop = EventLoop::new();
+            }
+
+            log::debug!("Creating window");
+            let window = WindowBuilder::new()
+                .with_title("Gfaestus")
+                .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
+                .build(&event_loop)?;
+
+            (event_loop, window)
+        };
+
+        log::debug!("Created Vulkan entry");
+        let instance = create_instance(&entry, &window)?;
+        log::debug!("Created Vulkan instance");
 
         let surface = Surface::new(&entry, &instance);
         let surface_khr = unsafe {
-            ash_window::create_surface(&entry, &instance, window, None)
+            ash_window::create_surface(&entry, &instance, &window, None)
         }?;
+        log::debug!("Created window surface");
 
         let debug_utils = debug::setup_debug_utils(&entry, &instance);
 
         let (physical_device, graphics_ix, present_ix, compute_ix) =
-            choose_physical_device(&instance, &surface, surface_khr)?;
+            choose_physical_device(
+                &instance,
+                &surface,
+                surface_khr,
+                args.force_graphics_device.as_deref(),
+            )?;
 
-        let (device, graphics_queue, present_queue, compute_queue) =
+        let (device, graphics_queue, present_queue, _compute_queue) =
             create_logical_device(
                 &instance,
                 physical_device,
@@ -177,14 +152,6 @@ impl GfaestusVk {
 
         let allocator = vk_mem::Allocator::new(&allocator_create_info)?;
 
-        trace!("graphics_ix: {}", graphics_ix);
-        trace!("present_ix: {}", present_ix);
-        trace!("compute_ix: {}", compute_ix);
-
-        trace!("graphics_queue: {:?}", graphics_queue);
-        trace!("present_queue: {:?}", present_queue);
-        trace!("compute_queue: {:?}", compute_queue);
-
         let vk_context = VkContext::new(
             entry,
             instance,
@@ -193,7 +160,7 @@ impl GfaestusVk {
             surface_khr,
             physical_device,
             device,
-        );
+        )?;
 
         let width = 800u32;
         let height = 600u32;
@@ -212,7 +179,6 @@ impl GfaestusVk {
         )?;
 
         let msaa_samples = vk_context.get_max_usable_sample_count();
-        // let msaa_samples = vk::SampleCountFlags::TYPE_4;
 
         let command_pool = Self::create_command_pool(
             vk_context.device(),
@@ -309,7 +275,7 @@ impl GfaestusVk {
             "Offscreen Color Attachment",
         )?;
 
-        Ok(result)
+        Ok((result, event_loop, window))
     }
 
     pub fn swapchain_dims(&self) -> ScreenDims {
@@ -476,7 +442,7 @@ impl GfaestusVk {
                 width: self.swapchain_props.extent.width as f32,
                 height: self.swapchain_props.extent.height as f32,
                 min_depth: 0.0,
-                max_depth: 0.0,
+                max_depth: 1.0,
             };
 
             let viewports = [viewport];
@@ -636,26 +602,19 @@ impl GfaestusVk {
                     vk::ImageLayout::GENERAL,
                 ) => (
                     vk::AccessFlags::SHADER_READ,
-                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    // | vk::AccessFlags::COLOR_ATTACHMENT_WRITE
                     vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 ),
                 (
                     vk::ImageLayout::GENERAL,
                     vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
                 ) => (
-                    // vk::AccessFlags::empty(),
-                    // vk::AccessFlags::COLOR_ATTACHMENT_READ
-                    // vk::AccessFlags::COLOR_ATTACHMENT_WRITE
                     vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::AccessFlags::SHADER_READ,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::FRAGMENT_SHADER,
                 ),
                 (vk::ImageLayout::UNDEFINED, vk::ImageLayout::GENERAL) => (
@@ -665,7 +624,6 @@ impl GfaestusVk {
                         | vk::AccessFlags::MEMORY_READ
                         | vk::AccessFlags::MEMORY_WRITE,
                     vk::PipelineStageFlags::TOP_OF_PIPE,
-                    // vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
                     vk::PipelineStageFlags::BOTTOM_OF_PIPE,
                 ),
                 _ => panic!(
@@ -740,6 +698,8 @@ impl GfaestusVk {
         tiling: vk::ImageTiling,
         usage: vk::ImageUsageFlags,
     ) -> Result<(vk::Image, vk::DeviceMemory)> {
+        let device = vk_context.device();
+
         let img_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(vk::Extent3D {
@@ -758,8 +718,7 @@ impl GfaestusVk {
             .flags(vk::ImageCreateFlags::empty())
             .build();
 
-        let device = vk_context.device();
-
+        log::debug!("Creating image {:?}", img_info);
         let image = unsafe { device.create_image(&img_info, None) }?;
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
         let mem_type_ix = find_memory_type(
@@ -773,11 +732,13 @@ impl GfaestusVk {
             .memory_type_index(mem_type_ix)
             .build();
 
+        log::debug!("Allocating {} bytes of memory for image", mem_reqs.size);
         let memory = unsafe {
             let mem = device.allocate_memory(&alloc_info, None)?;
             device.bind_image_memory(image, mem, 0)?;
             mem
         };
+        log::debug!("Image created: {:?}", image);
 
         Ok((image, memory))
     }
@@ -870,7 +831,6 @@ impl GfaestusVk {
                     device.cmd_copy_image_to_buffer(
                         cmd_buf,
                         image,
-                        // vk::ImageLayout::GENERAL,
                         vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
                         buffer,
                         &regions,
@@ -1089,7 +1049,44 @@ impl GfaestusVk {
         Ok(())
     }
 
-    pub fn create_buffer_with_data<A, T>(
+    pub fn create_uninitialized_buffer<T>(
+        &self,
+        buffer_usage: vk::BufferUsageFlags,
+        memory_usage: vk_mem::MemoryUsage,
+        mapped: bool,
+        element_count: usize,
+    ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
+    where
+        T: Zeroable,
+    {
+        let size = element_count * std::mem::size_of::<T>();
+
+        let buffer_info = vk::BufferCreateInfo::builder()
+            .size(size as vk::DeviceSize)
+            .usage(buffer_usage)
+            .sharing_mode(vk::SharingMode::EXCLUSIVE)
+            .build();
+
+        let create_info = if mapped {
+            vk_mem::AllocationCreateInfo {
+                usage: vk_mem::MemoryUsage::CpuOnly,
+                flags: vk_mem::AllocationCreateFlags::MAPPED,
+                ..Default::default()
+            }
+        } else {
+            vk_mem::AllocationCreateInfo {
+                usage: memory_usage,
+                ..Default::default()
+            }
+        };
+
+        let (buffer, alloc, alloc_info) =
+            self.allocator.create_buffer(&buffer_info, &create_info)?;
+
+        Ok((buffer, alloc, alloc_info))
+    }
+
+    pub fn create_buffer_with_data<T>(
         &self,
         usage: vk::BufferUsageFlags,
         memory_usage: vk_mem::MemoryUsage,
@@ -1097,7 +1094,7 @@ impl GfaestusVk {
         data: &[T],
     ) -> Result<(vk::Buffer, vk_mem::Allocation, vk_mem::AllocationInfo)>
     where
-        T: Copy,
+        T: Pod,
     {
         use vk::BufferUsageFlags as Usage;
 
@@ -1124,15 +1121,10 @@ impl GfaestusVk {
         unsafe {
             let mapped_ptr = staging_alloc_info.get_mapped_data();
 
-            let mapped_ptr = mapped_ptr as *mut std::ffi::c_void;
+            let target_slice =
+                std::slice::from_raw_parts_mut(mapped_ptr, size as usize);
 
-            let mut align = ash::util::Align::new(
-                mapped_ptr,
-                std::mem::align_of::<A>() as u64,
-                std::mem::size_of_val(&data) as u64,
-            );
-
-            align.copy_from_slice(data);
+            target_slice.clone_from_slice(bytemuck::cast_slice(&data))
         }
 
         let buffer_info = vk::BufferCreateInfo::builder()
@@ -1535,14 +1527,11 @@ impl SwapchainSupportDetails {
     fn choose_swapchain_surface_present_mode(
         available_present_modes: &[vk::PresentModeKHR],
     ) -> vk::PresentModeKHR {
-        if available_present_modes.contains(&vk::PresentModeKHR::FIFO) {
-            vk::PresentModeKHR::FIFO
-        } else if available_present_modes.contains(&vk::PresentModeKHR::MAILBOX)
-        {
-            vk::PresentModeKHR::MAILBOX
-        } else {
-            vk::PresentModeKHR::IMMEDIATE
-        }
+        let checkit = |v| available_present_modes.contains(&v).then(|| v);
+
+        checkit(vk::PresentModeKHR::FIFO)
+            .or(checkit(vk::PresentModeKHR::MAILBOX))
+            .unwrap_or(vk::PresentModeKHR::IMMEDIATE)
     }
 
     /// Choose the swapchain extent.
@@ -1610,5 +1599,81 @@ impl Iterator for InFlightFrames {
         self.current_frame = (self.current_frame + 1) % self.sync_objects.len();
 
         Some(next)
+    }
+}
+
+#[derive(Clone)]
+pub struct Queues {
+    graphics_queue: Arc<Mutex<vk::Queue>>,
+    present_queue: Arc<Mutex<vk::Queue>>,
+    compute_queue: Arc<Mutex<vk::Queue>>,
+}
+
+impl Queues {
+    #[allow(dead_code)]
+    fn new(
+        graphics: vk::Queue,
+        present: vk::Queue,
+        compute: vk::Queue,
+    ) -> Self {
+        let graphics_queue: Arc<Mutex<vk::Queue>>;
+        let present_queue: Arc<Mutex<vk::Queue>>;
+        let compute_queue: Arc<Mutex<vk::Queue>>;
+
+        graphics_queue = Arc::new(Mutex::new(graphics));
+
+        if present == graphics {
+            present_queue = graphics_queue.clone();
+        } else {
+            present_queue = Arc::new(Mutex::new(present));
+        }
+
+        if compute == graphics {
+            compute_queue = graphics_queue.clone();
+        } else {
+            compute_queue = Arc::new(Mutex::new(compute));
+        }
+
+        Self {
+            graphics_queue,
+            present_queue,
+            compute_queue,
+        }
+    }
+
+    pub fn lock_graphics(&self) -> MutexGuard<'_, vk::Queue> {
+        self.graphics_queue.lock()
+    }
+
+    pub fn try_lock_graphics(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.graphics_queue.try_lock()
+    }
+
+    pub fn lock_present(&self) -> MutexGuard<'_, vk::Queue> {
+        self.present_queue.lock()
+    }
+
+    pub fn try_lock_present(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.present_queue.try_lock()
+    }
+
+    pub fn lock_compute(&self) -> MutexGuard<'_, vk::Queue> {
+        self.compute_queue.lock()
+    }
+
+    pub fn try_lock_compute(&self) -> Option<MutexGuard<'_, vk::Queue>> {
+        self.compute_queue.try_lock()
+    }
+
+    pub fn is_graphics_locked(&self) -> bool {
+        self.graphics_queue.is_locked()
+    }
+
+    pub fn is_present_locked(&self) -> bool {
+        self.present_queue.is_locked()
+    }
+
+    pub fn is_compute_locked(&self) -> bool {
+        self.compute_queue.is_locked()
     }
 }

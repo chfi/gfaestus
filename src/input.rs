@@ -1,4 +1,5 @@
-use winit::event::VirtualKeyCode;
+use rustc_hash::FxHashMap;
+use winit::event::{ElementState, VirtualKeyCode};
 #[allow(unused_imports)]
 use winit::{
     event::{self, Event, KeyboardInput, WindowEvent},
@@ -9,9 +10,9 @@ use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 use std::sync::Arc;
 
-use crate::app::AppInput;
 use crate::gui::GuiInput;
 use crate::{app::mainview::MainViewInput, gui::GuiMsg};
+use crate::{app::AppInput, reactor::Reactor};
 use crate::{app::SharedState, geometry::*};
 
 pub mod binds;
@@ -53,6 +54,16 @@ pub struct InputManager {
     gui: SubsystemInput<GuiInput>,
 
     gui_focus_state: crate::gui::GuiFocusState,
+
+    custom_binds: FxHashMap<
+        winit::event::VirtualKeyCode,
+        Arc<dyn Fn() + Send + Sync + 'static>,
+        // Box<dyn Fn() + Send + Sync + 'static>,
+    >,
+    // custom_binds: Arc<Mutex<FxHashMap<
+    //     winit::event::VirtualKeyCode,
+    //     Box<dyn Fn() + Send + Sync + 'static>,
+    // >>>,
 }
 
 impl InputManager {
@@ -78,7 +89,25 @@ impl InputManager {
         self.mouse_screen_pos.clone()
     }
 
-    pub fn handle_events(&self, gui_msg_tx: &channel::Sender<GuiMsg>) {
+    pub fn add_binding<F>(
+        &mut self,
+        key_code: winit::event::VirtualKeyCode,
+        command: F,
+    ) where
+        F: Fn() + Send + Sync + 'static,
+    {
+        let boxed = Arc::new(command) as Arc<dyn Fn() + Send + Sync + 'static>;
+        // log::warn!("calling boxed binding command");
+        // boxed();
+
+        self.custom_binds.insert(key_code, boxed);
+    }
+
+    pub fn handle_events(
+        &self,
+        reactor: &mut Reactor,
+        gui_msg_tx: &channel::Sender<GuiMsg>,
+    ) {
         while let Ok(winit_ev) = self.winit_rx.try_recv() {
             if let event::WindowEvent::CursorMoved { position, .. } = winit_ev {
                 self.mouse_screen_pos.store(Point {
@@ -177,6 +206,26 @@ impl InputManager {
                     }
                 }
             }
+
+            if let event::WindowEvent::KeyboardInput { input, .. } = winit_ev {
+                let pressed = input.state == ElementState::Pressed;
+                if pressed && !gui_wants_keyboard {
+                    if let Some(command) = input
+                        .virtual_keycode
+                        .and_then(|kc| self.custom_binds.get(&kc))
+                    {
+                        log::warn!("executing bound command!");
+
+                        let command = command.clone();
+
+                        if let Ok(handle) =
+                            reactor.spawn(async move { command() })
+                        {
+                            handle.forget();
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -203,6 +252,8 @@ impl InputManager {
             gui,
 
             gui_focus_state,
+
+            custom_binds: FxHashMap::default(),
         }
     }
 }

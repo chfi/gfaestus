@@ -17,15 +17,15 @@ use crate::{
     vulkan::texture::{GradientName, Gradients},
 };
 
-use crate::app::OverlayState;
-use crate::overlays::{OverlayData, OverlayKind};
+use crate::app::{OverlayCreatorMsg, OverlayState};
+use crate::overlays::OverlayKind;
 
 use super::file::FilePicker;
 
 pub struct OverlayList {
     overlay_state: OverlayState,
 
-    overlay_names: FxHashMap<usize, (OverlayKind, String)>,
+    pub(crate) overlay_names: FxHashMap<usize, (OverlayKind, String)>,
 
     gradient_picker: GradientPicker,
 
@@ -69,31 +69,22 @@ impl OverlayList {
             .show(ctx, |mut ui| {
                 ui.set_min_width(300.0);
 
-                let use_overlay = self.overlay_state.use_overlay();
-
                 ui.horizontal(|ui| {
-                    if ui
-                        .selectable_label(use_overlay, "Overlay enabled")
-                        .clicked()
-                    {
-                        self.overlay_state.toggle_overlay();
-                    }
-
                     if ui
                         .selectable_label(*open_creator, "Overlay creator")
                         .clicked()
                     {
                         *open_creator = !*open_creator;
                     }
-                });
 
-                let open_gradient_picker = self.gradient_picker_open.load();
-                if ui
-                    .selectable_label(open_gradient_picker, "Gradients")
-                    .clicked()
-                {
-                    self.gradient_picker_open.store(!open_gradient_picker);
-                }
+                    let open_gradient_picker = self.gradient_picker_open.load();
+                    if ui
+                        .selectable_label(open_gradient_picker, "Gradients")
+                        .clicked()
+                    {
+                        self.gradient_picker_open.store(!open_gradient_picker);
+                    }
+                });
 
                 egui::Grid::new("overlay_list_window_grid").show(
                     &mut ui,
@@ -108,11 +99,11 @@ impl OverlayList {
                         let mut current_overlay =
                             self.overlay_state.current_overlay();
 
-                        for (id, (kind, name)) in overlay_names {
+                        for (id, (_kind, name)) in overlay_names {
                             if ui
                                 .radio_value(
                                     &mut current_overlay,
-                                    Some((*id, *kind)),
+                                    Some(*id),
                                     name,
                                 )
                                 .clicked()
@@ -314,7 +305,6 @@ impl OverlayCreator {
                 let name = &mut self.name;
                 let file_picker = &mut self.file_picker;
                 let file_picker_open = &mut self.file_picker_open;
-                let latest_result = &self.latest_result;
 
                 let script_results = &mut self.script_results;
 
@@ -389,10 +379,6 @@ impl OverlayCreator {
                 }
             })
     }
-}
-
-pub enum OverlayCreatorMsg {
-    NewOverlay { name: String, data: OverlayData },
 }
 
 pub struct GradientPicker {

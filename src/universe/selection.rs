@@ -1,8 +1,7 @@
 use handlegraph::handle::NodeId;
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use crate::geometry::*;
-use crate::graph_query::GraphQuery;
 
 use super::Node;
 

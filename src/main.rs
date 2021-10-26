@@ -1,22 +1,26 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
+use crossbeam::atomic::AtomicCell;
+use futures::SinkExt;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::gui::console::Console;
+use gfaestus::context::{ContextEntry, ContextMenu};
+use gfaestus::quad_tree::QuadTree;
+use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
+use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
-use rustc_hash::FxHashMap;
-use texture::Gradients;
-use winit::event::{Event, WindowEvent};
-use winit::event_loop::{ControlFlow, EventLoop};
+use gfaestus::vulkan::texture::{Gradients, Gradients_};
 
-#[cfg(target_os = "linux")]
-use winit::platform::unix::*;
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap;
+use std::collections::HashMap;
+
+use winit::event::{ElementState, Event, MouseButton, WindowEvent};
+use winit::event_loop::ControlFlow;
 
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use argh::FromArgs;
-
-use gfaestus::app::mainview::*;
+use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -32,8 +36,7 @@ use gfaestus::vulkan::debug;
 
 #[allow(unused_imports)]
 use gfaestus::vulkan::draw_system::{
-    nodes::{NodeOverlay, NodeOverlayValue, Overlay},
-    post::PostProcessPipeline,
+    nodes::Overlay, post::PostProcessPipeline,
 };
 
 use gfaestus::vulkan::draw_system::selection::{
@@ -52,7 +55,6 @@ use ash::{vk, Device};
 #[allow(unused_imports)]
 use futures::executor::{ThreadPool, ThreadPoolBuilder};
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 #[allow(unused_imports)]
@@ -92,8 +94,15 @@ fn universe_from_gfa_layout(
     Ok((universe, stats))
 }
 
-fn set_up_logger() -> Result<LoggerHandle> {
-    let logger = Logger::try_with_env_or_str("info")?
+fn set_up_logger(args: &Args) -> Result<LoggerHandle> {
+    let spec = match (args.trace, args.debug, args.quiet) {
+        (true, _, _) => "trace",
+        (_, true, _) => "debug",
+        (_, _, true) => "",
+        _ => "info",
+    };
+
+    let logger = Logger::try_with_env_or_str(spec)?
         .log_to_file(FileSpec::default())
         .duplicate_to_stderr(Duplicate::Debug)
         .start()?;
@@ -104,41 +113,15 @@ fn set_up_logger() -> Result<LoggerHandle> {
 fn main() {
     let args: Args = argh::from_env();
 
-    let _logger = set_up_logger().unwrap();
+    let _logger = set_up_logger(&args).unwrap();
+
+    log::debug!("Logger initalized");
 
     let gfa_file = &args.gfa;
     let layout_file = &args.layout;
+    log::debug!("using {} and {}", gfa_file, layout_file);
 
-    let event_loop: EventLoop<()>;
-
-    #[cfg(target_os = "linux")]
-    {
-        event_loop = if args.force_x11 {
-            if let Ok(ev_loop) = EventLoop::new_x11() {
-                ev_loop
-            } else {
-                error!(
-                    "Error initializing X11 window, falling back to default"
-                );
-                EventLoop::new()
-            }
-        } else {
-            EventLoop::new()
-        };
-    }
-
-    #[cfg(not(target_os = "linux"))]
-    {
-        event_loop = EventLoop::new();
-    }
-
-    let window = WindowBuilder::new()
-        .with_title("Gfaestus")
-        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600))
-        .build(&event_loop)
-        .unwrap();
-
-    let mut gfaestus = match GfaestusVk::new(&window) {
+    let (mut gfaestus, event_loop, window) = match GfaestusVk::new(&args) {
         Ok(app) => app,
         Err(err) => {
             error!("Error initializing Gfaestus");
@@ -146,6 +129,8 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    let renderer_config = gfaestus.vk_context().renderer_config;
 
     let num_cpus = num_cpus::get();
 
@@ -167,6 +152,9 @@ fn main() {
         rayon_cpus = num_cpus - 4;
     }
 
+    log::debug!("futures thread pool: {}", futures_cpus);
+    log::debug!("rayon   thread pool: {}", rayon_cpus);
+
     // TODO make sure to set thread pool size to less than number of CPUs
     let thread_pool = ThreadPoolBuilder::new()
         .pool_size(futures_cpus)
@@ -183,10 +171,13 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
+    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
+
     let mut reactor = gfaestus::reactor::Reactor::init(
         thread_pool.clone(),
         rayon_pool,
         graph_query.clone(),
+        app.channels(),
     );
 
     let graph_query_worker =
@@ -239,25 +230,38 @@ fn main() {
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
-    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
+    let mut input_manager = InputManager::new(winit_rx, app.shared_state());
 
-    let input_manager = InputManager::new(winit_rx, app.shared_state());
+    input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
+        println!("i'm a bound command!");
+    });
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
     let gui_rx = input_manager.clone_gui_rx();
 
-    let node_vertices = universe.new_vertices();
+    let node_vertices = universe.node_vertices();
 
     let mut main_view = MainView::new(
         &gfaestus,
         app.clone_channels(),
         app.settings.clone(),
         app.shared_state().clone(),
-        // app.settings.node_width().clone(),
         graph_query.node_count(),
     )
     .unwrap();
+
+    let tree_bounding_box = {
+        let height = (bottom_right.x - top_left.x) / 4.0;
+
+        let mut tl = top_left;
+        let mut br = bottom_right;
+
+        tl.y = -height;
+        br.y = height;
+
+        Rect::new(tl, br)
+    };
 
     let mut gui = Gui::new(
         &gfaestus,
@@ -269,17 +273,107 @@ fn main() {
     )
     .unwrap();
 
-    if let Some(script_file) = args.run_script.as_ref() {
-        warn!("executing script file {}", script_file);
-        gui.console
-            .eval_file(&mut reactor, true, script_file)
-            .unwrap();
+    // create default overlays
+    {
+        let node_seq_script = "
+fn node_color(id) {
+  let h = handle(id, false);
+  let seq = graph.sequence(h);
+  let hash = hash_bytes(seq);
+  let color = hash_color(hash);
+  color
+}
+";
+
+        let step_count_script = "
+fn node_color(id) {
+  let h = handle(id, false);
+
+  let steps = graph.steps_on_handle(h);
+  let count = 0.0;
+
+  for step in steps {
+    count += 1.0;
+  }
+
+  count
+}
+";
+
+        create_overlay(
+            &gfaestus,
+            &mut main_view,
+            &reactor,
+            "Node Seq Hash",
+            node_seq_script,
+        )
+        .expect("Error creating node seq hash overlay");
+
+        create_overlay(
+            &gfaestus,
+            &mut main_view,
+            &reactor,
+            "Node Step Count",
+            step_count_script,
+        )
+        .expect("Error creating step count overlay");
     }
+
+    app.shared_state()
+        .overlay_state
+        .set_current_overlay(Some(0));
 
     let mut initial_view: Option<View> = None;
     let mut initialized_view = false;
 
-    let new_overlay_rx = reactor.overlay_create_rx.clone();
+    let new_overlay_rx = app.channels().new_overlay_rx.clone();
+
+    let mut modal_handler =
+        ModalHandler::new(app.shared_state().show_modal.to_owned());
+
+    /*
+    let mut receiver = {
+        let (res_tx, res_rx) =
+            futures::channel::mpsc::channel::<Option<String>>(2);
+
+        let callback = move |text: &mut String, ui: &mut egui::Ui| {
+            let _text_box = ui.text_edit_singleline(text);
+
+            let ok_btn = ui.button("OK");
+            let cancel_btn = ui.button("cancel");
+
+            if ok_btn.clicked() {
+                return Ok(ModalSuccess::Success);
+            }
+
+            if cancel_btn.clicked() {
+                return Ok(ModalSuccess::Cancel);
+            }
+
+            Err(ModalError::Continue)
+        };
+
+        let prepared = ModalHandler::prepare_callback(
+            &app.shared_state().show_modal,
+            String::new(),
+            callback,
+            res_tx,
+        );
+
+        app.channels().modal_tx.send(prepared).unwrap();
+
+        res_rx
+    };
+
+    {
+        let _ = reactor.spawn_forget(async move {
+            use futures::stream::StreamExt;
+            log::warn!("awaiting modal result");
+            let val = receiver.next().await;
+            log::warn!("result: {:?}", val);
+        });
+    }
+    */
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
@@ -294,67 +388,41 @@ fn main() {
         .upload_vertices(&gfaestus, &node_vertices)
         .unwrap();
 
-    let use_quad_renderer = {
-        let vk_ctx = gfaestus.vk_context();
-
-        if vk_ctx.portability_subset {
-            let subset_features =
-                gfaestus.vk_context().portability_features().unwrap();
-            println!("subset_features: {:?}", subset_features);
-            subset_features.tessellation_isolines == vk::FALSE
-        } else {
-            false
-        }
-    };
-
-    if use_quad_renderer {
-        warn!("using the quad edge renderer");
+    let mut edge_renderer = if gfaestus.vk_context().renderer_config.edges
+        == EdgeRendererType::Disabled
+    {
+        log::warn!(
+            "Device does not support tessellation shaders, disabling edges"
+        );
+        None
     } else {
-        warn!("using the isoline edge renderer");
-    }
-
-    let mut edge_renderer = EdgeRenderer::new(
-        &gfaestus,
-        &graph_query.graph_arc(),
-        universe.layout(),
-        gfaestus.msaa_samples,
-        gfaestus.render_passes.edges,
-        use_quad_renderer,
-    )
-    .unwrap();
-
-    app.themes
-        .upload_to_gpu(
+        let edge_renderer = EdgeRenderer::new(
             &gfaestus,
-            &mut main_view.node_draw_system.theme_pipeline,
+            &graph_query.graph_arc(),
+            universe.layout(),
         )
         .unwrap();
 
-    main_view
-        .node_draw_system
-        .theme_pipeline
-        .set_active_theme(0)
-        .unwrap();
+        Some(edge_renderer)
+    };
 
     let mut dirty_swapchain = false;
 
-    let mut selection_edge = SelectionOutlineEdgePipeline::new(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_edge_detect,
-        gfaestus.node_attachments.mask_resolve,
-    )
-    .unwrap();
+    let mut selection_edge =
+        SelectionOutlineEdgePipeline::new(&gfaestus, 1).unwrap();
 
-    let mut selection_blur = SelectionOutlineBlurPipeline::new(
-        &gfaestus,
-        1,
-        gfaestus.render_passes.selection_blur,
-        gfaestus.node_attachments.mask_resolve,
-    )
-    .unwrap();
+    let mut selection_blur =
+        SelectionOutlineBlurPipeline::new(&gfaestus, 1).unwrap();
 
     let gui_msg_tx = gui.clone_gui_msg_tx();
+
+    // let gradients_ = Gradients_::initialize(
+    //     &gfaestus,
+    //     gfaestus.transient_command_pool,
+    //     gfaestus.graphics_queue,
+    //     1024,
+    // )
+    // .unwrap();
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -367,7 +435,7 @@ fn main() {
     gui.populate_overlay_list(
         main_view
             .node_draw_system
-            .overlay_pipelines
+            .pipelines
             .overlay_names()
             .into_iter(),
     );
@@ -382,30 +450,85 @@ fn main() {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
-    if app.themes.is_active_theme_dark() {
-        gui_msg_tx.send(GuiMsg::SetDarkMode).unwrap();
-    } else {
-        gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
+    gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
+
+    let mut context_menu = ContextMenu::new(&app);
+    let open_context = AtomicCell::new(false);
+
+    // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
+    // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
+    //     FxHashMap::default();
+
+    if let Some(script_file) = args.run_script.as_ref() {
+        if script_file == "-" {
+            use bstr::ByteSlice;
+            use std::io::prelude::*;
+
+            let mut stdin = std::io::stdin();
+            let mut script_bytes = Vec::new();
+            let read = stdin.read_to_end(&mut script_bytes).unwrap();
+
+            if let Ok(script) = script_bytes[0..read].to_str() {
+                warn!("executing script {}", script_file);
+                gui.console.eval_line(&mut reactor, true, script).unwrap();
+            }
+        } else {
+            warn!("executing script file {}", script_file);
+            gui.console
+                .eval_file(&mut reactor, true, script_file)
+                .unwrap();
+        }
     }
 
-    /*
-    let mut fence_id: Option<usize> = None;
-    let mut translate_timer = std::time::Instant::now();
-    */
-
-    let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
-    let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
-        FxHashMap::default();
+    {
+        for annot_path in &args.annotation_files {
+            if annot_path.exists() {
+                if let Some(path_str) = annot_path.to_str() {
+                    let script = format!("load_collection(\"{}\");", path_str);
+                    log::warn!("executing script: {}", script);
+                    gui.console.eval_line(&mut reactor, true, &script).unwrap();
+                }
+            }
+        }
+    }
 
     event_loop.run(move |event, _, control_flow| {
 
         *control_flow = ControlFlow::Poll;
 
+        // NB: AFAIK the only event that isn't 'static is the window
+        // scale change (for high DPI displays), as it returns a
+        // reference
+        // so until the corresponding support is added, those events
+        // are simply ignored here
         let event = if let Some(ev) = event.to_static() {
             ev
         } else {
             return;
         };
+
+        if let Event::WindowEvent { event, .. } = &event {
+            if let WindowEvent::MouseInput { state, button, .. } = event {
+                if *state == ElementState::Pressed &&
+                    *button == MouseButton::Right {
+
+                        let focus = &app.shared_state().gui_focus_state;
+
+                        // this whole thing should be handled better
+                        if !focus.mouse_over_gui() {
+                            main_view.send_context(context_menu.tx());
+                        }
+
+                        open_context.store(true);
+                        // context_menu.open_context_menu(&gui.ctx);
+                        context_menu.set_position(app.shared_state().mouse_pos());
+                }
+            }
+        }
+
+        while let Ok(callback) = app.channels().modal_rx.try_recv() {
+            let _ = modal_handler.set_prepared_active(callback);
+        }
 
         if let Event::WindowEvent { event, .. } = &event {
             let ev = event.clone();
@@ -423,7 +546,7 @@ fn main() {
 
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
-                input_manager.handle_events(&gui_msg_tx);
+                input_manager.handle_events(&mut reactor, &gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();
 
@@ -439,6 +562,13 @@ fn main() {
 
                 if app.selection_changed() {
                     if let Some(selected) = app.selected_nodes() {
+
+                        log::warn!("sending selection");
+                        context_menu
+                            .tx()
+                            .send(ContextEntry::Selection { nodes: selected.to_owned() })
+                            .unwrap();
+
                         let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                         nodes.sort();
 
@@ -447,12 +577,22 @@ fn main() {
                             .send(NodeListMsg::SetFiltered(nodes));
 
                         main_view.update_node_selection(selected).unwrap();
+
+
                     } else {
                         gui.app_view_state()
                             .node_list()
                             .send(NodeListMsg::SetFiltered(Vec::new()));
 
                         main_view.clear_node_selection().unwrap();
+                    }
+                }
+
+                while let Ok((key_code, command)) = app.channels().binds_rx.try_recv() {
+                    if let Some(cmd) = command {
+                        input_manager.add_binding(key_code, cmd);
+                        // input_manager.add_binding(key_code, Box::new(cmd));
+                    } else {
                     }
                 }
 
@@ -502,6 +642,7 @@ fn main() {
                     }
 
                     app.apply_app_msg(
+                        tree_bounding_box,
                         main_view.main_view_msg_tx(),
                         &gui_msg_tx,
                         universe.layout().nodes(),
@@ -525,7 +666,7 @@ fn main() {
                         gui.populate_overlay_list(
                             main_view
                                 .node_draw_system
-                                .overlay_pipelines
+                                .pipelines
                                 .overlay_names()
                                 .into_iter(),
                         );
@@ -539,20 +680,23 @@ fn main() {
 
                 let edge_ubo = app.settings.edge_renderer().load();
 
-                edge_renderer.write_ubo(&edge_ubo).unwrap();
-
+                for er in edge_renderer.iter_mut() {
+                    er.write_ubo(&edge_ubo).unwrap();
+                }
             }
             Event::RedrawEventsCleared => {
 
-
+                log::trace!("Event::RedrawEventsCleared");
                 let edge_ubo = app.settings.edge_renderer().load();
                 let edge_width = edge_ubo.edge_width;
 
                 if let Some(fid) = translate_fence_id {
                     if compute_manager.is_fence_ready(fid).unwrap() {
+                        log::trace!("Node translation fence ready");
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
 
+                        log::trace!("Compute fence freed, updating CPU node positions");
                         universe.update_positions_from_gpu(&gfaestus,
                                                            &main_view.node_draw_system.vertices).unwrap();
 
@@ -563,19 +707,17 @@ fn main() {
                 if let Some(fid) = select_fence_id {
 
                     if compute_manager.is_fence_ready(fid).unwrap() {
-                        let t = std::time::Instant::now();
+                        log::trace!("Node selection fence ready");
                         compute_manager.block_on_fence(fid).unwrap();
                         compute_manager.free_fence(fid, false).unwrap();
-                        trace!("block & free took {} ns", t.elapsed().as_nanos());
 
-                        let t = std::time::Instant::now();
                         GfaestusVk::copy_buffer(gfaestus.vk_context().device(),
                                                 gfaestus.transient_command_pool,
                                                 gfaestus.graphics_queue,
                                                 gpu_selection.selection_buffer.buffer,
                                                 main_view.selection_buffer.buffer,
                                                 main_view.selection_buffer.size);
-                        trace!("buffer copy took {} ns", t.elapsed().as_nanos());
+                        log::trace!("Copied selection buffer to main view");
 
 
                         let t = std::time::Instant::now();
@@ -585,11 +727,9 @@ fn main() {
                                                 .vk_context()
                                                 .device())
                             .unwrap();
+                        log::trace!("Updated CPU selection buffer");
                         trace!("fill_selection_set took {} ns", t.elapsed().as_nanos());
 
-                        use gfaestus::app::Select;
-
-                        let t = std::time::Instant::now();
                         app.channels().app_tx
                             .send(AppMsg::Selection(Select::Many {
                             nodes: main_view
@@ -598,7 +738,6 @@ fn main() {
                                 .clone(),
                             clear: true }))
                             .unwrap();
-                        trace!("send took {} ns", t.elapsed().as_nanos());
 
 
                         select_fence_id = None;
@@ -609,6 +748,7 @@ fn main() {
 
                 if dirty_swapchain {
                     let size = window.inner_size();
+                    log::trace!("Dirty swapchain, reconstructing");
                     if size.width > 0 && size.height > 0 {
                         app.update_dims([size.width as f32, size.height as f32]);
                         gfaestus
@@ -643,6 +783,7 @@ fn main() {
                             Some(new_initial_view.scale),
                         );
                     } else {
+                        log::debug!("Can't recreate swapchain with a zero resolution");
                         return;
                     }
                 }
@@ -653,11 +794,44 @@ fn main() {
                     &graph_query,
                     &graph_query_worker,
                     app.annotations(),
+                    context_menu.tx(),
                 );
 
+                modal_handler.show(&gui.ctx);
+
+                {
+                    let ctx = &gui.ctx;
+                    let clipboard = &mut gui.clipboard_ctx;
+
+                    if open_context.load() {
+                        context_menu.recv_contexts();
+                        context_menu.open_context_menu(&gui.ctx);
+                        open_context.store(false);
+                    }
+
+                    context_menu.show(ctx, &reactor, clipboard);
+                }
+
+
+
+                {
+                    let shared_state = app.shared_state();
+                    let view = shared_state.view();
+                    let labels = app.labels();
+                    // log::debug!("Clustering label sets");
+                    let cluster_tree = labels.cluster(tree_bounding_box,
+                                                      app.settings.label_radius().load(),
+                                                      view);
+                    // log::debug!("Drawing label sets");
+                    cluster_tree.draw_labels(&gui.ctx, shared_state);
+                    // cluster_tree.draw_clusters(&gui.ctx, view);
+                }
+
+
+                /*
                 let annotations = app.annotations();
 
-
+                log::trace!("Drawing label sets");
                 for label_set in annotations.visible_label_sets() {
 
                     if !step_caches.contains_key(&label_set.path_id) {
@@ -795,6 +969,7 @@ fn main() {
                         }
                     }
                 }
+                */
 
 
                 let meshes = gui.end_frame();
@@ -815,21 +990,16 @@ fn main() {
 
                 let offscreen_image = gfaestus.offscreen_attachment.color.image;
 
-                main_view
-                    .node_draw_system
-                    .theme_pipeline
-                    .set_active_theme(app.themes.active_theme())
-                    .unwrap();
-
-                let use_overlay = app.shared_state().overlay_state().use_overlay();
-
                 let overlay =
                     app.shared_state().overlay_state().current_overlay();
-                let push_descriptor = gfaestus.vk_context().push_descriptor().clone();
 
                 let current_view = app.shared_state().view();
 
                 let edges_enabled = app.shared_state().edges_enabled();
+
+                // TODO this should also check tess. isoline support etc. i think
+                let edges_enabled = edges_enabled &&
+                    !matches!(renderer_config.edges, EdgeRendererType::Disabled);
 
                 let debug_utils = gfaestus.vk_context().debug_utils().map(|u| u.to_owned());
 
@@ -839,15 +1009,8 @@ fn main() {
 
                 let draw =
                     |device: &Device, cmd_buf: vk::CommandBuffer, framebuffers: &Framebuffers| {
-                        // let size = window.inner_size();
+                        log::trace!("In draw_frame_from callback");
                         let size = swapchain_dims;
-
-                        // let dims: [u32; 2] = swapchain_dims.into();
-
-                        // if [size.width, size.height] != dims {
-                        //     return;
-                        // }
-
 
                         debug::begin_cmd_buf_label(
                             debug_utils,
@@ -855,6 +1018,7 @@ fn main() {
                             "Image transitions"
                         );
 
+                        log::trace!("Pre-rendering image transitions");
                         unsafe {
                             let offscreen_image_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -898,6 +1062,7 @@ fn main() {
                         let gradient_name = app.shared_state().overlay_state().gradient();
                         let gradient = gradients.gradient(gradient_name).unwrap();
 
+                        log::trace!("Drawing nodes");
                         main_view.draw_nodes(
                             cmd_buf,
                             node_pass,
@@ -906,7 +1071,6 @@ fn main() {
                             Point::ZERO,
                             overlay,
                             gradient,
-                            use_overlay,
                         ).unwrap();
 
 
@@ -914,6 +1078,7 @@ fn main() {
 
                         if edges_enabled {
 
+                            log::trace!("Drawing edges");
                             debug::begin_cmd_buf_label(
                                 debug_utils,
                                 cmd_buf,
@@ -930,22 +1095,25 @@ fn main() {
                             edge_pipeline.preprocess_memory_barrier(cmd_buf).unwrap();
                             */
 
-                            edge_renderer.draw(
-                                cmd_buf,
-                                edge_width,
-                                &main_view.node_draw_system.vertices,
-                                edges_pass,
-                                framebuffers,
-                                size.into(),
-                                2.0,
-                                current_view,
-                                Point::ZERO,
-                            ).unwrap();
+                            for er in edge_renderer.iter_mut() {
+                                er.draw(
+                                    cmd_buf,
+                                    edge_width,
+                                    &main_view.node_draw_system.vertices,
+                                    edges_pass,
+                                    framebuffers,
+                                    size.into(),
+                                    2.0,
+                                    current_view,
+                                    Point::ZERO,
+                                ).unwrap();
+                            }
 
                             debug::end_cmd_buf_label(debug_utils, cmd_buf);
                         }
 
 
+                        log::trace!("Post-edge image transitions");
                         unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -984,6 +1152,7 @@ fn main() {
                             "Node selection border",
                         );
 
+                        log::trace!("Drawing selection border edge detection");
                         selection_edge
                             .draw(
                                 &device,
@@ -994,6 +1163,7 @@ fn main() {
                             )
                             .unwrap();
 
+                        log::trace!("Selection border edge detection -- image transitions");
                         unsafe {
                             let image_memory_barrier = vk::ImageMemoryBarrier::builder()
                                 .src_access_mask(vk::AccessFlags::COLOR_ATTACHMENT_WRITE)
@@ -1027,6 +1197,7 @@ fn main() {
                             );
                         }
 
+                        log::trace!("Drawing selection border blur");
                         selection_blur
                             .draw(
                                 &device,
@@ -1045,19 +1216,19 @@ fn main() {
                             "GUI",
                         );
 
+                        log::trace!("Drawing GUI");
                         gui.draw(
                             cmd_buf,
                             gui_pass,
                             framebuffers,
                             size.into(),
-                            // [size.width as f32, size.height as f32],
-                            &push_descriptor,
                             &gradients,
                         )
                         .unwrap();
 
                         debug::end_cmd_buf_label(debug_utils, cmd_buf);
 
+                        log::trace!("End of draw_frame_from callback");
                     };
 
                 let size = window.inner_size();
@@ -1066,6 +1237,7 @@ fn main() {
                 if !dirty_swapchain {
                     let screen_dims = app.dims();
 
+                    log::trace!("Copying node ID image to buffer");
                     GfaestusVk::copy_image_to_buffer(
                         gfaestus.vk_context().device(),
                         gfaestus.transient_command_pool,
@@ -1079,6 +1251,7 @@ fn main() {
                     ).unwrap();
                 }
 
+                log::trace!("Calculating FPS");
                 let frame_time = frame_t.elapsed().as_secs_f32();
                 frame_time_history[frame % frame_time_history.len()] = frame_time;
 
@@ -1099,6 +1272,7 @@ fn main() {
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::CloseRequested => {
+                    log::trace!("WindowEvent::CloseRequested");
                     *control_flow = ControlFlow::Exit;
                 }
                 WindowEvent::Resized { .. } => {
@@ -1107,6 +1281,8 @@ fn main() {
                 _ => (),
             },
             Event::LoopDestroyed => {
+                log::trace!("Event::LoopDestroyed");
+
                 gfaestus.wait_gpu_idle().unwrap();
 
                 let device = gfaestus.vk_context().device();
@@ -1136,75 +1312,96 @@ fn handle_new_overlay(
     let overlay = match data {
         OverlayData::RGB(data) => {
             let mut overlay =
-                NodeOverlay::new_empty_rgb(&name, app, node_count).unwrap();
+                Overlay::new_empty_rgb(&name, app, node_count).unwrap();
 
             overlay
-                .update_overlay(
-                    app.vk_context().device(),
+                .update_rgb_overlay(
                     data.iter()
                         .enumerate()
                         .map(|(ix, col)| (NodeId::from((ix as u64) + 1), *col)),
                 )
                 .unwrap();
 
-            Overlay::RGB(overlay)
+            overlay
         }
         OverlayData::Value(data) => {
             let mut overlay =
-                NodeOverlayValue::new_empty_value(&name, &app, node_count)
-                    .unwrap();
+                Overlay::new_empty_value(&name, &app, node_count).unwrap();
 
             overlay
-                .update_overlay(
-                    app.vk_context().device(),
+                .update_value_overlay(
                     data.iter()
                         .enumerate()
                         .map(|(ix, v)| (NodeId::from((ix as u64) + 1), *v)),
                 )
                 .unwrap();
 
-            Overlay::Value(overlay)
+            overlay
         }
     };
 
-    main_view
-        .node_draw_system
-        .overlay_pipelines
-        .create_overlay(overlay);
+    main_view.node_draw_system.pipelines.create_overlay(overlay);
 
     Ok(())
 }
 
-#[derive(FromArgs)]
-/// Gfaestus
-pub struct Args {
-    /// the GFA file to load
-    #[argh(positional)]
-    gfa: String,
+fn create_overlay(
+    app: &GfaestusVk,
+    main_view: &mut MainView,
+    reactor: &Reactor,
+    name: &str,
+    script: &str,
+) -> Result<()> {
+    let node_count = reactor.graph_query.graph.node_count();
 
-    /// the layout file to use
-    #[argh(positional)]
-    layout: String,
+    let script_config = gfaestus::script::ScriptConfig {
+        default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
+        target: gfaestus::script::ScriptTarget::Nodes,
+    };
 
-    /// load and run a script file at startup, e.g. for configuration
-    #[argh(option)]
-    run_script: Option<String>,
+    if let Ok(data) = gfaestus::script::overlay_colors_tgt(
+        &reactor.rayon_pool,
+        &script_config,
+        &reactor.graph_query,
+        script,
+    ) {
+        let msg = OverlayCreatorMsg::NewOverlay {
+            name: name.to_string(),
+            data,
+        };
+        handle_new_overlay(app, main_view, node_count, msg)?;
+    }
 
-    #[cfg(target_os = "linux")]
-    /// force use of x11 window (debugging)
-    #[argh(switch)]
-    force_x11: bool,
+    Ok(())
+}
 
-    /// suppress log messages
-    #[argh(switch, short = 'q')]
-    quiet: bool,
+fn draw_tree<T>(ctx: &egui::CtxRef, tree: &QuadTree<T>, app: &App)
+where
+    T: Clone + ToString,
+{
+    let view = app.shared_state().view();
+    let s = app.shared_state().mouse_pos();
+    let dims = app.dims();
+    let w = view.screen_point_to_world(dims, s);
 
-    /// log debug messages
-    #[argh(switch, short = 'd')]
-    debug: bool,
+    for leaf in tree.leaves() {
+        gfaestus::gui::text::draw_rect_world(ctx, view, leaf.boundary(), None);
 
-    // #[argh(switch, short = 'l')]
-    /// whether or not to log to a file in the working directory
-    #[argh(switch)]
-    log_to_file: bool,
+        let points = leaf.points();
+        let data = leaf.data();
+        for (point, val) in points.into_iter().zip(data.into_iter()) {
+            gfaestus::gui::text::draw_text_at_world_point(
+                ctx,
+                view,
+                *point,
+                &val.to_string(),
+            );
+        }
+    }
+
+    if let Some(closest) = tree.nearest_leaf(w) {
+        let rect = closest.boundary();
+        let color = rgb::RGBA::new(0.8, 0.1, 0.1, 1.0);
+        gfaestus::gui::text::draw_rect_world(ctx, view, rect, Some(color));
+    }
 }

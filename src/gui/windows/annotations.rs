@@ -34,6 +34,7 @@ use crate::{
         AnnotationLabelSet, AnnotationRecord, Annotations, BedRecords,
         ColumnKey, Gff3Records,
     },
+    app::channels::OverlayCreatorMsg,
     app::AppMsg,
     geometry::Point,
     graph_query::{GraphQuery, GraphQueryWorker},
@@ -42,7 +43,7 @@ use crate::{
     reactor::{Host, Outbox, Reactor},
 };
 
-use super::{file::FilePicker, overlays::OverlayCreatorMsg};
+use super::file::FilePicker;
 
 pub struct LabelSetList {}
 
@@ -222,7 +223,6 @@ impl AnnotationFileList {
                     running_msg("Loading BED");
 
                     let records = BedRecords::parse_bed_file(&file);
-
                     match records {
                         Ok(records) => {
                             let file_name = records.file_name().to_string();
@@ -777,68 +777,6 @@ where
         }
     }
 
-    fn calculate_annotation_set(
-        graph: &GraphQuery,
-        records: &C,
-        record_indices: &[usize],
-        path_id: PathId,
-        path_name: &str,
-        column: &C::ColumnKey,
-        label_set_name: &str,
-    ) -> Option<AnnotationLabelSet> {
-        if record_indices.is_empty() {
-            return None;
-        }
-
-        let offset = crate::annotations::path_name_offset(path_name.as_bytes());
-
-        let steps = graph.path_pos_steps(path_id)?;
-
-        let mut label_strings: Vec<String> =
-            Vec::with_capacity(record_indices.len());
-        let mut label_indices: FxHashMap<NodeId, Vec<usize>> =
-            FxHashMap::default();
-
-        for &record_ix in record_indices.iter() {
-            let record = records.records().get(record_ix)?;
-
-            if let Some(range) = crate::annotations::path_step_range(
-                &steps,
-                offset,
-                record.start(),
-                record.end(),
-            ) {
-                if let Some(value) = record.get_first(column) {
-                    if let Some((mid, _, _)) = range.get(range.len() / 2) {
-                        let index = label_strings.len();
-                        let label = format!("{}", value.as_bstr());
-                        label_strings.push(label);
-                        label_indices.entry(mid.id()).or_default().push(index);
-                    }
-                }
-            }
-        }
-
-        for labels in label_indices.values_mut() {
-            labels.sort();
-            labels.dedup();
-            labels.shrink_to_fit();
-        }
-
-        label_strings.shrink_to_fit();
-        label_indices.shrink_to_fit();
-
-        Some(AnnotationLabelSet::new(
-            records,
-            path_id,
-            path_name.as_bytes(),
-            column,
-            label_set_name,
-            label_strings,
-            label_indices,
-        ))
-    }
-
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
@@ -1005,7 +943,7 @@ where
                 create_label_set |= create_label_set_btn.clicked();
 
                 if create_label_set {
-                    if let Some(label_set) = Self::calculate_annotation_set(
+                    if let Some(label_set) = calculate_annotation_set(
                         graph.graph(),
                         records.as_ref(),
                         filtered_records,
@@ -1023,4 +961,71 @@ where
                 }
             })
     }
+}
+
+pub(crate) fn calculate_annotation_set<C>(
+    graph: &GraphQuery,
+    records: &C,
+    record_indices: &[usize],
+    path_id: PathId,
+    path_name: &str,
+    column: &C::ColumnKey,
+    label_set_name: &str,
+) -> Option<AnnotationLabelSet>
+where
+    C: AnnotationCollection + Send + Sync + 'static,
+{
+    log::warn!("checking record_indices.is_empty");
+    if record_indices.is_empty() {
+        return None;
+    }
+
+    let offset = crate::annotations::path_name_offset(path_name.as_bytes());
+
+    log::warn!("getting path steps");
+    let steps = graph.path_pos_steps(path_id)?;
+
+    let mut label_strings: Vec<String> =
+        Vec::with_capacity(record_indices.len());
+    let mut label_indices: FxHashMap<NodeId, Vec<usize>> = FxHashMap::default();
+
+    for &record_ix in record_indices.iter() {
+        log::trace!("getting record");
+        let record = records.records().get(record_ix)?;
+
+        if let Some(range) = crate::annotations::path_step_range(
+            &steps,
+            offset,
+            record.start(),
+            record.end(),
+        ) {
+            if let Some(value) = record.get_first(column) {
+                if let Some((mid, _, _)) = range.get(range.len() / 2) {
+                    let index = label_strings.len();
+                    let label = format!("{}", value.as_bstr());
+                    label_strings.push(label);
+                    label_indices.entry(mid.id()).or_default().push(index);
+                }
+            }
+        }
+    }
+
+    for labels in label_indices.values_mut() {
+        labels.sort();
+        labels.dedup();
+        labels.shrink_to_fit();
+    }
+
+    label_strings.shrink_to_fit();
+    label_indices.shrink_to_fit();
+
+    Some(AnnotationLabelSet::new(
+        records,
+        path_id,
+        path_name.as_bytes(),
+        column,
+        label_set_name,
+        label_strings,
+        label_indices,
+    ))
 }

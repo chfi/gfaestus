@@ -1,20 +1,16 @@
 use ash::{
     extensions::{
         ext::DebugUtils,
-        khr::{PushDescriptor, Surface, Swapchain},
+        khr::{Surface, Swapchain},
     },
     version::{DeviceV1_0, EntryV1_0, InstanceV1_0},
     vk::SurfaceKHR,
 };
 use ash::{vk, Device, Entry, Instance};
 
-use bstr::ByteSlice;
 use winit::window::Window;
 
-use std::{
-    ffi::{CStr, CString},
-    os::raw::c_char,
-};
+use std::ffi::{CStr, CString};
 
 use anyhow::Result;
 
@@ -25,10 +21,57 @@ use super::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+pub(super) fn instance_extensions(entry: &Entry) -> Result<InstanceExtensions> {
+    let instance_ext_props = entry.enumerate_instance_extension_properties()?;
+
+    let instance_extensions: InstanceExtensions;
+
+    // on linux, swiftshader only supports X11, not Wayland, so we
+    // need to make sure not to load the corresponding instance
+    // extension if it's not available
+    #[cfg(target_os = "linux")]
+    {
+        let mut has_x11 = false;
+        let mut has_wayland = false;
+
+        let xlib_surface = CString::new("VK_KHR_lib_surface")?;
+        let wayland_surface = CString::new("VK_KHR_wayland_surface")?;
+
+        log::warn!("enumerating instance extension properties");
+
+        for inst_prop in instance_ext_props {
+            let name =
+                unsafe { CStr::from_ptr(inst_prop.extension_name.as_ptr()) };
+            log::warn!("{:?}", name);
+
+            if name == xlib_surface.as_c_str() {
+                has_x11 = true;
+            }
+
+            if name == wayland_surface.as_c_str() {
+                has_wayland = true;
+            }
+        }
+
+        instance_extensions = InstanceExtensions {
+            x11_surface: has_x11,
+            wayland_surface: has_wayland,
+        };
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        instance_extensions = InstanceExtensions;
+    }
+
+    Ok(instance_extensions)
+}
+
 pub(super) fn create_instance(
     entry: &Entry,
     window: &Window,
 ) -> Result<Instance> {
+    log::debug!("Creating instance");
     let app_name = CString::new("Gfaestus")?;
 
     let app_info = vk::ApplicationInfo::builder()
@@ -41,6 +84,7 @@ pub(super) fn create_instance(
 
     let extension_names =
         ash_window::enumerate_required_extensions(window).unwrap();
+    log::debug!("Enumerated required instance extensions");
     let mut extension_names = extension_names
         .iter()
         .map(|ext| ext.as_ptr())
@@ -54,6 +98,7 @@ pub(super) fn create_instance(
         CString::new("VK_KHR_get_physical_device_properties2")?;
     extension_names.push(phys_device_properties2.as_ptr());
 
+    log::debug!("getting layer names and pointers");
     let (_layer_names, layer_names_ptrs) = get_layer_names_and_pointers();
 
     let mut instance_create_info = vk::InstanceCreateInfo::builder()
@@ -64,6 +109,11 @@ pub(super) fn create_instance(
         check_validation_layer_support(&entry);
         instance_create_info =
             instance_create_info.enabled_layer_names(&layer_names_ptrs);
+    }
+
+    for ext in extension_names.iter() {
+        let name = unsafe { CStr::from_ptr(*ext) };
+        log::debug!("Loading instance extension {:?}", name);
     }
 
     let instance =
@@ -194,22 +244,52 @@ pub(super) fn choose_physical_device(
     instance: &Instance,
     surface: &Surface,
     surface_khr: vk::SurfaceKHR,
+    force_device: Option<&str>,
 ) -> Result<(vk::PhysicalDevice, u32, u32, u32)> {
-    info!("Enumerating physical devices");
+    let devices = unsafe { instance.enumerate_physical_devices() }?;
 
-    let device = {
-        let devices = unsafe { instance.enumerate_physical_devices() }?;
+    log::debug!("Enumerating physical devices");
+
+    let (_, device) = if let Some(preferred_device) = force_device {
+        log::warn!("Attempting to force use of device {}", preferred_device);
+
+        let device_name = CString::new(preferred_device)?;
+
+        let device = devices
+            .into_iter()
+            .enumerate()
+            .find(|(_ix, dev)| {
+                let name = unsafe {
+                    let props = instance.get_physical_device_properties(*dev);
+                    CStr::from_ptr(props.device_name.as_ptr())
+                };
+                (name == device_name.as_c_str())
+                    && device_is_suitable(instance, surface, surface_khr, *dev)
+                        .unwrap()
+            })
+            .expect("No suitable physical device found!");
+
+        device
+    } else {
+        for (ix, device) in devices.iter().enumerate() {
+            unsafe {
+                let props = instance.get_physical_device_properties(*device);
+                log::debug!(
+                    "Device {} - {:?}",
+                    ix,
+                    CStr::from_ptr(props.device_name.as_ptr())
+                );
+            }
+        }
 
         devices
             .into_iter()
-            .find(|&dev| {
-                unsafe {
-                    let props = instance.get_physical_device_properties(dev);
-                    info!("{:?}", CStr::from_ptr(props.device_name.as_ptr()));
-                }
-                device_is_suitable(instance, surface, surface_khr, dev).unwrap()
+            .enumerate()
+            .find(|(_ix, dev)| {
+                device_is_suitable(instance, surface, surface_khr, *dev)
+                    .unwrap()
             })
-            .unwrap()
+            .expect("No suitable physical device found!")
     };
 
     let properties = unsafe { instance.get_physical_device_properties(device) };
@@ -223,6 +303,12 @@ pub(super) fn choose_physical_device(
 
     let (graphics_ix, present_ix, compute_ix) =
         find_queue_families(instance, surface, surface_khr, device)?;
+    log::debug!(
+        "Found queue families; graphics: {:?}, present: {:?}, compute: {:?}",
+        graphics_ix,
+        present_ix,
+        compute_ix
+    );
 
     Ok((
         device,
@@ -357,20 +443,21 @@ pub(super) fn create_logical_device(
     };
 
     let device_extensions = required_device_extensions();
-    let mut device_extensions_ptrs = device_extensions
+    let device_extensions_ptrs = device_extensions
         .iter()
         .map(|ext| ext.as_ptr())
         .collect::<Vec<_>>();
-
-    device_extensions_ptrs.push(PushDescriptor::name().as_ptr());
 
     let available_features =
         unsafe { instance.get_physical_device_features(device) };
 
     let mut device_features = vk::PhysicalDeviceFeatures::builder()
         .sampler_anisotropy(true)
-        .tessellation_shader(true)
         .independent_blend(true);
+
+    if available_features.tessellation_shader == vk::TRUE {
+        device_features = device_features.tessellation_shader(true);
+    }
 
     if available_features.wide_lines == vk::TRUE {
         device_features = device_features.wide_lines(true);
@@ -431,32 +518,25 @@ fn device_supports_features(
     macro_rules! mandatory {
         ($path:tt) => {
             if features.$path == vk::FALSE {
-                error!(
-                    "Device is missing the mandatory feature: {}",
-                    stringify!($path)
-                );
                 result = false;
             }
         };
     }
 
-    macro_rules! optional {
-        ($path:tt) => {
-            if features.$path == vk::FALSE {
-                warn!(
-                    "Device is missing the optional feature: {}",
-                    stringify!($path)
-                );
-            }
-        };
-    }
-
     mandatory!(sampler_anisotropy);
-    mandatory!(tessellation_shader);
     mandatory!(independent_blend);
 
-    // optional features
-    optional!(wide_lines);
-
     Ok(result)
+}
+
+// for now Linux is the only OS where the instance features may
+// differ, so non-Linux platforms use an empty struct
+#[cfg(not(target_os = "linux"))]
+pub struct InstanceExtensions {}
+
+#[cfg(target_os = "linux")]
+#[derive(Debug, Clone, Copy)]
+pub struct InstanceExtensions {
+    pub x11_surface: bool,
+    pub wayland_surface: bool,
 }

@@ -510,7 +510,7 @@ impl RenderPasses {
             ))?
         };
 
-        log::warn!("chose format: {:?}", id_format);
+        log::debug!("Chose node ID image format: {:?}", id_format);
 
         let nodes = Self::create_nodes(
             device,

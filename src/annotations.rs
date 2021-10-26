@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, VecDeque},
+    sync::Arc,
+};
 
 use anyhow::Result;
 
@@ -12,11 +15,13 @@ use handlegraph::packedgraph::paths::StepPtr;
 
 use bstr::ByteSlice;
 
+use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::quad_tree::QuadTree;
+use crate::{app::SharedState, gui::text::LabelPos};
 use crate::{geometry::*, universe::Node, view::*};
 
-use nalgebra as na;
 use nalgebra_glm as glm;
 
 pub mod bed;
@@ -24,6 +29,268 @@ pub mod gff;
 
 pub use bed::*;
 pub use gff::*;
+
+#[derive(Debug, Default, Clone)]
+pub struct LabelSet {
+    positions: Vec<LabelPos>,
+    // positions: Vec<(LabelPos, Vec<usize>)>,
+    label_strings: Vec<String>,
+}
+
+impl LabelSet {
+    pub fn add_at_world_point(
+        &mut self,
+        point: Point,
+        text: &str,
+        offset: Option<Point>,
+    ) {
+        let pos = LabelPos::World { point, offset };
+
+        self.positions.push(pos);
+        self.label_strings.push(text.to_string());
+    }
+
+    pub fn add_at_handle(&mut self, handle: Handle, text: &str) {
+        let pos = LabelPos::Handle {
+            handle,
+            offset: None,
+        };
+
+        self.positions.push(pos);
+        self.label_strings.push(text.to_string());
+    }
+
+    pub fn add_at_node(&mut self, node: NodeId, text: &str) {
+        let handle = Handle::pack(node, false);
+        self.add_at_handle(handle, text);
+    }
+
+    pub fn add_many_at<'a, 'b>(
+        &'a mut self,
+        pos: LabelPos,
+        strings: impl Iterator<Item = &'b str>,
+    ) {
+        for text in strings {
+            self.positions.push(pos);
+            self.label_strings.push(text.to_string());
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.positions.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.positions.is_empty()
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+struct Cluster {
+    offset: Option<Point>,
+    lines: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClusterTree {
+    clusters: QuadTree<Cluster>,
+}
+
+impl ClusterTree {
+    pub fn from_boundary(boundary: Rect) -> Self {
+        Self {
+            clusters: QuadTree::new(boundary),
+        }
+    }
+
+    pub fn from_label_tree<L>(
+        tree: &QuadTree<(Option<Point>, L)>,
+        label_radius: f32,
+        scale: f32,
+    ) -> Self
+    where
+        L: Clone + ToString,
+    {
+        let mut result = Self::from_boundary(tree.boundary());
+        result.insert_label_tree(tree, label_radius, scale);
+        result
+    }
+
+    pub fn insert_label_tree<L>(
+        &mut self,
+        tree: &QuadTree<(Option<Point>, L)>,
+        label_radius: f32,
+        scale: f32,
+    ) where
+        L: Clone + ToString,
+    {
+        let radius = label_radius * scale;
+
+        let clusters = &mut self.clusters;
+
+        for leaf in tree.leaves() {
+            for (point, (offset, text)) in leaf.elems() {
+                // use the closest cluster if it exists and is within the radius
+                if let Some(mut cluster) = clusters
+                    .nearest_mut(point)
+                    .filter(|c| c.point().dist(point) <= radius)
+                {
+                    let cmut = cluster.data_mut();
+                    cmut.lines.push(text.to_string());
+                } else {
+                    let new_cluster = Cluster {
+                        offset: *offset,
+                        lines: vec![text.to_string()],
+                    };
+                    let result = clusters.insert(point, new_cluster);
+                }
+            }
+        }
+    }
+
+    pub fn draw_labels(&self, ctx: &egui::CtxRef, shared_state: &SharedState) {
+        let view = shared_state.view();
+        let mouse_pos = shared_state.mouse_pos();
+
+        for leaf in self.clusters.leaves() {
+            for (origin, cluster) in leaf.elems() {
+                let mut y_offset = 0.0;
+                let mut count = 0;
+
+                let offset = cluster.offset.unwrap_or_default();
+
+                let anchor_dir = Point::new(-offset.x, -offset.y);
+                let offset = offset * 20.0;
+
+                let lines = &cluster.lines;
+
+                for text in cluster.lines.iter() {
+                    let rect =
+                        crate::gui::text::draw_text_at_world_point_offset(
+                            ctx,
+                            view,
+                            origin,
+                            offset + Point::new(0.0, y_offset),
+                            text,
+                        );
+
+                    if let Some(rect) = rect {
+                        let rect = rect.resize(0.98);
+                        if rect.contains(mouse_pos) {
+                            crate::gui::text::draw_rect(ctx, rect);
+
+                            // TODO need some form of configurable callback here
+                            /*
+                            if gui.ctx.input().pointer.any_click() {
+                                match column {
+                                    AnnotationColumn::Gff3(col) => {
+                                        if let Some(gff) = records.downcast_ref::<Gff3Records>() {
+                                            gui.scroll_to_gff_record(gff, col, label.as_bytes());
+                                        }
+                                    }
+                                    AnnotationColumn::Bed(col) => {
+                                        if let Some(bed) = records.downcast_ref::<BedRecords>() {
+                                            gui.scroll_to_bed_record(bed, col, label.as_bytes());
+                                        }
+                                    }
+                                }
+                            }
+                            */
+                        }
+                    }
+
+                    y_offset += 15.0;
+                    count += 1;
+
+                    if count > 10 {
+                        let count = count.min(lines.len());
+                        let rem = lines.len() - count;
+
+                        if rem > 0 {
+                            let more_label = format!("and {} more", rem);
+
+                            crate::gui::text::draw_text_at_world_point_offset(
+                                ctx,
+                                view,
+                                origin,
+                                offset + Point::new(0.0, y_offset),
+                                &more_label,
+                            );
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    pub fn draw_clusters(
+        &self,
+        ctx: &egui::CtxRef,
+        view: View,
+        label_radius: f32,
+    ) {
+        for leaf in self.clusters.leaves() {
+            for (point, _cluster) in leaf.elems() {
+                crate::gui::text::draw_circle_world(
+                    ctx,
+                    view,
+                    point,
+                    label_radius,
+                    None,
+                );
+            }
+        }
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Labels {
+    // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
+    label_trees: HashMap<String, QuadTree<(Option<Point>, String)>>,
+}
+
+impl Labels {
+    pub fn add_label_set(
+        &mut self,
+        boundary: Rect,
+        nodes: &[Node],
+        name: &str,
+        labels: &LabelSet,
+    ) {
+        let name = name.to_string();
+
+        let mut label_tree: QuadTree<(Option<Point>, String)> =
+            QuadTree::new(boundary);
+
+        for (&label_pos, text) in
+            labels.positions.iter().zip(labels.label_strings.iter())
+        {
+            let world = label_pos.world(nodes);
+            let offset = label_pos.offset(nodes);
+            let _result = label_tree.insert(world, (offset, text.to_string()));
+        }
+
+        self.label_trees.insert(name, label_tree);
+        // .insert(name, Arc::new(Mutex::new(label_tree)));
+    }
+
+    pub fn cluster(
+        &self,
+        boundary: Rect,
+        label_radius: f32,
+        view: View,
+    ) -> ClusterTree {
+        let mut clusters = ClusterTree::from_boundary(boundary);
+
+        for (_name, tree) in self.label_trees.iter() {
+            let _result =
+                clusters.insert_label_tree(&tree, label_radius, view.scale);
+        }
+
+        clusters
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct AnnotationLabelSet {
@@ -41,6 +308,19 @@ pub struct AnnotationLabelSet {
 }
 
 impl AnnotationLabelSet {
+    pub fn label_set(&self) -> LabelSet {
+        let mut labels = LabelSet::default();
+
+        for (node, label_indices) in self.labels.iter() {
+            for &ix in label_indices.iter() {
+                let text = &self.label_strings[ix];
+                labels.add_at_node(*node, text);
+            }
+        }
+
+        labels
+    }
+
     pub fn new<C, R, K>(
         annotations: &C,
         path_id: PathId,
@@ -89,7 +369,6 @@ impl AnnotationLabelSet {
         &self.label_strings
     }
 
-    // pub fn labels(&self) -> &FxHashMap<NodeId, Vec<String>> {
     pub fn labels(&self) -> &FxHashMap<NodeId, Vec<usize>> {
         &self.labels
     }
@@ -123,11 +402,26 @@ pub struct Annotations {
     bed_annotations: HashMap<String, Arc<BedRecords>>,
 
     label_sets: HashMap<String, Arc<AnnotationLabelSet>>,
+
+    annotation_default_ref_path: HashMap<String, PathId>,
 }
 
 impl Annotations {
     pub fn annot_names(&self) -> &[(String, AnnotationFileType)] {
         &self.annot_names
+    }
+
+    pub fn get_default_ref_path(&self, annot: &str) -> Option<PathId> {
+        self.annotation_default_ref_path.get(annot).copied()
+    }
+
+    pub fn set_default_ref_path(&mut self, annot: &str, path: Option<PathId>) {
+        if let Some(path) = path {
+            self.annotation_default_ref_path
+                .insert(annot.to_string(), path);
+        } else {
+            self.annotation_default_ref_path.remove(annot);
+        }
     }
 
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
@@ -402,7 +696,6 @@ pub struct ClusterIndices {
 }
 
 pub struct ClusterCache {
-    // labels: Vec<String>,
     pub label_set: Arc<AnnotationLabelSet>,
     pub cluster_offsets: Vec<Point>,
 

@@ -4,10 +4,7 @@ use crate::{
     view::{ScreenDims, View},
 };
 
-use handlegraph::{
-    handle::{Edge, NodeId},
-    handlegraph::*,
-};
+use handlegraph::{handle::Edge, handlegraph::*};
 
 use handlegraph::packedgraph::PackedGraph;
 
@@ -83,7 +80,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/edges.vert.spv");
         let tesc_src = crate::load_shader!("edges/edges.tesc.spv");
@@ -95,7 +91,6 @@ impl EdgeRenderer {
             msaa_samples,
             render_pass,
             layouts,
-            wide_lines,
             &vert_src,
             &tesc_src,
             &tese_src,
@@ -108,7 +103,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
     ) -> (vk::Pipeline, vk::PipelineLayout) {
         let vert_src = crate::load_shader!("edges/quads.vert.spv");
         let tesc_src = crate::load_shader!("edges/quads.tesc.spv");
@@ -120,7 +114,6 @@ impl EdgeRenderer {
             msaa_samples,
             render_pass,
             layouts,
-            wide_lines,
             &vert_src,
             &tesc_src,
             &tese_src,
@@ -133,7 +126,6 @@ impl EdgeRenderer {
         msaa_samples: vk::SampleCountFlags,
         render_pass: vk::RenderPass,
         layouts: &[vk::DescriptorSetLayout],
-        wide_lines: bool,
         vert_src: &[u32],
         tesc_src: &[u32],
         tese_src: &[u32],
@@ -214,7 +206,6 @@ impl EdgeRenderer {
                 .depth_clamp_enable(false)
                 .rasterizer_discard_enable(false)
                 .polygon_mode(vk::PolygonMode::FILL)
-                // .line_width(1.0)
                 .cull_mode(vk::CullModeFlags::NONE)
                 .front_face(vk::FrontFace::COUNTER_CLOCKWISE)
                 .depth_bias_enable(false)
@@ -323,11 +314,12 @@ impl EdgeRenderer {
         app: &GfaestusVk,
         graph: &PackedGraph,
         layout: &FlatLayout,
-        msaa_samples: vk::SampleCountFlags,
-        render_pass: vk::RenderPass,
-        use_quad_pipeline: bool,
     ) -> Result<Self> {
+        let vk_context = app.vk_context();
         let device = app.vk_context().device();
+
+        let msaa_samples = app.msaa_samples;
+        let render_pass = app.render_passes.edges;
 
         let ubo = EdgesUBOBuffer::new(app)?;
 
@@ -386,31 +378,29 @@ impl EdgeRenderer {
 
         let layouts = [desc_set_layout];
 
-        let features = unsafe {
-            let instance = app.vk_context().instance();
-            let p_device = app.vk_context().physical_device();
+        let renderer_config = vk_context.renderer_config;
+        let wide_lines = renderer_config.supported_features.wide_lines;
 
-            instance.get_physical_device_features(p_device)
-        };
-
-        let wide_lines = features.wide_lines == vk::TRUE;
-
-        let (pipeline, pipeline_layout) = if use_quad_pipeline {
-            Self::create_quad_pipeline(
-                device,
-                msaa_samples,
-                render_pass,
-                &layouts,
-                wide_lines,
-            )
-        } else {
-            Self::create_isoline_pipeline(
-                device,
-                msaa_samples,
-                render_pass,
-                &layouts,
-                wide_lines,
-            )
+        let (pipeline, pipeline_layout) = match renderer_config.edges {
+            crate::vulkan::context::EdgeRendererType::TessellationIsolines => {
+                Self::create_isoline_pipeline(
+                    device,
+                    msaa_samples,
+                    render_pass,
+                    &layouts,
+                )
+            }
+            crate::vulkan::context::EdgeRendererType::TessellationQuads => {
+                Self::create_quad_pipeline(
+                    device,
+                    msaa_samples,
+                    render_pass,
+                    &layouts,
+                )
+            }
+            crate::vulkan::context::EdgeRendererType::Disabled => {
+                anyhow::bail!("Tried to create a Disabled edge renderer!");
+            }
         };
 
         let edge_index_buffer =
@@ -629,12 +619,8 @@ impl EdgeIndices {
         let memory_usage = vk_mem::MemoryUsage::GpuOnly;
 
         let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<u32, _>(
-                usage,
-                memory_usage,
-                false,
-                &edges,
-            )?;
+            // .create_buffer_with_data::<u32, _>(
+            .create_buffer_with_data(usage, memory_usage, false, &edges)?;
 
         app.set_debug_object_name(buffer, "Edge Indices Buffer")?;
 
@@ -741,12 +727,8 @@ impl EdgesUBOBuffer {
         let memory_usage = vk_mem::MemoryUsage::CpuOnly;
 
         let (buffer, allocation, allocation_info) = app
-            .create_buffer_with_data::<f32, _>(
-                usage,
-                memory_usage,
-                true,
-                &data,
-            )?;
+            // .create_buffer_with_data::<f32, _>(
+            .create_buffer_with_data(usage, memory_usage, true, &data)?;
 
         app.set_debug_object_name(buffer, "Edges UBO")?;
 
@@ -802,6 +784,12 @@ impl EdgesUBOBuffer {
             align.copy_from_slice(&ubos);
         }
 
+        Ok(())
+    }
+
+    pub fn destroy(&self, app: &GfaestusVk) -> Result<()> {
+        app.allocator
+            .destroy_buffer(self.buffer, &self.allocation)?;
         Ok(())
     }
 }

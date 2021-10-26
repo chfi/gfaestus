@@ -24,7 +24,7 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     _user_data: *mut c_void,
 ) -> u32 {
     use vk::DebugUtilsMessageSeverityFlagsEXT as MsgSeverity;
-    use vk::DebugUtilsMessageTypeFlagsEXT as MsgType;
+    // use vk::DebugUtilsMessageTypeFlagsEXT as MsgType;
 
     // might be better to use the ordering like this, but i'll fix
     // that later if it's worthwhile
@@ -86,14 +86,13 @@ unsafe extern "system" fn vulkan_debug_utils_callback(
     }
 
     if !objects.is_empty() {
-        message_string.push_str("\n  Objects: \n");
+        let mut first = true;
         for obj in objects {
-            if obj.p_object_name.is_null() {
-                message_string.push_str(&format!(
-                    "       {:#x} - no name\n",
-                    obj.object_handle,
-                ));
-            } else {
+            if !obj.p_object_name.is_null() {
+                if first {
+                    message_string.push_str("\n  Objects: \n");
+                    first = false;
+                }
                 message_string.push_str(&format!(
                     "       {:#x} - {:?}\n",
                     obj.object_handle,
@@ -209,7 +208,6 @@ pub fn begin_cmd_buf_label(
     label: &str,
 ) {
     if let Some(utils) = utils {
-        use std::ffi::CString;
         let name = CString::new(label.as_bytes()).unwrap();
         let label = vk::DebugUtilsLabelEXT::builder().label_name(&name).build();
         unsafe {

@@ -19,12 +19,12 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    asynchronous::AsyncResult,
+    context::ContextEntry,
     gui::util::grid_row_label,
     reactor::{Host, Outbox, Reactor},
 };
 
-use crate::graph_query::{GraphQuery, GraphQueryWorker};
+use crate::graph_query::GraphQuery;
 use crate::{
     app::{AppMsg, Select},
     geometry::*,
@@ -135,11 +135,11 @@ impl PathDetails {
         &mut self,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
-        graph_query_worker: &GraphQueryWorker,
         ctx: &egui::CtxRef,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
         app_msg_tx: &Sender<AppMsg>,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         self.path_details.fetch(graph_query)?;
 
@@ -209,6 +209,7 @@ impl PathDetails {
                         graph_query,
                         node_details_id_cell,
                         open_node_details,
+                        ctx_tx,
                     );
 
                     ui.shrink_width_to_current();
@@ -228,6 +229,7 @@ impl PathList {
         _app_msg_tx: &Sender<AppMsg>,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let paths = &self.all_paths;
 
@@ -330,6 +332,14 @@ impl PathList {
                                     if row.clicked() {
                                         path_id_cell.store(Some(path_id));
                                         *open_path_details = true;
+                                    }
+
+                                    if row.clicked_by(
+                                        egui::PointerButton::Secondary,
+                                    ) {
+                                        ctx_tx
+                                            .send(ContextEntry::Path(path_id))
+                                            .unwrap();
                                     }
                                 }
                             }
@@ -463,15 +473,12 @@ impl StepRange {
     }
 }
 
-enum StepsMsg {
-    Running,
-    Error(String),
-}
+// enum StepsMsg {
+//     Error(String),
+// }
 
-type StepsResult = std::result::Result<
-    (PathId, usize, Vec<(Handle, StepPtr, usize)>),
-    StepsMsg,
->;
+type StepsResult =
+    std::result::Result<(PathId, usize, Vec<(Handle, StepPtr, usize)>), String>;
 
 pub struct StepList {
     fetched_path_id: Option<PathId>,
@@ -483,9 +490,6 @@ pub struct StepList {
     steps_host: Host<PathId, StepsResult>,
     latest_result: Option<StepsResult>,
 
-    step_query:
-        Option<AsyncResult<(PathId, usize, Vec<(Handle, StepPtr, usize)>)>>,
-
     range_filter: StepRange,
 
     update_filter: bool,
@@ -496,7 +500,7 @@ impl StepList {
         let graph_query = reactor.graph_query.clone();
 
         let steps_host = reactor.create_host(
-            move |outbox: &Outbox<StepsResult>, path: PathId| {
+            move |_outbox: &Outbox<StepsResult>, path: PathId| {
                 println!("in steps_host");
                 dbg!();
                 let graph = graph_query.graph();
@@ -519,7 +523,7 @@ impl StepList {
                     Ok((path, base_len, steps_vec))
                 } else {
                     dbg!();
-                    Err(StepsMsg::Error("Path not found".to_string()))
+                    Err("Path not found".to_string())
                 }
             },
         );
@@ -534,44 +538,10 @@ impl StepList {
             steps_host,
             latest_result: None,
 
-            step_query: None,
-
             range_filter: StepRange::default(),
 
             update_filter: false,
         }
-    }
-
-    fn async_path_update(
-        &mut self,
-        graph_query_worker: &GraphQueryWorker,
-        path: PathId,
-    ) {
-        let result =
-            graph_query_worker.run_query(move |graph_query| async move {
-                let graph = graph_query.graph();
-                let path_pos = graph_query.path_positions();
-
-                if let Some(steps) = graph.path_steps(path) {
-                    let base_len = path_pos.path_base_len(path).unwrap();
-
-                    let steps_vec = steps
-                        .filter_map(|step| {
-                            let handle = step.handle();
-                            let (step_ptr, _) = step;
-                            let base =
-                                path_pos.path_step_position(path, step_ptr)?;
-                            Some((handle, step_ptr, base))
-                        })
-                        .collect::<Vec<_>>();
-
-                    (path, base_len, steps_vec)
-                } else {
-                    return (path, 0, Vec::new());
-                }
-            });
-
-        self.step_query = Some(result);
     }
 
     pub fn ui(
@@ -581,48 +551,20 @@ impl StepList {
         _graph_query: &GraphQuery,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
+        ctx_tx: &Sender<ContextEntry>,
     ) -> egui::InnerResponse<()> {
         if let Some(result) = self.steps_host.take() {
-            println!("steps_host.take()");
-            match &result {
-                Ok((path, path_base_len, steps)) => {
-                    if self.update_filter {
-                        self.range_filter =
-                            StepRange::from_steps(*path_base_len, steps);
+            if let Ok((_path, path_base_len, steps)) = &result {
+                if self.update_filter {
+                    self.range_filter =
+                        StepRange::from_steps(*path_base_len, steps);
 
-                        self.update_filter = false;
-                    }
-                }
-                Err(err) => {
-                    //
+                    self.update_filter = false;
                 }
             }
 
             self.latest_result = Some(result);
         }
-
-        /*
-        if let Some(query) = self.step_query.as_mut() {
-            query.move_result_if_ready();
-        }
-
-        let steps = if let Some((_path, path_base_len, result)) =
-            self.step_query.as_ref().and_then(|q| q.get_result())
-        {
-            if self.update_filter {
-                self.range_filter =
-                    StepRange::from_steps(*path_base_len, &result);
-
-                self.update_filter = false;
-            }
-
-            result.as_slice()
-        } else {
-            self.range_filter = StepRange::default();
-
-            &[]
-        };
-        */
 
         let steps = if let Some(Ok((_, len, steps))) = &self.latest_result {
             if self.update_filter {
@@ -791,6 +733,12 @@ impl StepList {
                         if row.clicked() {
                             node_details_id_cell.store(Some(handle.id()));
                             *open_node_details = true;
+                        }
+
+                        if row.clicked_by(egui::PointerButton::Secondary) {
+                            ctx_tx
+                                .send(ContextEntry::Node(handle.id()))
+                                .unwrap();
                         }
                     }
                 })

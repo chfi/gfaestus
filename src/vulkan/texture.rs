@@ -48,14 +48,14 @@ impl Texture {
             height: height as u32,
             depth: 1,
         };
-
         let img_info = vk::ImageCreateInfo::builder()
             .image_type(vk::ImageType::TYPE_2D)
             .extent(extent)
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            // .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC
@@ -68,6 +68,7 @@ impl Texture {
             .flags(vk::ImageCreateFlags::empty())
             .build();
 
+        log::debug!("Creating image {:?}", img_info);
         let image = unsafe { device.create_image(&img_info, None) }?;
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
         let mem_type_ix = super::find_memory_type(
@@ -81,12 +82,14 @@ impl Texture {
             .memory_type_index(mem_type_ix)
             .build();
 
+        log::debug!("Allocating {} bytes of memory for image", mem_reqs.size);
         let memory = unsafe {
             let mem = device.allocate_memory(&alloc_info, None)?;
             device.bind_image_memory(image, mem, 0)?;
             mem
         };
 
+        log::debug!("Transitioning image to SHADER_READ_ONLY_OPTIMAL");
         super::GfaestusVk::transition_image(
             device,
             command_pool,
@@ -112,10 +115,42 @@ impl Texture {
 
             unsafe { device.create_image_view(&create_info, None) }
         }?;
+        // log::debug!("Created image view {:?}", view);
+        log::debug!("Created image view");
 
         let texture = Self::new(image, memory, view, None);
+        log::debug!("Image created: {:?}", image);
 
         Ok(texture)
+    }
+
+    pub fn copy_from_slice(
+        &self,
+        app: &super::GfaestusVk,
+        command_pool: vk::CommandPool,
+        transition_queue: vk::Queue,
+        width: usize,
+        height: usize,
+        data: &[u8],
+    ) -> Result<()> {
+        let usage = vk::BufferUsageFlags::TRANSFER_SRC;
+        let memory_usage = vk_mem::MemoryUsage::GpuOnly;
+
+        let (staging_buf, staging_alloc, _) =
+            app.create_buffer_with_data(usage, memory_usage, false, &data)?;
+
+        self.copy_from_buffer(
+            app,
+            command_pool,
+            transition_queue,
+            staging_buf,
+            width,
+            height,
+        )?;
+
+        app.allocator.destroy_buffer(staging_buf, &staging_alloc)?;
+
+        Ok(())
     }
 
     pub fn copy_from_buffer(
@@ -135,6 +170,8 @@ impl Texture {
         };
 
         let device = app.vk_context().device();
+
+        log::debug!("Copying buffer into texture");
 
         super::GfaestusVk::transition_image(
             device,
@@ -187,11 +224,19 @@ impl Texture {
         let image_size =
             (pixels.len() * std::mem::size_of::<u8>()) as vk::DeviceSize;
 
+        log::debug!(
+            "Creating {}x{} R8_UNORM texture from pixel slice",
+            width,
+            height
+        );
+
         let (buffer, buf_mem, buf_size) = app.create_buffer(
             image_size,
             BufUsage::TRANSFER_SRC,
             MemProps::HOST_VISIBLE | MemProps::HOST_COHERENT,
         )?;
+
+        log::debug!("Created staging buffer");
 
         unsafe {
             let ptr = device.map_memory(
@@ -210,6 +255,7 @@ impl Texture {
             device.unmap_memory(buf_mem);
         }
 
+        log::debug!("Copied pixels into staging buffer");
         let extent = vk::Extent3D {
             width: width as u32,
             height: height as u32,
@@ -222,7 +268,8 @@ impl Texture {
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
+            // .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC
@@ -234,6 +281,7 @@ impl Texture {
             .flags(vk::ImageCreateFlags::empty())
             .build();
 
+        log::debug!("Creating image {:?}", img_info);
         let image = unsafe { device.create_image(&img_info, None) }?;
         let mem_reqs = unsafe { device.get_image_memory_requirements(image) };
         let mem_type_ix = super::find_memory_type(
@@ -285,6 +333,7 @@ impl Texture {
             )?;
         }
 
+        log::debug!("Filled image from staging buffer");
         let view = {
             let create_info = vk::ImageViewCreateInfo::builder()
                 .image(image)
@@ -346,6 +395,8 @@ impl Texture {
     ) -> Result<Self> {
         use vk::ImageLayout as Layout;
 
+        log::trace!("creating attachment image");
+
         let (img, mem) = super::GfaestusVk::create_image(
             vk_context,
             vk::MemoryPropertyFlags::DEVICE_LOCAL,
@@ -384,6 +435,8 @@ impl Texture {
         msaa_samples: vk::SampleCountFlags,
     ) -> Result<Self> {
         let format = swapchain_props.format.format;
+
+        log::trace!("creating transient color image");
 
         use vk::ImageLayout as Layout;
         use vk::ImageUsageFlags as Usage;
@@ -515,7 +568,8 @@ impl Texture1D {
             .mip_levels(1)
             .array_layers(1)
             .format(format)
-            .tiling(vk::ImageTiling::LINEAR)
+            // .tiling(vk::ImageTiling::LINEAR)
+            .tiling(vk::ImageTiling::OPTIMAL)
             .initial_layout(vk::ImageLayout::UNDEFINED)
             .usage(
                 ImgUsage::TRANSFER_SRC

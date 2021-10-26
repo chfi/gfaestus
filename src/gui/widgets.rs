@@ -7,8 +7,9 @@ use handlegraph::{
     packed::*,
     pathhandlegraph::*,
 };
+use rustc_hash::FxHashMap;
 
-use crate::app::AppMsg;
+use crate::{app::AppMsg, overlays::OverlayKind};
 use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
@@ -25,6 +26,8 @@ pub trait Widget {
 pub struct MenuBar {
     overlay_state: OverlayState,
 
+    overlay_list: Vec<(usize, String)>,
+
     height: AtomicCell<f32>,
 }
 
@@ -34,12 +37,25 @@ impl MenuBar {
     pub fn new(overlay_state: OverlayState) -> Self {
         Self {
             overlay_state,
+            overlay_list: Vec::new(),
             height: AtomicCell::new(0.0),
         }
     }
 
     pub fn height(&self) -> f32 {
         self.height.load()
+    }
+
+    pub fn populate_overlay_list(
+        &mut self,
+        names: &FxHashMap<usize, (OverlayKind, String)>,
+    ) {
+        let mut overlay_list = names
+            .iter()
+            .map(|(ix, (_, name))| (*ix, name.to_owned()))
+            .collect::<Vec<_>>();
+        overlay_list.sort_by_key(|(ix, _)| *ix);
+        self.overlay_list = overlay_list;
     }
 
     pub fn ui<'a>(
@@ -61,8 +77,6 @@ impl MenuBar {
         let overlays = &mut open_windows.overlays;
 
         let resp = egui::TopBottomPanel::top(Self::ID).show(ctx, |ui| {
-            // ui.horizontal(|ui| {
-
             use egui::menu;
 
             menu::bar(ui, |ui| {
@@ -75,10 +89,6 @@ impl MenuBar {
                         *paths = !*paths;
                     }
                 });
-
-                // if ui.selectable_label(*themes, "Themes").clicked() {
-                //     *themes = !*themes;
-                // }
 
                 menu::menu(ui, "Annotations", |ui| {
                     if ui.selectable_label(*annotation_files, "Files").clicked()
@@ -106,16 +116,6 @@ impl MenuBar {
                     {
                         *overlays = !*overlays;
                     }
-
-                    if ui
-                        .selectable_label(
-                            self.overlay_state.use_overlay(),
-                            "Show overlay",
-                        )
-                        .clicked()
-                    {
-                        self.overlay_state.toggle_overlay()
-                    }
                 });
 
                 menu::menu(ui, "View", |ui| {
@@ -129,6 +129,29 @@ impl MenuBar {
                         *settings = !*settings;
                     }
                 });
+
+                let mut selected =
+                    self.overlay_state.current_overlay().unwrap();
+                let overlay_count = self.overlay_list.len();
+
+                ui.separator();
+
+                let overlay_list =
+                    egui::ComboBox::from_id_source("menu_bar_overlay_list")
+                        .show_index(
+                            ui,
+                            &mut selected,
+                            overlay_count,
+                            |ix: usize| {
+                                let (_, name) =
+                                    self.overlay_list.get(ix).unwrap();
+                                name.to_string()
+                            },
+                        );
+
+                if overlay_list.changed() {
+                    self.overlay_state.set_current_overlay(Some(selected));
+                }
             });
         });
 
