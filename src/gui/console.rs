@@ -1539,6 +1539,84 @@ impl ConsoleShared {
                 _ => Err("Could not parse node ID".into()),
             }
         });
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+        let graph = self.graph.clone();
+
+        engine.register_fn("bed_label_wizard", move || {
+            #[derive(Clone, Debug, Default)]
+            struct WizardState {
+                annotation_file: String,
+                column_ix: usize,
+                column: Option<BedColumn>,
+            }
+
+            #[derive(Clone, Copy, PartialEq, Eq)]
+            enum WizardPage {
+                First,
+                Second,
+            }
+
+            let should_focus = AtomicCell::new(true);
+            let wizard_page = AtomicCell::new(WizardPage::First);
+
+            let (result_tx, result_rx) =
+                futures::channel::mpsc::channel::<Option<WizardState>>(1);
+
+            let callback = move |state: &mut WizardState, ui: &mut egui::Ui| {
+                match wizard_page.load() {
+                    WizardPage::First => {
+                        // choose annotation file
+                        ui.label("Choose annotation file");
+                        let text_box =
+                            ui.text_edit_singleline(&mut state.annotation_file);
+
+                        let next = ui.button("Next");
+                        if next.clicked() {
+                            wizard_page.store(WizardPage::Second);
+                            should_focus.store(false);
+                        }
+
+                        if should_focus.fetch_and(false) {
+                            text_box.request_focus();
+                        }
+
+                        if text_box.lost_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                        {
+                            return Ok(ModalSuccess::Success);
+                        }
+                    }
+                    WizardPage::Second => {
+                        //
+                        ui.label("Choose column");
+                        let input =
+                            ui.add(egui::DragValue::new(&mut state.column_ix));
+
+                        let prev = ui.button("Back");
+                        if prev.clicked() {
+                            wizard_page.store(WizardPage::First);
+                            should_focus.store(true);
+                        }
+                    }
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                WizardState::default(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result_str = futures_helper(result_rx).unwrap_or_default();
+            result_str
+        });
     }
 
     fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
