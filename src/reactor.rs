@@ -17,7 +17,7 @@ use crate::app::AppChannels;
 use crate::graph_query::GraphQuery;
 
 pub struct Reactor {
-    thread_pool: futures::executor::ThreadPool,
+    pub thread_pool: futures::executor::ThreadPool,
     pub rayon_pool: Arc<rayon::ThreadPool>,
 
     pub graph_query: Arc<GraphQuery>,

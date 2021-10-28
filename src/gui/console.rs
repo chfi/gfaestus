@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
 
-use futures::{future::RemoteHandle, Future, StreamExt};
+use futures::{future::RemoteHandle, task::SpawnExt, Future, StreamExt};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -84,6 +84,7 @@ pub struct Console<'a> {
     key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
 
+    thread_pool: futures::executor::ThreadPool,
     rayon_pool: Arc<rayon::ThreadPool>,
 
     // TODO this shouldn't be a Vec, and it should probably use an
@@ -112,7 +113,7 @@ pub struct ConsoleShared {
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
 
-    // is this a bad idea? i should probably just use a global pool
+    thread_pool: futures::executor::ThreadPool,
     rayon_pool: Arc<rayon::ThreadPool>,
 
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
@@ -138,6 +139,7 @@ impl Console<'static> {
 
         let future_tx = reactor.future_tx.clone();
 
+        let thread_pool = reactor.thread_pool.clone();
         let rayon_pool = reactor.rayon_pool.clone();
 
         // These macros add to the keys available with the `get` and `set` console functions
@@ -329,6 +331,8 @@ impl Console<'static> {
             key_code_map,
 
             overlay_list,
+
+            thread_pool,
             rayon_pool,
 
             window_defs,
@@ -352,6 +356,8 @@ impl Console<'static> {
             result_tx: self.result_tx.clone(),
 
             overlay_list: self.overlay_list.clone(),
+
+            thread_pool: self.thread_pool.clone(),
             rayon_pool: self.rayon_pool.clone(),
 
             future_tx: self.future_tx.clone(),
@@ -923,15 +929,13 @@ impl Console<'static> {
 
         let scope = self.scope.clone();
 
-        let handle = reactor.spawn(async move {
+        reactor.spawn_forget(async move {
             let mut scope = scope.lock();
 
             let result =
                 engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
             let _ = result_tx.send(result);
         })?;
-
-        handle.forget();
 
         Ok(())
     }
@@ -1308,10 +1312,7 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
-            let (rect, _result) =
-                std::thread::spawn(move || rx.recv().unwrap())
-                    .join()
-                    .unwrap();
+            let (rect, _) = rx.recv().unwrap();
 
             rect.center()
         });
@@ -1542,6 +1543,7 @@ impl ConsoleShared {
 
         let modal_tx = self.channels.modal_tx.clone();
         let show_modal = self.shared_state.show_modal.clone();
+        let thread_pool = self.thread_pool.clone();
         engine.register_result_fn("file_picker_modal", move || {
             let future = crate::reactor::file_picker_modal(
                 modal_tx.clone(),
@@ -1563,10 +1565,75 @@ impl ConsoleShared {
         let show_modal = self.shared_state.show_modal.clone();
         let graph = self.graph.clone();
 
+        let thread_pool = self.thread_pool.clone();
+
         engine.register_fn("bed_label_wizard", move || {
+            let path_future = crate::reactor::file_picker_modal(
+                modal_tx.clone(),
+                &show_modal,
+                &["bed"],
+            );
+
+            let (col_tx, mut col_rx) =
+                futures::channel::mpsc::channel::<Option<usize>>(1);
+
+            let first_run = AtomicCell::new(true);
+
+            let show_modal = show_modal.clone();
+            let modal_tx = modal_tx.clone();
+
+            let column_future = async move {
+                let callback = move |val: &mut usize, ui: &mut egui::Ui| {
+                    ui.label("Enter column index");
+                    let value = ui.add(
+                        egui::DragValue::new::<usize>(val).clamp_range(0..=64),
+                    );
+                    // let text_box = ui.text_edit_singleline(text);
+
+                    if first_run.fetch_and(false) {
+                        value.request_focus();
+                    }
+
+                    if value.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
+
+                    Err(ModalError::Continue)
+                };
+
+                let prepared = ModalHandler::prepare_callback(
+                    &show_modal,
+                    0,
+                    callback,
+                    col_tx,
+                );
+
+                modal_tx.send(prepared).unwrap();
+
+                col_rx.next().await.flatten()
+            };
+
+            let result = thread_pool.spawn(async {
+                if let Some(path) = path_future.await {
+                    log::warn!("path: {:?}", path);
+                    // TODO load the BED file
+
+                    let column = column_future.await;
+                    log::warn!("column: {:?}", column);
+                }
+            });
+
+            match result {
+                Ok(_) => true,
+                Err(_) => false,
+            }
+
+            /*
             #[derive(Clone, Debug, Default)]
             struct WizardState {
-                annotation_file: String,
+                annotation_file: PathBuf,
                 column_ix: usize,
                 column: Option<BedColumn>,
             }
@@ -1635,6 +1702,7 @@ impl ConsoleShared {
 
             let result_str = futures_helper(result_rx).unwrap_or_default();
             result_str
+            */
         });
     }
 
@@ -1904,10 +1972,10 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
-            let result = Self::error_helper::<Vec<String>>(&result).unwrap();
+            let result = rx.recv().unwrap().unwrap();
+            let strings: Vec<String> = result.cast();
 
-            let result = result
+            let result = strings
                 .into_iter()
                 .map(rhai::Dynamic::from)
                 .collect::<Vec<_>>();
@@ -1985,13 +2053,13 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+            let result = rx.recv().unwrap();
 
             if let Err(_) = &result {
                 return Err("Error spawning console request thread".into());
             }
 
-            let result = result.unwrap().unwrap();
+            let result = result.unwrap();
 
             if result.type_id() == TypeId::of::<Arc<Gff3Records>>()
                 || result.type_id() == TypeId::of::<Arc<BedRecords>>()

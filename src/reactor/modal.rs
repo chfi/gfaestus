@@ -282,22 +282,8 @@ pub fn file_picker_modal(
         FilePicker::new(egui::Id::new("_file_picker"), pwd).unwrap();
     file_picker.set_visible_extensions(extensions).unwrap();
 
-    let first_run = AtomicCell::new(true);
-
-    let text = Arc::new(Mutex::new(String::new()));
-
     let closure = move |state: &mut FilePicker, ui: &mut egui::Ui| {
         state.ui_impl(ui);
-
-        /*
-            let text_box = ui.text_edit_singleline(&mut state.current_dir_text);
-
-        if text_box.changed() {
-            let lock = text.lock();
-            let path_buf = PathBuf::from(&lock as &String);
-            *path = path_buf;
-        }
-        */
 
         // if text_box.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
         //     return Ok(ModalSuccess::Success);
