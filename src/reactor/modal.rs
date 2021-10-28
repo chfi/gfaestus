@@ -1,9 +1,9 @@
 use crossbeam::atomic::AtomicCell;
-use futures::{future::RemoteHandle, SinkExt};
+use futures::{future::RemoteHandle, Future, SinkExt, StreamExt};
 use parking_lot::{
     Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use crate::geometry::Point;
 
@@ -268,6 +268,65 @@ impl ModalHandler {
     }
 }
 
+pub fn file_picker_modal(
+    modal_tx: crossbeam::channel::Sender<
+        Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
+    >,
+    show_modal: &Arc<AtomicCell<bool>>,
+    extensions: &[&str],
+) -> impl Future<Output = Option<PathBuf>> + Send + Sync + 'static {
+    use crate::gui::windows::file::FilePicker;
+
+    let pwd = std::fs::canonicalize("./").unwrap();
+    let mut file_picker =
+        FilePicker::new(egui::Id::new("_file_picker"), pwd).unwrap();
+    file_picker.set_visible_extensions(extensions).unwrap();
+
+    let first_run = AtomicCell::new(true);
+
+    let text = Arc::new(Mutex::new(String::new()));
+
+    let closure = move |path: &mut PathBuf, ui: &mut egui::Ui| {
+        let text = text.clone();
+        let text_box = {
+            let mut lock = text.lock();
+            let text_box = ui.text_edit_singleline(&mut lock as &mut String);
+            text_box
+        };
+
+        if text_box.changed() {
+            let lock = text.lock();
+            let path_buf = PathBuf::from(&lock as &String);
+            *path = path_buf;
+        }
+
+        if first_run.fetch_and(false) {
+            text_box.request_focus();
+        }
+
+        if text_box.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
+            return Ok(ModalSuccess::Success);
+        }
+
+        Err(ModalError::Continue)
+    };
+
+    let (result_tx, mut result_rx) =
+        futures::channel::mpsc::channel::<Option<PathBuf>>(1);
+
+    let prepared = ModalHandler::prepare_callback(
+        show_modal,
+        PathBuf::new(),
+        closure,
+        result_tx,
+    );
+
+    modal_tx.send(prepared).unwrap();
+
+    async move { result_rx.next().await.flatten() }
+}
+
+/*
 pub type ModalCallback<T> = Box<dyn CallbackTrait<T>>;
 
 pub struct ModalValue<T>
@@ -326,3 +385,5 @@ where
         self.store.try_read()
     }
 }
+
+*/

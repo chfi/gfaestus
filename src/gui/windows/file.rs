@@ -8,17 +8,17 @@ use anyhow::Result;
 pub struct FilePicker {
     id: egui::Id,
 
-    pwd: PathBuf,
-    current_dir: PathBuf,
-    current_dir_text: String,
+    pub pwd: PathBuf,
+    pub current_dir: PathBuf,
+    pub current_dir_text: String,
 
-    highlighted_dir: Option<PathBuf>,
-    selected_path: Option<PathBuf>,
+    pub highlighted_dir: Option<PathBuf>,
+    pub selected_path: Option<PathBuf>,
 
-    dir_list: Vec<PathBuf>,
-    history: Vec<PathBuf>,
+    pub dir_list: Vec<PathBuf>,
+    pub history: Vec<PathBuf>,
 
-    extensions: HashSet<String>,
+    pub extensions: HashSet<String>,
 }
 
 impl FilePicker {
