@@ -1542,6 +1542,25 @@ impl ConsoleShared {
 
         let modal_tx = self.channels.modal_tx.clone();
         let show_modal = self.shared_state.show_modal.clone();
+        engine.register_result_fn("file_picker_modal", move || {
+            let future = crate::reactor::file_picker_modal(
+                modal_tx.clone(),
+                &show_modal,
+                &[],
+            );
+
+            let result =
+                std::thread::spawn(move || futures::executor::block_on(future))
+                    .join();
+
+            match result {
+                Ok(Some(path)) => Ok(path),
+                _ => Err("Path not found".into()),
+            }
+        });
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
         let graph = self.graph.clone();
 
         engine.register_fn("bed_label_wizard", move || {
