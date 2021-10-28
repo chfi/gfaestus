@@ -3,7 +3,7 @@ use futures::{future::RemoteHandle, SinkExt};
 use parking_lot::{
     Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use crate::geometry::Point;
 
@@ -31,8 +31,7 @@ pub enum ModalError {
 
 #[derive(Default)]
 pub struct ModalHandler {
-    active_modal: Option<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
-
+    modal_stack: VecDeque<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
     pub show_modal: Arc<AtomicCell<bool>>,
 }
 
@@ -167,11 +166,7 @@ impl ModalHandler {
         &mut self,
         callback: Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
     ) -> anyhow::Result<()> {
-        if self.active_modal.is_some() {
-            anyhow::bail!("Tried adding a modal when one was already active")
-        }
-
-        self.active_modal = Some(callback);
+        self.modal_stack.push_back(callback);
         self.show_modal.store(true);
         Ok(())
     }
@@ -188,11 +183,6 @@ impl ModalHandler {
             + 'static,
         T: std::fmt::Debug + Clone + Send + Sync + 'static,
     {
-        if self.active_modal.is_some() {
-            anyhow::bail!("Tried adding a modal when one was already active")
-        }
-        // let store = store.to_owned();
-
         let value: Arc<Mutex<T>> = {
             let lock = store.read();
             Arc::new(Mutex::new(lock.clone()))
@@ -247,7 +237,7 @@ impl ModalHandler {
         })
             as Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
 
-        self.active_modal = Some(wrapped);
+        self.modal_stack.push_back(wrapped);
 
         self.show_modal.store(true);
 
@@ -255,7 +245,7 @@ impl ModalHandler {
     }
 
     pub fn show(&mut self, ctx: &egui::CtxRef) {
-        if let Some(wrapped) = &self.active_modal {
+        if let Some(wrapped) = self.modal_stack.back() {
             if self.show_modal.load() {
                 egui::Window::new("Modal")
                     .id(egui::Id::new("modal_window"))
@@ -271,8 +261,9 @@ impl ModalHandler {
 
         // kinda hacky but this should make sure there only is an
         // active modal when it should be rendered
-        if !self.show_modal.load() && self.active_modal.is_some() {
-            self.active_modal.take();
+        if !self.show_modal.load() {
+            self.modal_stack.pop_back();
+            self.show_modal.store(self.modal_stack.is_empty());
         }
     }
 }
