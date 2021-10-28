@@ -24,7 +24,7 @@ use std::sync::Arc;
 use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
-    Gff3Records, Labels,
+    Gff3Records, LabelSet, Labels,
 };
 use crate::app::selection::NodeSelection;
 use crate::gui::GuiMsg;
@@ -108,6 +108,10 @@ pub enum AppMsg {
     AddGff3Records(Gff3Records),
     AddBedRecords(BedRecords),
 
+    NewLabelSet {
+        name: String,
+        label_set: LabelSet,
+    },
     NewNodeLabels {
         name: String,
         label_set: AnnotationLabelSet,
@@ -388,6 +392,14 @@ impl App {
             AppMsg::AddBedRecords(records) => {
                 let file_name = records.file_name().to_string();
                 self.annotations.insert_bed(&file_name, records);
+            }
+            AppMsg::NewLabelSet { name, label_set } => {
+                self.labels.add_label_set(
+                    boundary,
+                    node_positions,
+                    &name,
+                    &label_set,
+                );
             }
             AppMsg::NewNodeLabels { name, label_set } => {
                 let label_set_ = label_set.label_set();

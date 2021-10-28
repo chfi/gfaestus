@@ -17,14 +17,15 @@ use log::debug;
 use crossbeam::atomic::AtomicCell;
 
 use rhai::plugin::*;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use bstr::ByteSlice;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationRecord, Annotations, BedColumn,
-        BedRecord, BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
+        path_name_chr_range, AnnotationCollection, AnnotationRecord,
+        Annotations, BedColumn, BedRecord, BedRecords, ColumnKey, Gff3Column,
+        Gff3Record, Gff3Records, LabelSet,
     },
     overlays::OverlayKind,
     reactor::{ModalError, ModalHandler, ModalSuccess},
@@ -1562,39 +1563,61 @@ impl ConsoleShared {
         });
 
         let modal_tx = self.channels.modal_tx.clone();
+        let app_msg_tx = self.channels.app_tx.clone();
         let show_modal = self.shared_state.show_modal.clone();
         let graph = self.graph.clone();
 
         let thread_pool = self.thread_pool.clone();
 
         engine.register_fn("bed_label_wizard", move || {
+            log::warn!("in bed_label_wizard");
             let path_future = crate::reactor::file_picker_modal(
                 modal_tx.clone(),
                 &show_modal,
                 &["bed"],
             );
 
-            let (col_tx, mut col_rx) =
-                futures::channel::mpsc::channel::<Option<usize>>(1);
+            #[derive(Debug, Default, Clone)]
+            struct WizardCfg {
+                column: usize,
+                path_prefix: String,
+            }
+
+            // let config_state = Arc::new(Mutex::new(WizardCfg::default()));
+
+            let (cfg_tx, mut cfg_rx) =
+                futures::channel::mpsc::channel::<Option<WizardCfg>>(1);
 
             let first_run = AtomicCell::new(true);
 
             let show_modal = show_modal.clone();
             let modal_tx = modal_tx.clone();
+            log::warn!("creating config_future");
 
-            let column_future = async move {
-                let callback = move |val: &mut usize, ui: &mut egui::Ui| {
+            let config_future = async move {
+                log::warn!("in config_future");
+                let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
+                    log::warn!("in config_future's callback");
                     ui.label("Enter column index");
-                    let value = ui.add(
-                        egui::DragValue::new::<usize>(val).clamp_range(0..=64),
+                    let column = ui.add(
+                        egui::DragValue::new::<usize>(&mut cfg.column)
+                            .clamp_range(0..=64),
                     );
-                    // let text_box = ui.text_edit_singleline(text);
+
+                    let prefix_text =
+                        ui.text_edit_singleline(&mut cfg.path_prefix);
 
                     if first_run.fetch_and(false) {
-                        value.request_focus();
+                        prefix_text.request_focus();
                     }
 
-                    if value.lost_focus()
+                    if prefix_text.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
+
+                    if column.lost_focus()
                         && ui.input().key_pressed(egui::Key::Enter)
                     {
                         return Ok(ModalSuccess::Success);
@@ -1605,24 +1628,143 @@ impl ConsoleShared {
 
                 let prepared = ModalHandler::prepare_callback(
                     &show_modal,
-                    0,
+                    WizardCfg::default(),
                     callback,
-                    col_tx,
+                    cfg_tx,
                 );
 
+                log::warn!("sending in config_future's modal");
                 modal_tx.send(prepared).unwrap();
 
-                col_rx.next().await.flatten()
+                log::warn!("awaiting config_future's modal");
+                cfg_rx.next().await.flatten()
             };
 
-            let result = thread_pool.spawn(async {
+            let graph = graph.clone();
+            let app_msg_tx = app_msg_tx.clone();
+
+            log::warn!("spawning on thread_pool");
+            let result = thread_pool.spawn(async move {
+                log::warn!("in spawned future");
                 if let Some(path) = path_future.await {
                     log::warn!("path: {:?}", path);
                     // TODO load the BED file
 
-                    let column = column_future.await;
-                    log::warn!("column: {:?}", column);
+                    let records = BedRecords::parse_bed_file(&path);
+
+                    let config = config_future.await.unwrap_or_default();
+
+                    log::warn!("config: {:?}", config);
+                    match records {
+                        Ok(records) => {
+                            log::warn!("parsed correctly");
+                            let mut path_map: HashMap<
+                                &[u8],
+                                (PathId, Option<(usize, usize)>),
+                            > = HashMap::default();
+
+                            let mut step_caches: FxHashMap<
+                                PathId,
+                                Vec<(Handle, _, usize)>,
+                            > = FxHashMap::default();
+
+                            let prefix = config.path_prefix.as_bytes();
+
+                            let column = BedColumn::Index(config.column);
+
+                            let mut label_set = LabelSet::default();
+                            log::warn!("processing records");
+
+                            for record in records.records() {
+                                let path_name = record.chr.as_slice();
+                                // record.chr.strip_prefix(prefix).unwrap();
+
+                                let (path_id, range) = path_map
+                                    .entry(path_name)
+                                    .or_insert_with(|| {
+                                        let (name, range) =
+                                            if let Some((name, start, end)) =
+                                                path_name_chr_range(path_name)
+                                            {
+                                                (name, Some((start, end)))
+                                            } else {
+                                                (path_name, None)
+                                            };
+
+                                        let name: Vec<u8> = [prefix, name]
+                                            .iter()
+                                            .map(|&slice| slice.iter().copied())
+                                            .flatten()
+                                            .collect();
+
+                                        let path_id =
+                                            graph.graph.get_path_id(&name);
+
+                                        if path_id.is_none() {
+                                            log::warn!(
+                                                "
+could not find path with
+name {},
+prefix {},
+record.chr {}",
+                                                name.as_bstr(),
+                                                prefix.as_bstr(),
+                                                record.chr.as_bstr()
+                                            );
+                                        }
+
+                                        (path_id.unwrap(), range)
+                                    });
+
+                                let (path_id, range) = (*path_id, *range);
+
+                                let steps = step_caches
+                                    .entry(path_id)
+                                    .or_insert_with(|| {
+                                        graph.path_pos_steps(path_id).unwrap()
+                                    });
+
+                                let offset = range.map(|(s, _)| s + 3);
+
+                                if let Some(step_range) =
+                                    crate::annotations::path_step_range(
+                                        steps,
+                                        offset,
+                                        record.start(),
+                                        record.end(),
+                                    )
+                                {
+                                    if let Some(value) =
+                                        record.get_first(&column)
+                                    {
+                                        if let Some((mid, _, _)) =
+                                            step_range.get(step_range.len() / 2)
+                                        {
+                                            let label =
+                                                format!("{}", value.as_bstr());
+                                            label_set
+                                                .add_at_handle(*mid, &label);
+                                        }
+                                    }
+                                }
+                            }
+
+                            log::warn!("sending label set");
+                            app_msg_tx
+                                .send(AppMsg::NewLabelSet {
+                                    name: "tmp0".to_string(),
+                                    label_set,
+                                })
+                                .unwrap();
+
+                            // all records processed
+                        }
+                        Err(err) => {
+                            log::warn!("parse error: {:+}", err);
+                        }
+                    }
                 }
+                log::warn!("what the fuck now");
             });
 
             match result {
