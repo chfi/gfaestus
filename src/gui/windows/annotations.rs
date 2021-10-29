@@ -32,7 +32,7 @@ use crate::{
     annotations::{
         record_column_hash_color, AnnotationCollection, AnnotationFileType,
         AnnotationLabelSet, AnnotationRecord, Annotations, BedRecords,
-        ColumnKey, Gff3Records,
+        ColumnKey, Gff3Records, Labels,
     },
     app::channels::OverlayCreatorMsg,
     app::AppMsg,
@@ -54,6 +54,7 @@ impl LabelSetList {
         ctx: &egui::CtxRef,
         open: &mut bool,
         annotations: &Annotations,
+        labels: &Labels,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Label sets")
             .id(egui::Id::new(Self::ID))
@@ -64,44 +65,34 @@ impl LabelSetList {
                         &mut ui,
                         |ui| {
                             ui.label("Name");
-                            ui.label("File");
-                            ui.label("Column");
-                            ui.label("Path");
                             ui.label("Visible");
                             ui.end_row();
 
-                            let mut label_sets = annotations
-                                .label_sets()
-                                .into_iter()
-                                .collect::<Vec<_>>();
+                            let mut label_sets =
+                                labels.label_sets().iter().collect::<Vec<_>>();
 
-                            label_sets.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
+                            label_sets.sort_by(|(x, _), (y, _)| x.cmp(y));
 
-                            for (name, label_set) in label_sets {
-                                let file_name =
-                                    if label_set.annotation_name.len() > 20 {
-                                        let file_name =
-                                            label_set.annotation_name.as_str();
-                                        let len = file_name.len();
+                            for (name, _label_set) in label_sets {
+                                let view_name = if name.len() > 20 {
+                                    let len = name.len();
 
-                                        let start = &file_name[0..8];
-                                        let end = &file_name[len - 8..];
+                                    let start = &name[0..8];
+                                    let end = &name[len - 8..];
 
-                                        format!("{}...{}", start, end)
-                                    } else {
-                                        label_set.annotation_name.to_string()
-                                    };
+                                    format!("{}...{}", start, end)
+                                } else {
+                                    name.to_string()
+                                };
 
-                                let is_visible =
-                                    format!("{}", label_set.is_visible());
+                                let is_visible = labels
+                                    .visible(name)
+                                    .map(|v| v.load())
+                                    .unwrap_or_default();
+                                let visible_str = format!("{}", is_visible);
 
-                                let fields: [&str; 5] = [
-                                    &name,
-                                    &file_name,
-                                    &label_set.column_str,
-                                    &label_set.path_name,
-                                    &is_visible,
-                                ];
+                                let fields: [&str; 2] =
+                                    [&view_name, &visible_str];
 
                                 let row = grid_row_label(
                                     ui,
@@ -111,9 +102,11 @@ impl LabelSetList {
                                 );
 
                                 if row.clicked() {
-                                    label_set.set_visibility(
-                                        !label_set.is_visible(),
-                                    );
+                                    if let Some(visibility) =
+                                        labels.visible(name)
+                                    {
+                                        visibility.fetch_xor(true);
+                                    }
                                 }
                             }
                         },

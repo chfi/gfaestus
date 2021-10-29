@@ -1587,8 +1587,6 @@ impl ConsoleShared {
                 path_prefix: String,
             }
 
-            // let config_state = Arc::new(Mutex::new(WizardCfg::default()));
-
             let (cfg_tx, mut cfg_rx) =
                 futures::channel::mpsc::channel::<Option<WizardCfg>>(1);
 
@@ -1605,6 +1603,9 @@ impl ConsoleShared {
                             .clamp_range(0..=64),
                     );
 
+                    ui.label("Path prefix to remove");
+                    // TODO the prefix stuff is very weird due to a
+                    // thing in the path range logic
                     let prefix_text =
                         ui.text_edit_singleline(&mut cfg.path_prefix);
 
@@ -1807,7 +1808,7 @@ impl ConsoleShared {
 
                             app_msg_tx
                                 .send(AppMsg::NewLabelSet {
-                                    name: "tmp0".to_string(),
+                                    name: name.to_string(),
                                     label_set,
                                 })
                                 .unwrap();

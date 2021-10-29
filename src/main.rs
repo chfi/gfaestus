@@ -794,6 +794,7 @@ fn node_color(id) {
                     &graph_query,
                     &graph_query_worker,
                     app.annotations(),
+                    app.labels(),
                     context_menu.tx(),
                 );
 
@@ -818,13 +819,10 @@ fn node_color(id) {
                     let shared_state = app.shared_state();
                     let view = shared_state.view();
                     let labels = app.labels();
-                    // log::debug!("Clustering label sets");
                     let cluster_tree = labels.cluster(tree_bounding_box,
                                                       app.settings.label_radius().load(),
                                                       view);
-                    // log::debug!("Drawing label sets");
                     cluster_tree.draw_labels(&gui.ctx, shared_state);
-                    // cluster_tree.draw_clusters(&gui.ctx, view);
                 }
 
 

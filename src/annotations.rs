@@ -244,13 +244,25 @@ impl ClusterTree {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Labels {
     // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
     label_trees: HashMap<String, QuadTree<(Option<Point>, String)>>,
+
+    visible: HashMap<String, AtomicCell<bool>>,
 }
 
 impl Labels {
+    pub fn label_sets(
+        &self,
+    ) -> &HashMap<String, QuadTree<(Option<Point>, String)>> {
+        &self.label_trees
+    }
+
+    pub fn visible(&self, name: &str) -> Option<&AtomicCell<bool>> {
+        self.visible.get(name)
+    }
+
     pub fn add_label_set(
         &mut self,
         boundary: Rect,
@@ -271,8 +283,8 @@ impl Labels {
             let _result = label_tree.insert(world, (offset, text.to_string()));
         }
 
-        self.label_trees.insert(name, label_tree);
-        // .insert(name, Arc::new(Mutex::new(label_tree)));
+        self.label_trees.insert(name.clone(), label_tree);
+        self.visible.insert(name, true.into());
     }
 
     pub fn cluster(
@@ -283,9 +295,11 @@ impl Labels {
     ) -> ClusterTree {
         let mut clusters = ClusterTree::from_boundary(boundary);
 
-        for (_name, tree) in self.label_trees.iter() {
-            let _result =
-                clusters.insert_label_tree(&tree, label_radius, view.scale);
+        for (name, tree) in self.label_trees.iter() {
+            if self.visible(name).map(|v| v.load()).unwrap_or_default() {
+                let _result =
+                    clusters.insert_label_tree(&tree, label_radius, view.scale);
+            }
         }
 
         clusters

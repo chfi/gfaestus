@@ -20,7 +20,7 @@ use crossbeam::atomic::AtomicCell;
 use crate::{
     annotations::{
         AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
-        Gff3Records,
+        Gff3Records, Labels,
     },
     app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
     context::ContextEntry,
@@ -575,6 +575,7 @@ impl Gui {
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         annotations: &Annotations,
+        labels: &Labels,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
@@ -720,6 +721,7 @@ impl Gui {
             &self.ctx,
             &mut self.open_windows.label_set_list,
             annotations,
+            labels,
         );
 
         view_state
