@@ -27,8 +27,9 @@ use crate::{
         Annotations, BedColumn, BedRecord, BedRecords, ColumnKey, Gff3Column,
         Gff3Record, Gff3Records, LabelSet,
     },
-    overlays::OverlayKind,
+    overlays::{OverlayData, OverlayKind},
     reactor::{ModalError, ModalHandler, ModalSuccess},
+    script::plugins::colors::hash_color,
 };
 use crate::{
     app::{
@@ -1564,10 +1565,13 @@ impl ConsoleShared {
 
         let modal_tx = self.channels.modal_tx.clone();
         let app_msg_tx = self.channels.app_tx.clone();
+        let overlay_tx = self.channels.new_overlay_tx.clone();
+
         let show_modal = self.shared_state.show_modal.clone();
         let graph = self.graph.clone();
 
         let thread_pool = self.thread_pool.clone();
+        let rayon_pool = self.rayon_pool.clone();
 
         engine.register_fn("bed_label_wizard", move || {
             log::warn!("in bed_label_wizard");
@@ -1641,6 +1645,7 @@ impl ConsoleShared {
 
             let graph = graph.clone();
             let app_msg_tx = app_msg_tx.clone();
+            let overlay_tx = overlay_tx.clone();
 
             log::warn!("spawning on thread_pool");
             let result = thread_pool.spawn(async move {
@@ -1728,6 +1733,12 @@ impl ConsoleShared {
                             let mut label_set = LabelSet::default();
                             log::warn!("processing records");
 
+
+                            let mut node_color_map: FxHashMap<
+                                NodeId,
+                                rgb::RGBA<f32>,
+                            > = FxHashMap::default();
+
                             for record in records.records() {
                                 // let mut path_name =
                                 // let path_name = record.chr.as_slice();
@@ -1761,17 +1772,37 @@ impl ConsoleShared {
                                         if let Some(value) =
                                             record.get_first(&column)
                                         {
-                                            if let Some((mid, _, _)) =
-                                                step_range
-                                                    .get(step_range.len() / 2)
-                                            {
+                                            if !step_range.is_empty() {
+
+                                                let hash =
+                                                    {
+                                                        use std::collections::hash_map::DefaultHasher;
+                                                        use std::hash::{Hash, Hasher};
+                                                        let mut hasher = DefaultHasher::default();
+                                                        value.hash(&mut hasher);
+                                                        let hash = hasher.finish();
+                                                        hash
+                                                    };
+
+                                                let color = hash_color(hash);
+
+
+                                                let (mid, _, _) = step_range[step_range.len() / 2];
+
                                                 let label = format!(
                                                     "{}",
                                                     value.as_bstr()
                                                 );
                                                 label_set.add_at_handle(
-                                                    *mid, &label,
+                                                    mid, &label,
                                                 );
+
+                                                for &(handle, _, _) in step_range.iter() {
+                                                    let node = handle.id();
+                                                    node_color_map.insert(node, color);
+
+
+                                                }
                                             }
                                         }
                                     } else {
@@ -1783,56 +1814,33 @@ impl ConsoleShared {
                                     }
                                 }
 
-                                /*
-                                                                let (path_id, range) = path_map
-                                                                    .entry(record.chr.as_slice())
-                                                                    .or_insert_with(|| {
-                                                                        let mut path_name: Vec<u8> =
-                                                                            [prefix, &record.chr]
-                                                                                .iter()
-                                                                                .map(|&slice| {
-                                                                                    slice.iter().copied()
-                                                                                })
-                                                                                .flatten()
-                                                                                .collect();
-
-                                                                        let (_name, range) =
-                                                                            if let Some((name, start, end)) =
-                                                                                path_name_chr_range(&path_name)
-                                                                            {
-                                                                                (name, Some((start, end)))
-                                                                            } else {
-                                                                                (&path_name, None)
-                                                                            };
-
-                                                                        if let Some((start, end)) = range {
-                                                                            path_name.extend(
-                                                                                format!(":{}-{}", start, end)
-                                                                                    .as_bytes(),
-                                                                            );
-                                                                        }
-
-                                                                        let path_id =
-                                                                            graph.graph.get_path_id(&name);
-
-                                                                        if path_id.is_none() {
-                                                                            log::warn!("range: {:?}", range);
-                                                                            log::warn!(
-                                                                                "
-                                could not find path with
-                                name {},
-                                prefix {},
-                                record.chr {}",
-                                                                                name.as_bstr(),
-                                                                                prefix.as_bstr(),
-                                                                                record.chr.as_bstr()
-                                                                            );
-                                                                        }
-
-                                                                        (path_id.unwrap(), range)
-                                                                    });
-                                                                */
                             }
+
+                            let data = {
+
+                                let mut nodes = graph.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+                                nodes.sort();
+
+                                let mut colors: Vec<rgb::RGBA<f32>> = Vec::with_capacity(nodes.len());
+
+                                for node in nodes {
+
+                                    let color = node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4));
+                                    colors.push(color);
+                                }
+
+
+                                OverlayData::RGB(colors)
+                            };
+
+                            // let name = format!("{}", path);
+                            let name = path.to_str().unwrap();
+
+                            let msg = OverlayCreatorMsg::NewOverlay {
+                                name: name.to_string(),
+                                data,
+                            };
+                            overlay_tx.send(msg).unwrap();
 
                             log::warn!("label_set.len() {}", label_set.len());
                             // log::warn!(
@@ -1859,79 +1867,6 @@ impl ConsoleShared {
                 Err(_) => false,
             }
 
-            /*
-            #[derive(Clone, Debug, Default)]
-            struct WizardState {
-                annotation_file: PathBuf,
-                column_ix: usize,
-                column: Option<BedColumn>,
-            }
-
-            #[derive(Clone, Copy, PartialEq, Eq)]
-            enum WizardPage {
-                First,
-                Second,
-            }
-
-            let should_focus = AtomicCell::new(true);
-            let wizard_page = AtomicCell::new(WizardPage::First);
-
-            let (result_tx, result_rx) =
-                futures::channel::mpsc::channel::<Option<WizardState>>(1);
-
-            let callback = move |state: &mut WizardState, ui: &mut egui::Ui| {
-                match wizard_page.load() {
-                    WizardPage::First => {
-                        // choose annotation file
-                        ui.label("Choose annotation file");
-                        let text_box =
-                            ui.text_edit_singleline(&mut state.annotation_file);
-
-                        let next = ui.button("Next");
-                        if next.clicked() {
-                            wizard_page.store(WizardPage::Second);
-                            should_focus.store(false);
-                        }
-
-                        if should_focus.fetch_and(false) {
-                            text_box.request_focus();
-                        }
-
-                        if text_box.lost_focus()
-                            && ui.input().key_pressed(egui::Key::Enter)
-                        {
-                            return Ok(ModalSuccess::Success);
-                        }
-                    }
-                    WizardPage::Second => {
-                        //
-                        ui.label("Choose column");
-                        let input =
-                            ui.add(egui::DragValue::new(&mut state.column_ix));
-
-                        let prev = ui.button("Back");
-                        if prev.clicked() {
-                            wizard_page.store(WizardPage::First);
-                            should_focus.store(true);
-                        }
-                    }
-                }
-
-                Err(ModalError::Continue)
-            };
-
-            let prepared = ModalHandler::prepare_callback(
-                &show_modal,
-                WizardState::default(),
-                callback,
-                result_tx,
-            );
-
-            modal_tx.send(prepared).unwrap();
-
-            let result_str = futures_helper(result_rx).unwrap_or_default();
-            result_str
-            */
         });
     }
 
