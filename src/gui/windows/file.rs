@@ -5,6 +5,8 @@ use std::str::FromStr;
 
 use anyhow::Result;
 
+use crate::reactor::{ModalError, ModalSuccess};
+
 #[derive(Debug, Clone)]
 pub struct FilePicker {
     id: egui::Id,
@@ -155,7 +157,10 @@ impl FilePicker {
         Ok(())
     }
 
-    pub fn ui_impl(&mut self, ui: &mut egui::Ui) {
+    pub fn ui_impl(
+        &mut self,
+        ui: &mut egui::Ui,
+    ) -> std::result::Result<ModalSuccess, ModalError> {
         let max_height = ui.input().screen_rect.height() - 100.0;
         /*
         ui.set_max_height(max_height);
@@ -227,16 +232,6 @@ impl FilePicker {
             },
         );
 
-        if ui.button("Ok").clicked() {
-            if let Some(dir_path) = &self.highlighted_dir {
-                if dir_path.is_dir() {
-                    goto_dir = Some(dir_path.to_owned());
-                } else if dir_path.is_file() {
-                    choose_path = Some(dir_path.to_owned());
-                }
-            }
-        }
-
         if let Some(dir) = goto_dir {
             self.goto_dir(&dir, true).unwrap();
             ui.scroll_to_cursor(egui::Align::TOP);
@@ -244,7 +239,10 @@ impl FilePicker {
 
         if let Some(path) = choose_path {
             self.selected_path = Some(path);
+            return Ok(ModalSuccess::Success);
         }
+
+        Err(ModalError::Continue)
     }
 
     pub fn ui(
@@ -261,7 +259,11 @@ impl FilePicker {
 
                 ui.set_max_height(max_height);
 
-                self.ui_impl(ui);
+                let _ = self.ui_impl(ui);
+
+                if ui.button("Ok").clicked() {
+                    self.selected_path = self.highlighted_dir.clone();
+                }
             })
     }
 }

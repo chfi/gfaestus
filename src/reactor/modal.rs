@@ -283,11 +283,10 @@ pub fn file_picker_modal(
     file_picker.set_visible_extensions(extensions).unwrap();
 
     let closure = move |state: &mut FilePicker, ui: &mut egui::Ui| {
-        state.ui_impl(ui);
-
-        // if text_box.lost_focus() && ui.input().key_pressed(egui::Key::Enter) {
-        //     return Ok(ModalSuccess::Success);
-        // }
+        if let Ok(v) = state.ui_impl(ui) {
+            state.selected_path = state.highlighted_dir.clone();
+            return Ok(v);
+        }
 
         Err(ModalError::Continue)
     };

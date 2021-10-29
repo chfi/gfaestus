@@ -1616,11 +1616,10 @@ impl ConsoleShared {
                         cfg.column_ix = 0;
                         cfg.column = BedColumn::Index(0);
                     } else {
-                        // TODO there seems to be a bug with this part
                         if records.has_headers() {
                             ui.label("Choose header");
 
-                            for (ix, header) in records.headers().iter().enumerate() {
+                            for (ix, header) in records.headers().iter().skip(3).enumerate() {
                                 let row = ui.selectable_label(ix == cfg.column_ix, format!("{}", header.as_bstr()));
 
                                 if row.clicked() {
@@ -1692,7 +1691,6 @@ impl ConsoleShared {
 
                     match records {
                         Ok(records) => {
-
                             let records = Arc::new(records);
 
                             let config = config_future(records.clone()).await.unwrap_or_default();
@@ -1981,34 +1979,6 @@ impl ConsoleShared {
             let dims = screen_dims.load();
             view.screen_point_to_world(dims, screen)
         });
-    }
-
-    fn error_helper<T: Clone + 'static>(
-        result: &std::result::Result<
-            Result<rhai::Dynamic>,
-            Box<dyn std::any::Any + Send>,
-        >,
-    ) -> std::result::Result<T, Box<EvalAltResult>> {
-        let out = match result {
-            Ok(Ok(success)) => {
-                if success.type_id() == TypeId::of::<T>() {
-                    let success = success.clone();
-                    let result = success.cast::<T>();
-                    Ok(result)
-                } else {
-                    Err("Received incorrect type from App; this shouldn't happen!!!".into())
-                }
-            }
-            Ok(Err(_req_err)) => {
-                Err("Error when retrieving results from app request thread"
-                    .into())
-            }
-            Err(_spawn_err) => {
-                Err("Error when spawning app request thread".into())
-            }
-        };
-
-        out
     }
 
     fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
