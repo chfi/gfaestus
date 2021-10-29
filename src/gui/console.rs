@@ -1581,10 +1581,20 @@ impl ConsoleShared {
                 &["bed"],
             );
 
-            #[derive(Debug, Default, Clone)]
+            #[derive(Debug, Clone)]
             struct WizardCfg {
-                column: usize,
+                column_ix: usize,
+                column: BedColumn,
                 path_prefix: String,
+            }
+            impl std::default::Default for WizardCfg {
+                fn default() -> Self {
+                    Self {
+                        column_ix: 0,
+                        column: BedColumn::Index(0),
+                        path_prefix: String::new(),
+                    }
+                }
             }
 
             let (cfg_tx, mut cfg_rx) =
@@ -1603,17 +1613,36 @@ impl ConsoleShared {
 
                     let limit = columns.len() - 1;
                     if limit <= 1 {
-                        cfg.column = 0;
+                        cfg.column_ix = 0;
+                        cfg.column = BedColumn::Index(0);
                     } else {
-                        ui.label("Enter column index");
-                        let column = ui.add(
-                            egui::DragValue::new::<usize>(&mut cfg.column)
-                                .clamp_range(0..=limit),
-                        );
-                        if column.lost_focus()
-                            && ui.input().key_pressed(egui::Key::Enter)
-                        {
-                            return Ok(ModalSuccess::Success);
+                        // TODO there seems to be a bug with this part
+                        if records.has_headers() {
+                            ui.label("Choose header");
+
+                            for (ix, header) in records.headers().iter().enumerate() {
+                                let row = ui.selectable_label(ix == cfg.column_ix, format!("{}", header.as_bstr()));
+
+                                if row.clicked() {
+                                    cfg.column_ix = ix;
+                                    cfg.column = BedColumn::Index(ix);
+                                }
+                            }
+                        } else {
+                            ui.label("Enter column index");
+                            let column = ui.add(
+                                egui::DragValue::new::<usize>(&mut cfg.column_ix)
+                                    .clamp_range(0..=limit),
+                            );
+
+                            if column.changed() {
+                                cfg.column = BedColumn::Index(cfg.column_ix);
+                            }
+                            if column.lost_focus()
+                                && ui.input().key_pressed(egui::Key::Enter)
+                            {
+                                return Ok(ModalSuccess::Success);
+                            }
                         }
                     }
 
@@ -1680,7 +1709,7 @@ impl ConsoleShared {
 
                             let prefix = config.path_prefix.as_bytes();
 
-                            let column = BedColumn::Index(config.column);
+                            let column = &config.column;
 
                             for path_id in graph.graph.path_ids() {
                                 let path_name = graph
