@@ -1574,7 +1574,7 @@ impl ConsoleShared {
         let rayon_pool = self.rayon_pool.clone();
 
         engine.register_fn("bed_label_wizard", move || {
-            log::warn!("in bed_label_wizard");
+            log::trace!("in bed_label_wizard");
             let path_future = crate::reactor::file_picker_modal(
                 modal_tx.clone(),
                 &show_modal,
@@ -1596,10 +1596,8 @@ impl ConsoleShared {
 
             let show_modal = show_modal.clone();
             let modal_tx = modal_tx.clone();
-            log::warn!("creating config_future");
 
             let config_future = async move {
-                log::warn!("in config_future");
                 let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
                     ui.label("Enter column index");
                     let column = ui.add(
@@ -1636,10 +1634,8 @@ impl ConsoleShared {
                     cfg_tx,
                 );
 
-                log::warn!("sending in config_future's modal");
                 modal_tx.send(prepared).unwrap();
 
-                log::warn!("awaiting config_future's modal");
                 cfg_rx.next().await.flatten()
             };
 
@@ -1647,21 +1643,17 @@ impl ConsoleShared {
             let app_msg_tx = app_msg_tx.clone();
             let overlay_tx = overlay_tx.clone();
 
-            log::warn!("spawning on thread_pool");
+            let rayon_pool = rayon_pool.clone();
+
             let result = thread_pool.spawn(async move {
-                log::warn!("in spawned future");
                 if let Some(path) = path_future.await {
-                    log::warn!("path: {:?}", path);
-                    // TODO load the BED file
 
                     let records = BedRecords::parse_bed_file(&path);
 
                     let config = config_future.await.unwrap_or_default();
 
-                    log::warn!("config: {:?}", config);
                     match records {
                         Ok(records) => {
-                            log::warn!("parsed correctly");
 
                             let mut path_map: HashMap<
                                 Vec<u8>,
@@ -1678,50 +1670,26 @@ impl ConsoleShared {
                             let column = BedColumn::Index(config.column);
 
                             for path_id in graph.graph.path_ids() {
-                                log::warn!("adding path {:?}", path_id);
                                 let path_name = graph
                                     .graph
                                     .get_path_name_vec(path_id)
                                     .unwrap();
 
-                                log::warn!("name {}", path_name.as_bstr());
-
                                 if let Some((name, start, end)) =
                                     path_name_chr_range(&path_name)
                                 {
-                                    // let prefixed = format!("{}{}", prefix, name).as_bytes().iter().copied().collect();
-                                    log::warn!(
-                                        "range: {}:{}-{}",
-                                        name.as_bstr(),
-                                        start,
-                                        end
-                                    );
                                     if let Some(stripped) =
                                         name.strip_prefix(prefix)
                                     {
-                                        log::warn!(
-                                            "stripped {} of prefix {} -> {}",
-                                            name.as_bstr(),
-                                            prefix.as_bstr(),
-                                            stripped.as_bstr()
-                                        );
                                         path_map.insert(
                                             stripped.to_owned(),
                                             (path_id, Some((start, end))),
                                         );
                                     }
-                                    // path_map.insert(
-                                    // (prefix, Some((start, end)))
                                 } else {
                                     if let Some(stripped) =
                                         path_name.strip_prefix(prefix)
                                     {
-                                        log::warn!(
-                                            "stripped {} of prefix {} -> {}",
-                                            path_name.as_bstr(),
-                                            prefix.as_bstr(),
-                                            stripped.as_bstr()
-                                        );
                                         path_map.insert(
                                             stripped.to_owned(),
                                             (path_id, None),
@@ -1731,8 +1699,6 @@ impl ConsoleShared {
                             }
 
                             let mut label_set = LabelSet::default();
-                            log::warn!("processing records");
-
 
                             let mut node_color_map: FxHashMap<
                                 NodeId,
@@ -1740,9 +1706,6 @@ impl ConsoleShared {
                             > = FxHashMap::default();
 
                             for record in records.records() {
-                                // let mut path_name =
-                                // let path_name = record.chr.as_slice();
-                                // record.chr.strip_prefix(prefix).unwrap();
 
                                 if let Some((path_id, range)) =
                                     path_map.get(record.chr.as_slice())
@@ -1768,7 +1731,6 @@ impl ConsoleShared {
                                             record.end(),
                                         )
                                     {
-                                        // log::warn!("in step range");
                                         if let Some(value) =
                                             record.get_first(&column)
                                         {
@@ -1788,6 +1750,7 @@ impl ConsoleShared {
 
 
                                                 let (mid, _, _) = step_range[step_range.len() / 2];
+
 
                                                 let label = format!(
                                                     "{}",
@@ -1818,23 +1781,23 @@ impl ConsoleShared {
 
                             let data = {
 
+                                use rayon::prelude::*;
+
                                 let mut nodes = graph.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
                                 nodes.sort();
 
-                                let mut colors: Vec<rgb::RGBA<f32>> = Vec::with_capacity(nodes.len());
 
-                                for node in nodes {
+                                let colors = rayon_pool.install(|| {
+                                    nodes.par_iter().map(|node| {
 
-                                    let color = node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4));
-                                    colors.push(color);
-                                }
-
+                                        node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4))
+                                    }).collect()
+                                });
 
                                 OverlayData::RGB(colors)
                             };
 
-                            // let name = format!("{}", path);
-                            let name = path.to_str().unwrap();
+                            let name = path.file_name().and_then(|s| s.to_str()).unwrap();
 
                             let msg = OverlayCreatorMsg::NewOverlay {
                                 name: name.to_string(),
@@ -1842,9 +1805,6 @@ impl ConsoleShared {
                             };
                             overlay_tx.send(msg).unwrap();
 
-                            log::warn!("label_set.len() {}", label_set.len());
-                            // log::warn!(
-                            log::warn!("sending label set");
                             app_msg_tx
                                 .send(AppMsg::NewLabelSet {
                                     name: "tmp0".to_string(),
@@ -1852,7 +1812,6 @@ impl ConsoleShared {
                                 })
                                 .unwrap();
 
-                            // all records processed
                         }
                         Err(err) => {
                             log::warn!("parse error: {:+}", err);
