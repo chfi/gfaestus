@@ -1595,13 +1595,27 @@ impl ConsoleShared {
             let show_modal = show_modal.clone();
             let modal_tx = modal_tx.clone();
 
-            let config_future = async move {
+            let config_future = move |records: Arc<BedRecords>|
+            {
+            async move {
                 let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
-                    ui.label("Enter column index");
-                    let column = ui.add(
-                        egui::DragValue::new::<usize>(&mut cfg.column)
-                            .clamp_range(0..=64),
-                    );
+                    let columns = records.optional_columns();
+
+                    let limit = columns.len() - 1;
+                    if limit <= 1 {
+                        cfg.column = 0;
+                    } else {
+                        ui.label("Enter column index");
+                        let column = ui.add(
+                            egui::DragValue::new::<usize>(&mut cfg.column)
+                                .clamp_range(0..=limit),
+                        );
+                        if column.lost_focus()
+                            && ui.input().key_pressed(egui::Key::Enter)
+                        {
+                            return Ok(ModalSuccess::Success);
+                        }
+                    }
 
                     ui.label("Path prefix to remove");
                     // TODO the prefix stuff is very weird due to a
@@ -1619,11 +1633,6 @@ impl ConsoleShared {
                         return Ok(ModalSuccess::Success);
                     }
 
-                    if column.lost_focus()
-                        && ui.input().key_pressed(egui::Key::Enter)
-                    {
-                        return Ok(ModalSuccess::Success);
-                    }
 
                     Err(ModalError::Continue)
                 };
@@ -1638,6 +1647,7 @@ impl ConsoleShared {
                 modal_tx.send(prepared).unwrap();
 
                 cfg_rx.next().await.flatten()
+            }
             };
 
             let graph = graph.clone();
@@ -1651,10 +1661,12 @@ impl ConsoleShared {
 
                     let records = BedRecords::parse_bed_file(&path);
 
-                    let config = config_future.await.unwrap_or_default();
-
                     match records {
                         Ok(records) => {
+
+                            let records = Arc::new(records);
+
+                            let config = config_future(records.clone()).await.unwrap_or_default();
 
                             let mut path_map: HashMap<
                                 Vec<u8>,
