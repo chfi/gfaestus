@@ -1597,7 +1597,6 @@ impl ConsoleShared {
             let config_future = async move {
                 log::warn!("in config_future");
                 let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
-                    log::warn!("in config_future's callback");
                     ui.label("Enter column index");
                     let column = ui.add(
                         egui::DragValue::new::<usize>(&mut cfg.column)
@@ -1658,8 +1657,9 @@ impl ConsoleShared {
                     match records {
                         Ok(records) => {
                             log::warn!("parsed correctly");
+
                             let mut path_map: HashMap<
-                                &[u8],
+                                Vec<u8>,
                                 (PathId, Option<(usize, usize)>),
                             > = HashMap::default();
 
@@ -1672,83 +1672,170 @@ impl ConsoleShared {
 
                             let column = BedColumn::Index(config.column);
 
+                            for path_id in graph.graph.path_ids() {
+                                log::warn!("adding path {:?}", path_id);
+                                let path_name = graph
+                                    .graph
+                                    .get_path_name_vec(path_id)
+                                    .unwrap();
+
+                                log::warn!("name {}", path_name.as_bstr());
+
+                                if let Some((name, start, end)) =
+                                    path_name_chr_range(&path_name)
+                                {
+                                    // let prefixed = format!("{}{}", prefix, name).as_bytes().iter().copied().collect();
+                                    log::warn!(
+                                        "range: {}:{}-{}",
+                                        name.as_bstr(),
+                                        start,
+                                        end
+                                    );
+                                    if let Some(stripped) =
+                                        name.strip_prefix(prefix)
+                                    {
+                                        log::warn!(
+                                            "stripped {} of prefix {} -> {}",
+                                            name.as_bstr(),
+                                            prefix.as_bstr(),
+                                            stripped.as_bstr()
+                                        );
+                                        path_map.insert(
+                                            stripped.to_owned(),
+                                            (path_id, Some((start, end))),
+                                        );
+                                    }
+                                    // path_map.insert(
+                                    // (prefix, Some((start, end)))
+                                } else {
+                                    if let Some(stripped) =
+                                        path_name.strip_prefix(prefix)
+                                    {
+                                        log::warn!(
+                                            "stripped {} of prefix {} -> {}",
+                                            path_name.as_bstr(),
+                                            prefix.as_bstr(),
+                                            stripped.as_bstr()
+                                        );
+                                        path_map.insert(
+                                            stripped.to_owned(),
+                                            (path_id, None),
+                                        );
+                                    }
+                                };
+                            }
+
                             let mut label_set = LabelSet::default();
                             log::warn!("processing records");
 
                             for record in records.records() {
-                                let path_name = record.chr.as_slice();
+                                // let mut path_name =
+                                // let path_name = record.chr.as_slice();
                                 // record.chr.strip_prefix(prefix).unwrap();
 
-                                let (path_id, range) = path_map
-                                    .entry(path_name)
-                                    .or_insert_with(|| {
-                                        let (name, range) =
-                                            if let Some((name, start, end)) =
-                                                path_name_chr_range(path_name)
-                                            {
-                                                (name, Some((start, end)))
-                                            } else {
-                                                (path_name, None)
-                                            };
-
-                                        let name: Vec<u8> = [prefix, name]
-                                            .iter()
-                                            .map(|&slice| slice.iter().copied())
-                                            .flatten()
-                                            .collect();
-
-                                        let path_id =
-                                            graph.graph.get_path_id(&name);
-
-                                        if path_id.is_none() {
-                                            log::warn!(
-                                                "
-could not find path with
-name {},
-prefix {},
-record.chr {}",
-                                                name.as_bstr(),
-                                                prefix.as_bstr(),
-                                                record.chr.as_bstr()
-                                            );
-                                        }
-
-                                        (path_id.unwrap(), range)
-                                    });
-
-                                let (path_id, range) = (*path_id, *range);
-
-                                let steps = step_caches
-                                    .entry(path_id)
-                                    .or_insert_with(|| {
-                                        graph.path_pos_steps(path_id).unwrap()
-                                    });
-
-                                let offset = range.map(|(s, _)| s + 3);
-
-                                if let Some(step_range) =
-                                    crate::annotations::path_step_range(
-                                        steps,
-                                        offset,
-                                        record.start(),
-                                        record.end(),
-                                    )
+                                if let Some((path_id, range)) =
+                                    path_map.get(record.chr.as_slice())
                                 {
-                                    if let Some(value) =
-                                        record.get_first(&column)
+                                    //
+                                    let (path_id, range) = (*path_id, *range);
+
+                                    let steps = step_caches
+                                        .entry(path_id)
+                                        .or_insert_with(|| {
+                                            graph
+                                                .path_pos_steps(path_id)
+                                                .unwrap()
+                                        });
+
+                                    let offset = range.map(|(s, _)| s);
+
+                                    if let Some(step_range) =
+                                        crate::annotations::path_step_range(
+                                            steps,
+                                            offset,
+                                            record.start(),
+                                            record.end(),
+                                        )
                                     {
-                                        if let Some((mid, _, _)) =
-                                            step_range.get(step_range.len() / 2)
+                                        // log::warn!("in step range");
+                                        if let Some(value) =
+                                            record.get_first(&column)
                                         {
-                                            let label =
-                                                format!("{}", value.as_bstr());
-                                            label_set
-                                                .add_at_handle(*mid, &label);
+                                            if let Some((mid, _, _)) =
+                                                step_range
+                                                    .get(step_range.len() / 2)
+                                            {
+                                                let label = format!(
+                                                    "{}",
+                                                    value.as_bstr()
+                                                );
+                                                label_set.add_at_handle(
+                                                    *mid, &label,
+                                                );
+                                            }
                                         }
+                                    } else {
+                                        // log::warn!(
+                                        //     "out of step range: {}, {}",
+                                        //     record.start(),
+                                        //     record.end()
+                                        // );
                                     }
                                 }
+
+                                /*
+                                                                let (path_id, range) = path_map
+                                                                    .entry(record.chr.as_slice())
+                                                                    .or_insert_with(|| {
+                                                                        let mut path_name: Vec<u8> =
+                                                                            [prefix, &record.chr]
+                                                                                .iter()
+                                                                                .map(|&slice| {
+                                                                                    slice.iter().copied()
+                                                                                })
+                                                                                .flatten()
+                                                                                .collect();
+
+                                                                        let (_name, range) =
+                                                                            if let Some((name, start, end)) =
+                                                                                path_name_chr_range(&path_name)
+                                                                            {
+                                                                                (name, Some((start, end)))
+                                                                            } else {
+                                                                                (&path_name, None)
+                                                                            };
+
+                                                                        if let Some((start, end)) = range {
+                                                                            path_name.extend(
+                                                                                format!(":{}-{}", start, end)
+                                                                                    .as_bytes(),
+                                                                            );
+                                                                        }
+
+                                                                        let path_id =
+                                                                            graph.graph.get_path_id(&name);
+
+                                                                        if path_id.is_none() {
+                                                                            log::warn!("range: {:?}", range);
+                                                                            log::warn!(
+                                                                                "
+                                could not find path with
+                                name {},
+                                prefix {},
+                                record.chr {}",
+                                                                                name.as_bstr(),
+                                                                                prefix.as_bstr(),
+                                                                                record.chr.as_bstr()
+                                                                            );
+                                                                        }
+
+                                                                        (path_id.unwrap(), range)
+                                                                    });
+                                                                */
                             }
 
+                            log::warn!("label_set.len() {}", label_set.len());
+                            // log::warn!(
                             log::warn!("sending label set");
                             app_msg_tx
                                 .send(AppMsg::NewLabelSet {
@@ -1764,7 +1851,7 @@ record.chr {}",
                         }
                     }
                 }
-                log::warn!("what the fuck now");
+                //
             });
 
             match result {
