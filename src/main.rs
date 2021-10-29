@@ -20,7 +20,9 @@ use winit::event_loop::ControlFlow;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
+use gfaestus::app::{
+    mainview::*, Args, OverlayCreatorMsg, OverlayState, Select,
+};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -301,6 +303,7 @@ fn node_color(id) {
 ";
 
         create_overlay(
+            app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
             &reactor,
@@ -310,6 +313,7 @@ fn node_color(id) {
         .expect("Error creating node seq hash overlay");
 
         create_overlay(
+            app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
             &reactor,
@@ -658,6 +662,7 @@ fn node_color(id) {
 
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {
                     if let Ok(_) = handle_new_overlay(
+                        app.shared_state().overlay_state(),
                         &gfaestus,
                         &mut main_view,
                         graph_query.node_count(),
@@ -1300,6 +1305,7 @@ fn node_color(id) {
 }
 
 fn handle_new_overlay(
+    overlay_state: &OverlayState,
     app: &GfaestusVk,
     main_view: &mut MainView,
     node_count: usize,
@@ -1338,12 +1344,14 @@ fn handle_new_overlay(
         }
     };
 
-    main_view.node_draw_system.pipelines.create_overlay(overlay);
+    let id = main_view.node_draw_system.pipelines.create_overlay(overlay);
+    overlay_state.current_overlay.store(Some(id));
 
     Ok(())
 }
 
 fn create_overlay(
+    overlay_state: &OverlayState,
     app: &GfaestusVk,
     main_view: &mut MainView,
     reactor: &Reactor,
@@ -1367,7 +1375,7 @@ fn create_overlay(
             name: name.to_string(),
             data,
         };
-        handle_new_overlay(app, main_view, node_count, msg)?;
+        handle_new_overlay(overlay_state, app, main_view, node_count, msg)?;
     }
 
     Ok(())

@@ -1607,6 +1607,14 @@ impl ConsoleShared {
 
             let config_future = move |records: Arc<BedRecords>|
             {
+
+                let mut cfg = WizardCfg::default();
+                if records.has_headers() {
+                    let name = records.headers().first().cloned().unwrap_or_default();
+                    cfg.column = BedColumn::Header { index: 0, name };
+                }
+
+
             async move {
                 let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
                     let columns = records.optional_columns();
@@ -1624,7 +1632,7 @@ impl ConsoleShared {
 
                                 if row.clicked() {
                                     cfg.column_ix = ix;
-                                    cfg.column = BedColumn::Index(ix);
+                                    cfg.column = BedColumn::Header { index: ix, name: header.to_owned() };
                                 }
                             }
                         } else {
@@ -1667,7 +1675,7 @@ impl ConsoleShared {
 
                 let prepared = ModalHandler::prepare_callback(
                     &show_modal,
-                    WizardCfg::default(),
+                    cfg,
                     callback,
                     cfg_tx,
                 );
@@ -1691,6 +1699,7 @@ impl ConsoleShared {
 
                     match records {
                         Ok(records) => {
+
                             let records = Arc::new(records);
 
                             let config = config_future(records.clone()).await.unwrap_or_default();
@@ -1839,15 +1848,18 @@ impl ConsoleShared {
 
                             let name = path.file_name().and_then(|s| s.to_str()).unwrap();
 
+                            let name = format!("{}:{}", name, column);
+
                             let msg = OverlayCreatorMsg::NewOverlay {
                                 name: name.to_string(),
                                 data,
                             };
                             overlay_tx.send(msg).unwrap();
 
+
                             app_msg_tx
                                 .send(AppMsg::NewLabelSet {
-                                    name: name.to_string(),
+                                    name,
                                     label_set,
                                 })
                                 .unwrap();
