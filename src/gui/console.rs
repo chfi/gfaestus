@@ -1587,15 +1587,6 @@ impl ConsoleShared {
                 column: BedColumn,
                 path_prefix: String,
             }
-            impl std::default::Default for WizardCfg {
-                fn default() -> Self {
-                    Self {
-                        column_ix: 0,
-                        column: BedColumn::Index(0),
-                        path_prefix: String::new(),
-                    }
-                }
-            }
 
             let (cfg_tx, mut cfg_rx) =
                 futures::channel::mpsc::channel::<Option<WizardCfg>>(1);
@@ -1605,15 +1596,21 @@ impl ConsoleShared {
             let show_modal = show_modal.clone();
             let modal_tx = modal_tx.clone();
 
+            let path_prefix_id = egui::Id::new("bed_label_wizard_path_prefix");
+
             let config_future = move |records: Arc<BedRecords>|
             {
 
-                let mut cfg = WizardCfg::default();
+                let mut cfg = WizardCfg {
+                    column_ix: 0,
+                    column: BedColumn::Index(0),
+                    path_prefix: String::new(),
+                };
+
                 if records.has_headers() {
                     let name = records.headers().first().cloned().unwrap_or_default();
                     cfg.column = BedColumn::Header { index: 0, name };
                 }
-
 
             async move {
                 let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
@@ -1653,11 +1650,27 @@ impl ConsoleShared {
                         }
                     }
 
+                    let mut path_prefix_ = {
+                        let mut memory = ui.memory();
+                        let path_prefix_: &String = memory.id_data_temp.get_or_default(path_prefix_id);
+                        let path_prefix_ = path_prefix_.to_string();
+                        path_prefix_
+                    };
+
                     ui.label("Path prefix to remove");
+
                     // TODO the prefix stuff is very weird due to a
                     // thing in the path range logic
                     let prefix_text =
-                        ui.text_edit_singleline(&mut cfg.path_prefix);
+                        ui.text_edit_singleline(&mut path_prefix_);
+
+                    if prefix_text.changed() {
+                        let mut memory = ui.memory();
+                        let prefix_: &mut String = memory.id_data_temp.get_mut_or_default(path_prefix_id);
+
+                        *prefix_ = path_prefix_.to_owned();
+                        cfg.path_prefix = prefix_.to_owned();
+                    }
 
                     if first_run.fetch_and(false) {
                         prefix_text.request_focus();
@@ -1702,7 +1715,7 @@ impl ConsoleShared {
 
                             let records = Arc::new(records);
 
-                            let config = config_future(records.clone()).await.unwrap_or_default();
+                            let config = config_future(records.clone()).await.unwrap();
 
                             let mut path_map: HashMap<
                                 Vec<u8>,
@@ -1797,9 +1810,7 @@ impl ConsoleShared {
 
                                                 let color = hash_color(hash);
 
-
                                                 let (mid, _, _) = step_range[step_range.len() / 2];
-
 
                                                 let label = format!(
                                                     "{}",
@@ -1812,8 +1823,6 @@ impl ConsoleShared {
                                                 for &(handle, _, _) in step_range.iter() {
                                                     let node = handle.id();
                                                     node_color_map.insert(node, color);
-
-
                                                 }
                                             }
                                         }
@@ -1848,7 +1857,11 @@ impl ConsoleShared {
 
                             let name = path.file_name().and_then(|s| s.to_str()).unwrap();
 
-                            let name = format!("{}:{}", name, column);
+                            let name = if matches!(column, BedColumn::Index(_)) {
+                                format!("{}:col# {}", name, column)
+                            } else {
+                                format!("{}:{}", name, column)
+                            };
 
                             let msg = OverlayCreatorMsg::NewOverlay {
                                 name: name.to_string(),
@@ -1870,7 +1883,6 @@ impl ConsoleShared {
                         }
                     }
                 }
-                //
             });
 
             match result {
