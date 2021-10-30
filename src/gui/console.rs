@@ -1586,6 +1586,7 @@ impl ConsoleShared {
                 column_ix: usize,
                 column: BedColumn,
                 path_prefix: String,
+                numeric: bool,
             }
 
             let (cfg_tx, mut cfg_rx) =
@@ -1605,6 +1606,7 @@ impl ConsoleShared {
                     column_ix: 0,
                     column: BedColumn::Index(0),
                     path_prefix: String::new(),
+                    numeric: false,
                 };
 
                 if records.has_headers() {
@@ -1630,6 +1632,8 @@ impl ConsoleShared {
                                 if row.clicked() {
                                     cfg.column_ix = ix;
                                     cfg.column = BedColumn::Header { index: ix, name: header.to_owned() };
+
+
                                 }
                             }
                         } else {
@@ -1648,6 +1652,25 @@ impl ConsoleShared {
                                 return Ok(ModalSuccess::Success);
                             }
                         }
+                    }
+
+                    // if ui.selectable_label(cfg.numeric, "Numeric").clicked() {
+                    //     cfg.numeric ^= true;
+                    // }
+
+                    if let Some(row) = records.records().first() {
+                        let val = row.get_all(&cfg.column);
+
+                        if let &[v] = val.as_slice() {
+
+                            if let Some(parsed) = v.to_str().ok().and_then(|v| v.parse::<f32>().ok()) {
+                                cfg.numeric = true;
+
+                            } else {
+                                cfg.numeric = false;
+                            }
+                        }
+
                     }
 
                     let mut path_prefix_ = {
@@ -1798,7 +1821,17 @@ impl ConsoleShared {
                                         {
                                             if !step_range.is_empty() {
 
-                                                let hash =
+                                                let color = if config.numeric {
+
+                                                    let val = value.to_str().ok().and_then(|v| v.parse::<f32>().ok());
+
+                                                    if let Some(v) = val {
+                                                        Some(rgb::RGBA::new(v, v, v, v))
+                                                    } else {
+                                                        None
+                                                    }
+                                                } else {
+                                                    let hash =
                                                     {
                                                         use std::collections::hash_map::DefaultHasher;
                                                         use std::hash::{Hash, Hasher};
@@ -1808,21 +1841,26 @@ impl ConsoleShared {
                                                         hash
                                                     };
 
-                                                let color = hash_color(hash);
+                                                    let color = hash_color(hash);
+                                                    Some(color)
+                                                };
 
-                                                let (mid, _, _) = step_range[step_range.len() / 2];
 
-                                                let label = format!(
-                                                    "{}",
-                                                    value.as_bstr()
-                                                );
-                                                label_set.add_at_handle(
-                                                    mid, &label,
-                                                );
+                                                if let Some(color) = color {
+                                                    let (mid, _, _) = step_range[step_range.len() / 2];
 
-                                                for &(handle, _, _) in step_range.iter() {
-                                                    let node = handle.id();
-                                                    node_color_map.insert(node, color);
+                                                    let label = format!(
+                                                        "{}",
+                                                        value.as_bstr()
+                                                    );
+                                                    label_set.add_at_handle(
+                                                        mid, &label,
+                                                    );
+
+                                                    for &(handle, _, _) in step_range.iter() {
+                                                        let node = handle.id();
+                                                        node_color_map.insert(node, color);
+                                                    }
                                                 }
                                             }
                                         }
@@ -1838,21 +1876,34 @@ impl ConsoleShared {
                             }
 
                             let data = {
-
                                 use rayon::prelude::*;
 
                                 let mut nodes = graph.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
                                 nodes.sort();
 
 
-                                let colors = rayon_pool.install(|| {
-                                    nodes.par_iter().map(|node| {
+                                if config.numeric {
+                                    let values = rayon_pool.install(|| {
+                                        nodes.par_iter().map(|node| {
 
-                                        node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4))
-                                    }).collect()
-                                });
+                                            let rgb = node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.0, 0.0, 0.0, 0.0));
+                                            rgb.r
+                                        }).collect()
+                                    });
 
-                                OverlayData::RGB(colors)
+                                    OverlayData::Value(values)
+                                } else {
+
+                                    let colors = rayon_pool.install(|| {
+                                        nodes.par_iter().map(|node| {
+
+                                            node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4))
+                                        }).collect()
+                                    });
+
+                                    OverlayData::RGB(colors)
+                                }
+
                             };
 
                             let name = path.file_name().and_then(|s| s.to_str()).unwrap();
