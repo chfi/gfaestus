@@ -418,7 +418,7 @@ fn node_color(id) {
     let mut selection_blur =
         SelectionOutlineBlurPipeline::new(&gfaestus, 1).unwrap();
 
-    let gui_msg_tx = gui.clone_gui_msg_tx();
+    let gui_msg_tx = app.channels().gui_tx.clone();
 
     // let gradients_ = Gradients_::initialize(
     //     &gfaestus,

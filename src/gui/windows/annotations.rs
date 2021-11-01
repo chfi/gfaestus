@@ -53,14 +53,13 @@ impl LabelSetList {
     pub fn ui(
         ctx: &egui::CtxRef,
         open: &mut bool,
-        annotations: &Annotations,
         labels: &Labels,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Label sets")
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |mut ui| {
-                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                egui::ScrollArea::vertical().show(&mut ui, |mut ui| {
                     egui::Grid::new("label_set_list_grid").striped(true).show(
                         &mut ui,
                         |ui| {
@@ -332,7 +331,7 @@ impl AnnotationFileList {
 
                 ui.separator();
 
-                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                egui::ScrollArea::vertical().show(&mut ui, |mut ui| {
                     egui::Grid::new("annotations_file_list_grid")
                         .spacing(Point::new(10.0, 5.0))
                         .striped(true)
@@ -438,26 +437,25 @@ impl<T: ColumnKey> ColumnPickerOne<T> {
         egui::Window::new(window_name).id(self.id).open(open).show(
             ctx,
             |mut ui| {
-                egui::ScrollArea::from_max_height(
-                    ui.input().screen_rect.height() - 250.0,
-                )
-                .show(&mut ui, |ui| {
-                    let chosen_column = self.chosen_column;
+                egui::ScrollArea::vertical()
+                    .max_height(ui.input().screen_rect.height() - 250.0)
+                    .show(&mut ui, |ui| {
+                        let chosen_column = self.chosen_column;
 
-                    for (ix, col) in self.columns.iter().enumerate() {
-                        let active = chosen_column == Some(ix);
-                        if ui
-                            .selectable_label(active, col.to_string())
-                            .clicked()
-                        {
-                            if active {
-                                self.chosen_column = None;
-                            } else {
-                                self.chosen_column = Some(ix);
+                        for (ix, col) in self.columns.iter().enumerate() {
+                            let active = chosen_column == Some(ix);
+                            if ui
+                                .selectable_label(active, col.to_string())
+                                .clicked()
+                            {
+                                if active {
+                                    self.chosen_column = None;
+                                } else {
+                                    self.chosen_column = Some(ix);
+                                }
                             }
                         }
-                    }
-                });
+                    });
             },
         )
     }
@@ -580,7 +578,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
             let scroll_height = max_height - 50.0;
 
             ui.collapsing("Mandatory fields", |mut ui| {
-                egui::ScrollArea::from_max_height(scroll_height).show(
+                egui::ScrollArea::vertical().max_height(scroll_height).show(
                     &mut ui,
                     |ui| {
                         for (key, enabled) in mandatory.into_iter() {
@@ -596,7 +594,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
             });
 
             ui.collapsing("Optional fields", |mut ui| {
-                egui::ScrollArea::from_max_height(scroll_height).show(
+                egui::ScrollArea::vertical().max_height(scroll_height).show(
                     &mut ui,
                     |ui| {
                         for (key, enabled) in optional.into_iter() {

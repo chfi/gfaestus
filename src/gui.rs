@@ -67,6 +67,7 @@ pub struct Gui {
     frame_input: FrameInput,
 
     shared_state: SharedState,
+    channels: AppChannels,
     #[allow(dead_code)]
     settings: AppSettings,
 
@@ -75,13 +76,7 @@ pub struct Gui {
     hover_node_id: Option<NodeId>,
 
     open_windows: OpenWindows,
-
     view_state: AppViewState,
-
-    gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
-    gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
-
-    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
 
     menu_bar: MenuBar,
 
@@ -413,10 +408,6 @@ impl Gui {
 
         let frame_input = FrameInput::default();
 
-        let app_msg_tx = channels.app_tx.clone();
-        let gui_msg_tx = channels.gui_tx.clone();
-        let gui_msg_rx = channels.gui_rx.clone();
-
         let dropped_file = Arc::new(std::sync::Mutex::new(None));
 
         let view_state = AppViewState::new(
@@ -436,8 +427,8 @@ impl Gui {
 
         let annotation_file_list = AnnotationFileList::new(
             reactor,
-            app_msg_tx.clone(),
-            gui_msg_tx.clone(),
+            channels.app_tx.clone(),
+            channels.gui_tx.clone(),
         )?;
 
         let gff3_list = {
@@ -484,6 +475,7 @@ impl Gui {
             frame_input,
 
             shared_state: shared_state.clone(),
+            channels: channels.clone(),
             settings: settings.clone(),
 
             draw_system,
@@ -493,11 +485,6 @@ impl Gui {
             open_windows,
 
             view_state,
-
-            gui_msg_tx,
-            gui_msg_rx,
-
-            app_msg_tx,
 
             menu_bar,
 
@@ -515,10 +502,6 @@ impl Gui {
         };
 
         Ok(gui)
-    }
-
-    pub fn clone_gui_msg_tx(&self) -> crossbeam::channel::Sender<GuiMsg> {
-        self.gui_msg_tx.clone()
     }
 
     pub fn set_hover_node(&mut self, node: Option<NodeId>) {
@@ -609,8 +592,11 @@ impl Gui {
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 
-        self.menu_bar
-            .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
+        self.menu_bar.ui(
+            &self.ctx,
+            &mut self.open_windows,
+            &self.channels.app_tx,
+        );
 
         self.console.ui(&self.ctx, self.console_down, reactor);
 
@@ -660,7 +646,7 @@ impl Gui {
         self.annotation_file_list.ui(
             &self.ctx,
             &mut self.open_windows.annotation_files,
-            &self.gui_msg_tx,
+            &self.channels.gui_tx,
             annotations,
         );
 
@@ -672,7 +658,7 @@ impl Gui {
                     if let Some(records) = annotations.get_gff3(annot_name) {
                         let ctx = &self.ctx;
                         let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.app_msg_tx;
+                        let app_msg_tx = &self.channels.app_tx;
 
                         let gff3_list = &mut self.gff3_list;
 
@@ -695,7 +681,7 @@ impl Gui {
                     if let Some(records) = annotations.get_bed(annot_name) {
                         let ctx = &self.ctx;
                         let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.app_msg_tx;
+                        let app_msg_tx = &self.channels.app_tx;
 
                         let bed_list = &mut self.bed_list;
 
@@ -718,9 +704,10 @@ impl Gui {
         }
 
         LabelSetList::ui(
+            &self.channels,
+            &self.shared_state,
             &self.ctx,
             &mut self.open_windows.label_set_list,
-            annotations,
             labels,
         );
 
@@ -761,7 +748,7 @@ impl Gui {
             if *node_list {
                 view_state.node_list.state.ui(
                     &self.ctx,
-                    &self.app_msg_tx,
+                    &self.channels.app_tx,
                     node_details,
                     graph_query,
                     ctx_tx,
@@ -791,7 +778,7 @@ impl Gui {
             if *path_list {
                 view_state.path_list.state.ui(
                     &self.ctx,
-                    &self.app_msg_tx,
+                    &self.channels.app_tx,
                     path_details,
                     graph_query,
                     ctx_tx,
@@ -805,7 +792,7 @@ impl Gui {
                     &self.ctx,
                     node_details_id_cell,
                     node_details,
-                    &self.app_msg_tx,
+                    &self.channels.app_tx,
                     ctx_tx,
                 );
             }
@@ -911,7 +898,7 @@ impl Gui {
     }
 
     pub fn apply_received_gui_msgs(&mut self) {
-        while let Ok(msg) = self.gui_msg_rx.try_recv() {
+        while let Ok(msg) = self.channels.gui_rx.try_recv() {
             match msg {
                 GuiMsg::SetWindowOpen { window, open } => {
                     let open_windows = &mut self.open_windows;
@@ -1000,7 +987,8 @@ impl Gui {
                 if state.pressed() {
                     match payload {
                         GuiInput::KeyEguiInspectionUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiInspection,
                                     open: None,
@@ -1008,7 +996,8 @@ impl Gui {
                                 .unwrap();
                         }
                         GuiInput::KeyEguiSettingsUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiSettings,
                                     open: None,
@@ -1016,7 +1005,8 @@ impl Gui {
                                 .unwrap();
                         }
                         GuiInput::KeyEguiMemoryUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiMemory,
                                     open: None,
