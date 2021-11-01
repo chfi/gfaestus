@@ -1379,6 +1379,16 @@ impl ConsoleShared {
         let arc = self.shared_state.hover_node.clone();
         engine.register_fn("get_hover_node", move || arc.load());
 
+        let chosen_path = self.shared_state.chosen_path.clone();
+        engine.register_fn("set_chosen_path", move |path: PathId| {
+            chosen_path.store(Some(path));
+        });
+
+        let chosen_path = self.shared_state.chosen_path.clone();
+        engine.register_fn("clear_chosen_path", move || {
+            chosen_path.store(None);
+        });
+
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
             app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();

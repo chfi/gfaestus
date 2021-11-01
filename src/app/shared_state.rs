@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
+use handlegraph::pathhandlegraph::PathId;
 
 use crate::{geometry::*, gui::GuiFocusState};
 use crate::{view::*, vulkan::texture::GradientName};
@@ -14,6 +15,7 @@ pub struct SharedState {
     pub view: Arc<AtomicCell<View>>,
 
     pub hover_node: Arc<AtomicCell<Option<NodeId>>>,
+    pub chosen_path: Arc<AtomicCell<Option<PathId>>>,
 
     pub mouse_rect: MouseRect,
 
@@ -37,6 +39,7 @@ impl SharedState {
             view: Arc::new(View::default().into()),
 
             hover_node: Arc::new(None.into()),
+            chosen_path: Arc::new(None.into()),
 
             mouse_rect: MouseRect::default(),
 
