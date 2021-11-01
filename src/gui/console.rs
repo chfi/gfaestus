@@ -1647,14 +1647,14 @@ impl ConsoleShared {
                                 }
                             }
                         } else {
-                            ui.label("Enter column index");
+                            ui.label("Enter column number");
                             let column = ui.add(
                                 egui::DragValue::new::<usize>(&mut cfg.column_ix)
-                                    .clamp_range(0..=limit),
-                            );
+                                    .clamp_range(4..=(limit+4)));
 
                             if column.changed() {
-                                cfg.column = BedColumn::Index(cfg.column_ix);
+                                let ix = cfg.column_ix - 4;
+                                cfg.column = BedColumn::Index(ix);
                             }
                             if column.lost_focus()
                                 && ui.input().key_pressed(egui::Key::Enter)
