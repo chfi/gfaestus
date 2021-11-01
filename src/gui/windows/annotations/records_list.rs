@@ -424,9 +424,9 @@ where
                 None
             };
 
-            let range_filter_btn = ui.add(
-                egui::Button::new("Filter by path range")
-                    .enabled(path_name_range.is_some()),
+            let range_filter_btn = ui.add_enabled(
+                path_name_range.is_some(),
+                egui::Button::new("Filter by path range"),
             );
 
             if let Some((chr, start, end)) = path_name_range {

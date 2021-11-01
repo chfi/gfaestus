@@ -327,18 +327,18 @@ impl OverlayCreator {
                 });
 
                 ui.horizontal(|ui| {
-                    let file_btn =
-                        egui::Button::new("Choose file").enabled(!is_running);
+                    let file_btn = egui::Button::new("Choose file");
 
-                    if ui.add(file_btn).clicked() {
+                    if ui.add_enabled(!is_running, file_btn).clicked() {
                         file_picker.reset_selection();
                         *file_picker_open = true;
                     }
 
                     ui.separator();
 
-                    let run_script = ui.add(
-                        egui::Button::new("Run script").enabled(!is_running),
+                    let run_script = ui.add_enabled(
+                        !is_running,
+                        egui::Button::new("Run script"),
                     );
 
                     if run_script.clicked() && !is_running {

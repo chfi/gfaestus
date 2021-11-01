@@ -16,7 +16,7 @@ vk-mem = "0.2.2"
 
 winit = "0.25"
 # winit = { version = "0.25", default-features = false, features = ["x11"] }
-egui = "0.14.2"
+egui = "0.15"
 clipboard = "0.5"
 
 crossbeam = "0.8"

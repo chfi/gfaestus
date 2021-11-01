@@ -294,9 +294,9 @@ impl AnnotationFileList {
             .open(open)
             .show(ctx, |mut ui| {
                 if ui
-                    .add(
-                        egui::Button::new("Choose annotation file")
-                            .enabled(!is_running),
+                    .add_enabled(
+                        !is_running,
+                        egui::Button::new("Choose annotation file"),
                     )
                     .clicked()
                 {
@@ -315,9 +315,9 @@ impl AnnotationFileList {
                 let selected_path = self.file_picker.selected_path();
 
                 if ui
-                    .add(
-                        egui::Button::new("Load")
-                            .enabled(!is_running && selected_path.is_some()),
+                    .add_enabled(
+                        !is_running && selected_path.is_some(),
+                        egui::Button::new("Load"),
                     )
                     .clicked()
                 {
@@ -862,9 +862,9 @@ where
                 let column_picker = &self.column_picker;
                 let column = column_picker.chosen_column();
 
-                let create_overlay_btn = ui.add(
-                    egui::Button::new("Create overlay")
-                        .enabled(column.is_some() && !is_running),
+                let create_overlay_btn = ui.add_enabled(
+                    column.is_some() && !is_running,
+                    egui::Button::new("Create overlay"),
                 );
 
                 match &self.latest_result {
@@ -928,9 +928,9 @@ where
                 let column_picker = &self.column_picker;
                 let column = column_picker.chosen_column();
 
-                let create_label_set_btn = ui.add(
-                    egui::Button::new("Create label set")
-                        .enabled(column.is_some()),
+                let create_label_set_btn = ui.add_enabled(
+                    column.is_some(),
+                    egui::Button::new("Create label set"),
                 );
 
                 create_label_set |= create_label_set_btn.clicked();
