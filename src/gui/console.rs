@@ -1800,7 +1800,7 @@ impl ConsoleShared {
                                 rgb::RGBA<f32>,
                             > = FxHashMap::default();
 
-                            for record in records.records() {
+                            for (label_id, record) in records.records().iter().enumerate() {
 
                                 if let Some((path_id, range)) =
                                     path_map.get(record.chr.as_slice())
@@ -1859,12 +1859,12 @@ impl ConsoleShared {
                                                 if let Some(color) = color {
                                                     let (mid, _, _) = step_range[step_range.len() / 2];
 
-                                                    let label = format!(
+                                                    let label_text = format!(
                                                         "{}",
                                                         value.as_bstr()
                                                     );
                                                     label_set.add_at_handle(
-                                                        mid, &label,
+                                                        mid, label_id, &label_text,
                                                     );
 
                                                     for &(handle, _, _) in step_range.iter() {

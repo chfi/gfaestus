@@ -31,48 +31,72 @@ pub use bed::*;
 pub use gff::*;
 
 #[derive(Debug, Default, Clone)]
+pub struct Label {
+    id: usize,
+    text: String,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct LabelSet {
     positions: Vec<LabelPos>,
     // positions: Vec<(LabelPos, Vec<usize>)>,
-    label_strings: Vec<String>,
+    labels: Vec<Label>,
+    // label_strings: Vec<String>,
+
+    // label_ids: Vec<usize>,
 }
 
 impl LabelSet {
     pub fn add_at_world_point(
         &mut self,
         point: Point,
+        label_id: usize,
         text: &str,
         offset: Option<Point>,
     ) {
         let pos = LabelPos::World { point, offset };
 
         self.positions.push(pos);
-        self.label_strings.push(text.to_string());
+        self.labels.push(Label {
+            id: label_id,
+            text: text.to_string(),
+        });
     }
 
-    pub fn add_at_handle(&mut self, handle: Handle, text: &str) {
+    pub fn add_at_handle(
+        &mut self,
+        handle: Handle,
+        label_id: usize,
+        text: &str,
+    ) {
         let pos = LabelPos::Handle {
             handle,
             offset: None,
         };
 
         self.positions.push(pos);
-        self.label_strings.push(text.to_string());
+        self.labels.push(Label {
+            id: label_id,
+            text: text.to_string(),
+        });
     }
 
-    pub fn add_at_node(&mut self, node: NodeId, text: &str) {
+    pub fn add_at_node(&mut self, node: NodeId, label_id: usize, text: &str) {
         let handle = Handle::pack(node, false);
-        self.add_at_handle(handle, text);
+        self.add_at_handle(handle, label_id, text);
     }
 
     pub fn add_many_at<'a, 'b>(
         &'a mut self,
         pos: LabelPos,
-        strings: impl Iterator<Item = &'b str>,
+        labels: impl Iterator<Item = (usize, &'b str)>,
     ) {
-        for text in strings {
+        for (label_id, text) in labels {
             self.positions.push(pos);
-            self.label_strings.push(text.to_string());
+            self.labels.push(Label {
+                id: label_id,
+                text: text.to_string(),
+            });
         }
     }
 
@@ -88,7 +112,7 @@ impl LabelSet {
 #[derive(Debug, Default, Clone)]
 struct Cluster {
     offset: Option<Point>,
-    lines: Vec<String>,
+    labels: Vec<Label>,
 }
 
 #[derive(Debug, Clone)]
@@ -103,44 +127,39 @@ impl ClusterTree {
         }
     }
 
-    pub fn from_label_tree<L>(
-        tree: &QuadTree<(Option<Point>, L)>,
+    pub fn from_label_tree(
+        tree: &QuadTree<(Option<Point>, Label)>,
         label_radius: f32,
         scale: f32,
-    ) -> Self
-    where
-        L: Clone + ToString,
-    {
+    ) -> Self {
         let mut result = Self::from_boundary(tree.boundary());
         result.insert_label_tree(tree, label_radius, scale);
         result
     }
 
-    pub fn insert_label_tree<L>(
+    pub fn insert_label_tree(
         &mut self,
-        tree: &QuadTree<(Option<Point>, L)>,
+        tree: &QuadTree<(Option<Point>, Label)>,
         label_radius: f32,
         scale: f32,
-    ) where
-        L: Clone + ToString,
-    {
+    ) {
         let radius = label_radius * scale;
 
         let clusters = &mut self.clusters;
 
         for leaf in tree.leaves() {
-            for (point, (offset, text)) in leaf.elems() {
+            for (point, (offset, label)) in leaf.elems() {
                 // use the closest cluster if it exists and is within the radius
                 if let Some(mut cluster) = clusters
                     .nearest_mut(point)
                     .filter(|c| c.point().dist(point) <= radius)
                 {
                     let cmut = cluster.data_mut();
-                    cmut.lines.push(text.to_string());
+                    cmut.labels.push(label.to_owned())
                 } else {
                     let new_cluster = Cluster {
                         offset: *offset,
-                        lines: vec![text.to_string()],
+                        labels: vec![label.to_owned()],
                     };
                     let result = clusters.insert(point, new_cluster);
                 }
@@ -148,7 +167,12 @@ impl ClusterTree {
         }
     }
 
-    pub fn draw_labels(&self, ctx: &egui::CtxRef, shared_state: &SharedState) {
+    pub fn draw_labels(
+        &self,
+        ctx: &egui::CtxRef,
+        shared_state: &SharedState,
+        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+    ) {
         let view = shared_state.view();
         let mouse_pos = shared_state.mouse_pos();
 
@@ -162,22 +186,30 @@ impl ClusterTree {
                 let anchor_dir = Point::new(-offset.x, -offset.y);
                 let offset = offset * 20.0;
 
-                let lines = &cluster.lines;
+                let labels = &cluster.labels;
 
-                for text in cluster.lines.iter() {
+                for label in cluster.labels.iter() {
                     let rect =
                         crate::gui::text::draw_text_at_world_point_offset(
                             ctx,
                             view,
                             origin,
                             offset + Point::new(0.0, y_offset),
-                            text,
+                            &label.text,
                         );
 
                     if let Some(rect) = rect {
                         let rect = rect.resize(0.98);
                         if rect.contains(mouse_pos) {
                             crate::gui::text::draw_rect(ctx, rect);
+
+                            // this still needs to be fixed to only
+                            // use left clicks
+                            if ctx.input().pointer.any_click() {
+                                if let Some(f) = &on_label_click {
+                                    f(label.id);
+                                }
+                            }
 
                             // TODO need some form of configurable callback here
                             /*
@@ -203,8 +235,8 @@ impl ClusterTree {
                     count += 1;
 
                     if count > 10 {
-                        let count = count.min(lines.len());
-                        let rem = lines.len() - count;
+                        let count = count.min(labels.len());
+                        let rem = labels.len() - count;
 
                         if rem > 0 {
                             let more_label = format!("and {} more", rem);
@@ -247,7 +279,7 @@ impl ClusterTree {
 #[derive(Default)]
 pub struct Labels {
     // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
-    label_trees: HashMap<String, QuadTree<(Option<Point>, String)>>,
+    label_trees: HashMap<String, QuadTree<(Option<Point>, Label)>>,
 
     visible: HashMap<String, AtomicCell<bool>>,
 }
@@ -255,7 +287,7 @@ pub struct Labels {
 impl Labels {
     pub fn label_sets(
         &self,
-    ) -> &HashMap<String, QuadTree<(Option<Point>, String)>> {
+    ) -> &HashMap<String, QuadTree<(Option<Point>, Label)>> {
         &self.label_trees
     }
 
@@ -272,15 +304,15 @@ impl Labels {
     ) {
         let name = name.to_string();
 
-        let mut label_tree: QuadTree<(Option<Point>, String)> =
+        let mut label_tree: QuadTree<(Option<Point>, Label)> =
             QuadTree::new(boundary);
 
-        for (&label_pos, text) in
-            labels.positions.iter().zip(labels.label_strings.iter())
+        for (&label_pos, label) in
+            labels.positions.iter().zip(labels.labels.iter())
         {
             let world = label_pos.world(nodes);
             let offset = label_pos.offset(nodes);
-            let _result = label_tree.insert(world, (offset, text.to_string()));
+            let _result = label_tree.insert(world, (offset, label.to_owned()));
         }
 
         self.label_trees.insert(name.clone(), label_tree);
@@ -325,10 +357,12 @@ impl AnnotationLabelSet {
     pub fn label_set(&self) -> LabelSet {
         let mut labels = LabelSet::default();
 
+        let mut label_id = 0;
         for (node, label_indices) in self.labels.iter() {
             for &ix in label_indices.iter() {
                 let text = &self.label_strings[ix];
-                labels.add_at_node(*node, text);
+                labels.add_at_node(*node, label_id, text);
+                label_id += 1;
             }
         }
 
