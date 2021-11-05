@@ -40,13 +40,7 @@ pub struct Label {
 #[derive(Default)]
 pub struct LabelSet {
     positions: Vec<LabelPos>,
-    // positions: Vec<(LabelPos, Vec<usize>)>,
     labels: Vec<Label>,
-    // label_strings: Vec<String>,
-
-    // label_ids: Vec<usize>,
-    // on_click: O
-    // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
 }
 
 impl LabelSet {
@@ -145,23 +139,10 @@ impl ClusterTree {
         tree: &QuadTree<(Option<Point>, Label, Option<usize>)>,
         label_radius: f32,
         scale: f32,
-        // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) {
         let radius = label_radius * scale;
 
         let clusters = &mut self.clusters;
-
-        /*
-        let handler_id = if let Some(on_click) = on_label_click {
-            let id = self.next_handler_id;
-            self.next_handler_id += 1;
-            self.click_handlers.insert(id, on_click);
-
-            Some(id)
-        } else {
-            None
-        };
-        */
 
         for leaf in tree.leaves() {
             for (point, (offset, label, handler_id)) in leaf.elems() {
@@ -177,7 +158,7 @@ impl ClusterTree {
                         offset: *offset,
                         labels: vec![(label.to_owned(), *handler_id)],
                     };
-                    let result = clusters.insert(point, new_cluster);
+                    let _result = clusters.insert(point, new_cluster);
                 }
             }
         }
@@ -188,7 +169,6 @@ impl ClusterTree {
         label_sets: &Labels,
         ctx: &egui::CtxRef,
         shared_state: &SharedState,
-        // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) {
         let view = shared_state.view();
         let mouse_pos = shared_state.mouse_pos();
@@ -232,24 +212,6 @@ impl ClusterTree {
                                     on_click(label.id);
                                 }
                             }
-
-                            // TODO need some form of configurable callback here
-                            /*
-                            if gui.ctx.input().pointer.any_click() {
-                                match column {
-                                    AnnotationColumn::Gff3(col) => {
-                                        if let Some(gff) = records.downcast_ref::<Gff3Records>() {
-                                            gui.scroll_to_gff_record(gff, col, label.as_bytes());
-                                        }
-                                    }
-                                    AnnotationColumn::Bed(col) => {
-                                        if let Some(bed) = records.downcast_ref::<BedRecords>() {
-                                            gui.scroll_to_bed_record(bed, col, label.as_bytes());
-                                        }
-                                    }
-                                }
-                            }
-                            */
                         }
                     }
 
@@ -300,13 +262,11 @@ impl ClusterTree {
 
 #[derive(Default)]
 pub struct Labels {
-    // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
     label_trees:
         HashMap<String, QuadTree<(Option<Point>, Label, Option<usize>)>>,
 
     visible: HashMap<String, AtomicCell<bool>>,
 
-    // on_click: HashMap<String, Box<dyn Fn(usize) + Send + Sync + 'static>>,
     click_handlers:
         FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
 
@@ -352,8 +312,12 @@ impl Labels {
         {
             let world = label_pos.world(nodes);
             let offset = label_pos.offset(nodes);
-            let _result = label_tree
+            let result = label_tree
                 .insert(world, (offset, label.to_owned(), handler_id));
+
+            if result.is_err() {
+                log::warn!("label could not be inserted into quadtree");
+            }
         }
 
         self.label_trees.insert(name.clone(), label_tree);

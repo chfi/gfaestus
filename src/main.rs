@@ -254,15 +254,13 @@ fn main() {
     .unwrap();
 
     let tree_bounding_box = {
-        let height = (bottom_right.x - top_left.x) / 4.0;
-
         let mut tl = top_left;
         let mut br = bottom_right;
 
-        tl.y = -height;
-        br.y = height;
+        let p0 = tl - (br - tl) * 0.2;
+        let p1 = br + (br - tl) * 0.2;
 
-        Rect::new(tl, br)
+        Rect::new(p0, p1);
     };
 
     let mut gui = Gui::new(
