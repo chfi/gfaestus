@@ -121,43 +121,37 @@ struct Cluster {
 // #[derive(Clone)]
 pub struct ClusterTree {
     clusters: QuadTree<Cluster>,
-
-    click_handlers:
-        FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
-
-    next_handler_id: usize,
 }
 
 impl ClusterTree {
     pub fn from_boundary(boundary: Rect) -> Self {
         Self {
             clusters: QuadTree::new(boundary),
-            click_handlers: Default::default(),
-            next_handler_id: 0,
         }
     }
 
     pub fn from_label_tree(
-        tree: &QuadTree<(Option<Point>, Label)>,
+        tree: &QuadTree<(Option<Point>, Label, Option<usize>)>,
         label_radius: f32,
         scale: f32,
     ) -> Self {
         let mut result = Self::from_boundary(tree.boundary());
-        result.insert_label_tree(tree, label_radius, scale, None);
+        result.insert_label_tree(tree, label_radius, scale);
         result
     }
 
     pub fn insert_label_tree(
         &mut self,
-        tree: &QuadTree<(Option<Point>, Label)>,
+        tree: &QuadTree<(Option<Point>, Label, Option<usize>)>,
         label_radius: f32,
         scale: f32,
-        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+        // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) {
         let radius = label_radius * scale;
 
         let clusters = &mut self.clusters;
 
+        /*
         let handler_id = if let Some(on_click) = on_label_click {
             let id = self.next_handler_id;
             self.next_handler_id += 1;
@@ -167,20 +161,21 @@ impl ClusterTree {
         } else {
             None
         };
+        */
 
         for leaf in tree.leaves() {
-            for (point, (offset, label)) in leaf.elems() {
+            for (point, (offset, label, handler_id)) in leaf.elems() {
                 // use the closest cluster if it exists and is within the radius
                 if let Some(mut cluster) = clusters
                     .nearest_mut(point)
                     .filter(|c| c.point().dist(point) <= radius)
                 {
                     let cmut = cluster.data_mut();
-                    cmut.labels.push((label.to_owned(), handler_id))
+                    cmut.labels.push((label.to_owned(), *handler_id))
                 } else {
                     let new_cluster = Cluster {
                         offset: *offset,
-                        labels: vec![(label.to_owned(), handler_id)],
+                        labels: vec![(label.to_owned(), *handler_id)],
                     };
                     let result = clusters.insert(point, new_cluster);
                 }
@@ -190,6 +185,7 @@ impl ClusterTree {
 
     pub fn draw_labels(
         &self,
+        label_sets: &Labels,
         ctx: &egui::CtxRef,
         shared_state: &SharedState,
         // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
@@ -228,8 +224,10 @@ impl ClusterTree {
                             // use left clicks
 
                             if ctx.input().pointer.any_click() {
-                                if let Some(on_click) = handler_id
-                                    .and_then(|id| self.click_handlers.get(&id))
+                                if let Some(on_click) =
+                                    handler_id.and_then(|id| {
+                                        label_sets.click_handlers.get(&id)
+                                    })
                                 {
                                     on_click(label.id);
                                 }
@@ -303,16 +301,22 @@ impl ClusterTree {
 #[derive(Default)]
 pub struct Labels {
     // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
-    label_trees: HashMap<String, QuadTree<(Option<Point>, Label)>>,
+    label_trees:
+        HashMap<String, QuadTree<(Option<Point>, Label, Option<usize>)>>,
 
     visible: HashMap<String, AtomicCell<bool>>,
-    on_click: HashMap<String, Box<dyn Fn(usize) + Send + Sync + 'static>>,
+
+    // on_click: HashMap<String, Box<dyn Fn(usize) + Send + Sync + 'static>>,
+    click_handlers:
+        FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
+
+    next_handler_id: usize,
 }
 
 impl Labels {
     pub fn label_sets(
         &self,
-    ) -> &HashMap<String, QuadTree<(Option<Point>, Label)>> {
+    ) -> &HashMap<String, QuadTree<(Option<Point>, Label, Option<usize>)>> {
         &self.label_trees
     }
 
@@ -330,21 +334,29 @@ impl Labels {
     ) {
         let name = name.to_string();
 
-        let mut label_tree: QuadTree<(Option<Point>, Label)> =
+        let mut label_tree: QuadTree<(Option<Point>, Label, Option<usize>)> =
             QuadTree::new(boundary);
+
+        let handler_id = if let Some(on_click) = on_label_click {
+            let id = self.next_handler_id;
+            self.next_handler_id += 1;
+            self.click_handlers.insert(id, on_click);
+
+            Some(id)
+        } else {
+            None
+        };
 
         for (&label_pos, label) in
             labels.positions.iter().zip(labels.labels.iter())
         {
             let world = label_pos.world(nodes);
             let offset = label_pos.offset(nodes);
-            let _result = label_tree.insert(world, (offset, label.to_owned()));
+            let _result = label_tree
+                .insert(world, (offset, label.to_owned(), handler_id));
         }
 
         self.label_trees.insert(name.clone(), label_tree);
-        if let Some(on_click) = on_label_click {
-            self.on_click.insert(name.clone(), on_click);
-        }
         self.visible.insert(name, true.into());
     }
 
@@ -358,13 +370,8 @@ impl Labels {
 
         for (name, tree) in self.label_trees.iter() {
             if self.visible(name).map(|v| v.load()).unwrap_or_default() {
-                let on_click = self.on_click.get(name).as_ref();
-                let _result = clusters.insert_label_tree(
-                    &tree,
-                    label_radius,
-                    view.scale,
-                    on_click,
-                );
+                let _result =
+                    clusters.insert_label_tree(&tree, label_radius, view.scale);
             }
         }
 
