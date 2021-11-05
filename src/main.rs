@@ -827,7 +827,6 @@ fn node_color(id) {
                     let cluster_tree = labels.cluster(tree_bounding_box,
                                                       app.settings.label_radius().load(),
                                                       view);
-                    // cluster_tree.draw_labels(&gui.ctx, shared_state, None);
                     cluster_tree.draw_labels(&gui.ctx, shared_state);
                 }
 

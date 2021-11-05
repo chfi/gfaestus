@@ -91,7 +91,7 @@ pub enum Select {
     },
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
 pub enum AppMsg {
     Selection(Select),
     GotoSelection,
@@ -111,6 +111,7 @@ pub enum AppMsg {
     NewLabelSet {
         name: String,
         label_set: LabelSet,
+        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     },
     NewNodeLabels {
         name: String,
@@ -393,12 +394,17 @@ impl App {
                 let file_name = records.file_name().to_string();
                 self.annotations.insert_bed(&file_name, records);
             }
-            AppMsg::NewLabelSet { name, label_set } => {
+            AppMsg::NewLabelSet {
+                name,
+                label_set,
+                on_label_click,
+            } => {
                 self.labels.add_label_set(
                     boundary,
                     node_positions,
                     &name,
                     &label_set,
+                    on_label_click,
                 );
             }
             AppMsg::NewNodeLabels { name, label_set } => {
@@ -408,6 +414,7 @@ impl App {
                     node_positions,
                     &name,
                     &label_set_,
+                    None,
                 );
                 self.annotations.insert_label_set(&name, label_set);
             }

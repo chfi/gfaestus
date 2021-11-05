@@ -1930,11 +1930,22 @@ impl ConsoleShared {
                             };
                             overlay_tx.send(msg).unwrap();
 
+                            let records = records.clone();
+                            // let graph = graph.clone();
+
+                            let on_label_click = Box::new(move |label_id| {
+                                if let Some(record) = records.records.get(label_id) {
+                                    let record: &BedRecord = record;
+                                    let chr: &[u8] = &record.chr;
+                                    log::warn!("clicked record on path {}, range {}-{}", chr.as_bstr(), record.start, record.end);
+                                }
+                            }) as Box<dyn Fn(usize) + Send + Sync + 'static>;
 
                             app_msg_tx
                                 .send(AppMsg::NewLabelSet {
                                     name,
                                     label_set,
+                                    on_label_click: Some(on_label_click),
                                 })
                                 .unwrap();
 
