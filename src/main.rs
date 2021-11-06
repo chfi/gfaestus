@@ -260,7 +260,7 @@ fn main() {
         let p0 = tl - (br - tl) * 0.2;
         let p1 = br + (br - tl) * 0.2;
 
-        Rect::new(p0, p1);
+        Rect::new(p0, p1)
     };
 
     let mut gui = Gui::new(
