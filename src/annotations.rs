@@ -106,10 +106,17 @@ impl LabelSet {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LabelHandlers {
+    hover_handler: Option<usize>,
+    click_handler: Option<usize>,
+}
+
 #[derive(Debug, Default, Clone)]
 struct Cluster {
     offset: Option<Point>,
-    labels: Vec<(Label, Option<usize>)>,
+    labels: Vec<(Label, LabelHandlers)>,
+    // labels: Vec<(Label, Option<usize>)>,
 }
 
 // #[derive(Clone)]
@@ -125,7 +132,7 @@ impl ClusterTree {
     }
 
     pub fn from_label_tree(
-        tree: &QuadTree<(Option<Point>, Label, Option<usize>)>,
+        tree: &QuadTree<(Option<Point>, Label, LabelHandlers)>,
         label_radius: f32,
         scale: f32,
     ) -> Self {
@@ -136,7 +143,7 @@ impl ClusterTree {
 
     pub fn insert_label_tree(
         &mut self,
-        tree: &QuadTree<(Option<Point>, Label, Option<usize>)>,
+        tree: &QuadTree<(Option<Point>, Label, LabelHandlers)>,
         label_radius: f32,
         scale: f32,
     ) {
@@ -145,18 +152,18 @@ impl ClusterTree {
         let clusters = &mut self.clusters;
 
         for leaf in tree.leaves() {
-            for (point, (offset, label, handler_id)) in leaf.elems() {
+            for (point, (offset, label, handlers)) in leaf.elems() {
                 // use the closest cluster if it exists and is within the radius
                 if let Some(mut cluster) = clusters
                     .nearest_mut(point)
                     .filter(|c| c.point().dist(point) <= radius)
                 {
                     let cmut = cluster.data_mut();
-                    cmut.labels.push((label.to_owned(), *handler_id))
+                    cmut.labels.push((label.to_owned(), *handlers))
                 } else {
                     let new_cluster = Cluster {
                         offset: *offset,
-                        labels: vec![(label.to_owned(), *handler_id)],
+                        labels: vec![(label.to_owned(), *handlers)],
                     };
                     let _result = clusters.insert(point, new_cluster);
                 }
@@ -173,6 +180,12 @@ impl ClusterTree {
         let view = shared_state.view();
         let mouse_pos = shared_state.mouse_pos();
 
+        let mut interacted: Option<(usize, LabelHandlers)> = None;
+        let mut label_rect: Option<Rect> = None;
+
+        let mut hovered = false;
+        let mut clicked = false;
+
         for leaf in self.clusters.leaves() {
             for (origin, cluster) in leaf.elems() {
                 let mut y_offset = 0.0;
@@ -185,7 +198,7 @@ impl ClusterTree {
 
                 let labels = &cluster.labels;
 
-                for (label, handler_id) in cluster.labels.iter() {
+                for (label, handlers) in cluster.labels.iter() {
                     let rect =
                         crate::gui::text::draw_text_at_world_point_offset(
                             ctx,
@@ -198,19 +211,16 @@ impl ClusterTree {
                     if let Some(rect) = rect {
                         let rect = rect.resize(0.98);
                         if rect.contains(mouse_pos) {
-                            crate::gui::text::draw_rect(ctx, rect);
+                            label_rect = Some(rect);
+
+                            interacted = Some((label.id, *handlers));
+                            hovered = true;
 
                             // this still needs to be fixed to only
                             // use left clicks
 
                             if ctx.input().pointer.any_click() {
-                                if let Some(on_click) =
-                                    handler_id.and_then(|id| {
-                                        label_sets.click_handlers.get(&id)
-                                    })
-                                {
-                                    on_click(label.id);
-                                }
+                                clicked = true;
                             }
                         }
                     }
@@ -234,6 +244,32 @@ impl ClusterTree {
                             );
                         }
                         break;
+                    }
+                }
+            }
+        }
+
+        if hovered || clicked {
+            if let Some((label_id, handlers)) = interacted {
+                if clicked {
+                    if let Some(on_click) = handlers
+                        .click_handler
+                        .and_then(|id| label_sets.click_handlers.get(&id))
+                    {
+                        on_click(label_id);
+                    }
+                }
+
+                if hovered {
+                    if let Some(rect) = label_rect {
+                        crate::gui::text::draw_rect(ctx, rect);
+                    }
+
+                    if let Some(on_hover) = handlers
+                        .hover_handler
+                        .and_then(|id| label_sets.hover_handlers.get(&id))
+                    {
+                        on_hover(label_id);
                     }
                 }
             }
@@ -263,20 +299,23 @@ impl ClusterTree {
 #[derive(Default)]
 pub struct Labels {
     label_trees:
-        HashMap<String, QuadTree<(Option<Point>, Label, Option<usize>)>>,
+        HashMap<String, QuadTree<(Option<Point>, Label, LabelHandlers)>>,
 
     visible: HashMap<String, AtomicCell<bool>>,
 
+    hover_handlers:
+        FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
     click_handlers:
         FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
 
-    next_handler_id: usize,
+    next_hover_id: usize,
+    next_click_id: usize,
 }
 
 impl Labels {
     pub fn label_sets(
         &self,
-    ) -> &HashMap<String, QuadTree<(Option<Point>, Label, Option<usize>)>> {
+    ) -> &HashMap<String, QuadTree<(Option<Point>, Label, LabelHandlers)>> {
         &self.label_trees
     }
 
@@ -294,12 +333,12 @@ impl Labels {
     ) {
         let name = name.to_string();
 
-        let mut label_tree: QuadTree<(Option<Point>, Label, Option<usize>)> =
+        let mut label_tree: QuadTree<(Option<Point>, Label, LabelHandlers)> =
             QuadTree::new(boundary);
 
-        let handler_id = if let Some(on_click) = on_label_click {
-            let id = self.next_handler_id;
-            self.next_handler_id += 1;
+        let click_handler = if let Some(on_click) = on_label_click {
+            let id = self.next_click_id;
+            self.next_click_id += 1;
             self.click_handlers.insert(id, on_click);
 
             Some(id)
@@ -307,13 +346,18 @@ impl Labels {
             None
         };
 
+        let handlers = LabelHandlers {
+            hover_handler: None,
+            click_handler,
+        };
+
         for (&label_pos, label) in
             labels.positions.iter().zip(labels.labels.iter())
         {
             let world = label_pos.world(nodes);
             let offset = label_pos.offset(nodes);
-            let result = label_tree
-                .insert(world, (offset, label.to_owned(), handler_id));
+            let result =
+                label_tree.insert(world, (offset, label.to_owned(), handlers));
 
             if result.is_err() {
                 log::warn!("label could not be inserted into quadtree");
