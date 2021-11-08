@@ -24,16 +24,16 @@ pub fn grid_row_label(
 
     let visuals = ui.style().interact_selectable(&row, false);
 
-    if row.hovered() {
-        let mut rect = row.rect;
-        rect.max.x = ui.max_rect().right();
+    ui.end_row();
 
-        let rect = rect.expand(visuals.expansion);
+    if row.hovered() {
+        // let mut rect = row.rect;
+        // rect.max.x = ui.max_rect().right();
+
+        let rect = row.rect.expand(visuals.expansion);
 
         ui.painter().rect_stroke(rect, 0.0, visuals.bg_stroke);
     }
-
-    ui.end_row();
 
     row
 }

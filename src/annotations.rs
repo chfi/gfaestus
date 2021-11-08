@@ -199,14 +199,38 @@ impl ClusterTree {
                 let labels = &cluster.labels;
 
                 for (label, handlers) in cluster.labels.iter() {
-                    let rect =
-                        crate::gui::text::draw_text_at_world_point_offset(
-                            ctx,
-                            view,
-                            origin,
-                            offset + Point::new(0.0, y_offset),
-                            &label.text,
-                        );
+                    // for some reason, the returned rectangle is too tall
+                    let rect = {
+                        let rect =
+                            crate::gui::text::draw_text_at_world_point_offset(
+                                ctx,
+                                view,
+                                origin,
+                                offset + Point::new(0.0, y_offset),
+                                &label.text,
+                            );
+
+                        if let Some(rect) = rect {
+                            let p = rect.center();
+
+                            // the extra is horizontal padding
+                            let w = rect.width() + 6.0;
+                            let h = rect.height();
+
+                            let p0 = Point {
+                                x: p.x - (w / 2.0),
+                                y: p.y - (h / 2.0),
+                            };
+                            let p1 = Point {
+                                x: p0.x + w,
+                                y: p0.y + (h / 2.0),
+                            };
+
+                            Some(Rect::new(p0, p1))
+                        } else {
+                            None
+                        }
+                    };
 
                     if let Some(rect) = rect {
                         let rect = rect.resize(0.98);
@@ -218,7 +242,6 @@ impl ClusterTree {
 
                             // this still needs to be fixed to only
                             // use left clicks
-
                             if ctx.input().pointer.any_click() {
                                 clicked = true;
                             }
@@ -690,9 +713,9 @@ pub fn path_name_chr_range(path_name: &[u8]) -> Option<(&[u8], usize, usize)> {
     Some((chr, start, end))
 }
 
-pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
+pub fn path_name_range(path_name: &[u8]) -> Option<(&[u8], usize, usize)> {
     let mut range_split = path_name.split_str(":");
-    let _name = range_split.next()?;
+    let name = range_split.next()?;
     let range = range_split.next()?;
 
     let mut start_end = range.split_str("-");
@@ -705,11 +728,11 @@ pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
     let end_str = end.to_str().ok()?;
     let end = end_str.parse().ok()?;
 
-    Some((start, end))
+    Some((name, start, end))
 }
 
 pub fn path_name_offset(path_name: &[u8]) -> Option<usize> {
-    path_name_range(path_name).map(|(s, _)| s)
+    path_name_range(path_name).map(|(_, s, _)| s)
     /*
     let mut range_split = path_name.split_str(":");
     let _name = range_split.next()?;
