@@ -267,41 +267,31 @@ impl ContextMenu {
                 .fixed_pos(screen_pos)
                 .show(egui_ctx, |ui| {
                     let frame = egui::Frame::popup(ui.style());
-                    // let frame_margin = frame.margin;
                     frame.show(ui, |ui| {
-                        ui.with_layout(
-                            egui::Layout::top_down_justified(egui::Align::LEFT),
-                            |ui| {
-                                if let Some(_node) = self.contexts.node {
-                                    if ui.button("Copy node ID").clicked() {
-                                        process(ContextAction::CopyNodeId);
-                                    }
-                                    if ui.button("Copy node sequence").clicked()
-                                    {
-                                        process(ContextAction::CopyNodeSeq);
-                                    }
-                                }
+                        if let Some(_node) = self.contexts.node {
+                            if ui.button("Copy node ID").clicked() {
+                                process(ContextAction::CopyNodeId);
+                            }
+                            if ui.button("Copy node sequence").clicked() {
+                                process(ContextAction::CopyNodeSeq);
+                            }
+                        }
 
-                                if let Some(_path) = self.contexts.path {
-                                    if ui.button("Copy path name").clicked() {
-                                        process(ContextAction::CopyPathName);
-                                    }
-                                }
+                        if let Some(_path) = self.contexts.path {
+                            if ui.button("Copy path name").clicked() {
+                                process(ContextAction::CopyPathName);
+                            }
+                        }
 
-                                if self.contexts.has_selection {
-                                    if ui
-                                        .button("Copy subgraph as GFA")
-                                        .clicked()
-                                    {
-                                        process(ContextAction::CopySubgraphGfa);
-                                    }
-                                }
+                        if self.contexts.has_selection {
+                            if ui.button("Copy subgraph as GFA").clicked() {
+                                process(ContextAction::CopySubgraphGfa);
+                            }
+                        }
 
-                                if ui.button("Pan to node").clicked() {
-                                    process(ContextAction::PanToNode);
-                                }
-                            },
-                        );
+                        if ui.button("Pan to node").clicked() {
+                            process(ContextAction::PanToNode);
+                        }
                     });
                 });
 

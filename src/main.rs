@@ -254,8 +254,8 @@ fn main() {
     .unwrap();
 
     let tree_bounding_box = {
-        let mut tl = top_left;
-        let mut br = bottom_right;
+        let tl = top_left;
+        let br = bottom_right;
 
         let p0 = tl - (br - tl) * 0.2;
         let p1 = br + (br - tl) * 0.2;
