@@ -562,9 +562,7 @@ fn node_color(id) {
                     .read_node_id_at(mouse_pos)
                     .map(|nid| NodeId::from(nid as u64));
 
-                app.channels().app_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
-
-                gui.set_hover_node(hover_node);
+                app.shared_state().hover_node.store(hover_node);
 
                 if app.selection_changed() {
                     if let Some(selected) = app.selected_nodes() {

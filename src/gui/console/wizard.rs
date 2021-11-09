@@ -427,11 +427,11 @@ pub(super) fn bed_label_wizard_impl(
                             }) as Box<dyn Fn(usize) + Send + Sync + 'static>;
 
                             app_msg_tx
-                                .send(AppMsg::NewLabelSet {
+                                .send(AppMsg::new_label_set(
                                     name,
                                     label_set,
-                                    on_label_click: Some(on_label_click),
-                                })
+                                    Some(on_label_click),
+                                ))
                                 .unwrap();
 
                         }

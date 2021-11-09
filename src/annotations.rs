@@ -200,37 +200,15 @@ impl ClusterTree {
 
                 for (label, handlers) in cluster.labels.iter() {
                     // for some reason, the returned rectangle is too tall
-                    let rect = {
-                        let rect =
-                            crate::gui::text::draw_text_at_world_point_offset(
-                                ctx,
-                                view,
-                                origin,
-                                offset + Point::new(0.0, y_offset),
-                                &label.text,
-                            );
-
-                        if let Some(rect) = rect {
-                            let p = rect.center();
-
-                            // the extra is horizontal padding
-                            let w = rect.width() + 6.0;
-                            let h = rect.height();
-
-                            let p0 = Point {
-                                x: p.x - (w / 2.0),
-                                y: p.y - (h / 2.0),
-                            };
-                            let p1 = Point {
-                                x: p0.x + w,
-                                y: p0.y + (h / 2.0),
-                            };
-
-                            Some(Rect::new(p0, p1))
-                        } else {
-                            None
-                        }
-                    };
+                    let rect =
+                        crate::gui::text::draw_text_at_world_point_offset(
+                            ctx,
+                            view,
+                            origin,
+                            offset + Point::new(0.0, y_offset),
+                            &label.text,
+                        )
+                        .map(|r| r.resize(1.01));
 
                     if let Some(rect) = rect {
                         let rect = rect.resize(0.98);

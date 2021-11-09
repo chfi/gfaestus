@@ -60,95 +60,6 @@ pub struct App {
     msg_handlers: HashMap<String, Arc<AppMsgHandler>>,
 }
 
-type BoxedAny = Box<dyn std::any::Any + Send + Sync>;
-
-trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync {}
-
-impl<'a, T> HandlerFn<'a> for T where
-    T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
-{
-}
-
-pub struct AppMsgHandler {
-    type_id: TypeId,
-    handler: Box<dyn for<'a> HandlerFn<'a>>,
-}
-
-impl AppMsgHandler {
-    fn call(&self, app: &mut App, nodes: &[Node], input: BoxedAny) {
-        (self.handler)(app, nodes, input);
-    }
-
-    fn from_fn<T, F>(f: F) -> Self
-    where
-        F: Fn(&mut App, &[Node], &T) + Send + Sync + 'static,
-        T: std::any::Any + 'static,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
-                if let Some(arg) = input.downcast_ref::<T>() {
-                    f(app, nodes, arg);
-                }
-            },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
-
-        AppMsgHandler { type_id, handler }
-    }
-
-    fn from_fn_mut<T, F>(f: F) -> Self
-    where
-        F: Fn(&mut App, &[Node], &mut T) + Send + Sync + 'static,
-        T: std::any::Any + 'static,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
-                if let Some(arg) = input.downcast_mut::<T>() {
-                    f(app, nodes, arg);
-                }
-            },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
-
-        AppMsgHandler { type_id, handler }
-    }
-
-    fn from_fn_default<T, F>(f: F) -> Self
-    where
-        F: Fn(&mut App, &[Node], T) + Send + Sync + 'static,
-        T: std::any::Any + std::default::Default + 'static,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
-                if let Some(arg) = input.downcast_mut::<T>() {
-                    let mut tmp = T::default();
-                    std::mem::swap(arg, &mut tmp);
-                    f(app, nodes, tmp);
-                }
-            },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
-
-        AppMsgHandler { type_id, handler }
-    }
-}
-
-fn test_handler() -> AppMsgHandler {
-    AppMsgHandler::from_fn(|app, nodes, id: &NodeId| {
-        if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
-            let mut view = app.shared_state.view();
-            view.center = node_pos.center();
-            app.channels
-                .main_view_tx
-                .send(MainViewMsg::GotoView(view))
-                .unwrap();
-        }
-    })
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
     KeyClearSelection,
@@ -193,24 +104,11 @@ pub enum Select {
 // #[derive(Debug)]
 pub enum AppMsg {
     Selection(Select),
-    GotoNode(NodeId),
 
     // TODO these two should not be here (see how they're handled in main)
     RectSelect(Rect),
     TranslateSelected(Point),
 
-    HoverNode(Option<NodeId>),
-
-    ToggleDarkMode,
-
-    AddGff3Records(Gff3Records),
-    AddBedRecords(BedRecords),
-
-    NewLabelSet {
-        name: String,
-        label_set: LabelSet,
-        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
-    },
     NewNodeLabels {
         name: String,
         label_set: AnnotationLabelSet,
@@ -248,6 +146,14 @@ impl AppMsg {
         }
     }
 
+    pub fn add_gff3_records(records: Gff3Records) -> Self {
+        Self::raw("add_gff3_records", records)
+    }
+
+    pub fn add_bed_records(records: BedRecords) -> Self {
+        Self::raw("add_bed_records", records)
+    }
+
     pub fn goto_node(id: NodeId) -> Self {
         Self::raw("goto_node", id)
     }
@@ -258,6 +164,24 @@ impl AppMsg {
 
     pub fn goto_selection() -> Self {
         Self::raw::<Option<Rect>>("goto_selection", None)
+    }
+
+    pub fn toggle_dark_mode() -> Self {
+        Self::raw("toggle_dark_mode", ())
+    }
+
+    pub fn new_label_set(
+        name: String,
+        label_set: LabelSet,
+        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+    ) -> Self {
+        Self::raw("new_label_set", (name, label_set, on_label_click))
+    }
+
+    // pub fn set_data(key: &str, index: &str, value: rhai::Dynamic) -> Self {
+    // Self::raw("set_data", (key.to_string(), index.to_string(), value))
+    pub fn set_data(key: String, index: String, value: rhai::Dynamic) -> Self {
+        Self::raw("set_data", (key, index, value))
     }
 }
 
@@ -468,6 +392,56 @@ impl App {
                 },
             ),
         );
+
+        new_handler(
+            "toggle_dark_mode",
+            AppMsgHandler::from_fn(|app, _nodes, _: &()| {
+                app.toggle_dark_mode();
+            }),
+        );
+
+        new_handler(
+            "new_label_set",
+            AppMsgHandler::from_fn_default(
+                |app,
+                 node_positions,
+                 (name, label_set, on_label_click): (
+                    String,
+                    LabelSet,
+                    Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+                )| {
+                    app.labels.add_label_set(
+                        app.layout_boundary,
+                        node_positions,
+                        &name,
+                        &label_set,
+                        on_label_click,
+                    );
+                },
+            ),
+        );
+
+        new_handler(
+            "set_data",
+            AppMsgHandler::from_fn(|app, _nodes, (k, i, value): &(String, String, rhai::Dynamic)| {
+
+                match k.as_str() {
+                "annotation_ref_path" => {
+                    if value.as_unit().is_ok() {
+                        app.annotations.set_default_ref_path(i.as_str(), None);
+                    } else if value.type_id()
+                        == std::any::TypeId::of::<PathId>()
+                    {
+                        let value = value.to_owned();
+                        let path = value.cast::<PathId>();
+                        app.annotations
+                            .set_default_ref_path(i.as_str(), Some(path));
+                    }
+                }
+                _ => (),
+
+                }
+            }));
     }
 
     pub fn apply_app_msg(
@@ -488,11 +462,7 @@ impl App {
                     self.selected_nodes_bounding_box = Some((min, max));
                 }
             }
-            AppMsg::GotoNode(id) => {
-                self.send_raw::<NodeId>("goto_node", id).unwrap();
-            }
-            AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
-
+            // AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selection_changed = true;
@@ -609,27 +579,14 @@ impl App {
                         Some((top_left, bottom_right));
                 }
             },
-            AppMsg::AddGff3Records(records) => {
-                self.send_raw::<Gff3Records>("add_gff3_records", records)
-                    .unwrap();
-            }
-            AppMsg::AddBedRecords(records) => {
-                self.send_raw::<BedRecords>("add_bed_records", records)
-                    .unwrap();
-            }
-            AppMsg::NewLabelSet {
-                name,
-                label_set,
-                on_label_click,
-            } => {
-                self.labels.add_label_set(
-                    self.layout_boundary,
-                    node_positions,
-                    &name,
-                    &label_set,
-                    on_label_click,
-                );
-            }
+            // AppMsg::AddGff3Records(records) => {
+            //     self.send_raw::<Gff3Records>("add_gff3_records", records)
+            //         .unwrap();
+            // }
+            // AppMsg::AddBedRecords(records) => {
+            //     self.send_raw::<BedRecords>("add_bed_records", records)
+            //         .unwrap();
+            // }
             AppMsg::NewNodeLabels { name, label_set } => {
                 let label_set_ = label_set.label_set();
                 self.labels.add_label_set(
@@ -640,9 +597,6 @@ impl App {
                     None,
                 );
                 self.annotations.insert_label_set(&name, label_set);
-            }
-            AppMsg::ToggleDarkMode => {
-                self.toggle_dark_mode();
             }
             AppMsg::RequestSelection(sender) => {
                 let selection = self.selected_nodes.to_owned();
@@ -712,6 +666,10 @@ impl App {
 
                 sender.send(boxed).unwrap();
             }
+            AppMsg::SetData { key, index, value } => {
+                self.send_msg(AppMsg::set_data(key, index, value)).unwrap();
+            }
+            /*
             AppMsg::SetData { key, index, value } => match key.as_str() {
                 "annotation_ref_path" => {
                     if value.as_unit().is_ok() {
@@ -726,6 +684,7 @@ impl App {
                 }
                 _ => (),
             },
+                */
             AppMsg::ConsoleEval { script } => {
                 console_input_tx.send(script).unwrap();
             }
@@ -780,6 +739,82 @@ impl App {
                 }
             }
         }
+    }
+}
+
+type BoxedAny = Box<dyn std::any::Any + Send + Sync>;
+
+trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync {}
+
+impl<'a, T> HandlerFn<'a> for T where
+    T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
+{
+}
+
+pub struct AppMsgHandler {
+    type_id: TypeId,
+    handler: Box<dyn for<'a> HandlerFn<'a>>,
+}
+
+impl AppMsgHandler {
+    fn call(&self, app: &mut App, nodes: &[Node], input: BoxedAny) {
+        (self.handler)(app, nodes, input);
+    }
+
+    fn from_fn<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], &T) + Send + Sync + 'static,
+        T: std::any::Any + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
+                if let Some(arg) = input.downcast_ref::<T>() {
+                    f(app, nodes, arg);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
+    }
+
+    fn from_fn_mut<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], &mut T) + Send + Sync + 'static,
+        T: std::any::Any + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
+                if let Some(arg) = input.downcast_mut::<T>() {
+                    f(app, nodes, arg);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
+    }
+
+    fn from_fn_default<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], T) + Send + Sync + 'static,
+        T: std::any::Any + std::default::Default + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
+                if let Some(arg) = input.downcast_mut::<T>() {
+                    let mut tmp = T::default();
+                    std::mem::swap(arg, &mut tmp);
+                    f(app, nodes, tmp);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
     }
 }
 

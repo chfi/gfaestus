@@ -237,7 +237,9 @@ impl ContextMenu {
                         {
                             let node_id = NodeId::from(parsed);
                             if graph.has_node(node_id) {
-                                app_tx.send(AppMsg::GotoNode(node_id)).unwrap();
+                                app_tx
+                                    .send(AppMsg::goto_node(node_id))
+                                    .unwrap();
                             }
                         }
                     })

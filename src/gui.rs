@@ -73,8 +73,6 @@ pub struct Gui {
 
     pub draw_system: GuiPipeline,
 
-    hover_node_id: Option<NodeId>,
-
     open_windows: OpenWindows,
     view_state: AppViewState,
 
@@ -402,8 +400,6 @@ impl Gui {
         };
         ctx.set_fonts(font_defs);
 
-        let hover_node_id: Option<NodeId> = None;
-
         let open_windows = OpenWindows::default();
 
         let frame_input = FrameInput::default();
@@ -480,8 +476,6 @@ impl Gui {
 
             draw_system,
 
-            hover_node_id,
-
             open_windows,
 
             view_state,
@@ -502,10 +496,6 @@ impl Gui {
         };
 
         Ok(gui)
-    }
-
-    pub fn set_hover_node(&mut self, node: Option<NodeId>) {
-        self.hover_node_id = node;
     }
 
     pub fn app_view_state(&self) -> &AppViewState {

@@ -1436,7 +1436,7 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
+            app_msg_tx.send(AppMsg::toggle_dark_mode()).unwrap();
         });
 
         // Actually add the `get` and `set` functions, see Console::new as well
@@ -1734,7 +1734,7 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("goto_node", move |node: NodeId| {
-            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
 
             let msg = AppMsg::Selection(Select::One { node, clear: true });
             app_msg_tx.send(msg).unwrap();
@@ -1743,7 +1743,7 @@ impl ConsoleShared {
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("goto_node", move |node: i64| {
             let node = NodeId::from(node as u64);
-            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
 
             let msg = AppMsg::Selection(Select::One { node, clear: true });
             app_msg_tx.send(msg).unwrap();
@@ -1928,7 +1928,7 @@ impl ConsoleShared {
                 match records {
                     Ok(records) => {
                         app_msg_tx
-                            .send(AppMsg::AddGff3Records(records))
+                            .send(AppMsg::add_gff3_records(records))
                             .unwrap();
 
                         result_tx
@@ -1946,7 +1946,7 @@ impl ConsoleShared {
                 match records {
                     Ok(records) => {
                         app_msg_tx
-                            .send(AppMsg::AddBedRecords(records))
+                            .send(AppMsg::add_bed_records(records))
                             .unwrap();
 
                         result_tx

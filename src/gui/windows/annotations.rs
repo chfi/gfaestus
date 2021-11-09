@@ -193,7 +193,7 @@ impl AnnotationFileList {
                             let file_name = records.file_name().to_string();
 
                             app_msg_tx
-                                .send(AppMsg::AddGff3Records(records))
+                                .send(AppMsg::raw("add_gff3_records", records))
                                 .unwrap();
                             gui_msg_tx
                                 .send(GuiMsg::SetWindowOpen {
@@ -220,7 +220,7 @@ impl AnnotationFileList {
                             let file_name = records.file_name().to_string();
 
                             app_msg_tx
-                                .send(AppMsg::AddBedRecords(records))
+                                .send(AppMsg::raw("add_bed_records", records))
                                 .unwrap();
                             gui_msg_tx
                                 .send(GuiMsg::SetWindowOpen {
