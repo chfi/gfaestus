@@ -116,12 +116,6 @@ pub enum AppMsg {
 
     RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
 
-    RequestData {
-        key: String,
-        index: String,
-        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
-    },
-
     SetData {
         key: String,
         index: String,
@@ -176,6 +170,24 @@ impl AppMsg {
         on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) -> Self {
         Self::raw("new_label_set", (name, label_set, on_label_click))
+    }
+
+    pub fn request_data_(
+        key: String,
+        index: String,
+        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+    ) -> Self {
+        Self::raw("request_data", (key, index, sender))
+    }
+
+    pub fn request_data(
+        key: String,
+        index: String,
+    ) -> (Self, crossbeam::channel::Receiver<Result<rhai::Dynamic>>) {
+        let (tx, rx) = crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
+        let msg = Self::request_data_(key, index, tx);
+
+        (msg, rx)
     }
 
     // pub fn set_data(key: &str, index: &str, value: rhai::Dynamic) -> Self {
@@ -422,6 +434,78 @@ impl App {
         );
 
         new_handler(
+            "request_data",
+            AppMsgHandler::from_fn(
+                |app,
+                 _nodes,
+                 (key, index, sender): &(
+                    String,
+                    String,
+                    crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+                )| {
+                    type ReqResult = Result<rhai::Dynamic>;
+
+                    macro_rules! handle {
+                        ($expr:expr, $err:literal) => {
+                            if let Some(result) = $expr {
+                                Ok(rhai::Dynamic::from(result.clone()))
+                            } else {
+                                let err = anyhow::anyhow!($err);
+                                Err(err) as ReqResult
+                            }
+                        };
+                    }
+
+                    let boxed = match key.as_str() {
+                        "annotation_file" => {
+                            if let Some(records) =
+                                app.annotations.get_gff3(&index)
+                            {
+                                Ok(rhai::Dynamic::from(records.clone()))
+                            } else if let Some(records) =
+                                app.annotations.get_bed(&index)
+                            {
+                                Ok(rhai::Dynamic::from(records.clone()))
+                            } else {
+                                Err(anyhow::anyhow!(
+                                    "Annotation file not loaded: {}",
+                                    index
+                                ))
+                            }
+                        }
+                        "annotation_names" => {
+                            let names = app
+                                .annotations
+                                .annot_names()
+                                .iter()
+                                .map(|(name, _)| name.to_string())
+                                .collect::<Vec<_>>();
+
+                            Ok(rhai::Dynamic::from(names))
+                        }
+                        "annotation_ref_path" => {
+                            if let Some(path) =
+                                app.annotations.get_default_ref_path(&index)
+                            {
+                                Ok(rhai::Dynamic::from(path))
+                            } else {
+                                Ok(rhai::Dynamic::from(()))
+                            }
+                        }
+                        _ => {
+                            let err = anyhow::anyhow!(
+                                "Requested unknown key from App"
+                            );
+                            Err(err) as ReqResult
+                        }
+                    };
+
+                    sender.send(boxed).unwrap();
+                },
+            ),
+        );
+
+        new_handler(
             "set_data",
             AppMsgHandler::from_fn(|app, _nodes, (k, i, value): &(String, String, rhai::Dynamic)| {
 
@@ -462,7 +546,6 @@ impl App {
                     self.selected_nodes_bounding_box = Some((min, max));
                 }
             }
-            // AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selection_changed = true;
@@ -579,14 +662,6 @@ impl App {
                         Some((top_left, bottom_right));
                 }
             },
-            // AppMsg::AddGff3Records(records) => {
-            //     self.send_raw::<Gff3Records>("add_gff3_records", records)
-            //         .unwrap();
-            // }
-            // AppMsg::AddBedRecords(records) => {
-            //     self.send_raw::<BedRecords>("add_bed_records", records)
-            //         .unwrap();
-            // }
             AppMsg::NewNodeLabels { name, label_set } => {
                 let label_set_ = label_set.label_set();
                 self.labels.add_label_set(
@@ -608,83 +683,9 @@ impl App {
                 sender.send((rect, selection)).unwrap();
             }
 
-            AppMsg::RequestData { key, index, sender } => {
-                type ReqResult = Result<rhai::Dynamic>;
-
-                macro_rules! handle {
-                    ($expr:expr, $err:literal) => {
-                        if let Some(result) = $expr {
-                            Ok(rhai::Dynamic::from(result.clone()))
-                        } else {
-                            let err = anyhow::anyhow!($err);
-                            Err(err) as ReqResult
-                        }
-                    };
-                }
-
-                let boxed = match key.as_str() {
-                    "annotation_file" => {
-                        if let Some(records) = self.annotations.get_gff3(&index)
-                        {
-                            Ok(rhai::Dynamic::from(records.clone()))
-                        } else if let Some(records) =
-                            self.annotations.get_bed(&index)
-                        {
-                            Ok(rhai::Dynamic::from(records.clone()))
-                        } else {
-                            Err(anyhow::anyhow!(
-                                "Annotation file not loaded: {}",
-                                index
-                            ))
-                        }
-                    }
-                    "annotation_names" => {
-                        let names = self
-                            .annotations
-                            .annot_names()
-                            .iter()
-                            .map(|(name, _)| name.to_string())
-                            .collect::<Vec<_>>();
-
-                        Ok(rhai::Dynamic::from(names))
-                    }
-                    "annotation_ref_path" => {
-                        if let Some(path) =
-                            self.annotations.get_default_ref_path(&index)
-                        {
-                            Ok(rhai::Dynamic::from(path))
-                        } else {
-                            Ok(rhai::Dynamic::from(()))
-                        }
-                    }
-                    _ => {
-                        let err =
-                            anyhow::anyhow!("Requested unknown key from App");
-                        Err(err) as ReqResult
-                    }
-                };
-
-                sender.send(boxed).unwrap();
-            }
             AppMsg::SetData { key, index, value } => {
                 self.send_msg(AppMsg::set_data(key, index, value)).unwrap();
             }
-            /*
-            AppMsg::SetData { key, index, value } => match key.as_str() {
-                "annotation_ref_path" => {
-                    if value.as_unit().is_ok() {
-                        self.annotations.set_default_ref_path(&index, None);
-                    } else if value.type_id()
-                        == std::any::TypeId::of::<PathId>()
-                    {
-                        let path = value.cast::<PathId>();
-                        self.annotations
-                            .set_default_ref_path(&index, Some(path));
-                    }
-                }
-                _ => (),
-            },
-                */
             AppMsg::ConsoleEval { script } => {
                 console_input_tx.send(script).unwrap();
             }
@@ -693,11 +694,8 @@ impl App {
                 msg_name,
                 value,
             } => {
-                log::warn!("received raw: {:?}, {}", type_id, msg_name);
-
                 if let Some(handler) = self.msg_handlers.get(&msg_name) {
                     let handler: Arc<_> = handler.clone();
-
                     if type_id == handler.type_id {
                         handler.call(self, node_positions, value);
                     }

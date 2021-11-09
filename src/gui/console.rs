@@ -1890,14 +1890,7 @@ impl ConsoleShared {
             let key = "annotation_names".to_string();
             let index = "".to_string();
 
-            let (tx, rx) =
-                crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                key,
-                index,
-                sender: tx,
-            };
+            let (msg, rx) = AppMsg::request_data(key, index);
 
             app_msg_tx.send(msg).unwrap();
 
@@ -1968,17 +1961,10 @@ impl ConsoleShared {
         // for requesting data like this
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("get_collection", move |c_name: &str| {
-            use crossbeam::channel;
             let key = "annotation_file".to_string();
             let index = c_name.to_string();
 
-            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                key,
-                index,
-                sender: tx,
-            };
+            let (msg, rx) = AppMsg::request_data(key, index);
 
             app_msg_tx.send(msg).unwrap();
 
