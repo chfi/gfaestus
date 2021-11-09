@@ -96,82 +96,58 @@ impl AppMsgHandler {
 
         AppMsgHandler { type_id, handler }
     }
-}
 
-fn test_handler() -> AppMsgHandler {
-    let type_id = TypeId::of::<NodeId>();
-
-    let handler =
-        Box::new(|app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
-            if let Some(id) = input.downcast_ref::<NodeId>() {
-                if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
-                    let mut view = app.shared_state.view();
-                    view.center = node_pos.center();
-                    app.channels
-                        .main_view_tx
-                        .send(MainViewMsg::GotoView(view))
-                        .unwrap();
-                }
-            }
-            //
-        }) as Box<dyn for<'a> HandlerFn<'a>>;
-
-    AppMsgHandler { type_id, handler }
-}
-
-/*
-
-
-fn goto_node(app_msg_input: AppMsgInput<'_>, id: NodeId) {
-    if let Some(node_pos) =
-        app_msg_input.node_positions.get((id.0 - 1) as usize)
+    fn from_fn_mut<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], &mut T) + Send + Sync + 'static,
+        T: std::any::Any + 'static,
     {
-        let mut view = app_msg_input.app.shared_state.view();
-        view.center = node_pos.center();
-        app_msg_input
-            .app
-            .channels
-            .main_view_tx
-            .send(MainViewMsg::GotoView(view))
-            .unwrap();
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
+                if let Some(arg) = input.downcast_mut::<T>() {
+                    f(app, nodes, arg);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
+    }
+
+    fn from_fn_default<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], T) + Send + Sync + 'static,
+        T: std::any::Any + std::default::Default + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
+                if let Some(arg) = input.downcast_mut::<T>() {
+                    let mut tmp = T::default();
+                    std::mem::swap(arg, &mut tmp);
+                    f(app, nodes, tmp);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
     }
 }
 
-fn goto_node_handler() -> AppMsgHandler {
-    let type_id = TypeId::of::<NodeId>();
-
-    // let handler = Box::new(
-    //     |app: &App, boundary, nodes: &[Node], console, id: BoxedAny| {
-    //         if let Some(id) = id.downcast_ref::<NodeId>() {
-    //             if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
-    //                 let mut view = app.shared_state.view();
-    //                 view.center = node_pos.center();
-    //                 app.channels
-    //                     .main_view_tx
-    //                     .send(MainViewMsg::GotoView(view))
-    //                     .unwrap();
-    //             }
-    //         }
-    //     },
-    // )
-    //     as Box<
-    //         // dyn Fn(&mut App, Rect, &[Node], &Sender<String>, BoxedAny)
-    //         dyn for<'a> Fn(
-    //                 &'a mut App,
-    //                 Rect,
-    //                 &'a [Node],
-    //                 &'a Sender<String>,
-    //                 BoxedAny,
-    //             ) + Send
-    //             + Sync
-    //             + 'static,
-    //     >;
-    // // dyn for<'a> Fn(AppMsgInput<'a>, BoxedAny) + Send + Sync + 'static,
-    // // >;
-
-    AppMsgHandler { type_id, handler }
+fn test_handler() -> AppMsgHandler {
+    AppMsgHandler::from_fn(|app, nodes, id: &NodeId| {
+        if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
+            let mut view = app.shared_state.view();
+            view.center = node_pos.center();
+            app.channels
+                .main_view_tx
+                .send(MainViewMsg::GotoView(view))
+                .unwrap();
+        }
+    })
 }
-*/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
@@ -217,7 +193,6 @@ pub enum Select {
 // #[derive(Debug)]
 pub enum AppMsg {
     Selection(Select),
-    GotoSelection,
     GotoNode(NodeId),
 
     // TODO these two should not be here (see how they're handled in main)
@@ -264,6 +239,28 @@ pub enum AppMsg {
     },
 }
 
+impl AppMsg {
+    pub fn raw<T: std::any::Any + Send + Sync>(msg_name: &str, v: T) -> Self {
+        AppMsg::Raw {
+            type_id: TypeId::of::<T>(),
+            msg_name: msg_name.to_string(),
+            value: Box::new(v) as _,
+        }
+    }
+
+    pub fn goto_node(id: NodeId) -> Self {
+        Self::raw("goto_node", id)
+    }
+
+    pub fn goto_rect(rect: Rect) -> Self {
+        Self::raw("goto_rect", Some(rect))
+    }
+
+    pub fn goto_selection() -> Self {
+        Self::raw::<Option<Rect>>("goto_selection", None)
+    }
+}
+
 impl App {
     pub fn new<Dims: Into<ScreenDims>>(
         screen_dims: Dims,
@@ -284,8 +281,7 @@ impl App {
         );
 
         let mut msg_handlers = HashMap::default();
-
-        msg_handlers.insert("goto_node".to_string(), Arc::new(test_handler()));
+        Self::add_msg_handlers(&mut msg_handlers);
 
         Ok(Self {
             shared_state,
@@ -308,6 +304,12 @@ impl App {
 
             msg_handlers,
         })
+    }
+
+    pub fn send_msg(&self, msg: AppMsg) -> Result<()> {
+        self.channels.app_tx.send(msg)?;
+
+        Ok(())
     }
 
     pub fn send_raw<T: std::any::Any + Send + Sync>(
@@ -408,6 +410,66 @@ impl App {
         self.shared_state.screen_dims.store(screen_dims.into());
     }
 
+    fn add_msg_handlers(handlers: &mut HashMap<String, Arc<AppMsgHandler>>) {
+        let mut new_handler = |name: &str, handler: AppMsgHandler| {
+            handlers.insert(name.to_string(), Arc::new(handler))
+        };
+
+        new_handler(
+            "goto_node",
+            AppMsgHandler::from_fn(|app, nodes, id: &NodeId| {
+                if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
+                    let mut view = app.shared_state.view();
+                    view.center = node_pos.center();
+                    app.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
+                }
+            }),
+        );
+
+        new_handler(
+            "goto_rect",
+            AppMsgHandler::from_fn(|app, _nodes, rect: &Option<Rect>| {
+                let bounds: Option<Rect> = rect
+                    .or_else(|| Some(app.selected_nodes_bounding_box?.into()));
+
+                if let Some(rect) = bounds {
+                    let view = View::from_dims_and_target(
+                        app.dims(),
+                        rect.min(),
+                        rect.max(),
+                    );
+                    app.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
+                }
+            }),
+        );
+
+        new_handler(
+            "add_gff3_records",
+            AppMsgHandler::from_fn_default(
+                |app, _nodes, records: Gff3Records| {
+                    let file_name = records.file_name().to_string();
+                    app.annotations.insert_gff3(&file_name, records);
+                },
+            ),
+        );
+
+        new_handler(
+            "add_bed_records",
+            AppMsgHandler::from_fn_default(
+                |app, _nodes, records: BedRecords| {
+                    let file_name = records.file_name().to_string();
+                    app.annotations.insert_bed(&file_name, records);
+                },
+            ),
+        );
+    }
+
     pub fn apply_app_msg(
         &mut self,
         console_input_tx: &Sender<String>,
@@ -426,34 +488,9 @@ impl App {
                     self.selected_nodes_bounding_box = Some((min, max));
                 }
             }
-            AppMsg::GotoSelection => {
-                if let Some(bounds) = self.selected_nodes_bounding_box {
-                    let view = View::from_dims_and_target(
-                        self.dims(),
-                        bounds.0,
-                        bounds.1,
-                    );
-                    self.channels
-                        .main_view_tx
-                        .send(MainViewMsg::GotoView(view))
-                        .unwrap();
-                }
-            }
             AppMsg::GotoNode(id) => {
                 self.send_raw::<NodeId>("goto_node", id).unwrap();
             }
-            /*
-                if let Some(node_pos) = node_positions.get((id.0 - 1) as usize)
-                {
-                    let mut view = self.shared_state.view();
-                    view.center = node_pos.center();
-                    self.channels
-                        .main_view_tx
-                        .send(MainViewMsg::GotoView(view))
-                        .unwrap();
-                }
-            }
-            */
             AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
 
             AppMsg::Selection(sel) => match sel {
@@ -573,12 +610,12 @@ impl App {
                 }
             },
             AppMsg::AddGff3Records(records) => {
-                let file_name = records.file_name().to_string();
-                self.annotations.insert_gff3(&file_name, records);
+                self.send_raw::<Gff3Records>("add_gff3_records", records)
+                    .unwrap();
             }
             AppMsg::AddBedRecords(records) => {
-                let file_name = records.file_name().to_string();
-                self.annotations.insert_bed(&file_name, records);
+                self.send_raw::<BedRecords>("add_bed_records", records)
+                    .unwrap();
             }
             AppMsg::NewLabelSet {
                 name,

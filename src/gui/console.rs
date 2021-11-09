@@ -1380,9 +1380,13 @@ impl ConsoleShared {
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("pan_to_active_selection", move || {
-            let msg = AppMsg::GotoSelection;
-            app_msg_tx.send(msg).unwrap();
+        engine.register_fn("goto_selection", move || {
+            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_rect", move |p0: Point, p1: Point| {
+            app_msg_tx.send(AppMsg::goto_rect((p0, p1).into())).unwrap();
         });
 
         let graph = self.graph.graph.clone();

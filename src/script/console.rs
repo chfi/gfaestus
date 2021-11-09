@@ -199,7 +199,14 @@ impl ConsoleCore {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("pan_to_active_selection", move || {
-            let msg = AppMsg::GotoSelection;
+            let msg = AppMsg::goto_selection();
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("pan_to_rect", move |p0: Point, p1: Point| {
+            let rect = Rect::new(p0, p1);
+            let msg = AppMsg::goto_rect(rect);
             app_msg_tx.send(msg).unwrap();
         });
 

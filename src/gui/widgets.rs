@@ -120,7 +120,7 @@ impl MenuBar {
 
                 menu::menu(ui, "View", |ui| {
                     if ui.button("Goto selection").clicked() {
-                        app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                        app_msg_tx.send(AppMsg::goto_selection()).unwrap();
                     }
                 });
 

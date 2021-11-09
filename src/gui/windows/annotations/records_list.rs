@@ -554,7 +554,7 @@ where
                             );
                         }
                         if row_interact.double_clicked() {
-                            app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
                         }
                     }
                 }
