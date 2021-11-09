@@ -173,14 +173,13 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
-    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
-
-    let mut reactor = gfaestus::reactor::Reactor::init(
+    let mut app = App::new(
+        (100.0, 100.0),
         thread_pool.clone(),
         rayon_pool,
         graph_query.clone(),
-        app.channels(),
-    );
+    )
+    .expect("error when creating App");
 
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
@@ -263,12 +262,16 @@ fn main() {
         Rect::new(p0, p1)
     };
 
+    let shared_state = app.shared_state().clone();
+    let channels = app.channels().clone();
+    let settings = app.settings.clone();
+
     let mut gui = Gui::new(
         &gfaestus,
-        &mut reactor,
-        app.shared_state().clone(),
-        app.channels(),
-        app.settings.clone(),
+        &mut app.reactor,
+        shared_state,
+        &channels,
+        settings,
         &graph_query,
     )
     .unwrap();
@@ -304,7 +307,7 @@ fn node_color(id) {
             app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
-            &reactor,
+            &app.reactor,
             "Node Seq Hash",
             node_seq_script,
         )
@@ -314,7 +317,7 @@ fn node_color(id) {
             app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
-            &reactor,
+            &app.reactor,
             "Node Step Count",
             step_count_script,
         )
@@ -472,12 +475,12 @@ fn node_color(id) {
 
             if let Ok(script) = script_bytes[0..read].to_str() {
                 warn!("executing script {}", script_file);
-                gui.console.eval_line(&mut reactor, true, script).unwrap();
+                gui.console.eval(&mut app.reactor, true, script).unwrap();
             }
         } else {
             warn!("executing script file {}", script_file);
             gui.console
-                .eval_file(&mut reactor, true, script_file)
+                .eval_file(&mut app.reactor, true, script_file)
                 .unwrap();
         }
     }
@@ -488,7 +491,7 @@ fn node_color(id) {
                 if let Some(path_str) = annot_path.to_str() {
                     let script = format!("load_collection(\"{}\");", path_str);
                     log::warn!("executing script: {}", script);
-                    gui.console.eval_line(&mut reactor, true, &script).unwrap();
+                    gui.console.eval(&mut app.reactor, true, &script).unwrap();
                 }
             }
         }
@@ -548,7 +551,7 @@ fn node_color(id) {
 
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
-                input_manager.handle_events(&mut reactor, &gui_msg_tx);
+                input_manager.handle_events(&mut app.reactor, &gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();
 
@@ -791,13 +794,20 @@ fn node_color(id) {
                     }
                 }
 
+                let _ = gui.console.eval_next(&mut app.reactor, true);
+
+                let dims = app.dims();
+                let reactor = &mut app.reactor;
+                let annotations = &app.annotations;
+                let labels = &app.labels;
+
                 gui.begin_frame(
-                    &mut reactor,
-                    Some(app.dims().into()),
+                    reactor,
+                    Some(dims.into()),
                     &graph_query,
                     &graph_query_worker,
-                    app.annotations(),
-                    app.labels(),
+                    annotations,
+                    labels,
                     context_menu.tx(),
                 );
 
@@ -813,7 +823,7 @@ fn node_color(id) {
                         open_context.store(false);
                     }
 
-                    context_menu.show(ctx, &reactor, clipboard);
+                    context_menu.show(ctx, &app.reactor, clipboard);
                 }
 
                 {

@@ -27,7 +27,9 @@ use crate::annotations::{
     Gff3Records, LabelSet, Labels,
 };
 use crate::app::selection::NodeSelection;
+use crate::graph_query::GraphQuery;
 use crate::gui::GuiMsg;
+use crate::reactor::Reactor;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
 use crate::{
@@ -40,14 +42,16 @@ pub struct App {
     channels: AppChannels,
     pub settings: AppSettings,
 
+    pub reactor: Reactor,
+
     selected_nodes: FxHashSet<NodeId>,
     selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
-    annotations: Annotations,
+    pub annotations: Annotations,
 
-    labels: Labels,
+    pub labels: Labels,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -134,12 +138,28 @@ pub enum AppMsg {
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Result<Self> {
+    pub fn new<Dims: Into<ScreenDims>>(
+        screen_dims: Dims,
+        thread_pool: futures::executor::ThreadPool,
+        rayon_pool: rayon::ThreadPool,
+        graph_query: Arc<GraphQuery>,
+    ) -> Result<Self> {
         let shared_state = SharedState::new(screen_dims);
+
+        let channels = AppChannels::new();
+
+        let mut reactor = crate::reactor::Reactor::init(
+            thread_pool,
+            rayon_pool,
+            graph_query,
+            &channels,
+        );
 
         Ok(Self {
             shared_state,
-            channels: AppChannels::new(),
+            channels,
+
+            reactor,
 
             selected_nodes: FxHashSet::default(),
             selection_changed: false,

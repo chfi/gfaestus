@@ -81,6 +81,9 @@ pub struct Console<'a> {
 
     remote_handles: HashMap<String, RemoteHandle<()>>,
 
+    input_rx: crossbeam::channel::Receiver<String>,
+    input_tx: crossbeam::channel::Sender<String>,
+
     result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
 
@@ -142,6 +145,8 @@ impl Console<'static> {
     ) -> Self {
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
+
+        let (input_tx, input_rx) = crossbeam::channel::unbounded::<String>();
 
         let future_tx = reactor.future_tx.clone();
 
@@ -326,6 +331,9 @@ impl Console<'static> {
 
             remote_handles: Default::default(),
 
+            input_tx,
+            input_rx,
+
             result_tx,
             result_rx,
 
@@ -372,6 +380,10 @@ impl Console<'static> {
 
     pub fn append_output(&mut self, output: &str) {
         self.output_history.extend(output.lines().map(String::from));
+    }
+
+    pub fn input_tx(&self) -> &crossbeam::channel::Sender<String> {
+        &self.input_tx
     }
 
     // NB: this shouldn't be handled this way (it shouldn't be a
@@ -697,7 +709,7 @@ impl Console<'static> {
             self.input_line.clear();
             return Ok(());
         }
-        self.eval(reactor, print)?;
+        self.eval(reactor, print, &input)?;
 
         Ok(())
     }
@@ -718,9 +730,10 @@ impl Console<'static> {
                 .push(format!(">>> Evaluating file '{}'", path));
         }
 
-        self.eval_line(reactor, print, &script)
+        self.eval(reactor, print, &script)
     }
 
+    /*
     pub fn eval_line(
         &mut self,
         reactor: &mut Reactor,
@@ -735,6 +748,7 @@ impl Console<'static> {
 
         Ok(())
     }
+    */
 
     fn eval_file_interval(
         &mut self,
@@ -926,12 +940,17 @@ impl Console<'static> {
         Ok(())
     }
 
-    pub fn eval(&mut self, reactor: &mut Reactor, _print: bool) -> Result<()> {
+    pub fn eval(
+        &mut self,
+        reactor: &mut Reactor,
+        _print: bool,
+        input_line: &str,
+    ) -> Result<()> {
         let engine = self.create_engine();
 
         let result_tx = self.result_tx.clone();
 
-        let input = self.input_line.to_string();
+        let input = input_line.to_string();
 
         let scope = self.scope.clone();
 
@@ -942,6 +961,24 @@ impl Console<'static> {
                 engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
             let _ = result_tx.send(result);
         })?;
+
+        Ok(())
+    }
+
+    pub fn eval_next(
+        &mut self,
+        reactor: &mut Reactor,
+        eval_all: bool,
+    ) -> Result<()> {
+        if eval_all {
+            while let Ok(input) = self.input_rx.try_recv() {
+                self.eval(reactor, false, &input)?;
+            }
+        } else {
+            if let Ok(input) = self.input_rx.try_recv() {
+                self.eval(reactor, false, &input)?;
+            }
+        }
 
         Ok(())
     }
