@@ -1,8 +1,8 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
 
-use futures::{task::SpawnExt, StreamExt};
+use futures::{task::SpawnExt, Future, FutureExt, StreamExt};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -33,7 +33,7 @@ use super::ConsoleShared;
 pub(super) fn bed_label_wizard_impl(
     console: &ConsoleShared,
     bed_path: Option<&str>,
-    path_prefix: Option<&str>,
+    arg_path_prefix: Option<&str>,
     arg_column_ix: Option<usize>,
 ) -> bool {
     let graph = console.graph.clone();
@@ -51,13 +51,22 @@ pub(super) fn bed_label_wizard_impl(
     let show_modal = shared_state.show_modal.clone();
 
     log::trace!("in bed_label_wizard");
-    let path_future = crate::reactor::file_picker_modal(
-        modal_tx.clone(),
-        &show_modal,
-        &["bed"],
-    );
 
-    let path_prefix = path_prefix.unwrap_or_default().to_string();
+    let path_future = if let Some(path) = bed_path {
+        let path = PathBuf::from(path);
+        let path_future = async move { Some(path) };
+        path_future.boxed()
+    } else {
+        let path_future = crate::reactor::file_picker_modal(
+            modal_tx.clone(),
+            &show_modal,
+            &["bed"],
+        );
+
+        path_future.boxed()
+    };
+
+    let path_prefix = arg_path_prefix.unwrap_or_default().to_string();
 
     #[derive(Debug, Clone)]
     struct WizardCfg {
@@ -76,6 +85,19 @@ pub(super) fn bed_label_wizard_impl(
     let modal_tx = modal_tx.clone();
 
     let path_prefix_id = egui::Id::new("bed_label_wizard_path_prefix");
+
+    let pre_config = if let (Some(prefix), Some(column_ix)) =
+        (arg_path_prefix, arg_column_ix)
+    {
+        Some(WizardCfg {
+            column_ix,
+            column: BedColumn::Index(column_ix),
+            path_prefix: path_prefix.clone(),
+            numeric: false,
+        })
+    } else {
+        None
+    };
 
     let config_future = move |records: Arc<BedRecords>| {
         let mut cfg = WizardCfg {
@@ -101,7 +123,7 @@ pub(super) fn bed_label_wizard_impl(
                 let mut success = false;
 
                 if let Some(ix) = column_ix.load() {
-                    let ix = ix - 3;
+                    let ix = ix - 4;
                     if ix <= limit {
                         cfg.column_ix = ix;
                         cfg.column = BedColumn::Index(ix);
@@ -156,20 +178,6 @@ pub(super) fn bed_label_wizard_impl(
                     }
                 }
 
-                if let Some(row) = records.records().first() {
-                    let val = row.get_all(&cfg.column);
-
-                    if let &[v] = val.as_slice() {
-                        if let Some(parsed) =
-                            v.to_str().ok().and_then(|v| v.parse::<f32>().ok())
-                        {
-                            cfg.numeric = true;
-                        } else {
-                            cfg.numeric = false;
-                        }
-                    }
-                }
-
                 if success {
                     return Ok(ModalSuccess::Success);
                 }
@@ -206,7 +214,26 @@ pub(super) fn bed_label_wizard_impl(
 
                             let records = Arc::new(records);
 
-                            let config = config_future(records.clone()).await.unwrap();
+                            let config = if let Some(mut config) = pre_config {
+
+                                if let Some(row) = records.records().first() {
+                                    let val = row.get_all(&config.column);
+
+                                    if let &[v] = val.as_slice() {
+                                        if let Some(_parsed) =
+                                            v.to_str().ok().and_then(|v| v.parse::<f32>().ok())
+                                        {
+                                            config.numeric = true;
+                                        } else {
+                                            config.numeric = false;
+                                        }
+                                    }
+                                }
+
+                                config
+                            } else {
+                                config_future(records.clone()).await.unwrap()
+                            };
 
                             let mut path_map: HashMap<
                                 Vec<u8>,

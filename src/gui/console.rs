@@ -1648,7 +1648,7 @@ impl ConsoleShared {
         let shared = self.clone();
 
         engine.register_fn(
-            "bed_label_wizard_",
+            "bed_label_wizard",
             move |bed_path: &str, path_prefix: &str, column_ix: i64| {
                 let bed_path = (bed_path != "").then(|| bed_path);
                 let path_prefix = (path_prefix != "").then(|| path_prefix);
