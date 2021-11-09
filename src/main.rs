@@ -173,14 +173,6 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
-    let mut app = App::new(
-        (100.0, 100.0),
-        thread_pool.clone(),
-        rayon_pool,
-        graph_query.clone(),
-    )
-    .expect("error when creating App");
-
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
 
@@ -188,6 +180,25 @@ fn main() {
         universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
+
+    let tree_bounding_box = {
+        let tl = top_left;
+        let br = bottom_right;
+
+        let p0 = tl - (br - tl) * 0.2;
+        let p1 = br + (br - tl) * 0.2;
+
+        Rect::new(p0, p1)
+    };
+
+    let mut app = App::new(
+        (100.0, 100.0),
+        thread_pool.clone(),
+        rayon_pool,
+        graph_query.clone(),
+        tree_bounding_box,
+    )
+    .expect("error when creating App");
 
     let _center = Point {
         x: top_left.x + (bottom_right.x - top_left.x) / 2.0,
@@ -251,16 +262,6 @@ fn main() {
         graph_query.node_count(),
     )
     .unwrap();
-
-    let tree_bounding_box = {
-        let tl = top_left;
-        let br = bottom_right;
-
-        let p0 = tl - (br - tl) * 0.2;
-        let p1 = br + (br - tl) * 0.2;
-
-        Rect::new(p0, p1)
-    };
 
     let shared_state = app.shared_state().clone();
     let channels = app.channels().clone();
@@ -647,9 +648,6 @@ fn node_color(id) {
                     }
 
                     app.apply_app_msg(
-                        tree_bounding_box,
-                        main_view.main_view_msg_tx(),
-                        &gui_msg_tx,
                         &gui.console.input_tx(),
                         universe.layout().nodes(),
                         app_msg,

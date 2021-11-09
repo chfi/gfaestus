@@ -19,6 +19,8 @@ use anyhow::Result;
 
 use argh::FromArgs;
 
+use std::any::TypeId;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use self::mainview::MainViewMsg;
@@ -42,6 +44,8 @@ pub struct App {
     channels: AppChannels,
     pub settings: AppSettings,
 
+    layout_boundary: Rect,
+
     pub reactor: Reactor,
 
     selected_nodes: FxHashSet<NodeId>,
@@ -52,7 +56,122 @@ pub struct App {
     pub annotations: Annotations,
 
     pub labels: Labels,
+
+    msg_handlers: HashMap<String, Arc<AppMsgHandler>>,
 }
+
+type BoxedAny = Box<dyn std::any::Any + Send + Sync>;
+
+trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync {}
+
+impl<'a, T> HandlerFn<'a> for T where
+    T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
+{
+}
+
+pub struct AppMsgHandler {
+    type_id: TypeId,
+    handler: Box<dyn for<'a> HandlerFn<'a>>,
+}
+
+impl AppMsgHandler {
+    fn call(&self, app: &mut App, nodes: &[Node], input: BoxedAny) {
+        (self.handler)(app, nodes, input);
+    }
+
+    fn from_fn<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], &T) + Send + Sync + 'static,
+        T: std::any::Any + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Box::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
+                if let Some(arg) = input.downcast_ref::<T>() {
+                    f(app, nodes, arg);
+                }
+            },
+        ) as Box<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
+    }
+}
+
+fn test_handler() -> AppMsgHandler {
+    let type_id = TypeId::of::<NodeId>();
+
+    let handler =
+        Box::new(|app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
+            if let Some(id) = input.downcast_ref::<NodeId>() {
+                if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
+                    let mut view = app.shared_state.view();
+                    view.center = node_pos.center();
+                    app.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
+                }
+            }
+            //
+        }) as Box<dyn for<'a> HandlerFn<'a>>;
+
+    AppMsgHandler { type_id, handler }
+}
+
+/*
+
+
+fn goto_node(app_msg_input: AppMsgInput<'_>, id: NodeId) {
+    if let Some(node_pos) =
+        app_msg_input.node_positions.get((id.0 - 1) as usize)
+    {
+        let mut view = app_msg_input.app.shared_state.view();
+        view.center = node_pos.center();
+        app_msg_input
+            .app
+            .channels
+            .main_view_tx
+            .send(MainViewMsg::GotoView(view))
+            .unwrap();
+    }
+}
+
+fn goto_node_handler() -> AppMsgHandler {
+    let type_id = TypeId::of::<NodeId>();
+
+    // let handler = Box::new(
+    //     |app: &App, boundary, nodes: &[Node], console, id: BoxedAny| {
+    //         if let Some(id) = id.downcast_ref::<NodeId>() {
+    //             if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
+    //                 let mut view = app.shared_state.view();
+    //                 view.center = node_pos.center();
+    //                 app.channels
+    //                     .main_view_tx
+    //                     .send(MainViewMsg::GotoView(view))
+    //                     .unwrap();
+    //             }
+    //         }
+    //     },
+    // )
+    //     as Box<
+    //         // dyn Fn(&mut App, Rect, &[Node], &Sender<String>, BoxedAny)
+    //         dyn for<'a> Fn(
+    //                 &'a mut App,
+    //                 Rect,
+    //                 &'a [Node],
+    //                 &'a Sender<String>,
+    //                 BoxedAny,
+    //             ) + Send
+    //             + Sync
+    //             + 'static,
+    //     >;
+    // // dyn for<'a> Fn(AppMsgInput<'a>, BoxedAny) + Send + Sync + 'static,
+    // // >;
+
+    AppMsgHandler { type_id, handler }
+}
+*/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum AppInput {
@@ -138,6 +257,11 @@ pub enum AppMsg {
     ConsoleEval {
         script: String,
     },
+    Raw {
+        type_id: TypeId,
+        msg_name: String,
+        value: Box<dyn std::any::Any + Send + Sync>,
+    },
 }
 
 impl App {
@@ -146,6 +270,7 @@ impl App {
         thread_pool: futures::executor::ThreadPool,
         rayon_pool: rayon::ThreadPool,
         graph_query: Arc<GraphQuery>,
+        layout_boundary: Rect,
     ) -> Result<Self> {
         let shared_state = SharedState::new(screen_dims);
 
@@ -158,11 +283,17 @@ impl App {
             &channels,
         );
 
+        let mut msg_handlers = HashMap::default();
+
+        msg_handlers.insert("goto_node".to_string(), Arc::new(test_handler()));
+
         Ok(Self {
             shared_state,
             channels,
 
             reactor,
+
+            layout_boundary,
 
             selected_nodes: FxHashSet::default(),
             selection_changed: false,
@@ -174,7 +305,31 @@ impl App {
             annotations: Annotations::default(),
 
             labels: Labels::default(),
+
+            msg_handlers,
         })
+    }
+
+    pub fn send_raw<T: std::any::Any + Send + Sync>(
+        &self,
+        msg_name: &str,
+        v: T,
+    ) -> Result<()> {
+        let type_id = TypeId::of::<T>();
+        let msg_name = msg_name.to_string();
+        let value = Box::new(v) as _;
+
+        log::warn!("sending raw: {:?}, {}", type_id, msg_name);
+
+        let msg = AppMsg::Raw {
+            type_id,
+            msg_name,
+            value,
+        };
+
+        self.channels.app_tx.send(msg)?;
+
+        Ok(())
     }
 
     pub fn shared_state(&self) -> &SharedState {
@@ -255,9 +410,6 @@ impl App {
 
     pub fn apply_app_msg(
         &mut self,
-        boundary: Rect,
-        main_view_msg_tx: &Sender<MainViewMsg>,
-        gui_msg: &Sender<GuiMsg>,
         console_input_tx: &Sender<String>,
         node_positions: &[Node],
         msg: AppMsg,
@@ -281,17 +433,27 @@ impl App {
                         bounds.0,
                         bounds.1,
                     );
-                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
+                    self.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
                 }
             }
             AppMsg::GotoNode(id) => {
+                self.send_raw::<NodeId>("goto_node", id).unwrap();
+            }
+            /*
                 if let Some(node_pos) = node_positions.get((id.0 - 1) as usize)
                 {
                     let mut view = self.shared_state.view();
                     view.center = node_pos.center();
-                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
+                    self.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
                 }
             }
+            */
             AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
 
             AppMsg::Selection(sel) => match sel {
@@ -424,7 +586,7 @@ impl App {
                 on_label_click,
             } => {
                 self.labels.add_label_set(
-                    boundary,
+                    self.layout_boundary,
                     node_positions,
                     &name,
                     &label_set,
@@ -434,7 +596,7 @@ impl App {
             AppMsg::NewNodeLabels { name, label_set } => {
                 let label_set_ = label_set.label_set();
                 self.labels.add_label_set(
-                    boundary,
+                    self.layout_boundary,
                     node_positions,
                     &name,
                     &label_set_,
@@ -443,7 +605,7 @@ impl App {
                 self.annotations.insert_label_set(&name, label_set);
             }
             AppMsg::ToggleDarkMode => {
-                self.toggle_dark_mode(gui_msg);
+                self.toggle_dark_mode();
             }
             AppMsg::RequestSelection(sender) => {
                 let selection = self.selected_nodes.to_owned();
@@ -530,10 +692,25 @@ impl App {
             AppMsg::ConsoleEval { script } => {
                 console_input_tx.send(script).unwrap();
             }
+            AppMsg::Raw {
+                type_id,
+                msg_name,
+                value,
+            } => {
+                log::warn!("received raw: {:?}, {}", type_id, msg_name);
+
+                if let Some(handler) = self.msg_handlers.get(&msg_name) {
+                    let handler: Arc<_> = handler.clone();
+
+                    if type_id == handler.type_id {
+                        handler.call(self, node_positions, value);
+                    }
+                }
+            }
         }
     }
 
-    fn toggle_dark_mode(&self, gui_msg: &Sender<GuiMsg>) {
+    fn toggle_dark_mode(&self) {
         let prev = self.shared_state.dark_mode.fetch_xor(true);
 
         let msg = if prev {
@@ -542,7 +719,7 @@ impl App {
             GuiMsg::SetDarkMode
         };
 
-        gui_msg.send(msg).unwrap();
+        self.channels.gui_tx.send(msg).unwrap();
     }
 
     pub fn apply_input(
@@ -561,7 +738,7 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        self.toggle_dark_mode(gui_msg);
+                        self.toggle_dark_mode();
                     }
                 }
             }
