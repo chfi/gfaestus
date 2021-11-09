@@ -128,6 +128,15 @@ impl MenuBar {
                     if ui.selectable_label(*settings, "Settings").clicked() {
                         *settings = !*settings;
                     }
+
+                    ui.separator();
+
+                    if ui.button("BED Label Wizard").clicked() {
+                        let script = "bed_label_wizard()".to_string();
+                        app_msg_tx
+                            .send(AppMsg::ConsoleEval { script })
+                            .unwrap();
+                    }
                 });
 
                 let mut selected =

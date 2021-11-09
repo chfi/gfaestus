@@ -135,6 +135,9 @@ pub enum AppMsg {
         index: String,
         value: rhai::Dynamic,
     },
+    ConsoleEval {
+        script: String,
+    },
 }
 
 impl App {
@@ -148,7 +151,7 @@ impl App {
 
         let channels = AppChannels::new();
 
-        let mut reactor = crate::reactor::Reactor::init(
+        let reactor = crate::reactor::Reactor::init(
             thread_pool,
             rayon_pool,
             graph_query,
@@ -255,6 +258,7 @@ impl App {
         boundary: Rect,
         main_view_msg_tx: &Sender<MainViewMsg>,
         gui_msg: &Sender<GuiMsg>,
+        console_input_tx: &Sender<String>,
         node_positions: &[Node],
         msg: AppMsg,
     ) {
@@ -523,6 +527,9 @@ impl App {
                 }
                 _ => (),
             },
+            AppMsg::ConsoleEval { script } => {
+                console_input_tx.send(script).unwrap();
+            }
         }
     }
 

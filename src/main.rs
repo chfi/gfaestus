@@ -650,6 +650,7 @@ fn node_color(id) {
                         tree_bounding_box,
                         main_view.main_view_msg_tx(),
                         &gui_msg_tx,
+                        &gui.console.input_tx(),
                         universe.layout().nodes(),
                         app_msg,
                     );
