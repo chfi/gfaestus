@@ -77,7 +77,7 @@ pub struct Console<'a> {
     shared_state: SharedState,
     channels: AppChannels,
 
-    get_set: Arc<GetSetTruth>,
+    pub get_set: Arc<GetSetTruth>,
 
     remote_handles: HashMap<String, RemoteHandle<()>>,
 
@@ -1216,6 +1216,38 @@ pub struct GetSetTruth {
 }
 
 impl GetSetTruth {
+    pub fn get(&self, key: &str) -> Option<rhai::Dynamic> {
+        let getter = self.getters.get(key)?;
+        Some(getter())
+    }
+
+    pub fn get_var(&self, key: &str) -> Option<rhai::Dynamic> {
+        let lock = self.console_vars.lock();
+        let val = lock.get(key)?.to_owned();
+        Some(val)
+    }
+
+    pub fn set(&self, key: &str, val: rhai::Dynamic) {
+        if let Some(setter) = self.setters.get(key) {
+            setter(val);
+        }
+    }
+
+    pub fn set_vars<'a>(
+        &self,
+        pairs: impl Iterator<Item = (&'a str, rhai::Dynamic)>,
+    ) {
+        let mut lock = self.console_vars.lock();
+        for (key, val) in pairs {
+            lock.insert(key.to_string(), val);
+        }
+    }
+
+    pub fn set_var(&self, key: &str, val: rhai::Dynamic) {
+        let mut lock = self.console_vars.lock();
+        lock.insert(key.to_string(), val);
+    }
+
     pub fn add_var(&mut self, name: &str, val: rhai::Dynamic) {
         let mut lock = self.console_vars.lock();
         lock.insert(name.to_string(), val);

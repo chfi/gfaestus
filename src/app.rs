@@ -160,6 +160,10 @@ impl AppMsg {
         Self::raw::<Option<Rect>>("goto_selection", None)
     }
 
+    pub fn clear_selection() -> Self {
+        Self::raw("clear_selection", ())
+    }
+
     pub fn toggle_dark_mode() -> Self {
         Self::raw("toggle_dark_mode", ())
     }
