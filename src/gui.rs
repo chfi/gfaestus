@@ -324,7 +324,7 @@ impl std::default::Default for OpenWindows {
             paths: false,
             path_details: false,
 
-            path_position_list: true,
+            path_position_list: false,
 
             themes: false,
             overlays: false,

@@ -1,9 +1,14 @@
 use crossbeam::atomic::AtomicCell;
-use handlegraph::pathhandlegraph::{GraphPathNames, PathId};
+use handlegraph::pathhandlegraph::{
+    GraphPathNames, GraphPaths, PathId, PathSequences,
+};
 
 use lazy_static::lazy_static;
 
+use rustc_hash::FxHashMap;
+
 use bstr::ByteSlice;
+use parking_lot::Mutex;
 
 use crate::{geometry::Point, gui::console::Console, reactor::Reactor};
 
@@ -61,15 +66,22 @@ impl PathPositionList {
 
                                 let mut rows = Vec::new();
 
+                                let graph = reactor.graph_query.graph();
+                                let path_pos = reactor.graph_query.path_positions();
+
+                                // path_pos.
+
+                                    // path_pa
+
                                 for (ix, path) in paths.into_iter().enumerate()
                                 {
                                     let path: PathId = path.cast();
 
-                                    let path_name = reactor
-                                        .graph_query
-                                        .graph
-                                        .get_path_name_vec(path)
-                                        .unwrap();
+                                    let path_name =
+                                        graph.get_path_name_vec(path).unwrap();
+
+                                    let path_len =
+                                        path_pos.path_base_len(path).unwrap() as f32;
 
                                     let mut row =
                                         ui.label(format!("{}", path.0));
@@ -99,10 +111,34 @@ impl PathPositionList {
 
                                         let p_ = p - p0;
 
+                                        let n = (p_.x / width).clamp(0.0, 1.0);
+
+                                        let pos = (path_len * n) as usize;
+
+
+
                                         log::warn!(
-                                            "hovered at {}",
-                                            p_.x / width
+                                            "hovered at {}, pos {}", n, pos
                                         );
+
+
+                                        if let Some(step) = path_pos.find_step_at_base(path, pos) {
+                                            log::warn!(
+                                                "step {:?}", step
+                                            );
+
+                                            if let Some(handle) = graph.path_handle_at_step(path, step) {
+                                                log::warn!("handle {:?}", handle);
+                                                egui::show_tooltip(
+                                                    ctx,
+                                                    egui::Id::new("path_position_list_tooltip"),
+                                                    |ui| {
+                                                        ui.label(handle.id());
+                                                    },
+                                                );
+
+                                            }
+                                        }
                                     }
 
                                     if interact.clicked() {
