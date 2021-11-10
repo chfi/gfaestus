@@ -5,7 +5,7 @@ use lazy_static::lazy_static;
 
 use bstr::ByteSlice;
 
-use crate::{gui::console::Console, reactor::Reactor};
+use crate::{geometry::Point, gui::console::Console, reactor::Reactor};
 
 lazy_static! {
     static ref CONSOLE_ADDED: AtomicCell<bool> = AtomicCell::new(false);
@@ -49,21 +49,71 @@ impl PathPositionList {
                 if let Some(paths) = console.get_set.get_var(Self::PATHS) {
                     let paths: Vec<rhai::Dynamic> = paths.cast();
 
-                    for (ix, path) in paths.into_iter().enumerate() {
-                        let path: PathId = path.cast();
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        egui::Grid::new("path_position_list_grid").show(
+                            ui,
+                            |ui| {
+                                ui.label("Path");
+                                ui.separator();
 
-                        let path_name = reactor
-                            .graph_query
-                            .graph
-                            .get_path_name_vec(path)
-                            .unwrap();
+                                ui.label("-");
+                                ui.end_row();
 
-                        ui.label(format!(
-                            "{} - {}",
-                            path.0,
-                            path_name.as_bstr()
-                        ));
-                    }
+                                let mut rows = Vec::new();
+
+                                for (ix, path) in paths.into_iter().enumerate()
+                                {
+                                    let path: PathId = path.cast();
+
+                                    let path_name = reactor
+                                        .graph_query
+                                        .graph
+                                        .get_path_name_vec(path)
+                                        .unwrap();
+
+                                    let mut row =
+                                        ui.label(format!("{}", path.0));
+                                    row = row.union(ui.separator());
+
+                                    row = row.union(ui.label(format!(
+                                        "{}",
+                                        path_name.as_bstr()
+                                    )));
+
+                                    ui.end_row();
+
+                                    let interact = ui.interact(
+                                        row.rect,
+                                        egui::Id::new(Self::ID).with(ix),
+                                        egui::Sense::hover()
+                                            .union(egui::Sense::click()),
+                                    );
+
+                                    if let Some(pos) = interact.hover_pos() {
+                                        let rect = interact.rect;
+
+                                        let p0 = Point::from(rect.min);
+                                        let p = Point::from(pos);
+
+                                        let width = rect.width();
+
+                                        let p_ = p - p0;
+
+                                        log::warn!(
+                                            "hovered at {}",
+                                            p_.x / width
+                                        );
+                                    }
+
+                                    if interact.clicked() {
+                                        log::warn!("clicked!");
+                                    }
+
+                                    rows.push(interact);
+                                }
+                            },
+                        )
+                    });
                 }
             });
     }
