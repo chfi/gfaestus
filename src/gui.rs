@@ -302,6 +302,8 @@ pub struct OpenWindows {
     paths: bool,
     path_details: bool,
 
+    path_position_list: bool,
+
     themes: bool,
     overlays: bool,
     overlay_creator: bool,
@@ -321,6 +323,8 @@ impl std::default::Default for OpenWindows {
 
             paths: false,
             path_details: false,
+
+            path_position_list: true,
 
             themes: false,
             overlays: false,
@@ -638,6 +642,13 @@ impl Gui {
             &mut self.open_windows.annotation_files,
             &self.channels.gui_tx,
             annotations,
+        );
+
+        PathPositionList::ui(
+            &self.ctx,
+            &mut self.open_windows.path_position_list,
+            &self.console,
+            reactor,
         );
 
         if let Some((annot_type, annot_name)) =

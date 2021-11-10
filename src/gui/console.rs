@@ -1212,7 +1212,7 @@ pub struct GetSetTruth {
     setters:
         HashMap<String, Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>>,
 
-    console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
+    pub console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
 }
 
 impl GetSetTruth {
@@ -1235,7 +1235,7 @@ impl GetSetTruth {
 
     pub fn set_vars<'a>(
         &self,
-        pairs: impl Iterator<Item = (&'a str, rhai::Dynamic)>,
+        pairs: impl IntoIterator<Item = (&'a str, rhai::Dynamic)>,
     ) {
         let mut lock = self.console_vars.lock();
         for (key, val) in pairs {

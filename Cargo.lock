@@ -793,6 +793,7 @@ dependencies = [
  "futures-timer",
  "gfa",
  "handlegraph",
+ "lazy_static",
  "log",
  "nalgebra",
  "nalgebra-glm",
