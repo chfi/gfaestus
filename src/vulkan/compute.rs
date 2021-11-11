@@ -9,6 +9,7 @@ use super::GfaestusVk;
 
 pub mod edges;
 pub mod node_motion;
+pub mod path_view;
 pub mod selection;
 
 pub use edges::*;

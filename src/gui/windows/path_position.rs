@@ -10,7 +10,11 @@ use rustc_hash::FxHashMap;
 use bstr::ByteSlice;
 use parking_lot::Mutex;
 
-use crate::{geometry::Point, gui::console::Console, reactor::Reactor};
+use crate::{
+    geometry::{Point, Rect},
+    gui::console::Console,
+    reactor::Reactor,
+};
 
 lazy_static! {
     static ref CONSOLE_ADDED: AtomicCell<bool> = AtomicCell::new(false);
@@ -67,11 +71,15 @@ impl PathPositionList {
                                 let mut rows = Vec::new();
 
                                 let graph = reactor.graph_query.graph();
-                                let path_pos = reactor.graph_query.path_positions();
+                                let path_pos =
+                                    reactor.graph_query.path_positions();
 
                                 // path_pos.
 
-                                    // path_pa
+                                // path_pa
+
+                                let dy: f32 = 1.0 / 4.0;
+                                let oy: f32 = dy / 2.0;
 
                                 for (ix, path) in paths.into_iter().enumerate()
                                 {
@@ -81,16 +89,31 @@ impl PathPositionList {
                                         graph.get_path_name_vec(path).unwrap();
 
                                     let path_len =
-                                        path_pos.path_base_len(path).unwrap() as f32;
+                                        path_pos.path_base_len(path).unwrap()
+                                            as f32;
 
-                                    let mut row =
-                                        ui.label(format!("{}", path.0));
-                                    row = row.union(ui.separator());
+                                    // let mut row =
+                                    ui.label(format!("{}", path.0));
+                                    ui.separator();
 
-                                    row = row.union(ui.label(format!(
+                                    ui.label(format!(
                                         "{}",
                                         path_name.as_bstr()
-                                    )));
+                                    ));
+
+                                    ui.separator();
+
+                                    let y = oy + (dy * ix as f32);
+
+                                    let p0 = Point::new(0.0, y);
+                                    let p1 = Point::new(1.0, y);
+
+                                    let img = egui::Image::new(
+                                        egui::TextureId::User(1),
+                                        Point { x: 1024.0, y: 30.0 },
+                                    )
+                                    .uv(Rect::new(p0, p1));
+                                    let row = ui.add(img);
 
                                     ui.end_row();
 
@@ -115,13 +138,13 @@ impl PathPositionList {
 
                                         let pos = (path_len * n) as usize;
 
-
-
                                         log::warn!(
-                                            "hovered at {}, pos {}", n, pos
+                                            "hovered at {}, pos {}",
+                                            n,
+                                            pos
                                         );
 
-
+                                        /*
                                         if let Some(step) = path_pos.find_step_at_base(path, pos) {
                                             log::warn!(
                                                 "step {:?}", step
@@ -139,6 +162,7 @@ impl PathPositionList {
 
                                             }
                                         }
+                                        */
                                     }
 
                                     if interact.clicked() {

@@ -6,9 +6,10 @@ use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::context::{ContextEntry, ContextMenu};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
+use gfaestus::script::plugins::colors::{hash_bytes, hash_color};
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
-use gfaestus::vulkan::texture::{Gradients, Gradients_};
+use gfaestus::vulkan::texture::{Gradients, Gradients_, Texture};
 
 use parking_lot::RwLock;
 use rustc_hash::FxHashMap;
@@ -433,6 +434,77 @@ fn node_color(id) {
     gui.draw_system
         .add_texture(&gfaestus, gradients_.texture)
         .unwrap();
+
+    // add test path position view texture
+    /*
+    {
+        let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
+
+        let height = 4;
+        let width = 1024;
+        let size = width * height;
+
+        let format = vk::Format::R8G8B8A8_UNORM;
+
+        let texture = Texture::allocate(
+            &gfaestus,
+            gfaestus.transient_command_pool,
+            gfaestus.graphics_queue,
+            width,
+            height,
+            format,
+        )
+        .unwrap();
+
+        let mut pixels: Vec<u8> =
+            Vec::with_capacity(size * std::mem::size_of::<[u8; 4]>());
+
+        for path in paths {
+            let steps = graph_query.path_pos_steps(path).unwrap();
+            let (_, _, path_len) = steps.last().unwrap();
+
+            for i in 0..width {
+                let n = ((i as f64) / (width as f64));
+
+                let n = n * 0.001;
+
+                let p = (n * (*path_len as f64)) as usize;
+
+                let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
+
+                let ix = ix.min(steps.len() - 1);
+
+                let (handle, step, pos) = steps[ix];
+
+                let mut seq = graph_query.graph().sequence_vec(handle);
+                let mut color = hash_color(hash_bytes(&mut seq));
+
+                pixels.push((color.r * 255.0) as u8);
+                pixels.push((color.g * 255.0) as u8);
+                pixels.push((color.b * 255.0) as u8);
+                pixels.push((color.a * 255.0) as u8);
+            }
+        }
+
+        texture
+            .copy_from_slice(
+                &gfaestus,
+                gfaestus.transient_command_pool,
+                gfaestus.graphics_queue,
+                width,
+                height,
+                &pixels,
+            )
+            .unwrap();
+
+        let tex_id = gui.draw_system.add_texture(&gfaestus, texture).unwrap();
+
+        log::warn!("uploaded path view texture: {:?}", tex_id);
+    }
+    */
 
     let gradients = Gradients::initialize(
         &gfaestus,

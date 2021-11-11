@@ -424,8 +424,10 @@ impl GradientPicker {
                         let mut current_gradient =
                             self.overlay_state.gradient();
 
-                        let dy: f32 = 1.0 / 38.0;
-                        let oy: f32 = dy / 2.0;
+                        let den = self.gradient_names.len() as f32;
+                        let dy = 1.0 / den;
+                        // let dy: f32 = 1.0 / 38.0;
+                        // let oy: f32 = dy / 2.0;
 
                         for (ix, (gradient_name, name)) in
                             self.gradient_names.iter().enumerate()
@@ -441,7 +443,9 @@ impl GradientPicker {
                                 self.overlay_state.set_gradient(*gradient_name);
                             }
 
-                            let y = oy + (dy * ix as f32);
+                            // let y = oy + (dy * ix as f32);
+
+                            let y = dy * ix as f32;
 
                             let p0 = Point::new(0.0, y);
                             let p1 = Point::new(1.0, y);
