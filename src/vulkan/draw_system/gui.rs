@@ -17,22 +17,20 @@ pub struct GuiPipeline {
     descriptor_set_layout: vk::DescriptorSetLayout,
     texture_sets: Vec<vk::DescriptorSet>,
 
-    // texture_pool: vk::DescriptorPool,
-    // texture_descriptors: Vec<vk::DescriptorSet>,
     sampler: vk::Sampler,
     egui_texture_set: vk::DescriptorSet,
     egui_texture: Texture,
     egui_texture_version: u64,
 
     texture_set_map: FxHashMap<u64, vk::DescriptorSet>,
-    // texture_set_map: FxHashMap<u64, (Texture, usize)>,
+
     pub vertices: GuiVertices,
 
     tex_2d_pipeline_layout: vk::PipelineLayout,
     tex_2d_pipeline: vk::Pipeline,
 
-    // tex_1d_pipeline_layout: vk::PipelineLayout,
-    // tex_1d_pipeline: vk::Pipeline,
+    tex_rgba_pipeline_layout: vk::PipelineLayout,
+    tex_rgba_pipeline: vk::Pipeline,
     device: Device,
 }
 
@@ -86,12 +84,13 @@ impl GuiPipeline {
             crate::load_shader!("gui/gui_2d.frag.spv"),
         );
 
-        // let (tex_1d_pipeline, tex_1d_pipeline_layout) = Self::create_pipeline(
-        //     device,
-        //     render_pass,
-        //     desc_set_layout,
-        //     crate::load_shader!("gui/gui_1d.frag.spv"),
-        // );
+        let (tex_rgba_pipeline, tex_rgba_pipeline_layout) =
+            Self::create_pipeline(
+                device,
+                render_pass,
+                desc_set_layout,
+                crate::load_shader!("gui/gui_rgba.frag.spv"),
+            );
 
         let sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
@@ -135,14 +134,11 @@ impl GuiPipeline {
             tex_2d_pipeline_layout,
             tex_2d_pipeline,
 
-            // tex_1d_pipeline_layout,
-            // tex_1d_pipeline,
+            tex_rgba_pipeline_layout,
+            tex_rgba_pipeline,
             device: device.clone(),
         })
     }
-
-    // pub fn add_texture(&mut self,
-    //                    app: &GfaestusVk,
 
     pub fn draw(
         &self,
@@ -260,7 +256,7 @@ impl GuiPipeline {
                         device.cmd_bind_pipeline(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
-                            self.tex_2d_pipeline,
+                            self.tex_rgba_pipeline,
                         );
 
                         let desc_set = self
@@ -272,7 +268,7 @@ impl GuiPipeline {
                         device.cmd_bind_descriptor_sets(
                             cmd_buf,
                             vk::PipelineBindPoint::GRAPHICS,
-                            self.tex_2d_pipeline_layout,
+                            self.tex_rgba_pipeline_layout,
                             0,
                             &desc_sets,
                             &[],
@@ -281,7 +277,7 @@ impl GuiPipeline {
                         use vk::ShaderStageFlags as Flags;
                         device.cmd_push_constants(
                             cmd_buf,
-                            self.tex_2d_pipeline_layout,
+                            self.tex_rgba_pipeline_layout,
                             Flags::VERTEX,
                             0,
                             &pc_bytes,
@@ -348,8 +344,8 @@ impl GuiPipeline {
             device.destroy_pipeline(self.tex_2d_pipeline, None);
             device.destroy_pipeline_layout(self.tex_2d_pipeline_layout, None);
 
-            // device.destroy_pipeline(self.tex_1d_pipeline, None);
-            // device.destroy_pipeline_layout(self.tex_1d_pipeline_layout, None);
+            device.destroy_pipeline(self.tex_rgba_pipeline, None);
+            device.destroy_pipeline_layout(self.tex_rgba_pipeline_layout, None);
 
             self.vertices.destroy(allocator);
 
