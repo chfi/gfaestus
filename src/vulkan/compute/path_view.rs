@@ -20,6 +20,10 @@ pub struct PathViewRenderer {
     pipeline: ComputePipeline,
     descriptor_set_layout: vk::DescriptorSetLayout,
 
+    descriptor_pool: vk::DescriptorPool,
+    buffer_desc_set: vk::DescriptorSet,
+    // path_desc_set: vk::DescriptorSet,
+    // output_desc_set: vk::DescriptorSet,
     width: usize,
     height: usize,
 
@@ -79,7 +83,75 @@ impl PathViewRenderer {
             (buffer, allocation, allocation_info)
         };
 
+        let descriptor_pool = {
+            let sampler_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_BUFFER,
+                // ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: 2,
+            };
+
+            let pool_sizes = [sampler_size];
+
+            let pool_info = vk::DescriptorPoolCreateInfo::builder()
+                .pool_sizes(&pool_sizes)
+                .max_sets(2)
+                .build();
+
+            unsafe { device.create_descriptor_pool(&pool_info, None) }
+        }?;
+
         let descriptor_set_layout = Self::create_descriptor_set_layout(device)?;
+
+        let descriptor_sets = {
+            let layouts = vec![descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let buffer_desc_set = descriptor_sets[0];
+
+        {
+            let path_buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(path_buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let path_buf_infos = [path_buf_info];
+
+            let path_write = vk::WriteDescriptorSet::builder()
+                .dst_set(buffer_desc_set)
+                .dst_binding(0)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&path_buf_infos)
+                .build();
+
+            let output_buf_info = vk::DescriptorBufferInfo::builder()
+                .buffer(output_buffer)
+                .offset(0)
+                .range(vk::WHOLE_SIZE)
+                .build();
+
+            let output_buf_infos = [output_buf_info];
+
+            let output_write = vk::WriteDescriptorSet::builder()
+                .dst_set(buffer_desc_set)
+                .dst_binding(1)
+                .dst_array_element(0)
+                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+                .buffer_info(&output_buf_infos)
+                .build();
+
+            let desc_writes = [path_write, output_write];
+
+            unsafe { device.update_descriptor_sets(&desc_writes, &[]) };
+        }
 
         let pipeline_layout = {
             use vk::ShaderStageFlags as Flags;
@@ -113,6 +185,9 @@ impl PathViewRenderer {
         Ok(Self {
             pipeline,
             descriptor_set_layout,
+
+            descriptor_pool,
+            buffer_desc_set,
 
             width,
             height,
@@ -164,7 +239,42 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 3] {
+    /*
+    pub fn dispatch(
+        &self,
+        app: &GfaestusVk,
+        overlay_desc: vk::DescriptorSet,
+        // cmd_pool: vk::CommandPool,
+        // queue: vk::Queue,
+    ) -> Result<()> {
+        let device = app.vk_context().device();
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_pipeline.pipeline,
+            );
+
+            let desc_sets = [];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.compute_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=0],
+                &null,
+            );
+        };
+
+        Ok(())
+        //
+    }
+    */
+
+    fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;
 
         //
@@ -183,14 +293,15 @@ impl PathViewRenderer {
             .stage_flags(Stages::COMPUTE)
             .build();
 
-        let overlay_sampler = vk::DescriptorSetLayoutBinding::builder()
-            .binding(2)
-            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
-            .descriptor_count(1)
-            .stage_flags(Stages::COMPUTE)
-            .build();
+        // let overlay_sampler = vk::DescriptorSetLayoutBinding::builder()
+        //     .binding(2)
+        //     .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+        //     .descriptor_count(1)
+        //     .stage_flags(Stages::COMPUTE)
+        //     .build();
 
-        [path_buffer, output_buffer, overlay_sampler]
+        // [path_buffer, output_buffer, overlay_sampler]
+        [path_buffer, output_buffer]
     }
 
     fn create_descriptor_set_layout(

@@ -8,7 +8,7 @@ layout (set = 0, binding = 1) buffer Output {
   vec4 color[];
 } image;
 
-layout (set = 0, binding = 2) uniform samplerBuffer overlay;
+layout (set = 1, binding = 0) uniform samplerBuffer overlay;
 
 layout (push_constant) uniform PushConstants {
   uint path_count;
