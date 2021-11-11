@@ -82,16 +82,16 @@ impl PathViewRenderer {
         let descriptor_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let pipeline_layout = {
-            // use vk::ShaderStageFlags as Flags;
+            use vk::ShaderStageFlags as Flags;
 
-            // let pc_range = vk::PushConstantRange::builder()
-            //     .stage_flags(Flags::COMPUTE)
-            //     .offset(0)
-            //     .size(20)
-            //     .build();
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(std::mem::size_of::<[u32; 4]>() as _)
+                .build();
 
-            // let pc_ranges = [pc_range];
-            let pc_ranges = [];
+            let pc_ranges = [pc_range];
+            // let pc_ranges = [];
 
             let layouts = [descriptor_set_layout];
 
@@ -164,7 +164,7 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
+    fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 3] {
         use vk::ShaderStageFlags as Stages;
 
         //
@@ -183,7 +183,14 @@ impl PathViewRenderer {
             .stage_flags(Stages::COMPUTE)
             .build();
 
-        [path_buffer, output_buffer]
+        let overlay_sampler = vk::DescriptorSetLayoutBinding::builder()
+            .binding(2)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .descriptor_count(1)
+            .stage_flags(Stages::COMPUTE)
+            .build();
+
+        [path_buffer, output_buffer, overlay_sampler]
     }
 
     fn create_descriptor_set_layout(
