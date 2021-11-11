@@ -430,6 +430,10 @@ fn node_color(id) {
     )
     .unwrap();
 
+    gui.draw_system
+        .add_texture(&gfaestus, gradients_.texture)
+        .unwrap();
+
     let gradients = Gradients::initialize(
         &gfaestus,
         gfaestus.transient_command_pool,

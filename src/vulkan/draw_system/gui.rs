@@ -24,8 +24,8 @@ pub struct GuiPipeline {
     egui_texture: Texture,
     egui_texture_version: u64,
 
-    textures: FxHashMap<u64, (Texture, usize)>,
-
+    texture_set_map: FxHashMap<u64, vk::DescriptorSet>,
+    // texture_set_map: FxHashMap<u64, (Texture, usize)>,
     pub vertices: GuiVertices,
 
     tex_2d_pipeline_layout: vk::PipelineLayout,
@@ -116,7 +116,7 @@ impl GuiPipeline {
 
         let vertices = GuiVertices::new(device);
 
-        let mut textures = FxHashMap::default();
+        let texture_set_map = FxHashMap::default();
 
         Ok(Self {
             descriptor_pool,
@@ -128,7 +128,7 @@ impl GuiPipeline {
             egui_texture,
             egui_texture_version: 0,
 
-            textures,
+            texture_set_map,
 
             vertices,
 
@@ -228,7 +228,6 @@ impl GuiPipeline {
                         );
 
                         let desc_sets = [self.egui_texture_set];
-                        // let desc_sets = [self.descriptor_sets[0]];
 
                         device.cmd_bind_descriptor_sets(
                             cmd_buf,
@@ -238,27 +237,6 @@ impl GuiPipeline {
                             &desc_sets,
                             &[],
                         );
-
-                        /*
-                        self.pipelines.bind_descriptor_sets(
-                            device,
-                            cmd_buf,
-                            overlay_id,
-                            self.selection_descriptors.descriptor_set,
-                        )?;
-                        */
-
-                        // let desc_write = self.egui_descriptor_write();
-
-                        // let desc_writes = [desc_write];
-
-                        // push_descriptor.cmd_push_descriptor_set(
-                        //     cmd_buf,
-                        //     vk::PipelineBindPoint::GRAPHICS,
-                        //     self.tex_2d_pipeline_layout,
-                        //     0,
-                        //     &desc_writes,
-                        // );
 
                         use vk::ShaderStageFlags as Flags;
                         device.cmd_push_constants(
@@ -279,6 +257,44 @@ impl GuiPipeline {
                         )
                     }
                     egui::TextureId::User(texture_id) => {
+                        device.cmd_bind_pipeline(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.tex_2d_pipeline,
+                        );
+
+                        let desc_set = self
+                            .texture_set_map
+                            .get(&texture_id)
+                            .expect("GUI tried to use missing texture");
+                        let desc_sets = [*desc_set];
+
+                        device.cmd_bind_descriptor_sets(
+                            cmd_buf,
+                            vk::PipelineBindPoint::GRAPHICS,
+                            self.tex_2d_pipeline_layout,
+                            0,
+                            &desc_sets,
+                            &[],
+                        );
+
+                        use vk::ShaderStageFlags as Flags;
+                        device.cmd_push_constants(
+                            cmd_buf,
+                            self.tex_2d_pipeline_layout,
+                            Flags::VERTEX,
+                            0,
+                            &pc_bytes,
+                        );
+
+                        device.cmd_draw_indexed(
+                            cmd_buf,
+                            ix_count,
+                            1,
+                            0,
+                            vx_offset as i32,
+                            0,
+                        )
                         /*
                         device.cmd_bind_pipeline(
                             cmd_buf,
@@ -351,16 +367,6 @@ impl GuiPipeline {
         self.egui_texture.is_null()
     }
 
-    pub fn add_texture(
-        &mut self,
-        app: &GfaestusVk,
-        command_pool: vk::CommandPool,
-        transition_queue: vk::Queue,
-        texture: Texture,
-    ) -> Result<()> {
-        Ok(())
-    }
-
     pub fn upload_egui_texture(
         &mut self,
         app: &super::super::GfaestusVk,
@@ -417,6 +423,51 @@ impl GuiPipeline {
             .build();
 
         sampler_descriptor_write
+    }
+
+    pub fn add_texture(
+        &mut self,
+        app: &GfaestusVk,
+        texture: Texture,
+    ) -> Result<egui::TextureId> {
+        let device = app.vk_context().device();
+
+        let id = self.texture_sets.len() as u64;
+        let tex_id = egui::TextureId::User(id);
+
+        let texture_sets = {
+            let layouts = vec![self.descriptor_set_layout];
+
+            let alloc_info = vk::DescriptorSetAllocateInfo::builder()
+                .descriptor_pool(self.descriptor_pool)
+                .set_layouts(&layouts)
+                .build();
+
+            unsafe { device.allocate_descriptor_sets(&alloc_info) }
+        }?;
+
+        let image_info = vk::DescriptorImageInfo::builder()
+            .image_layout(vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL)
+            .image_view(texture.view)
+            .sampler(self.sampler)
+            .build();
+        let image_infos = [image_info];
+
+        let sampler_descriptor_write = vk::WriteDescriptorSet::builder()
+            .dst_set(texture_sets[0])
+            .dst_binding(0)
+            .dst_array_element(0)
+            .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
+            .image_info(&image_infos)
+            .build();
+
+        let writes = [sampler_descriptor_write];
+        unsafe { device.update_descriptor_sets(&writes, &[]) }
+
+        self.texture_sets.push(texture_sets[0]);
+        self.texture_set_map.insert(id, texture_sets[0]);
+
+        Ok(tex_id)
     }
 
     fn gradient_descriptor_write(

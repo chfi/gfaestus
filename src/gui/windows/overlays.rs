@@ -10,6 +10,7 @@ use anyhow::Result;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+use crate::geometry::Rect;
 use crate::reactor::{Host, Outbox, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
@@ -423,7 +424,11 @@ impl GradientPicker {
                         let mut current_gradient =
                             self.overlay_state.gradient();
 
-                        for (gradient_name, name) in self.gradient_names.iter()
+                        let dy: f32 = 1.0 / 38.0;
+                        let oy: f32 = dy / 2.0;
+
+                        for (ix, (gradient_name, name)) in
+                            self.gradient_names.iter().enumerate()
                         {
                             let gradient_select = ui.selectable_value(
                                 &mut current_gradient,
@@ -436,10 +441,19 @@ impl GradientPicker {
                                 self.overlay_state.set_gradient(*gradient_name);
                             }
 
-                            ui.image(
-                                gradient_name.texture_id(),
-                                Point { x: 130.0, y: 15.0 },
-                            );
+                            let y = oy + (dy * ix as f32);
+
+                            let p0 = Point::new(0.0, y);
+                            let p1 = Point::new(1.0, y);
+
+                            let img = egui::Image::new(
+                                egui::TextureId::User(0),
+                                Point { x: 260.0, y: 25.0 },
+                            )
+                            .uv(Rect::new(p0, p1));
+
+                            ui.add(img);
+
                             ui.end_row();
                         }
                     });

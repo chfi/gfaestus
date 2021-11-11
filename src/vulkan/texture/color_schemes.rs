@@ -15,7 +15,7 @@ use super::Texture1D;
 pub struct Gradients_ {
     // gradient_offsets: FxHashMap<egui::TextureId, usize>,
     gradient_offsets: FxHashMap<GradientName, usize>,
-    texture: Texture,
+    pub texture: Texture,
 }
 
 impl Gradients_ {
