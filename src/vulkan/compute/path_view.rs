@@ -129,11 +129,39 @@ impl PathViewRenderer {
 
     pub fn load_paths(
         &mut self,
+        app: &GfaestusVk,
         reactor: &mut Reactor,
         paths: impl IntoIterator<Item = PathId>,
     ) -> Result<()> {
+        let mut node_buf: Vec<u32> =
+            Vec::with_capacity(self.width * self.height);
 
         // TODO for now hardcoded to max 64 paths
+        for path in paths.into_iter().take(64) {
+            let steps = reactor.graph_query.path_pos_steps(path).unwrap();
+            let (_, _, path_len) = steps.last().unwrap();
+
+            for x in 0..self.width {
+                let n = (x as f64) / (self.width as f64);
+
+                let p = (n * (*path_len as f64)) as usize;
+
+                let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
+
+                let ix = ix.min(steps.len() - 1);
+
+                let (handle, _step, _pos) = steps[ix];
+
+                node_buf.push(handle.id().0 as u32);
+            }
+        }
+
+        app.copy_data_to_buffer::<u32, u32>(&node_buf, self.path_buffer)?;
+
+        Ok(())
     }
 
     fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {

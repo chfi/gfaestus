@@ -338,50 +338,6 @@ fn node_color(id) {
     let mut modal_handler =
         ModalHandler::new(app.shared_state().show_modal.to_owned());
 
-    /*
-    let mut receiver = {
-        let (res_tx, res_rx) =
-            futures::channel::mpsc::channel::<Option<String>>(2);
-
-        let callback = move |text: &mut String, ui: &mut egui::Ui| {
-            let _text_box = ui.text_edit_singleline(text);
-
-            let ok_btn = ui.button("OK");
-            let cancel_btn = ui.button("cancel");
-
-            if ok_btn.clicked() {
-                return Ok(ModalSuccess::Success);
-            }
-
-            if cancel_btn.clicked() {
-                return Ok(ModalSuccess::Cancel);
-            }
-
-            Err(ModalError::Continue)
-        };
-
-        let prepared = ModalHandler::prepare_callback(
-            &app.shared_state().show_modal,
-            String::new(),
-            callback,
-            res_tx,
-        );
-
-        app.channels().modal_tx.send(prepared).unwrap();
-
-        res_rx
-    };
-
-    {
-        let _ = reactor.spawn_forget(async move {
-            use futures::stream::StreamExt;
-            log::warn!("awaiting modal result");
-            let val = receiver.next().await;
-            log::warn!("result: {:?}", val);
-        });
-    }
-    */
-
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
         edge_count: Some(stats.edge_count),
