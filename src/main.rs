@@ -422,13 +422,13 @@ fn node_color(id) {
 
     let gui_msg_tx = app.channels().gui_tx.clone();
 
-    // let gradients_ = Gradients_::initialize(
-    //     &gfaestus,
-    //     gfaestus.transient_command_pool,
-    //     gfaestus.graphics_queue,
-    //     1024,
-    // )
-    // .unwrap();
+    let gradients_ = Gradients_::initialize(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        1024,
+    )
+    .unwrap();
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -835,7 +835,7 @@ fn node_color(id) {
 
                 let meshes = gui.end_frame();
 
-                gui.upload_texture(&gfaestus).unwrap();
+                gui.upload_egui_texture(&gfaestus).unwrap();
 
                 if !meshes.is_empty() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();

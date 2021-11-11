@@ -44,7 +44,8 @@ impl OverlayList {
 
             gradient_picker,
 
-            gradient_picker_open: AtomicCell::new(false),
+            gradient_picker_open: AtomicCell::new(true),
+            // gradient_picker_open: AtomicCell::new(false),
         }
     }
 
@@ -410,7 +411,8 @@ impl GradientPicker {
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
-                egui::ScrollArea::auto_sized().show(ui, |ui| {
+                egui::ScrollArea::both().show(ui, |ui| {
+                    // egui::ScrollArea::auto_sized().show(ui, |ui| {
                     egui::Grid::new("gradient_picker_list").show(ui, |ui| {
                         ui.label("Name");
                         ui.separator();

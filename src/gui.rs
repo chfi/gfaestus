@@ -324,7 +324,7 @@ impl std::default::Default for OpenWindows {
             paths: false,
             path_details: false,
 
-            path_position_list: false,
+            path_position_list: true,
 
             themes: false,
             overlays: false,
@@ -890,15 +890,15 @@ impl Gui {
         self.ctx.is_pointer_over_area()
     }
 
-    pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+    pub fn upload_egui_texture(&mut self, app: &GfaestusVk) -> Result<()> {
         log::trace!("Gui::upload_texture");
 
         let egui_tex = self.ctx.texture();
-        if egui_tex.version != self.draw_system.texture_version() {
+        if egui_tex.version != self.draw_system.egui_texture_version() {
             log::trace!(
                 "Texture version difference, uploading new GUI texture"
             );
-            self.draw_system.upload_texture(
+            self.draw_system.upload_egui_texture(
                 app,
                 app.transient_command_pool,
                 app.graphics_queue,

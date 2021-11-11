@@ -13,7 +13,8 @@ use super::Texture;
 use super::Texture1D;
 
 pub struct Gradients_ {
-    gradient_offsets: FxHashMap<egui::TextureId, usize>,
+    // gradient_offsets: FxHashMap<egui::TextureId, usize>,
+    gradient_offsets: FxHashMap<GradientName, usize>,
     texture: Texture,
 }
 
@@ -36,7 +37,7 @@ impl Gradients_ {
 
         // let mut gradients: HashMap<egui::TextureId, GradientTexture> =
 
-        let mut gradient_offsets: FxHashMap<egui::TextureId, usize> =
+        let mut gradient_offsets: FxHashMap<GradientName, usize> =
             FxHashMap::default();
 
         let format = vk::Format::R8G8B8A8_UNORM;
@@ -65,8 +66,9 @@ impl Gradients_ {
                 pixels.push(255);
             }
 
-            let key = name.texture_id();
-            gradient_offsets.insert(key, gradient_id);
+            let offset = pixels.len();
+
+            gradient_offsets.insert(*name, offset);
         }
 
         texture.copy_from_slice(
