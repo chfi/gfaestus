@@ -1,5 +1,6 @@
 use crate::geometry::{Point, Rect};
 use crate::reactor::Reactor;
+use crate::vulkan::texture::Texture;
 
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
@@ -30,10 +31,12 @@ pub struct PathViewRenderer {
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
     path_allocation_info: vk_mem::AllocationInfo,
+
+    pub output_image: Texture,
     // path_allocation_info: Option<vk_mem::AllocationInfo>,
-    output_buffer: vk::Buffer,
-    output_allocation: vk_mem::Allocation,
-    output_allocation_info: vk_mem::AllocationInfo,
+    // output_buffer: vk::Buffer,
+    // output_allocation: vk_mem::Allocation,
+    // output_allocation_info: vk_mem::AllocationInfo,
     // path_buffer:
 }
 
@@ -71,13 +74,44 @@ impl PathViewRenderer {
 
         dbg!();
 
+        let output_image = {
+            let format = vk::Format::R8G8B8A8_UNORM;
+
+            let texture = Texture::allocate(
+                app,
+                app.transient_command_pool,
+                app.graphics_queue,
+                width,
+                height,
+                format,
+                vk::ImageUsageFlags::TRANSFER_SRC
+                    | vk::ImageUsageFlags::TRANSFER_DST
+                    | vk::ImageUsageFlags::STORAGE
+                    | vk::ImageUsageFlags::SAMPLED,
+            )?;
+
+            GfaestusVk::transition_image(
+                device,
+                app.transient_command_pool,
+                app.graphics_queue,
+                texture.image,
+                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                vk::ImageLayout::GENERAL,
+            )?;
+
+            texture
+        };
+
+        /*
         let (output_buffer, output_allocation, output_allocation_info) = {
             let usage = vk::BufferUsageFlags::STORAGE_BUFFER
                 | vk::BufferUsageFlags::TRANSFER_SRC;
 
             let memory_usage = vk_mem::MemoryUsage::GpuToCpu;
 
-            let pixels = vec![[0u8; 4]; size];
+            // let pixels = vec![[0u8; 4]; size];
+            // let pixels = vec![[255u8; 4]; size];
+            let pixels = vec![[255u8, 0, 0, 255]; size];
 
             let (buffer, allocation, allocation_info) = app
                 .create_buffer_with_data(usage, memory_usage, true, &pixels)?;
@@ -90,17 +124,24 @@ impl PathViewRenderer {
 
             (buffer, allocation, allocation_info)
         };
+        */
 
         dbg!();
 
         let descriptor_pool = {
-            let sampler_size = vk::DescriptorPoolSize {
+            let buffer_size = vk::DescriptorPoolSize {
                 ty: vk::DescriptorType::STORAGE_BUFFER,
                 // ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
-                descriptor_count: 2,
+                descriptor_count: 1,
             };
 
-            let pool_sizes = [sampler_size];
+            let image_size = vk::DescriptorPoolSize {
+                ty: vk::DescriptorType::STORAGE_IMAGE,
+                // ty: vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                descriptor_count: 1,
+            };
+
+            let pool_sizes = [buffer_size, image_size];
 
             let pool_info = vk::DescriptorPoolCreateInfo::builder()
                 .pool_sizes(&pool_sizes)
@@ -146,20 +187,19 @@ impl PathViewRenderer {
                 .buffer_info(&path_buf_infos)
                 .build();
 
-            let output_buf_info = vk::DescriptorBufferInfo::builder()
-                .buffer(output_buffer)
-                .offset(0)
-                .range(vk::WHOLE_SIZE)
+            let output_img_info = vk::DescriptorImageInfo::builder()
+                .image_layout(vk::ImageLayout::GENERAL)
+                .image_view(output_image.view)
+                // .sampler(sampler)
                 .build();
-
-            let output_buf_infos = [output_buf_info];
+            let image_infos = [output_img_info];
 
             let output_write = vk::WriteDescriptorSet::builder()
                 .dst_set(buffer_desc_set)
                 .dst_binding(1)
                 .dst_array_element(0)
-                .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
-                .buffer_info(&output_buf_infos)
+                .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
+                .image_info(&image_infos)
                 .build();
 
             let desc_writes = [path_write, output_write];
@@ -216,9 +256,10 @@ impl PathViewRenderer {
             path_allocation,
             path_allocation_info,
 
-            output_buffer,
-            output_allocation,
-            output_allocation_info,
+            output_image,
+            // output_buffer,
+            // output_allocation,
+            // output_allocation_info,
         })
     }
 
@@ -266,6 +307,15 @@ impl PathViewRenderer {
         path_count: usize,
     ) -> Result<()> {
         let device = app.vk_context().device();
+
+        // GfaestusVk::transition_image(
+        //     device,
+        //     app.transient_command_pool,
+        //     app.graphics_queue,
+        //     self.output_image.image,
+        //     vk::ImageLayout::UNDEFINED,
+        //     vk::ImageLayout::GENERAL,
+        // )?;
 
         let cmd_buf = {
             let alloc_info = vk::CommandBufferAllocateInfo::builder()
@@ -325,7 +375,8 @@ impl PathViewRenderer {
         };
 
         let x_group_count = self.width / 256;
-        let y_group_count = path_count;
+        // let y_group_count = path_count;
+        let y_group_count = 64;
         let z_group_count = 1;
 
         unsafe {
@@ -340,14 +391,17 @@ impl PathViewRenderer {
         Ok(())
     }
 
+    /*
     pub fn copy_pixels(&self) -> Result<Vec<u8>> {
         let mut out = Vec::new();
 
         unsafe {
             let ptr = self.output_allocation_info.get_mapped_data();
 
-            let pixels =
-                std::slice::from_raw_parts(ptr as *const u8, self.width * 4);
+            let pixels = std::slice::from_raw_parts(
+                ptr as *const u8,
+                self.width * self.height * 4,
+            );
 
             out.extend_from_slice(pixels);
             // for color in pixels.chunks_exact(4) {
@@ -385,6 +439,7 @@ impl PathViewRenderer {
 
         Ok(out)
     }
+    */
 
     fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;
@@ -398,12 +453,19 @@ impl PathViewRenderer {
             .stage_flags(Stages::COMPUTE)
             .build();
 
-        let output_buffer = vk::DescriptorSetLayoutBinding::builder()
+        let output_image = vk::DescriptorSetLayoutBinding::builder()
             .binding(1)
-            .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+            .descriptor_type(vk::DescriptorType::STORAGE_IMAGE)
             .descriptor_count(1)
             .stage_flags(Stages::COMPUTE)
             .build();
+
+        // let output_buffer = vk::DescriptorSetLayoutBinding::builder()
+        //     .binding(1)
+        //     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
+        //     .descriptor_count(1)
+        //     .stage_flags(Stages::COMPUTE)
+        //     .build();
 
         // let overlay_sampler = vk::DescriptorSetLayoutBinding::builder()
         //     .binding(2)
@@ -413,7 +475,7 @@ impl PathViewRenderer {
         //     .build();
 
         // [path_buffer, output_buffer, overlay_sampler]
-        [path_buffer, output_buffer]
+        [path_buffer, output_image]
     }
 
     fn create_descriptor_set_layout(

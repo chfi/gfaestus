@@ -380,6 +380,7 @@ fn node_color(id) {
 
     let gui_msg_tx = app.channels().gui_tx.clone();
 
+    dbg!();
     let gradients_ = Gradients_::initialize(
         &gfaestus,
         gfaestus.transient_command_pool,
@@ -388,11 +389,13 @@ fn node_color(id) {
     )
     .unwrap();
 
+    dbg!();
     gui.draw_system
         .add_texture(&gfaestus, gradients_.texture)
         .unwrap();
 
     dbg!();
+
     let mut path_view = PathViewRenderer::new(
         &gfaestus,
         main_view
@@ -404,6 +407,14 @@ fn node_color(id) {
     .unwrap();
 
     let mut do_paths = true;
+
+    let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
+
+    dbg!();
+    path_view
+        .load_paths(&gfaestus, &mut app.reactor, paths)
+        .unwrap();
+    dbg!();
 
     // add test path position view texture
     /*
@@ -738,21 +749,21 @@ fn node_color(id) {
             Event::RedrawEventsCleared => {
 
 
+
+
+                /*
     if do_paths && timer.elapsed().as_millis() > 2000 {
 
         log::warn!("doing the paths");
         do_paths = false;
 
-        app.shared_state().tmp.store(true);
+        // let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
 
-
-        let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
-
-        dbg!();
-        path_view
-            .load_paths(&gfaestus, &mut app.reactor, paths)
-            .unwrap();
-        dbg!();
+        // dbg!();
+        // path_view
+        //     .load_paths(&gfaestus, &mut app.reactor, paths)
+        //     .unwrap();
+        // dbg!();
 
         // let overlay_desc = main_view.node_draw_system.pipelines.overlays
         let overlay_desc = main_view
@@ -774,6 +785,26 @@ fn node_color(id) {
         gfaestus.wait_gpu_idle().unwrap();
         dbg!();
 
+
+
+        GfaestusVk::transition_image(
+            gfaestus.vk_context().device(),
+            // device,
+            gfaestus.transient_command_pool,
+            gfaestus.graphics_queue,
+            path_view.output_image.image,
+            vk::ImageLayout::GENERAL,
+            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        ).unwrap();
+
+
+        dbg!();
+        gfaestus.wait_gpu_idle().unwrap();
+        dbg!();
+
+        app.shared_state().tmp.store(true);
+
+        /*
         // let colors = path_view.copy_output().unwrap();
         let pixels = path_view.copy_pixels().unwrap();
         dbg!(pixels.len());
@@ -785,6 +816,10 @@ fn node_color(id) {
             path_view.width,
             path_view.height,
             format,
+            vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED,
         )
         .unwrap();
         dbg!();
@@ -800,11 +835,15 @@ fn node_color(id) {
             )
             .unwrap();
         dbg!();
+        */
 
-        let tex_id = gui.draw_system.add_texture(&gfaestus, texture).unwrap();
+        let tex_id = gui.draw_system.add_texture(&gfaestus, path_view.output_image).unwrap();
+
+        app.shared_state().tmp.store(true);
 
         log::warn!("uploaded path view texture: {:?}", tex_id);
     }
+                */
 
                 log::trace!("Event::RedrawEventsCleared");
                 let edge_ubo = app.settings.edge_renderer().load();

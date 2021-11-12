@@ -4,9 +4,14 @@ layout (set = 0, binding = 0) readonly buffer Paths {
   uint node[];
 } paths;
 
+/*
 layout (set = 0, binding = 1) buffer Output {
-  vec4 color[];
+  // vec4 color[];
+  int color[];
 } image;
+*/
+
+layout (rgba8, set = 0, binding = 1) writeonly uniform image2D image;
 
 layout (set = 1, binding = 0) uniform samplerBuffer overlay;
 
@@ -23,10 +28,31 @@ void main() {
 
   uint path = gl_GlobalInvocationID.y;
 
+  uint ix = (path * 2048) + (gl_GlobalInvocationID.x * 4);
+
+  ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+
+  // imageStore(image, pixel, vec4(1.0, 1.0, 1.0, 1.0));
+  imageStore(image, pixel, vec4(0.5));
+  // imageStore(image, pixel, vec4(0.3, 0.2, 0.8, 1.0));
+
+  for (int i = 0; i < 32; i++) {
+    for (int j = 0; j < 32; j++) {
+      imageStore(image, ivec2(i, j), vec4(0.5));
+    }
+  }
+
+  // image.color[ix] = vec4(1.0, 0.0, 0.0, 1.0);
+  // image.color[ix] = 0;
+  // image.color[ix+1] = 0;
+  // image.color[ix+2] = 0;
+  // image.color[ix+3] = 0;
+
+  /*
   if (path < pc.path_count) {
 
     // find index for current pixel
-    uint ix = (path * pc.width) + gl_GlobalInvocationID.x;
+    // uint ix = (path * pc.width) + gl_GlobalInvocationID.x;
 
     // read node at index
     uint node = paths.node[ix];
@@ -42,7 +68,11 @@ void main() {
 
     } else {
       // if there's no node, write an empty pixel
-      image.color[ix] = vec4(0.0);
+      // image.color[ix] = vec4(0.0);
+      image.color[ix] = vec4(1.0, 0.0, 0.0, 1.0);
     }
+  } else {
+    image.color[ix] = vec4(0.0, 0.0, 1.0, 1.0);
   }
+  */
 }
