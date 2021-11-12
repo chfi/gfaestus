@@ -566,7 +566,8 @@ impl NodeList {
                             ui.label("Node");
                             ui.label("Degree");
                             ui.label("Seq. len");
-                            ui.label("Path count");
+                            ui.label("Unique Path count");
+                            ui.label("Step count");
                             ui.end_row();
 
                             for (ix, slot) in self.slots.iter().enumerate() {
@@ -586,11 +587,17 @@ impl NodeList {
                                         slot.unique_paths.len() // slot.paths.len()
                                     );
 
-                                    let fields: [&str; 4] = [
+                                    let step_count = format!(
+                                        "{}",
+                                        slot.paths.len() // slot.paths.len()
+                                    );
+
+                                    let fields: [&str; 5] = [
                                         &node_id,
                                         &degree,
                                         &seq_len,
                                         &uniq_paths,
+                                        &step_count,
                                     ];
 
                                     let row = grid_row_label(
