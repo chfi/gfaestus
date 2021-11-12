@@ -644,12 +644,14 @@ impl Gui {
             annotations,
         );
 
-        PathPositionList::ui(
-            &self.ctx,
-            &mut self.open_windows.path_position_list,
-            &self.console,
-            reactor,
-        );
+        if self.shared_state.tmp.load() {
+            PathPositionList::ui(
+                &self.ctx,
+                &mut self.open_windows.path_position_list,
+                &self.console,
+                reactor,
+            );
+        }
 
         if let Some((annot_type, annot_name)) =
             self.annotation_file_list.current_annotation()

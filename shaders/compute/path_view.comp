@@ -33,11 +33,12 @@ void main() {
 
     if (node != 0) {
       // sample overlay at node
-      int color_u = node - 1;
-      vec4 color = texelFetch(overlay, color_u);
+      uint color_u = node - 1;
+      vec4 color = texelFetch(overlay, int(color_u));
 
       // write sampled value at index to output buffer
       image.color[ix] = color;
+      // image.color[ix] = vec4(1.0, 0.0, 0.0, 1.0);
 
     } else {
       // if there's no node, write an empty pixel

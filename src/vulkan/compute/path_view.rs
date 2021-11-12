@@ -24,8 +24,8 @@ pub struct PathViewRenderer {
     buffer_desc_set: vk::DescriptorSet,
     // path_desc_set: vk::DescriptorSet,
     // output_desc_set: vk::DescriptorSet,
-    width: usize,
-    height: usize,
+    pub width: usize,
+    pub height: usize,
 
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
@@ -38,12 +38,17 @@ pub struct PathViewRenderer {
 }
 
 impl PathViewRenderer {
-    pub fn new(app: &GfaestusVk) -> Result<Self> {
+    pub fn new(
+        app: &GfaestusVk,
+        overlay_desc_layout: vk::DescriptorSetLayout,
+    ) -> Result<Self> {
         let width = 2048;
         let height = 64;
         let size = width * height;
 
         let device = app.vk_context().device();
+
+        dbg!();
 
         let (path_buffer, path_allocation, path_allocation_info) = {
             let usage = vk::BufferUsageFlags::STORAGE_BUFFER
@@ -64,6 +69,8 @@ impl PathViewRenderer {
             (buffer, allocation, allocation_info)
         };
 
+        dbg!();
+
         let (output_buffer, output_allocation, output_allocation_info) = {
             let usage = vk::BufferUsageFlags::STORAGE_BUFFER
                 | vk::BufferUsageFlags::TRANSFER_SRC;
@@ -73,7 +80,8 @@ impl PathViewRenderer {
             let pixels = vec![[0u8; 4]; size];
 
             let (buffer, allocation, allocation_info) = app
-                .create_buffer_with_data(usage, memory_usage, false, &pixels)?;
+                .create_buffer_with_data(usage, memory_usage, true, &pixels)?;
+            // .create_buffer_with_data(usage, memory_usage, false, &pixels)?;
 
             app.set_debug_object_name(
                 buffer,
@@ -82,6 +90,8 @@ impl PathViewRenderer {
 
             (buffer, allocation, allocation_info)
         };
+
+        dbg!();
 
         let descriptor_pool = {
             let sampler_size = vk::DescriptorPoolSize {
@@ -100,6 +110,8 @@ impl PathViewRenderer {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
+        dbg!();
+
         let descriptor_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let descriptor_sets = {
@@ -112,6 +124,8 @@ impl PathViewRenderer {
 
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
+
+        dbg!();
 
         let buffer_desc_set = descriptor_sets[0];
 
@@ -153,19 +167,21 @@ impl PathViewRenderer {
             unsafe { device.update_descriptor_sets(&desc_writes, &[]) };
         }
 
+        dbg!();
+
         let pipeline_layout = {
             use vk::ShaderStageFlags as Flags;
 
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(std::mem::size_of::<[u32; 4]>() as _)
+                .size(16)
                 .build();
 
             let pc_ranges = [pc_range];
             // let pc_ranges = [];
 
-            let layouts = [descriptor_set_layout];
+            let layouts = [descriptor_set_layout, overlay_desc_layout];
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
@@ -175,12 +191,16 @@ impl PathViewRenderer {
             unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
 
+        dbg!();
+
         let pipeline = ComputePipeline::new(
             device,
             descriptor_set_layout,
             pipeline_layout,
             crate::include_shader!("compute/path_view.comp.spv"),
         )?;
+
+        dbg!();
 
         Ok(Self {
             pipeline,
@@ -239,40 +259,132 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    /*
     pub fn dispatch(
         &self,
         app: &GfaestusVk,
         overlay_desc: vk::DescriptorSet,
-        // cmd_pool: vk::CommandPool,
-        // queue: vk::Queue,
+        path_count: usize,
     ) -> Result<()> {
         let device = app.vk_context().device();
+
+        let cmd_buf = {
+            let alloc_info = vk::CommandBufferAllocateInfo::builder()
+                .level(vk::CommandBufferLevel::PRIMARY)
+                .command_pool(app.command_pool)
+                .command_buffer_count(1)
+                .build();
+
+            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
+            bufs[0]
+        };
+
+        {
+            let begin_info = vk::CommandBufferBeginInfo::builder()
+                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
+                .build();
+
+            unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
+        }
 
         unsafe {
             device.cmd_bind_pipeline(
                 cmd_buf,
                 vk::PipelineBindPoint::COMPUTE,
-                self.compute_pipeline.pipeline,
+                self.pipeline.pipeline,
             );
 
-            let desc_sets = [];
+            let desc_sets = [self.buffer_desc_set, overlay_desc];
 
             let null = [];
             device.cmd_bind_descriptor_sets(
                 cmd_buf,
                 vk::PipelineBindPoint::COMPUTE,
-                self.compute_pipeline.pipeline_layout,
+                self.pipeline.pipeline_layout,
                 0,
-                &desc_sets[0..=0],
+                &desc_sets[0..=1],
                 &null,
             );
+
+            let push_constants = [
+                path_count as u32,
+                self.width as u32,
+                self.height as u32,
+                0u32,
+            ];
+
+            let pc_bytes = bytemuck::cast_slice(&push_constants);
+
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                pc_bytes,
+            )
+        };
+
+        let x_group_count = self.width / 256;
+        let y_group_count = path_count;
+        let z_group_count = 1;
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count as u32,
+                y_group_count as u32,
+                z_group_count as u32,
+            )
         };
 
         Ok(())
-        //
     }
-    */
+
+    pub fn copy_pixels(&self) -> Result<Vec<u8>> {
+        let mut out = Vec::new();
+
+        unsafe {
+            let ptr = self.output_allocation_info.get_mapped_data();
+
+            let pixels =
+                std::slice::from_raw_parts(ptr as *const u8, self.width * 4);
+
+            out.extend_from_slice(pixels);
+            // for color in pixels.chunks_exact(4) {
+            //     if let [r, g, b, a] = color {
+            //         out.push((*r as f32) / 255.0);
+            //         out.push((*g as f32) / 255.0);
+            //         out.push((*b as f32) / 255.0);
+            //         out.push((*a as f32) / 255.0);
+            //     }
+            // }
+        }
+
+        Ok(out)
+    }
+
+    pub fn copy_output(&self) -> Result<Vec<rgb::RGBA<f32>>> {
+        let mut out = Vec::new();
+
+        unsafe {
+            let ptr = self.output_allocation_info.get_mapped_data();
+
+            let pixels =
+                std::slice::from_raw_parts(ptr as *const u8, self.width * 4);
+
+            for color in pixels.chunks_exact(4) {
+                if let [r, g, b, a] = color {
+                    let r = (*r as f32) / 255.0;
+                    let g = (*g as f32) / 255.0;
+                    let b = (*b as f32) / 255.0;
+                    let a = (*a as f32) / 255.0;
+                    out.push(rgb::RGBA::new(r, g, b, a));
+                }
+            }
+        }
+
+        Ok(out)
+    }
 
     fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;

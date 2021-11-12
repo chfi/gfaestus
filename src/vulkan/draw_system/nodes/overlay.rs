@@ -11,8 +11,8 @@ use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 use super::NodePipelineConfig;
 
 pub struct OverlayPipelines {
-    pipeline_rgb: OverlayPipelineRGB,
-    pipeline_value: OverlayPipelineValue,
+    pub pipeline_rgb: OverlayPipelineRGB,
+    pub pipeline_value: OverlayPipelineValue,
 
     pub(super) overlay_set_id: Option<usize>,
 
@@ -187,9 +187,9 @@ impl OverlayPipelines {
 
 pub struct OverlayPipelineRGB {
     pub(super) descriptor_pool: vk::DescriptorPool,
-    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
 
-    pub(super) overlay_set: vk::DescriptorSet,
+    pub overlay_set: vk::DescriptorSet,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
@@ -199,11 +199,11 @@ pub struct OverlayPipelineRGB {
 
 pub struct OverlayPipelineValue {
     pub(super) descriptor_pool: vk::DescriptorPool,
-    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
 
     sampler: vk::Sampler,
 
-    pub(super) overlay_set: vk::DescriptorSet,
+    pub overlay_set: vk::DescriptorSet,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
