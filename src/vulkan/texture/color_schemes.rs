@@ -56,8 +56,9 @@ impl Gradients_ {
                 | vk::ImageUsageFlags::SAMPLED,
         )?;
 
-        let mut pixels: Vec<u8> =
-            vec![0; size * std::mem::size_of::<[u8; 4]>()];
+        let buf_size = size * std::mem::size_of::<[u8; 4]>();
+
+        let mut pixels: Vec<u8> = Vec::with_capacity(buf_size);
 
         for (gradient_id, name) in Self::GRADIENT_NAMES.iter().enumerate() {
             let gradient = name.gradient();
@@ -74,6 +75,10 @@ impl Gradients_ {
             let offset = pixels.len();
 
             gradient_offsets.insert(*name, offset);
+        }
+
+        for _ in 0..(buf_size - pixels.len()) {
+            pixels.push(0);
         }
 
         texture.copy_from_slice(
