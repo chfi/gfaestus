@@ -782,7 +782,7 @@ fn node_color(id) {
             &gfaestus,
             gfaestus.transient_command_pool,
             gfaestus.graphics_queue,
-            path_view.width * 4,
+            path_view.width,
             path_view.height,
             format,
         )

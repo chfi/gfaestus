@@ -391,7 +391,7 @@ impl OverlayPipelineRGB {
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build()
     }
 

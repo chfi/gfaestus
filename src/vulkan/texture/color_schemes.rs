@@ -42,6 +42,7 @@ impl Gradients_ {
 
         let format = vk::Format::R8G8B8A8_UNORM;
 
+        // TODO fix the usage flags
         let texture = Texture::allocate(
             app,
             command_pool,
@@ -49,6 +50,10 @@ impl Gradients_ {
             width,
             height,
             format,
+            vk::ImageUsageFlags::TRANSFER_SRC
+                | vk::ImageUsageFlags::TRANSFER_DST
+                | vk::ImageUsageFlags::STORAGE
+                | vk::ImageUsageFlags::SAMPLED,
         )?;
 
         let mut pixels: Vec<u8> =

@@ -36,6 +36,7 @@ impl Texture {
         width: usize,
         height: usize,
         format: vk::Format,
+        usage: vk::ImageUsageFlags,
     ) -> Result<Self> {
         use vk::ImageLayout as Layout;
         use vk::ImageUsageFlags as ImgUsage;
@@ -57,12 +58,12 @@ impl Texture {
             .tiling(vk::ImageTiling::OPTIMAL)
             // .tiling(vk::ImageTiling::LINEAR)
             .initial_layout(vk::ImageLayout::UNDEFINED)
-            .usage(
-                ImgUsage::TRANSFER_SRC
-                    | ImgUsage::TRANSFER_DST
-                    | ImgUsage::STORAGE
-                    | vk::ImageUsageFlags::SAMPLED,
-            )
+            .usage(usage)
+            //     ImgUsage::TRANSFER_SRC
+            //         | ImgUsage::TRANSFER_DST
+            //         | ImgUsage::STORAGE
+            //         | vk::ImageUsageFlags::SAMPLED,
+            // )
             .sharing_mode(vk::SharingMode::EXCLUSIVE)
             .samples(vk::SampleCountFlags::TYPE_1)
             .flags(vk::ImageCreateFlags::empty())
