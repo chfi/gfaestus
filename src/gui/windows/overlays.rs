@@ -45,8 +45,8 @@ impl OverlayList {
 
             gradient_picker,
 
-            gradient_picker_open: AtomicCell::new(true),
-            // gradient_picker_open: AtomicCell::new(false),
+            // gradient_picker_open: AtomicCell::new(true),
+            gradient_picker_open: AtomicCell::new(false),
         }
     }
 
