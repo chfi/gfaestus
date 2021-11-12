@@ -644,6 +644,7 @@ impl Gui {
             annotations,
         );
 
+        /*
         if self.shared_state.tmp.load() {
             PathPositionList::ui(
                 &self.ctx,
@@ -652,6 +653,7 @@ impl Gui {
                 reactor,
             );
         }
+        */
 
         if let Some((annot_type, annot_name)) =
             self.annotation_file_list.current_annotation()

@@ -52,7 +52,7 @@ impl Gradients_ {
         )?;
 
         let mut pixels: Vec<u8> =
-            Vec::with_capacity(size * std::mem::size_of::<[u8; 4]>());
+            vec![0; size * std::mem::size_of::<[u8; 4]>()];
 
         for (gradient_id, name) in Self::GRADIENT_NAMES.iter().enumerate() {
             let gradient = name.gradient();
