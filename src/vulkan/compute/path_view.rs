@@ -7,7 +7,7 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
-use handlegraph::handle::Handle;
+use handlegraph::handle::{Handle, NodeId};
 use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -271,13 +271,18 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    pub fn get_handle_at(&self, x: usize, y: usize) -> Option<Handle> {
+    pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
         let ix = y * self.width + x;
 
-        let raw = self.path_data.get(ix)?;
-        let handle = Handle::from_integer(*raw as u64);
+        let raw = *self.path_data.get(ix)?;
+        if raw == 0 {
+            return None;
+        }
 
-        Some(handle)
+        let id = raw + 1;
+        let node = NodeId::from(raw as u64);
+
+        Some(node)
     }
 
     pub fn dispatch_managed(

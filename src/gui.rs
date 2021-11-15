@@ -653,6 +653,7 @@ impl Gui {
                 &mut self.open_windows.path_position_list,
                 &self.console,
                 reactor,
+                &self.channels,
                 path_view,
             );
         }

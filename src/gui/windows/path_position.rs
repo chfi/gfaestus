@@ -11,6 +11,7 @@ use bstr::ByteSlice;
 use parking_lot::Mutex;
 
 use crate::{
+    app::{AppChannels, AppMsg},
     geometry::{Point, Rect},
     gui::console::Console,
     reactor::Reactor,
@@ -33,6 +34,7 @@ impl PathPositionList {
         open: &mut bool,
         console: &Console,
         reactor: &mut Reactor,
+        channels: &AppChannels,
         path_view: &PathViewRenderer,
     ) {
         // hacky but works
@@ -109,7 +111,7 @@ impl PathPositionList {
 
                                     let img = egui::Image::new(
                                         egui::TextureId::User(1),
-                                        Point { x: 256.0, y: 64.0 },
+                                        Point { x: 256.0, y: 32.0 },
                                     )
                                     .uv(Rect::new(p0, p1));
                                     let row = ui.add(img);
@@ -162,14 +164,21 @@ impl PathPositionList {
                                             let y = ix;
                                             let x = ((path_view.width as f32) * n) as usize;
 
-                                            let handle = path_view.get_handle_at(x, y);
+                                            let node = path_view.get_node_at(x, y);
+
 
                                             log::warn!(
-                                                "clicked at {}, pos {}, handle {:?}",
+                                                "clicked at {}, pos {}, node {:?}",
                                                 n,
                                                 pos,
-                                                handle
+                                                node
                                             );
+
+                                            if let Some(node) = node {
+                                                let msg = AppMsg::goto_node(node);
+                                                channels.app_tx.send(msg).unwrap();
+
+                                            }
                                         }
                                     }
 
