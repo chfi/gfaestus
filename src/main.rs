@@ -242,6 +242,7 @@ fn main() {
     let mut translate_fence_id: Option<usize> = None;
 
     let mut path_view_fence: Option<usize> = None;
+    let mut prev_overlay: Option<usize> = None;
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -408,8 +409,7 @@ fn node_color(id) {
     )
     .unwrap();
 
-    let mut do_paths = true;
-    let mut first = true;
+    let mut upload_path_view_texture = true;
 
     let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
 
@@ -751,12 +751,14 @@ fn node_color(id) {
             }
             Event::RedrawEventsCleared => {
 
+                if timer.elapsed().as_millis() > 2000 {
 
+                    let cur_overlay = app.shared_state().overlay_state().current_overlay();
 
-                if do_paths && timer.elapsed().as_millis() > 2000 {
-
-                    if path_view_fence.is_none() {
+                    if path_view_fence.is_none() && cur_overlay != prev_overlay {
                         log::warn!("doing the paths");
+
+                        prev_overlay = cur_overlay;
 
                         let overlay_desc = main_view
                             .node_draw_system
@@ -777,14 +779,16 @@ fn node_color(id) {
                         ).unwrap();
 
                         dbg!();
-                        let fence_id = path_view.dispatch_managed(&mut compute_manager, &gfaestus, overlay_desc, path_count).unwrap();
+                        let fence_id = path_view
+                            .dispatch_managed(&mut compute_manager,
+                                              &gfaestus,
+                                              overlay_desc,
+                                              path_count
+                            ).unwrap();
 
                         dbg!();
                         path_view_fence = Some(fence_id);
                         dbg!();
-
-                        do_paths = false;
-
                     }
                 }
 
@@ -827,11 +831,15 @@ fn node_color(id) {
 
                         app.shared_state().tmp.store(true);
 
-                        if first {
-                            let tex_id = gui.draw_system.add_texture(&gfaestus, path_view.output_image).unwrap();
+                        if upload_path_view_texture {
+                            upload_path_view_texture = false;
 
-                            first = false;
-                            // app.shared_state().tmp.store(true);
+                            let tex_id = gui
+                                .draw_system
+                                .add_texture(&gfaestus,
+                                             path_view.output_image
+                                ).unwrap();
+
 
                             log::warn!("uploaded path view texture: {:?}", tex_id);
                         }

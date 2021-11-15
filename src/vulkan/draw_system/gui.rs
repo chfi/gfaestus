@@ -94,8 +94,10 @@ impl GuiPipeline {
 
         let sampler = {
             let sampler_info = vk::SamplerCreateInfo::builder()
-                .mag_filter(vk::Filter::LINEAR)
-                .min_filter(vk::Filter::LINEAR)
+                .mag_filter(vk::Filter::NEAREST)
+                .min_filter(vk::Filter::NEAREST)
+                // .mag_filter(vk::Filter::LINEAR)
+                // .min_filter(vk::Filter::LINEAR)
                 .address_mode_u(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .address_mode_v(vk::SamplerAddressMode::CLAMP_TO_EDGE)
                 .address_mode_w(vk::SamplerAddressMode::CLAMP_TO_EDGE)

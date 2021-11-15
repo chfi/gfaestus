@@ -43,9 +43,11 @@ void main() {
       imageStore(image, pixel, color);
     } else {
       // if there's no node, write an empty pixel
-      imageStore(image, pixel, vec4(1.0, 0.0, 0.0, 1.0));
+      // imageStore(image, pixel, vec4(1.0, 0.0, 0.0, 1.0));
+      imageStore(image, pixel, vec4(0.0, 0.0, 0.0, 0.0));
     }
   } else {
-    imageStore(image, pixel, vec4(0.0, 0.0, 1.0, 1.0));
+    // imageStore(image, pixel, vec4(0.0, 0.0, 1.0, 1.0));
+      imageStore(image, pixel, vec4(0.0, 0.0, 0.0, 0.0));
   }
 }
