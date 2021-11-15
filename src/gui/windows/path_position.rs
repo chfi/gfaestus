@@ -74,14 +74,11 @@ impl PathPositionList {
                                 let path_pos =
                                     reactor.graph_query.path_positions();
 
-                                // path_pos.
-
-                                // path_pa
-
-                                let dy: f32 = 1.0 / 4.0;
+                                let dy: f32 = 1.0 / 64.0;
                                 let oy: f32 = dy / 2.0;
 
-                                for (ix, path) in paths.into_iter().enumerate()
+                                for (ix, path) in
+                                    paths.into_iter().enumerate().rev()
                                 {
                                     let path: PathId = path.cast();
 
@@ -110,7 +107,7 @@ impl PathPositionList {
 
                                     let img = egui::Image::new(
                                         egui::TextureId::User(1),
-                                        Point { x: 1024.0, y: 30.0 },
+                                        Point { x: 256.0, y: 64.0 },
                                     )
                                     .uv(Rect::new(p0, p1));
                                     let row = ui.add(img);
@@ -138,12 +135,6 @@ impl PathPositionList {
 
                                         let pos = (path_len * n) as usize;
 
-                                        log::warn!(
-                                            "hovered at {}, pos {}",
-                                            n,
-                                            pos
-                                        );
-
                                         /*
                                         if let Some(step) = path_pos.find_step_at_base(path, pos) {
                                             log::warn!(
@@ -163,10 +154,14 @@ impl PathPositionList {
                                             }
                                         }
                                         */
-                                    }
 
-                                    if interact.clicked() {
-                                        log::warn!("clicked!");
+                                        if interact.clicked() {
+                                            log::warn!(
+                                                "clicked at {}, pos {}",
+                                                n,
+                                                pos
+                                            );
+                                        }
                                     }
 
                                     rows.push(interact);

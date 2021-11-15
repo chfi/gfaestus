@@ -751,8 +751,8 @@ fn node_color(id) {
             }
             Event::RedrawEventsCleared => {
 
+                // TODO this timer is just to make sure everything has been initialized; it should probably be replaced by checking the frame count
                 if timer.elapsed().as_millis() > 2000 {
-
                     let cur_overlay = app.shared_state().overlay_state().current_overlay();
 
                     if path_view_fence.is_none() && cur_overlay != prev_overlay {

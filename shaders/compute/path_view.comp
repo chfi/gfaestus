@@ -17,21 +17,17 @@ layout (push_constant) uniform PushConstants {
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
+
 void main() {
 
   uint path = gl_GlobalInvocationID.y;
 
-  uint ix = (path * 2048) + (gl_GlobalInvocationID.x * 4);
+  uint ix = (path * 2048) + gl_GlobalInvocationID.x;
 
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
-  imageStore(image, pixel, vec4(0.7));
-
   if (path < pc.path_count) {
-    // find index for current pixel
-    // uint ix = (path * pc.width) + gl_GlobalInvocationID.x;
-
-    // read node at index
+    // read node at this pixel in the path
     uint node = paths.node[ix];
 
     if (node != 0) {
@@ -41,13 +37,6 @@ void main() {
 
       // write sampled value at index to output buffer
       imageStore(image, pixel, color);
-    } else {
-      // if there's no node, write an empty pixel
-      // imageStore(image, pixel, vec4(1.0, 0.0, 0.0, 1.0));
-      imageStore(image, pixel, vec4(0.0, 0.0, 0.0, 0.0));
     }
-  } else {
-    // imageStore(image, pixel, vec4(0.0, 0.0, 1.0, 1.0));
-      imageStore(image, pixel, vec4(0.0, 0.0, 0.0, 0.0));
   }
 }
