@@ -14,6 +14,7 @@ use crate::{
     geometry::{Point, Rect},
     gui::console::Console,
     reactor::Reactor,
+    vulkan::compute::path_view::PathViewRenderer,
 };
 
 lazy_static! {
@@ -32,6 +33,7 @@ impl PathPositionList {
         open: &mut bool,
         console: &Console,
         reactor: &mut Reactor,
+        path_view: &PathViewRenderer,
     ) {
         // hacky but works
         if !CONSOLE_ADDED.load() {
@@ -78,7 +80,7 @@ impl PathPositionList {
                                 let oy: f32 = dy / 2.0;
 
                                 for (ix, path) in
-                                    paths.into_iter().enumerate().rev()
+                                    paths.into_iter().enumerate()
                                 {
                                     let path: PathId = path.cast();
 
@@ -156,10 +158,17 @@ impl PathPositionList {
                                         */
 
                                         if interact.clicked() {
+
+                                            let y = ix;
+                                            let x = ((path_view.width as f32) * n) as usize;
+
+                                            let handle = path_view.get_handle_at(x, y);
+
                                             log::warn!(
-                                                "clicked at {}, pos {}",
+                                                "clicked at {}, pos {}, handle {:?}",
                                                 n,
-                                                pos
+                                                pos,
+                                                handle
                                             );
                                         }
                                     }

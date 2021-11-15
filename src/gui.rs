@@ -26,6 +26,7 @@ use crate::{
     context::ContextEntry,
     graph_query::GraphQueryWorker,
     reactor::Reactor,
+    vulkan::compute::path_view::PathViewRenderer,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
 use crate::{app::OverlayState, geometry::*};
@@ -554,6 +555,7 @@ impl Gui {
         annotations: &Annotations,
         labels: &Labels,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
+        path_view: &PathViewRenderer,
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -651,6 +653,7 @@ impl Gui {
                 &mut self.open_windows.path_position_list,
                 &self.console,
                 reactor,
+                path_view,
             );
         }
         */

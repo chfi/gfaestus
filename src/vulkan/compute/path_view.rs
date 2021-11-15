@@ -7,6 +7,7 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+use handlegraph::handle::Handle;
 use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -27,6 +28,8 @@ pub struct PathViewRenderer {
     // output_desc_set: vk::DescriptorSet,
     pub width: usize,
     pub height: usize,
+
+    path_data: Vec<u32>,
 
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
@@ -219,6 +222,8 @@ impl PathViewRenderer {
             width,
             height,
 
+            path_data: Vec::with_capacity(width * height),
+
             path_buffer,
             path_allocation,
             path_allocation_info,
@@ -236,8 +241,7 @@ impl PathViewRenderer {
         reactor: &mut Reactor,
         paths: impl IntoIterator<Item = PathId>,
     ) -> Result<()> {
-        let mut node_buf: Vec<u32> =
-            Vec::with_capacity(self.width * self.height);
+        self.path_data.clear();
 
         // TODO for now hardcoded to max 64 paths
         for path in paths.into_iter().take(64) {
@@ -258,13 +262,22 @@ impl PathViewRenderer {
 
                 let (handle, _step, _pos) = steps[ix];
 
-                node_buf.push(handle.id().0 as u32);
+                self.path_data.push(handle.id().0 as u32);
             }
         }
 
-        app.copy_data_to_buffer::<u32, u32>(&node_buf, self.path_buffer)?;
+        app.copy_data_to_buffer::<u32, u32>(&self.path_data, self.path_buffer)?;
 
         Ok(())
+    }
+
+    pub fn get_handle_at(&self, x: usize, y: usize) -> Option<Handle> {
+        let ix = y * self.width + x;
+
+        let raw = self.path_data.get(ix)?;
+        let handle = Handle::from_integer(*raw as u64);
+
+        Some(handle)
     }
 
     pub fn dispatch_managed(

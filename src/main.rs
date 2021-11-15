@@ -945,6 +945,7 @@ fn node_color(id) {
                     annotations,
                     labels,
                     context_menu.tx(),
+                    &path_view,
                 );
 
                 modal_handler.show(&gui.ctx);
