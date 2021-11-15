@@ -241,6 +241,8 @@ fn main() {
     let mut select_fence_id: Option<usize> = None;
     let mut translate_fence_id: Option<usize> = None;
 
+    let mut path_view_fence: Option<usize> = None;
+
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -407,6 +409,7 @@ fn node_color(id) {
     .unwrap();
 
     let mut do_paths = true;
+    let mut first = true;
 
     let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
 
@@ -750,100 +753,41 @@ fn node_color(id) {
 
 
 
+                if do_paths && timer.elapsed().as_millis() > 2000 {
 
-                /*
-    if do_paths && timer.elapsed().as_millis() > 2000 {
+                    if path_view_fence.is_none() {
+                        log::warn!("doing the paths");
 
-        log::warn!("doing the paths");
-        do_paths = false;
+                        let overlay_desc = main_view
+                            .node_draw_system
+                            .pipelines
+                            .pipeline_rgb
+                            .overlay_set;
 
-        // let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
+                        let path_count = 4;
 
-        // dbg!();
-        // path_view
-        //     .load_paths(&gfaestus, &mut app.reactor, paths)
-        //     .unwrap();
-        // dbg!();
+                        GfaestusVk::transition_image(
+                            gfaestus.vk_context().device(),
+                            // device,
+                            gfaestus.transient_command_pool,
+                            gfaestus.graphics_queue,
+                            path_view.output_image.image,
+                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                            vk::ImageLayout::GENERAL,
+                        ).unwrap();
 
-        // let overlay_desc = main_view.node_draw_system.pipelines.overlays
-        let overlay_desc = main_view
-            .node_draw_system
-            .pipelines
-            .pipeline_rgb
-            .overlay_set;
+                        dbg!();
+                        let fence_id = path_view.dispatch_managed(&mut compute_manager, &gfaestus, overlay_desc, path_count).unwrap();
 
-        let path_count = 4;
+                        dbg!();
+                        path_view_fence = Some(fence_id);
+                        dbg!();
 
-        dbg!();
-        path_view
-            .dispatch(&gfaestus, overlay_desc, path_count)
-            .unwrap();
+                        do_paths = false;
 
-        let format = vk::Format::R8G8B8A8_UNORM;
+                    }
+                }
 
-        dbg!();
-        gfaestus.wait_gpu_idle().unwrap();
-        dbg!();
-
-
-
-        GfaestusVk::transition_image(
-            gfaestus.vk_context().device(),
-            // device,
-            gfaestus.transient_command_pool,
-            gfaestus.graphics_queue,
-            path_view.output_image.image,
-            vk::ImageLayout::GENERAL,
-            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-        ).unwrap();
-
-
-        dbg!();
-        gfaestus.wait_gpu_idle().unwrap();
-        dbg!();
-
-        app.shared_state().tmp.store(true);
-
-        /*
-        // let colors = path_view.copy_output().unwrap();
-        let pixels = path_view.copy_pixels().unwrap();
-        dbg!(pixels.len());
-
-        let texture = Texture::allocate(
-            &gfaestus,
-            gfaestus.transient_command_pool,
-            gfaestus.graphics_queue,
-            path_view.width,
-            path_view.height,
-            format,
-            vk::ImageUsageFlags::TRANSFER_SRC
-                | vk::ImageUsageFlags::TRANSFER_DST
-                | vk::ImageUsageFlags::STORAGE
-                | vk::ImageUsageFlags::SAMPLED,
-        )
-        .unwrap();
-        dbg!();
-
-        texture
-            .copy_from_slice(
-                &gfaestus,
-                gfaestus.transient_command_pool,
-                gfaestus.graphics_queue,
-                path_view.width,
-                path_view.height,
-                &pixels,
-            )
-            .unwrap();
-        dbg!();
-        */
-
-        let tex_id = gui.draw_system.add_texture(&gfaestus, path_view.output_image).unwrap();
-
-        app.shared_state().tmp.store(true);
-
-        log::warn!("uploaded path view texture: {:?}", tex_id);
-    }
-                */
 
                 log::trace!("Event::RedrawEventsCleared");
                 let edge_ubo = app.settings.edge_renderer().load();
@@ -860,6 +804,37 @@ fn node_color(id) {
                                                            &main_view.node_draw_system.vertices).unwrap();
 
                         translate_fence_id = None;
+                    }
+                }
+
+                if let Some(fid) = path_view_fence {
+                    if compute_manager.is_fence_ready(fid).unwrap() {
+                        log::trace!("Path view fence ready");
+                        compute_manager.block_on_fence(fid).unwrap();
+                        compute_manager.free_fence(fid, false).unwrap();
+
+                        path_view_fence = None;
+
+                        GfaestusVk::transition_image(
+                            gfaestus.vk_context().device(),
+                            // device,
+                            gfaestus.transient_command_pool,
+                            gfaestus.graphics_queue,
+                            path_view.output_image.image,
+                            vk::ImageLayout::GENERAL,
+                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        ).unwrap();
+
+                        app.shared_state().tmp.store(true);
+
+                        if first {
+                            let tex_id = gui.draw_system.add_texture(&gfaestus, path_view.output_image).unwrap();
+
+                            first = false;
+                            // app.shared_state().tmp.store(true);
+
+                            log::warn!("uploaded path view texture: {:?}", tex_id);
+                        }
                     }
                 }
 

@@ -90,41 +90,8 @@ impl PathViewRenderer {
                     | vk::ImageUsageFlags::SAMPLED,
             )?;
 
-            GfaestusVk::transition_image(
-                device,
-                app.transient_command_pool,
-                app.graphics_queue,
-                texture.image,
-                vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                vk::ImageLayout::GENERAL,
-            )?;
-
             texture
         };
-
-        /*
-        let (output_buffer, output_allocation, output_allocation_info) = {
-            let usage = vk::BufferUsageFlags::STORAGE_BUFFER
-                | vk::BufferUsageFlags::TRANSFER_SRC;
-
-            let memory_usage = vk_mem::MemoryUsage::GpuToCpu;
-
-            // let pixels = vec![[0u8; 4]; size];
-            // let pixels = vec![[255u8; 4]; size];
-            let pixels = vec![[255u8, 0, 0, 255]; size];
-
-            let (buffer, allocation, allocation_info) = app
-                .create_buffer_with_data(usage, memory_usage, true, &pixels)?;
-            // .create_buffer_with_data(usage, memory_usage, false, &pixels)?;
-
-            app.set_debug_object_name(
-                buffer,
-                "Path View Renderer (Output Buffer)",
-            )?;
-
-            (buffer, allocation, allocation_info)
-        };
-        */
 
         dbg!();
 
@@ -300,41 +267,30 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    pub fn dispatch(
+    pub fn dispatch_managed(
         &self,
+        comp_manager: &mut ComputeManager,
+        app: &GfaestusVk,
+        overlay_desc: vk::DescriptorSet,
+        path_count: usize,
+    ) -> Result<usize> {
+        let fence_id = comp_manager.dispatch_with(|_device, cmd_buf| {
+            self.dispatch_cmd(cmd_buf, app, overlay_desc, path_count)
+                .unwrap();
+        })?;
+
+        Ok(fence_id)
+    }
+
+    pub fn dispatch_cmd(
+        &self,
+        cmd_buf: vk::CommandBuffer,
         app: &GfaestusVk,
         overlay_desc: vk::DescriptorSet,
         path_count: usize,
     ) -> Result<()> {
+        log::warn!("in dispatch()");
         let device = app.vk_context().device();
-
-        // GfaestusVk::transition_image(
-        //     device,
-        //     app.transient_command_pool,
-        //     app.graphics_queue,
-        //     self.output_image.image,
-        //     vk::ImageLayout::UNDEFINED,
-        //     vk::ImageLayout::GENERAL,
-        // )?;
-
-        let cmd_buf = {
-            let alloc_info = vk::CommandBufferAllocateInfo::builder()
-                .level(vk::CommandBufferLevel::PRIMARY)
-                .command_pool(app.command_pool)
-                .command_buffer_count(1)
-                .build();
-
-            let bufs = unsafe { device.allocate_command_buffers(&alloc_info) }?;
-            bufs[0]
-        };
-
-        {
-            let begin_info = vk::CommandBufferBeginInfo::builder()
-                .flags(vk::CommandBufferUsageFlags::ONE_TIME_SUBMIT)
-                .build();
-
-            unsafe { device.begin_command_buffer(cmd_buf, &begin_info) }?;
-        }
 
         unsafe {
             device.cmd_bind_pipeline(
@@ -391,60 +347,8 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    /*
-    pub fn copy_pixels(&self) -> Result<Vec<u8>> {
-        let mut out = Vec::new();
-
-        unsafe {
-            let ptr = self.output_allocation_info.get_mapped_data();
-
-            let pixels = std::slice::from_raw_parts(
-                ptr as *const u8,
-                self.width * self.height * 4,
-            );
-
-            out.extend_from_slice(pixels);
-            // for color in pixels.chunks_exact(4) {
-            //     if let [r, g, b, a] = color {
-            //         out.push((*r as f32) / 255.0);
-            //         out.push((*g as f32) / 255.0);
-            //         out.push((*b as f32) / 255.0);
-            //         out.push((*a as f32) / 255.0);
-            //     }
-            // }
-        }
-
-        Ok(out)
-    }
-
-    pub fn copy_output(&self) -> Result<Vec<rgb::RGBA<f32>>> {
-        let mut out = Vec::new();
-
-        unsafe {
-            let ptr = self.output_allocation_info.get_mapped_data();
-
-            let pixels =
-                std::slice::from_raw_parts(ptr as *const u8, self.width * 4);
-
-            for color in pixels.chunks_exact(4) {
-                if let [r, g, b, a] = color {
-                    let r = (*r as f32) / 255.0;
-                    let g = (*g as f32) / 255.0;
-                    let b = (*b as f32) / 255.0;
-                    let a = (*a as f32) / 255.0;
-                    out.push(rgb::RGBA::new(r, g, b, a));
-                }
-            }
-        }
-
-        Ok(out)
-    }
-    */
-
     fn layout_binding() -> [vk::DescriptorSetLayoutBinding; 2] {
         use vk::ShaderStageFlags as Stages;
-
-        //
 
         let path_buffer = vk::DescriptorSetLayoutBinding::builder()
             .binding(0)
