@@ -410,85 +410,17 @@ fn node_color(id) {
     .unwrap();
 
     let mut upload_path_view_texture = true;
+    let mut rerender_path_view = false;
 
     let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
 
     dbg!();
+    path_view.zoom(0.1);
+
     path_view
-        .load_paths(&gfaestus, &mut app.reactor, paths)
+        .load_paths(&gfaestus, &mut app.reactor, paths.clone())
         .unwrap();
     dbg!();
-
-    // add test path position view texture
-    /*
-    {
-        let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
-
-        let height = 4;
-        let width = 1024;
-        let size = width * height;
-
-        let format = vk::Format::R8G8B8A8_UNORM;
-
-        let texture = Texture::allocate(
-            &gfaestus,
-            gfaestus.transient_command_pool,
-            gfaestus.graphics_queue,
-            width,
-            height,
-            format,
-        )
-        .unwrap();
-
-        let mut pixels: Vec<u8> =
-            Vec::with_capacity(size * std::mem::size_of::<[u8; 4]>());
-
-        for path in paths {
-            let steps = graph_query.path_pos_steps(path).unwrap();
-            let (_, _, path_len) = steps.last().unwrap();
-
-            for i in 0..width {
-                let n = ((i as f64) / (width as f64));
-
-                let n = n * 0.001;
-
-                let p = (n * (*path_len as f64)) as usize;
-
-                let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
-                    Ok(i) => i,
-                    Err(i) => i,
-                };
-
-                let ix = ix.min(steps.len() - 1);
-
-                let (handle, step, pos) = steps[ix];
-
-                let mut seq = graph_query.graph().sequence_vec(handle);
-                let mut color = hash_color(hash_bytes(&mut seq));
-
-                pixels.push((color.r * 255.0) as u8);
-                pixels.push((color.g * 255.0) as u8);
-                pixels.push((color.b * 255.0) as u8);
-                pixels.push((color.a * 255.0) as u8);
-            }
-        }
-
-        texture
-            .copy_from_slice(
-                &gfaestus,
-                gfaestus.transient_command_pool,
-                gfaestus.graphics_queue,
-                width,
-                height,
-                &pixels,
-            )
-            .unwrap();
-
-        let tex_id = gui.draw_system.add_texture(&gfaestus, texture).unwrap();
-
-        log::warn!("uploaded path view texture: {:?}", tex_id);
-    }
-    */
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -751,11 +683,22 @@ fn node_color(id) {
             }
             Event::RedrawEventsCleared => {
 
+
+                /*
+                if path_view.should_reload() {
+                    path_view
+                        .load_paths(&gfaestus, &mut app.reactor, paths.clone())
+                        .unwrap();
+
+                    rerender_path_view = true;
+                }
+                */
+
                 // TODO this timer is just to make sure everything has been initialized; it should probably be replaced by checking the frame count
                 if timer.elapsed().as_millis() > 2000 {
                     let cur_overlay = app.shared_state().overlay_state().current_overlay();
 
-                    if path_view_fence.is_none() && cur_overlay != prev_overlay {
+                    if path_view_fence.is_none() && (cur_overlay != prev_overlay || rerender_path_view) {
                         log::warn!("doing the paths");
 
                         prev_overlay = cur_overlay;

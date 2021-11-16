@@ -121,11 +121,35 @@ impl PathPositionList {
                                     let interact = ui.interact(
                                         row.rect,
                                         egui::Id::new(Self::ID).with(ix),
-                                        egui::Sense::hover()
-                                            .union(egui::Sense::click()),
+                                        egui::Sense::click_and_drag()
                                     );
 
+
+                                    if interact.dragged() {
+                                        let delta = interact.drag_delta();
+                                        log::warn!("image drag delta: {}", delta.x);
+                                    }
+
+
                                     if let Some(pos) = interact.hover_pos() {
+
+                                        let scroll_delta = ui.input().scroll_delta;
+
+                                        if scroll_delta.y != 0.0 {
+                                            log::warn!("scroll delta: {}", scroll_delta.y);
+
+                                            /*
+                                            let d = if scroll_delta.y > 0.0 {
+                                                1.05
+                                            } else {
+                                                1.0 / 1.05
+                                            };
+
+                                            path_view.zoom(d);
+                                            */
+
+                                        }
+
                                         let rect = interact.rect;
 
                                         let p0 = Point::from(rect.min);
@@ -138,26 +162,6 @@ impl PathPositionList {
                                         let n = (p_.x / width).clamp(0.0, 1.0);
 
                                         let pos = (path_len * n) as usize;
-
-                                        /*
-                                        if let Some(step) = path_pos.find_step_at_base(path, pos) {
-                                            log::warn!(
-                                                "step {:?}", step
-                                            );
-
-                                            if let Some(handle) = graph.path_handle_at_step(path, step) {
-                                                log::warn!("handle {:?}", handle);
-                                                egui::show_tooltip(
-                                                    ctx,
-                                                    egui::Id::new("path_position_list_tooltip"),
-                                                    |ui| {
-                                                        ui.label(handle.id());
-                                                    },
-                                                );
-
-                                            }
-                                        }
-                                        */
 
                                         if interact.clicked() {
 

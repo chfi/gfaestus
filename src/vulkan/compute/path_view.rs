@@ -7,6 +7,7 @@ use ash::{vk, Device};
 
 use anyhow::Result;
 
+use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::{Handle, NodeId};
 use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
@@ -28,6 +29,10 @@ pub struct PathViewRenderer {
     // output_desc_set: vk::DescriptorSet,
     pub width: usize,
     pub height: usize,
+
+    left: AtomicCell<f32>,
+    right: AtomicCell<f32>,
+    reload: AtomicCell<bool>,
 
     path_data: Vec<u32>,
 
@@ -222,6 +227,10 @@ impl PathViewRenderer {
             width,
             height,
 
+            left: AtomicCell::new(0.0),
+            right: AtomicCell::new(1.0),
+            reload: AtomicCell::new(false),
+
             path_data: Vec::with_capacity(width * height),
 
             path_buffer,
@@ -235,6 +244,39 @@ impl PathViewRenderer {
         })
     }
 
+    pub fn reset_zoom(&self) {
+        self.left.store(0.0);
+        self.right.store(1.0);
+    }
+
+    pub fn zoom(&self, delta: f32) {
+        let delta = delta.clamp(-1.0, 1.0);
+
+        let l = self.left.load();
+        let r = self.right.load();
+
+        let len = r - l;
+        let mid = l + (len / 2.0);
+
+        let len_ = len * delta;
+        let rad = len_ / 2.0;
+
+        let l_ = (mid - rad).clamp(0.0, 1.0);
+        let r_ = (mid + rad).clamp(0.0, 1.0);
+
+        if l_ != l || r_ != r {
+            self.left.store(l_);
+            self.right.store(r_);
+            // self.reload.store(true);
+        }
+
+        log::warn!("new zoom: {} - {}", l_, r_);
+    }
+
+    pub fn should_reload(&self) -> bool {
+        self.reload.load()
+    }
+
     pub fn load_paths(
         &mut self,
         app: &GfaestusVk,
@@ -243,15 +285,28 @@ impl PathViewRenderer {
     ) -> Result<()> {
         self.path_data.clear();
 
+        let left = self.left.load();
+        let right = self.right.load();
+
         // TODO for now hardcoded to max 64 paths
         for path in paths.into_iter().take(64) {
             let steps = reactor.graph_query.path_pos_steps(path).unwrap();
             let (_, _, path_len) = steps.last().unwrap();
 
+            let len = *path_len as f32;
+            let start = left * len;
+            let end = start + (right - left) * len;
+
+            let s = start as usize;
+            // let e = end as usize;
+
             for x in 0..self.width {
                 let n = (x as f64) / (self.width as f64);
+                let p_ = ((n as f32) * len) as usize;
 
-                let p = (n * (*path_len as f64)) as usize;
+                let p = s + p_;
+
+                // let p = (n * (*path_len as f64)) as usize;
 
                 let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
                     Ok(i) => i,
@@ -266,6 +321,7 @@ impl PathViewRenderer {
             }
         }
 
+        self.reload.store(false);
         app.copy_data_to_buffer::<u32, u32>(&self.path_data, self.path_buffer)?;
 
         Ok(())
