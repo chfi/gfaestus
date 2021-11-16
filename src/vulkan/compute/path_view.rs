@@ -1,4 +1,5 @@
 use crate::geometry::{Point, Rect};
+use crate::overlays::OverlayKind;
 use crate::reactor::Reactor;
 use crate::vulkan::texture::Texture;
 
@@ -20,7 +21,8 @@ use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 use super::{ComputeManager, ComputePipeline};
 
 pub struct PathViewRenderer {
-    pipeline: ComputePipeline,
+    rgb_pipeline: ComputePipeline,
+    val_pipeline: ComputePipeline,
     descriptor_set_layout: vk::DescriptorSetLayout,
 
     descriptor_pool: vk::DescriptorPool,
@@ -51,7 +53,8 @@ pub struct PathViewRenderer {
 impl PathViewRenderer {
     pub fn new(
         app: &GfaestusVk,
-        overlay_desc_layout: vk::DescriptorSetLayout,
+        rgb_overlay_desc_layout: vk::DescriptorSetLayout,
+        val_overlay_desc_layout: vk::DescriptorSetLayout,
     ) -> Result<Self> {
         let width = 2048;
         let height = 64;
@@ -196,7 +199,7 @@ impl PathViewRenderer {
             let pc_ranges = [pc_range];
             // let pc_ranges = [];
 
-            let layouts = [descriptor_set_layout, overlay_desc_layout];
+            let layouts = [descriptor_set_layout, rgb_overlay_desc_layout];
 
             let layout_info = vk::PipelineLayoutCreateInfo::builder()
                 .set_layouts(&layouts)
@@ -208,17 +211,49 @@ impl PathViewRenderer {
 
         dbg!();
 
-        let pipeline = ComputePipeline::new(
+        let rgb_pipeline = ComputePipeline::new(
             device,
             descriptor_set_layout,
             pipeline_layout,
             crate::include_shader!("compute/path_view.comp.spv"),
         )?;
 
+        let pipeline_layout = {
+            use vk::ShaderStageFlags as Flags;
+
+            let pc_range = vk::PushConstantRange::builder()
+                .stage_flags(Flags::COMPUTE)
+                .offset(0)
+                .size(16)
+                .build();
+
+            let pc_ranges = [pc_range];
+            // let pc_ranges = [];
+
+            let layouts = [descriptor_set_layout, val_overlay_desc_layout];
+
+            let layout_info = vk::PipelineLayoutCreateInfo::builder()
+                .set_layouts(&layouts)
+                .push_constant_ranges(&pc_ranges)
+                .build();
+
+            unsafe { device.create_pipeline_layout(&layout_info, None) }
+        }?;
+
+        dbg!();
+
+        let val_pipeline = ComputePipeline::new(
+            device,
+            descriptor_set_layout,
+            pipeline_layout,
+            crate::include_shader!("compute/path_view_val.comp.spv"),
+        )?;
+
         dbg!();
 
         Ok(Self {
-            pipeline,
+            rgb_pipeline,
+            val_pipeline,
             descriptor_set_layout,
 
             descriptor_pool,
@@ -352,22 +387,43 @@ impl PathViewRenderer {
         &self,
         comp_manager: &mut ComputeManager,
         app: &GfaestusVk,
-        overlay_desc: vk::DescriptorSet,
+        rgb_overlay_desc: vk::DescriptorSet,
+        val_overlay_desc: vk::DescriptorSet,
+        overlay_kind: OverlayKind,
         path_count: usize,
     ) -> Result<usize> {
-        let fence_id = comp_manager.dispatch_with(|_device, cmd_buf| {
-            self.dispatch_cmd(cmd_buf, app, overlay_desc, path_count)
-                .unwrap();
-        })?;
+        let fence_id =
+            comp_manager.dispatch_with(
+                |_device, cmd_buf| match overlay_kind {
+                    OverlayKind::RGB => {
+                        self.dispatch_cmd_rgb(
+                            cmd_buf,
+                            app,
+                            rgb_overlay_desc,
+                            path_count,
+                        )
+                        .unwrap();
+                    }
+                    OverlayKind::Value => {
+                        self.dispatch_cmd_val(
+                            cmd_buf,
+                            app,
+                            val_overlay_desc,
+                            path_count,
+                        )
+                        .unwrap();
+                    }
+                },
+            )?;
 
         Ok(fence_id)
     }
 
-    pub fn dispatch_cmd(
+    pub fn dispatch_cmd_val(
         &self,
         cmd_buf: vk::CommandBuffer,
         app: &GfaestusVk,
-        overlay_desc: vk::DescriptorSet,
+        val_overlay_desc: vk::DescriptorSet,
         path_count: usize,
     ) -> Result<()> {
         log::warn!("in dispatch()");
@@ -377,16 +433,16 @@ impl PathViewRenderer {
             device.cmd_bind_pipeline(
                 cmd_buf,
                 vk::PipelineBindPoint::COMPUTE,
-                self.pipeline.pipeline,
+                self.val_pipeline.pipeline,
             );
 
-            let desc_sets = [self.buffer_desc_set, overlay_desc];
+            let desc_sets = [self.buffer_desc_set, val_overlay_desc];
 
             let null = [];
             device.cmd_bind_descriptor_sets(
                 cmd_buf,
                 vk::PipelineBindPoint::COMPUTE,
-                self.pipeline.pipeline_layout,
+                self.val_pipeline.pipeline_layout,
                 0,
                 &desc_sets[0..=1],
                 &null,
@@ -404,7 +460,72 @@ impl PathViewRenderer {
             use vk::ShaderStageFlags as Flags;
             device.cmd_push_constants(
                 cmd_buf,
-                self.pipeline.pipeline_layout,
+                self.val_pipeline.pipeline_layout,
+                Flags::COMPUTE,
+                0,
+                pc_bytes,
+            )
+        };
+
+        let x_group_count = self.width / 256;
+        // let y_group_count = path_count;
+        let y_group_count = 64;
+        let z_group_count = 1;
+
+        unsafe {
+            device.cmd_dispatch(
+                cmd_buf,
+                x_group_count as u32,
+                y_group_count as u32,
+                z_group_count as u32,
+            )
+        };
+
+        Ok(())
+    }
+
+    pub fn dispatch_cmd_rgb(
+        &self,
+        cmd_buf: vk::CommandBuffer,
+        app: &GfaestusVk,
+        rgb_overlay_desc: vk::DescriptorSet,
+        path_count: usize,
+    ) -> Result<()> {
+        log::warn!("in dispatch()");
+        let device = app.vk_context().device();
+
+        unsafe {
+            device.cmd_bind_pipeline(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.rgb_pipeline.pipeline,
+            );
+
+            let desc_sets = [self.buffer_desc_set, rgb_overlay_desc];
+
+            let null = [];
+            device.cmd_bind_descriptor_sets(
+                cmd_buf,
+                vk::PipelineBindPoint::COMPUTE,
+                self.rgb_pipeline.pipeline_layout,
+                0,
+                &desc_sets[0..=1],
+                &null,
+            );
+
+            let push_constants = [
+                path_count as u32,
+                self.width as u32,
+                self.height as u32,
+                0u32,
+            ];
+
+            let pc_bytes = bytemuck::cast_slice(&push_constants);
+
+            use vk::ShaderStageFlags as Flags;
+            device.cmd_push_constants(
+                cmd_buf,
+                self.rgb_pipeline.pipeline_layout,
                 Flags::COMPUTE,
                 0,
                 pc_bytes,

@@ -406,6 +406,11 @@ fn node_color(id) {
             .pipelines
             .pipeline_rgb
             .descriptor_set_layout,
+        main_view
+            .node_draw_system
+            .pipelines
+            .pipeline_value
+            .descriptor_set_layout,
     )
     .unwrap();
 
@@ -703,12 +708,6 @@ fn node_color(id) {
 
                         prev_overlay = cur_overlay;
 
-                        let overlay_desc = main_view
-                            .node_draw_system
-                            .pipelines
-                            .pipeline_rgb
-                            .overlay_set;
-
                         let path_count = 4;
 
                         GfaestusVk::transition_image(
@@ -721,11 +720,34 @@ fn node_color(id) {
                             vk::ImageLayout::GENERAL,
                         ).unwrap();
 
+                        let overlay =
+                            app.shared_state().overlay_state().current_overlay().unwrap();
+
+                        let rgb_overlay_desc = main_view
+                            .node_draw_system
+                            .pipelines
+                            .pipeline_rgb
+                            .overlay_set;
+
+                        let val_overlay_desc = main_view
+                            .node_draw_system
+                            .pipelines
+                            .pipeline_value
+                            .overlay_set;
+
+                        let overlay_kind = main_view
+                            .node_draw_system
+                            .pipelines
+                            .overlay_kind(overlay).unwrap();
+
+
                         dbg!();
                         let fence_id = path_view
                             .dispatch_managed(&mut compute_manager,
                                               &gfaestus,
-                                              overlay_desc,
+                                              rgb_overlay_desc,
+                                              val_overlay_desc,
+                                              overlay_kind,
                                               path_count
                             ).unwrap();
 

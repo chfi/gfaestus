@@ -60,6 +60,11 @@ impl OverlayPipelines {
         Ok(())
     }
 
+    pub fn overlay_kind(&self, id: usize) -> Option<OverlayKind> {
+        let o = self.overlays.get(&id)?;
+        Some(o.kind)
+    }
+
     pub(super) fn bind_pipeline(
         &self,
         device: &Device,
@@ -234,14 +239,14 @@ impl OverlayPipelineValue {
             .binding(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build();
 
         let values = vk::DescriptorSetLayoutBinding::builder()
             .binding(1)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build();
 
         [sampler, values]
