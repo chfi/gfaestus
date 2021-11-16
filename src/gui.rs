@@ -26,6 +26,7 @@ use crate::{
     context::ContextEntry,
     graph_query::GraphQueryWorker,
     reactor::Reactor,
+    universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
 };
@@ -556,6 +557,7 @@ impl Gui {
         labels: &Labels,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
         path_view: &PathViewRenderer,
+        nodes: &[Node],
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
@@ -654,7 +656,9 @@ impl Gui {
                 &self.console,
                 reactor,
                 &self.channels,
+                &self.shared_state,
                 path_view,
+                nodes,
             );
         }
         */

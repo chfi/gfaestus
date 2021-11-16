@@ -415,7 +415,7 @@ fn node_color(id) {
     let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
 
     dbg!();
-    path_view.zoom(0.1);
+    // path_view.zoom(0.1);
 
     path_view
         .load_paths(&gfaestus, &mut app.reactor, paths.clone())
@@ -889,6 +889,7 @@ fn node_color(id) {
                     labels,
                     context_menu.tx(),
                     &path_view,
+                    universe.layout().nodes(),
                 );
 
                 modal_handler.show(&gui.ctx);

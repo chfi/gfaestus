@@ -11,10 +11,11 @@ use bstr::ByteSlice;
 use parking_lot::Mutex;
 
 use crate::{
-    app::{AppChannels, AppMsg},
+    app::{AppChannels, AppMsg, SharedState},
     geometry::{Point, Rect},
     gui::console::Console,
     reactor::Reactor,
+    universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
 };
 
@@ -35,7 +36,9 @@ impl PathPositionList {
         console: &Console,
         reactor: &mut Reactor,
         channels: &AppChannels,
+        shared_state: &SharedState,
         path_view: &PathViewRenderer,
+        nodes: &[Node],
     ) {
         // hacky but works
         if !CONSOLE_ADDED.load() {
@@ -133,6 +136,7 @@ impl PathPositionList {
 
                                     if let Some(pos) = interact.hover_pos() {
 
+
                                         let scroll_delta = ui.input().scroll_delta;
 
                                         if scroll_delta.y != 0.0 {
@@ -163,12 +167,42 @@ impl PathPositionList {
 
                                         let pos = (path_len * n) as usize;
 
+                                        let y = ix;
+                                        let x = ((path_view.width as f32) * n) as usize;
+
+                                        let node = path_view.get_node_at(x, y);
+
+
+                                        if let Some(node) = node {
+                                            let ix = (node.0 - 1) as usize;
+                                            if let Some(pos) = nodes.get(ix) {
+                                                let world = pos.center();
+
+                                                let view = shared_state.view();
+
+                                                let screen = view.world_point_to_screen(world);
+
+                                                let screen_rect = ctx.input().screen_rect();
+                                                let dims = Point::new(screen_rect.width(), screen_rect.height());
+
+                                                let screen = screen + dims / 2.0;
+
+                                                let dims = shared_state.screen_dims();
+
+                                                if screen.x > 0.0 && screen.y > 0.0 && screen.x < dims.width && screen.y < dims.height {
+                                                    egui::show_tooltip_at(ctx, egui::Id::new("path_view_tooltip"), Some(screen.into()), |ui| {
+                                                        //
+                                                        ui.label(format!("{}", node.0));
+                                                    });
+                                                }
+                                            }
+
+                                            // let msg = AppMsg::goto_node(node);
+                                            // channels.app_tx.send(msg).unwrap();
+                                        }
+
+
                                         if interact.clicked() {
-
-                                            let y = ix;
-                                            let x = ((path_view.width as f32) * n) as usize;
-
-                                            let node = path_view.get_node_at(x, y);
 
 
                                             log::warn!(
@@ -181,7 +215,6 @@ impl PathPositionList {
                                             if let Some(node) = node {
                                                 let msg = AppMsg::goto_node(node);
                                                 channels.app_tx.send(msg).unwrap();
-
                                             }
                                         }
                                     }

@@ -245,8 +245,15 @@ impl PathViewRenderer {
     }
 
     pub fn reset_zoom(&self) {
-        self.left.store(0.0);
-        self.right.store(1.0);
+        self.set_visible_range(0.0, 1.0);
+    }
+
+    pub fn set_visible_range(&self, left: f32, right: f32) {
+        let l = left.min(right).clamp(0.0, 1.0);
+        let r = left.max(right).clamp(0.0, 1.0);
+
+        self.left.store(l);
+        self.right.store(r);
     }
 
     pub fn zoom(&self, delta: f32) {
