@@ -5,7 +5,11 @@ pub mod draw_system;
 pub mod render_pass;
 pub mod texture;
 
+pub mod msg;
+
 mod init;
+
+pub use msg::*;
 
 use context::*;
 use init::*;

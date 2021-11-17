@@ -719,6 +719,13 @@ fn node_color(id) {
                     }
                 }
 
+                app.reactor
+                    .gpu_tasks
+                    .execute_all(&gfaestus,
+                                 gfaestus.transient_command_pool,
+                                 gfaestus.graphics_queue).unwrap();
+
+
                 // TODO this timer is just to make sure everything has
                 // been initialized; it should probably be replaced by
                 // checking the frame count

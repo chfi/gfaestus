@@ -15,6 +15,7 @@ use paired::*;
 use crate::app::channels::OverlayCreatorMsg;
 use crate::app::AppChannels;
 use crate::graph_query::GraphQuery;
+use crate::vulkan::GpuTasks;
 
 pub struct Reactor {
     pub thread_pool: futures::executor::ThreadPool,
@@ -24,6 +25,8 @@ pub struct Reactor {
 
     pub overlay_create_tx: Sender<OverlayCreatorMsg>,
     pub overlay_create_rx: Receiver<OverlayCreatorMsg>,
+
+    pub gpu_tasks: Arc<GpuTasks>,
 
     pub future_tx:
         Sender<Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
@@ -60,6 +63,8 @@ impl Reactor {
             rayon_pool,
 
             graph_query,
+
+            gpu_tasks: Arc::new(GpuTasks::default()),
 
             overlay_create_tx: channels.new_overlay_tx.clone(),
             overlay_create_rx: channels.new_overlay_rx.clone(),
