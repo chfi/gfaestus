@@ -417,7 +417,7 @@ fn node_color(id) {
     let mut upload_path_view_texture = true;
     let mut rerender_path_view = false;
 
-    let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
+    let paths = vec![];
 
     dbg!();
     // path_view.zoom(0.1);
