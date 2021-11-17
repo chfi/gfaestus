@@ -689,7 +689,7 @@ fn node_color(id) {
             Event::RedrawEventsCleared => {
 
 
-                /*
+
                 if path_view.should_reload() {
                     path_view
                         .load_paths(&gfaestus, &mut app.reactor, paths.clone())
@@ -697,7 +697,6 @@ fn node_color(id) {
 
                     rerender_path_view = true;
                 }
-                */
 
                 // TODO this timer is just to make sure everything has
                 // been initialized; it should probably be replaced by
@@ -715,6 +714,8 @@ fn node_color(id) {
 
                         prev_overlay = cur_overlay;
                         prev_gradient = cur_gradient;
+
+                        rerender_path_view = false;
 
                         let path_count = 4;
 

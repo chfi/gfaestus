@@ -299,6 +299,33 @@ impl PathViewRenderer {
         self.right.store(r);
     }
 
+    pub fn pan(&self, pixel_delta: f32) {
+        let l = self.left.load();
+        let r = self.right.load();
+
+        let len = r - l;
+
+        let norm_delta = pixel_delta / (self.width as f32);
+
+        log::warn!("norm_delta: {}", norm_delta);
+
+        if norm_delta < 0.0 {
+            let l_ = (l - norm_delta).clamp(0.0, 1.0);
+            let r_ = (l_ + len).clamp(0.0, 1.0);
+
+            self.left.store(l_);
+            self.right.store(r_);
+            self.reload.store(true);
+        } else {
+            let r_ = (r + norm_delta).clamp(0.0, 1.0);
+            let l_ = (r_ - len).clamp(0.0, 1.0);
+
+            self.left.store(l_);
+            self.right.store(r_);
+            self.reload.store(true);
+        }
+    }
+
     pub fn zoom(&self, delta: f32) {
         let delta = delta.clamp(-1.0, 1.0);
 
@@ -317,7 +344,7 @@ impl PathViewRenderer {
         if l_ != l || r_ != r {
             self.left.store(l_);
             self.right.store(r_);
-            // self.reload.store(true);
+            self.reload.store(true);
         }
 
         log::warn!("new zoom: {} - {}", l_, r_);

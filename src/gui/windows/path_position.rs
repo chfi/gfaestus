@@ -114,7 +114,7 @@ impl PathPositionList {
 
                                     let img = egui::Image::new(
                                         egui::TextureId::User(1),
-                                        Point { x: 256.0, y: 32.0 },
+                                        Point { x: 1024.0, y: 32.0 },
                                     )
                                     .uv(Rect::new(p0, p1));
                                     let row = ui.add(img);
@@ -131,6 +131,9 @@ impl PathPositionList {
                                     if interact.dragged() {
                                         let delta = interact.drag_delta();
                                         log::warn!("image drag delta: {}", delta.x);
+
+                                        path_view.pan(delta.x);
+
                                     }
 
 
@@ -142,7 +145,7 @@ impl PathPositionList {
                                         if scroll_delta.y != 0.0 {
                                             log::warn!("scroll delta: {}", scroll_delta.y);
 
-                                            /*
+
                                             let d = if scroll_delta.y > 0.0 {
                                                 1.05
                                             } else {
@@ -150,7 +153,6 @@ impl PathPositionList {
                                             };
 
                                             path_view.zoom(d);
-                                            */
 
                                         }
 
