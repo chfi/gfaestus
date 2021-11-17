@@ -29,6 +29,7 @@ impl PathPositionList {
     pub const ID: &'static str = "path_position_list";
 
     pub const PATHS: &'static str = "gui/path_position_list/paths";
+    pub const RELOAD: &'static str = "gui/path_position_list/reload";
 
     pub fn ui(
         ctx: &egui::CtxRef,
@@ -49,9 +50,10 @@ impl PathPositionList {
             paths.push(rhai::Dynamic::from(PathId(2)));
             paths.push(rhai::Dynamic::from(PathId(3)));
 
-            console
-                .get_set
-                .set_vars([(Self::PATHS, rhai::Dynamic::from(paths))]);
+            console.get_set.set_vars([
+                (Self::PATHS, rhai::Dynamic::from(paths)),
+                (Self::RELOAD, rhai::Dynamic::from(true)),
+            ]);
 
             log::warn!("initialized PathPositionList");
 

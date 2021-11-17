@@ -72,6 +72,7 @@ impl MenuBar {
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
+        let path_view = &mut open_windows.path_position_list;
 
         let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
@@ -87,6 +88,12 @@ impl MenuBar {
 
                     if ui.selectable_label(*paths, "Paths").clicked() {
                         *paths = !*paths;
+                    }
+
+                    ui.separator();
+
+                    if ui.selectable_label(*path_view, "Path View").clicked() {
+                        *path_view = !*path_view;
                     }
                 });
 
