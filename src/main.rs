@@ -241,8 +241,8 @@ fn main() {
     let mut select_fence_id: Option<usize> = None;
     let mut translate_fence_id: Option<usize> = None;
 
-    let mut path_view_fence: Option<usize> = None;
     let mut prev_overlay: Option<usize> = None;
+    let mut prev_gradient = app.shared_state().overlay_state().gradient();
 
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
@@ -699,26 +699,24 @@ fn node_color(id) {
                 }
                 */
 
-                // TODO this timer is just to make sure everything has been initialized; it should probably be replaced by checking the frame count
+                // TODO this timer is just to make sure everything has
+                // been initialized; it should probably be replaced by
+                // checking the frame count
                 if timer.elapsed().as_millis() > 2000 {
                     let cur_overlay = app.shared_state().overlay_state().current_overlay();
+                    let cur_gradient = app.shared_state().overlay_state().gradient();
 
-                    if path_view_fence.is_none() && (cur_overlay != prev_overlay || rerender_path_view) {
+                    if path_view.fence_id().is_none()
+                        && (cur_overlay != prev_overlay ||
+                            rerender_path_view ||
+                            cur_gradient != prev_gradient)
+                    {
                         log::warn!("doing the paths");
 
                         prev_overlay = cur_overlay;
+                        prev_gradient = cur_gradient;
 
                         let path_count = 4;
-
-                        GfaestusVk::transition_image(
-                            gfaestus.vk_context().device(),
-                            // device,
-                            gfaestus.transient_command_pool,
-                            gfaestus.graphics_queue,
-                            path_view.output_image.image,
-                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                            vk::ImageLayout::GENERAL,
-                        ).unwrap();
 
                         let overlay =
                             app.shared_state().overlay_state().current_overlay().unwrap();
@@ -741,8 +739,7 @@ fn node_color(id) {
                             .overlay_kind(overlay).unwrap();
 
 
-                        dbg!();
-                        let fence_id = path_view
+                        path_view
                             .dispatch_managed(&mut compute_manager,
                                               &gfaestus,
                                               rgb_overlay_desc,
@@ -751,9 +748,6 @@ fn node_color(id) {
                                               path_count
                             ).unwrap();
 
-                        dbg!();
-                        path_view_fence = Some(fence_id);
-                        dbg!();
                     }
                 }
 
@@ -776,23 +770,12 @@ fn node_color(id) {
                     }
                 }
 
-                if let Some(fid) = path_view_fence {
+
+
+                if let Some(fid) = path_view.fence_id() {
                     if compute_manager.is_fence_ready(fid).unwrap() {
                         log::trace!("Path view fence ready");
-                        compute_manager.block_on_fence(fid).unwrap();
-                        compute_manager.free_fence(fid, false).unwrap();
-
-                        path_view_fence = None;
-
-                        GfaestusVk::transition_image(
-                            gfaestus.vk_context().device(),
-                            // device,
-                            gfaestus.transient_command_pool,
-                            gfaestus.graphics_queue,
-                            path_view.output_image.image,
-                            vk::ImageLayout::GENERAL,
-                            vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
-                        ).unwrap();
+                        path_view.block_on_fence(&mut compute_manager);
 
                         app.shared_state().tmp.store(true);
 

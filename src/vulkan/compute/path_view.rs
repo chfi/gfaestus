@@ -20,6 +20,7 @@ use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 use super::{ComputeManager, ComputePipeline};
 
+#[allow(dead_code)]
 pub struct PathViewRenderer {
     rgb_pipeline: ComputePipeline,
     val_pipeline: ComputePipeline,
@@ -27,8 +28,7 @@ pub struct PathViewRenderer {
 
     descriptor_pool: vk::DescriptorPool,
     buffer_desc_set: vk::DescriptorSet,
-    // path_desc_set: vk::DescriptorSet,
-    // output_desc_set: vk::DescriptorSet,
+
     pub width: usize,
     pub height: usize,
 
@@ -43,14 +43,23 @@ pub struct PathViewRenderer {
     path_allocation_info: vk_mem::AllocationInfo,
 
     pub output_image: Texture,
-    // path_allocation_info: Option<vk_mem::AllocationInfo>,
-    // output_buffer: vk::Buffer,
-    // output_allocation: vk_mem::Allocation,
-    // output_allocation_info: vk_mem::AllocationInfo,
-    // path_buffer:
+
+    fence_id: AtomicCell<Option<usize>>,
 }
 
 impl PathViewRenderer {
+    pub fn fence_id(&self) -> Option<usize> {
+        self.fence_id.load()
+    }
+
+    pub fn block_on_fence(&self, comp_manager: &mut ComputeManager) {
+        if let Some(fid) = self.fence_id.load() {
+            comp_manager.block_on_fence(fid).unwrap();
+            comp_manager.free_fence(fid, false).unwrap();
+            self.fence_id.store(None);
+        }
+    }
+
     pub fn new(
         app: &GfaestusVk,
         rgb_overlay_desc_layout: vk::DescriptorSetLayout,
@@ -61,8 +70,6 @@ impl PathViewRenderer {
         let size = width * height;
 
         let device = app.vk_context().device();
-
-        dbg!();
 
         let (path_buffer, path_allocation, path_allocation_info) = {
             let usage = vk::BufferUsageFlags::STORAGE_BUFFER
@@ -276,6 +283,7 @@ impl PathViewRenderer {
             // output_buffer,
             // output_allocation,
             // output_allocation_info,
+            fence_id: AtomicCell::new(None),
         })
     }
 
@@ -378,9 +386,42 @@ impl PathViewRenderer {
         }
 
         let id = raw + 1;
-        let node = NodeId::from(raw as u64);
+        let node = NodeId::from(id as u64);
 
         Some(node)
+    }
+
+    pub fn running(&self, comp_manager: &mut ComputeManager) -> Result<bool> {
+        if let Some(fid) = self.fence_id.load() {
+            let is_ready = comp_manager.is_fence_ready(fid)?;
+            Ok(!is_ready)
+        } else {
+            Ok(false)
+        }
+    }
+
+    pub fn dispatch_complete(
+        &self,
+        comp_manager: &mut ComputeManager,
+    ) -> Result<bool> {
+        dbg!();
+        if let Some(fid) = self.fence_id.load() {
+            dbg!();
+            if comp_manager.is_fence_ready(fid)? {
+                dbg!();
+                comp_manager.block_on_fence(fid).unwrap();
+                comp_manager.free_fence(fid, false).unwrap();
+                self.fence_id.store(None);
+
+                Ok(true)
+            } else {
+                dbg!();
+                Ok(false)
+            }
+        } else {
+            dbg!();
+            Ok(false)
+        }
     }
 
     pub fn dispatch_managed(
@@ -391,10 +432,33 @@ impl PathViewRenderer {
         val_overlay_desc: vk::DescriptorSet,
         overlay_kind: OverlayKind,
         path_count: usize,
-    ) -> Result<usize> {
-        let fence_id =
-            comp_manager.dispatch_with(
-                |_device, cmd_buf| match overlay_kind {
+    ) -> Result<()> {
+        if let Some(fid) = self.fence_id.load() {
+            dbg!();
+            // handle this, but how
+        } else {
+            dbg!();
+            let fence_id = comp_manager.dispatch_with(|device, cmd_buf| {
+                let (barrier, src_stage, dst_stage) =
+                    GfaestusVk::image_transition_barrier(
+                        self.output_image.image,
+                        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                        vk::ImageLayout::GENERAL,
+                    );
+
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        cmd_buf,
+                        src_stage,
+                        dst_stage,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[barrier],
+                    )
+                };
+
+                match overlay_kind {
                     OverlayKind::RGB => {
                         self.dispatch_cmd_rgb(
                             cmd_buf,
@@ -413,10 +477,32 @@ impl PathViewRenderer {
                         )
                         .unwrap();
                     }
-                },
-            )?;
+                }
 
-        Ok(fence_id)
+                let (barrier, src_stage, dst_stage) =
+                    GfaestusVk::image_transition_barrier(
+                        self.output_image.image,
+                        vk::ImageLayout::GENERAL,
+                        vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+                    );
+
+                unsafe {
+                    device.cmd_pipeline_barrier(
+                        cmd_buf,
+                        src_stage,
+                        dst_stage,
+                        vk::DependencyFlags::empty(),
+                        &[],
+                        &[],
+                        &[barrier],
+                    )
+                };
+            })?;
+
+            self.fence_id.store(Some(fence_id));
+        }
+
+        Ok(())
     }
 
     pub fn dispatch_cmd_val(
