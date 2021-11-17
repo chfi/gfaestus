@@ -399,7 +399,12 @@ impl PathViewRenderer {
         }
 
         self.reload.store(false);
-        app.copy_data_to_buffer::<u32, u32>(&self.path_data, self.path_buffer)?;
+        if !self.path_data.is_empty() {
+            app.copy_data_to_buffer::<u32, u32>(
+                &self.path_data,
+                self.path_buffer,
+            )?;
+        }
 
         Ok(())
     }
