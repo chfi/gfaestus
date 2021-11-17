@@ -61,7 +61,7 @@ pub(super) fn instance_extensions(entry: &Entry) -> Result<InstanceExtensions> {
 
     #[cfg(not(target_os = "linux"))]
     {
-        instance_extensions = InstanceExtensions;
+        instance_extensions = InstanceExtensions {};
     }
 
     Ok(instance_extensions)
