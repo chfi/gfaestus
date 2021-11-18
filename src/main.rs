@@ -420,14 +420,14 @@ fn node_color(id) {
     // let mut rerender_path_view = false;
 
     // let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
-    let paths = vec![];
-
-    dbg!();
+    // dbg!();
     // path_view.zoom(0.1);
 
-    path_view
-        .load_paths(&gfaestus, &mut app.reactor, paths.clone())
-        .unwrap();
+    // let paths = vec![];
+
+    // path_view
+    //     .load_paths_async(&gfaestus, &mut app.reactor, paths.clone())
+    //     .unwrap();
     dbg!();
 
     let gradients = Gradients::initialize(

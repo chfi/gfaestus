@@ -50,7 +50,8 @@ pub struct PathViewRenderer {
     reload: AtomicCell<bool>,
     should_rerender: Arc<AtomicCell<bool>>,
 
-    path_data: Vec<u32>,
+    // path_data: Vec<u32>,
+    path_data: Arc<Mutex<Vec<u32>>>,
 
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
@@ -289,9 +290,8 @@ impl PathViewRenderer {
             reload: AtomicCell::new(false),
             should_rerender: Arc::new(AtomicCell::new(false)),
 
-            // path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
-            path_data: Vec::with_capacity(width * height),
-
+            path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
+            // path_data: Vec::with_capacity(width * height),
             path_buffer,
             path_allocation,
             path_allocation_info,
@@ -391,7 +391,7 @@ impl PathViewRenderer {
     }
 
     pub fn load_paths_async(
-        &mut self,
+        &self,
         app: &GfaestusVk,
         reactor: &mut Reactor,
         paths: impl IntoIterator<Item = PathId> + Send + Sync + 'static,
@@ -414,6 +414,7 @@ impl PathViewRenderer {
 
         let state_cell = self.state.clone();
         let should_rerender = self.should_rerender.clone();
+        let path_data = self.path_data.clone();
 
         let fut = async move {
             //
@@ -454,19 +455,16 @@ impl PathViewRenderer {
                 }
             }
 
-            // {
-            //     let mut lock = path_data.lock();
-            //     *lock = path_data_local;
-            // }
+            {
+                let mut lock = path_data.lock();
+                *lock = path_data_local.clone();
+            }
 
             state_cell.store(LoadState::Loading);
 
             let data = Arc::new(path_data_local);
             let dst = buffer;
-            let task = GpuTask::CopyDataToBuffer {
-                data: data.clone(),
-                dst,
-            };
+            let task = GpuTask::CopyDataToBuffer { data, dst };
 
             let copy_complete = gpu_tasks.queue_task(task);
 
@@ -505,6 +503,7 @@ impl PathViewRenderer {
         Ok(())
     }
 
+    /*
     pub fn load_paths(
         &mut self,
         app: &GfaestusVk,
@@ -559,11 +558,12 @@ impl PathViewRenderer {
 
         Ok(())
     }
+    */
 
     pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
         let ix = y * self.width + x;
 
-        let raw = self.path_data.get(ix).copied()?;
+        let raw = self.path_data.try_lock().and_then(|l| l.get(x).copied())?;
 
         if raw == 0 {
             return None;
