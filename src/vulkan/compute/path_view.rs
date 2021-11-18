@@ -2,6 +2,7 @@ use crate::geometry::{Point, Rect};
 use crate::overlays::OverlayKind;
 use crate::reactor::Reactor;
 use crate::vulkan::texture::Texture;
+use crate::vulkan::GpuTask;
 
 use ash::version::DeviceV1_0;
 use ash::{vk, Device};
@@ -9,16 +10,27 @@ use ash::{vk, Device};
 use anyhow::Result;
 
 use crossbeam::atomic::AtomicCell;
+use futures::future::RemoteHandle;
+// use futures::lock::Mutex;
 use handlegraph::handle::{Handle, NodeId};
 use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 use crate::app::selection::SelectionBuffer;
 
 use crate::vulkan::{draw_system::nodes::NodeVertices, GfaestusVk};
 
 use super::{ComputeManager, ComputePipeline};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoadState {
+    Idle,
+    Loading,
+    ShouldReload,
+}
 
 #[allow(dead_code)]
 pub struct PathViewRenderer {
@@ -34,7 +46,9 @@ pub struct PathViewRenderer {
 
     left: AtomicCell<f32>,
     right: AtomicCell<f32>,
+    state: Arc<AtomicCell<LoadState>>,
     reload: AtomicCell<bool>,
+    should_rerender: Arc<AtomicCell<bool>>,
 
     path_data: Vec<u32>,
 
@@ -271,8 +285,11 @@ impl PathViewRenderer {
 
             left: AtomicCell::new(0.0),
             right: AtomicCell::new(1.0),
+            state: Arc::new(AtomicCell::new(LoadState::Idle)),
             reload: AtomicCell::new(false),
+            should_rerender: Arc::new(AtomicCell::new(false)),
 
+            // path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
             path_data: Vec::with_capacity(width * height),
 
             path_buffer,
@@ -316,6 +333,7 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
             self.reload.store(true);
+            self.state.store(LoadState::ShouldReload);
         } else {
             let r_ = (r + norm_delta).clamp(0.0, 1.0);
             let l_ = (r_ - len).clamp(0.0, 1.0);
@@ -323,6 +341,7 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
             self.reload.store(true);
+            self.state.store(LoadState::ShouldReload);
         }
     }
 
@@ -345,13 +364,145 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
             self.reload.store(true);
+            self.state.store(LoadState::ShouldReload);
         }
 
         log::warn!("new zoom: {} - {}", l_, r_);
     }
 
+    pub fn should_rerender(&self) -> bool {
+        self.should_rerender.load()
+    }
+
+    pub fn state_should_reload(&self) -> bool {
+        matches!(self.state.load(), LoadState::ShouldReload)
+    }
+
+    pub fn state_idle(&self) -> bool {
+        matches!(self.state.load(), LoadState::Idle)
+    }
+
+    pub fn state_loading(&self) -> bool {
+        matches!(self.state.load(), LoadState::Loading)
+    }
+
     pub fn should_reload(&self) -> bool {
         self.reload.load()
+    }
+
+    pub fn load_paths_async(
+        &mut self,
+        app: &GfaestusVk,
+        reactor: &mut Reactor,
+        paths: impl IntoIterator<Item = PathId> + Send + Sync + 'static,
+    ) -> Result<()> {
+        // if self.load_paths_handle.is_some() {
+        //     return Ok(());
+        // }
+        let left = self.left.load();
+        let right = self.right.load();
+
+        let graph = reactor.graph_query.clone();
+
+        let width = self.width;
+        let height = self.height;
+
+        // let
+        let gpu_tasks = reactor.gpu_tasks.clone();
+
+        let buffer = self.path_buffer;
+
+        let state_cell = self.state.clone();
+        let should_rerender = self.should_rerender.clone();
+
+        let fut = async move {
+            //
+
+            let mut path_data_local = Vec::with_capacity(width * height);
+
+            for path in paths.into_iter().take(64) {
+                let steps = graph.path_pos_steps(path).unwrap();
+                let (_, _, path_len) = steps.last().unwrap();
+
+                let len = *path_len as f32;
+                let start = left * len;
+                let end = start + (right - left) * len;
+
+                let s = start as usize;
+                // let e = end as usize;
+
+                for x in 0..width {
+                    let n = (x as f64) / (width as f64);
+                    let p_ = ((n as f32) * len) as usize;
+
+                    let p = s + p_;
+
+                    // let p = (n * (*path_len as f64)) as usize;
+
+                    let ix =
+                        match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                            Ok(i) => i,
+                            Err(i) => i,
+                        };
+
+                    let ix = ix.min(steps.len() - 1);
+
+                    let (handle, _step, _pos) = steps[ix];
+
+                    path_data_local.push(handle.id().0 as u32);
+                    // self.path_data.push(handle.id().0 as u32);
+                }
+            }
+
+            // {
+            //     let mut lock = path_data.lock();
+            //     *lock = path_data_local;
+            // }
+
+            state_cell.store(LoadState::Loading);
+
+            let data = Arc::new(path_data_local);
+            let dst = buffer;
+            let task = GpuTask::CopyDataToBuffer {
+                data: data.clone(),
+                dst,
+            };
+
+            let copy_complete = gpu_tasks.queue_task(task);
+
+            if let Ok(complete) = copy_complete {
+                let _ = complete.await;
+                // the path buffer has been updated here
+                state_cell.store(LoadState::Idle);
+                should_rerender.store(true);
+            } else {
+                log::warn!("error queing GPU task in load_paths");
+                state_cell.store(LoadState::Idle);
+            }
+            // gpu_tasks.queue_task(
+            // std::mem::swap(&mut lock, &mut path_data_local);
+            // path_data_local
+        };
+
+        reactor.spawn_forget(fut)?;
+        // let handle = reactor.spawn(fut)?;
+        // self.load_paths_handle = Some(handle);
+
+        // TODO for now hardcoded to max 64 paths
+        /*
+         */
+
+        /*
+        self.reload.store(false);
+        if !self.path_data.is_empty() {
+            app.copy_data_to_buffer::<u32, u32>(
+                &self.path_data,
+                self.path_buffer,
+            )?;
+        }
+        */
+
+        Ok(())
     }
 
     pub fn load_paths(
@@ -412,7 +563,8 @@ impl PathViewRenderer {
     pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
         let ix = y * self.width + x;
 
-        let raw = *self.path_data.get(ix)?;
+        let raw = self.path_data.get(ix).copied()?;
+
         if raw == 0 {
             return None;
         }
@@ -457,7 +609,7 @@ impl PathViewRenderer {
     }
 
     pub fn dispatch_managed(
-        &self,
+        &mut self,
         comp_manager: &mut ComputeManager,
         app: &GfaestusVk,
         rgb_overlay_desc: vk::DescriptorSet,
@@ -465,11 +617,19 @@ impl PathViewRenderer {
         overlay_kind: OverlayKind,
         path_count: usize,
     ) -> Result<()> {
+        // if self.reload.load() {}
+        // if let Some(handle) = self.load_paths_handle.as_mut() {}
+
+        if !self.state_idle() {
+            return Ok(());
+        }
+
         if let Some(fid) = self.fence_id.load() {
             dbg!();
             // handle this, but how
         } else {
             dbg!();
+            self.should_rerender.store(false);
             let fence_id = comp_manager.dispatch_with(|device, cmd_buf| {
                 let (barrier, src_stage, dst_stage) =
                     GfaestusVk::image_transition_barrier(

@@ -244,6 +244,8 @@ fn main() {
     let mut prev_overlay: Option<usize> = None;
     let mut prev_gradient = app.shared_state().overlay_state().gradient();
 
+    let mut dispatch_timer: Option<std::time::Instant> = None;
+
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -415,8 +417,9 @@ fn node_color(id) {
     .unwrap();
 
     let mut upload_path_view_texture = true;
-    let mut rerender_path_view = false;
+    // let mut rerender_path_view = false;
 
+    // let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
     let paths = vec![];
 
     dbg!();
@@ -691,7 +694,7 @@ fn node_color(id) {
 
                 {
 
-                    let mut should_reload = path_view.should_reload();
+                    let mut should_reload = path_view.state_should_reload();
 
                     let path = gfaestus::gui::windows::PathPositionList::RELOAD;
                     if let Some(raw) = gui.console.get_set.get_var(path) {
@@ -704,19 +707,20 @@ fn node_color(id) {
                     if should_reload {
                         let path = gfaestus::gui::windows::PathPositionList::PATHS;
 
+
                         if let Some(raw_paths) = gui.console.get_set.get_var(path) {
                             let paths: Vec<rhai::Dynamic> = raw_paths.cast();
 
                             let paths = paths.into_iter().map(|d| d.cast::<PathId>());
 
-                            path_view
-                                .load_paths(&gfaestus, &mut app.reactor, paths)
-                                .unwrap();
 
-                            rerender_path_view = true;
+                            path_view
+                                .load_paths_async(&gfaestus, &mut app.reactor, paths)
+                                .unwrap();
                         }
 
                     }
+
                 }
 
                 app.reactor
@@ -735,7 +739,8 @@ fn node_color(id) {
 
                     if path_view.fence_id().is_none()
                         && (cur_overlay != prev_overlay ||
-                            rerender_path_view ||
+                            path_view.should_rerender() ||
+                            // rerender_path_view ||
                             cur_gradient != prev_gradient)
                     {
                         log::warn!("doing the paths");
@@ -743,7 +748,7 @@ fn node_color(id) {
                         prev_overlay = cur_overlay;
                         prev_gradient = cur_gradient;
 
-                        rerender_path_view = false;
+                        // rerender_path_view = false;
 
                         let path_count = 4;
 
@@ -777,6 +782,8 @@ fn node_color(id) {
                                               path_count
                             ).unwrap();
 
+                        dispatch_timer = Some(std::time::Instant::now());
+
                     }
                 }
 
@@ -805,6 +812,9 @@ fn node_color(id) {
                     if compute_manager.is_fence_ready(fid).unwrap() {
                         log::trace!("Path view fence ready");
                         path_view.block_on_fence(&mut compute_manager);
+                        if let Some(timer) = dispatch_timer {
+                            log::warn!("dispatch took {} us", timer.elapsed().as_micros());
+                        }
 
                         app.shared_state().tmp.store(true);
 
