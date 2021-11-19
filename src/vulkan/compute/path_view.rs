@@ -50,6 +50,8 @@ pub struct PathViewRenderer {
     reload: AtomicCell<bool>,
     should_rerender: Arc<AtomicCell<bool>>,
 
+    offsets: Arc<AtomicCell<(f32, f32)>>,
+
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
@@ -216,7 +218,7 @@ impl PathViewRenderer {
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(16)
+                .size(24)
                 .build();
 
             let pc_ranges = [pc_range];
@@ -247,7 +249,7 @@ impl PathViewRenderer {
             let pc_range = vk::PushConstantRange::builder()
                 .stage_flags(Flags::COMPUTE)
                 .offset(0)
-                .size(16)
+                .size(24)
                 .build();
 
             let pc_ranges = [pc_range];
@@ -290,6 +292,8 @@ impl PathViewRenderer {
             state: Arc::new(AtomicCell::new(LoadState::Idle)),
             reload: AtomicCell::new(false),
             should_rerender: Arc::new(AtomicCell::new(false)),
+
+            offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
 
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
             path_count: Arc::new(AtomicCell::new(0)),
@@ -336,6 +340,9 @@ impl PathViewRenderer {
             self.right.store(r_);
             self.reload.store(true);
             self.state.store(LoadState::ShouldReload);
+
+            // self.offsets.store((l_, r_));
+            self.offsets.store((pixel_delta, 1.0));
         } else {
             let r_ = (r + norm_delta).clamp(0.0, 1.0);
             let l_ = (r_ - len).clamp(0.0, 1.0);
@@ -344,6 +351,9 @@ impl PathViewRenderer {
             self.right.store(r_);
             self.reload.store(true);
             self.state.store(LoadState::ShouldReload);
+
+            // self.offsets.store((l_, r_));
+            self.offsets.store((pixel_delta, 1.0));
         }
     }
 
@@ -367,6 +377,8 @@ impl PathViewRenderer {
             self.right.store(r_);
             self.reload.store(true);
             self.state.store(LoadState::ShouldReload);
+
+            // self.offsets.store((l_, r_));
         }
 
         log::warn!("new zoom: {} - {}", l_, r_);
@@ -740,15 +752,21 @@ impl PathViewRenderer {
                 0u32,
             ];
 
-            let pc_bytes = bytemuck::cast_slice(&push_constants);
+            let (left, right) = self.offsets.load();
+            self.offsets.store((0.0, 1.0));
+            let float_consts = [left, right];
+
+            let mut bytes: Vec<u8> = Vec::with_capacity(24);
+            bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
+            bytes.extend_from_slice(bytemuck::cast_slice(&float_consts));
 
             use vk::ShaderStageFlags as Flags;
             device.cmd_push_constants(
                 cmd_buf,
-                self.val_pipeline.pipeline_layout,
+                self.rgb_pipeline.pipeline_layout,
                 Flags::COMPUTE,
                 0,
-                pc_bytes,
+                &bytes,
             )
         };
 
@@ -805,7 +823,13 @@ impl PathViewRenderer {
                 0u32,
             ];
 
-            let pc_bytes = bytemuck::cast_slice(&push_constants);
+            let (left, right) = self.offsets.load();
+            self.offsets.store((0.0, 1.0));
+            let float_consts = [left, right];
+
+            let mut bytes: Vec<u8> = Vec::with_capacity(24);
+            bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
+            bytes.extend_from_slice(bytemuck::cast_slice(&float_consts));
 
             use vk::ShaderStageFlags as Flags;
             device.cmd_push_constants(
@@ -813,7 +837,7 @@ impl PathViewRenderer {
                 self.rgb_pipeline.pipeline_layout,
                 Flags::COMPUTE,
                 0,
-                pc_bytes,
+                &bytes,
             )
         };
 

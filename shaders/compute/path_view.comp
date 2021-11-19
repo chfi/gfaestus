@@ -13,6 +13,8 @@ layout (push_constant) uniform PushConstants {
   uint width;
   uint height;
   uint dummy;
+  float left;
+  float right;
 } pc;
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
@@ -25,6 +27,9 @@ void main() {
   uint ix = (path * 2048) + gl_GlobalInvocationID.x;
 
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+
+  pixel.x += int(pc.left);
+  pixel.x = clamp(pixel.x, 0, 2048);
 
   if (path < pc.path_count) {
     // read node at this pixel in the path
