@@ -52,6 +52,7 @@ pub struct PathViewRenderer {
 
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
+    path_count: Arc<AtomicCell<usize>>,
 
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
@@ -291,7 +292,8 @@ impl PathViewRenderer {
             should_rerender: Arc::new(AtomicCell::new(false)),
 
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
-            // path_data: Vec::with_capacity(width * height),
+            path_count: Arc::new(AtomicCell::new(0)),
+
             path_buffer,
             path_allocation,
             path_allocation_info,
@@ -414,16 +416,22 @@ impl PathViewRenderer {
 
         let state_cell = self.state.clone();
         let should_rerender = self.should_rerender.clone();
+
         let path_data = self.path_data.clone();
+        let path_count = self.path_count.clone();
 
         let fut = async move {
             //
 
             let mut path_data_local = Vec::with_capacity(width * height);
 
+            let mut num_paths = 0;
+
             for path in paths.into_iter().take(64) {
                 let steps = graph.path_pos_steps(path).unwrap();
                 let (_, _, path_len) = steps.last().unwrap();
+
+                num_paths += 1;
 
                 let len = *path_len as f32;
                 let start = left * len;
@@ -451,6 +459,7 @@ impl PathViewRenderer {
                     let (handle, _step, _pos) = steps[ix];
 
                     path_data_local.push(handle.id().0 as u32);
+
                     // self.path_data.push(handle.id().0 as u32);
                 }
             }
@@ -458,6 +467,7 @@ impl PathViewRenderer {
             {
                 let mut lock = path_data.lock();
                 *lock = path_data_local.clone();
+                path_count.store(num_paths);
             }
 
             state_cell.store(LoadState::Loading);
@@ -615,11 +625,7 @@ impl PathViewRenderer {
         rgb_overlay_desc: vk::DescriptorSet,
         val_overlay_desc: vk::DescriptorSet,
         overlay_kind: OverlayKind,
-        path_count: usize,
     ) -> Result<()> {
-        // if self.reload.load() {}
-        // if let Some(handle) = self.load_paths_handle.as_mut() {}
-
         if !self.state_idle() {
             return Ok(());
         }
@@ -628,6 +634,7 @@ impl PathViewRenderer {
             dbg!();
             // handle this, but how
         } else {
+            let path_count = self.path_count.load();
             dbg!();
             self.should_rerender.store(false);
             let fence_id = comp_manager.dispatch_with(|device, cmd_buf| {

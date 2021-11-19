@@ -417,18 +417,6 @@ fn node_color(id) {
     .unwrap();
 
     let mut upload_path_view_texture = true;
-    // let mut rerender_path_view = false;
-
-    // let paths = vec![PathId(0), PathId(1), PathId(2), PathId(3)];
-    // dbg!();
-    // path_view.zoom(0.1);
-
-    // let paths = vec![];
-
-    // path_view
-    //     .load_paths_async(&gfaestus, &mut app.reactor, paths.clone())
-    //     .unwrap();
-    dbg!();
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -748,10 +736,6 @@ fn node_color(id) {
                         prev_overlay = cur_overlay;
                         prev_gradient = cur_gradient;
 
-                        // rerender_path_view = false;
-
-                        let path_count = 4;
-
                         let overlay =
                             app.shared_state().overlay_state().current_overlay().unwrap();
 
@@ -779,7 +763,6 @@ fn node_color(id) {
                                               rgb_overlay_desc,
                                               val_overlay_desc,
                                               overlay_kind,
-                                              path_count
                             ).unwrap();
 
                         dispatch_timer = Some(std::time::Instant::now());
