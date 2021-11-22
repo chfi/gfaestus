@@ -17,8 +17,8 @@ layout (push_constant) uniform PushConstants {
   uint width;
   uint height;
   uint dummy;
-  float left;
-  float right;
+  float translation;
+  float scaling;
 } pc;
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;

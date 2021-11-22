@@ -682,7 +682,7 @@ fn node_color(id) {
 
                 {
 
-                    let mut should_reload = path_view.state_should_reload();
+                    let mut should_reload = path_view.should_reload();
 
                     let path = gfaestus::gui::windows::PathPositionList::RELOAD;
                     if let Some(raw) = gui.console.get_set.get_var(path) {

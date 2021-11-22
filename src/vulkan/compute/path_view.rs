@@ -29,7 +29,52 @@ use super::{ComputeManager, ComputePipeline};
 pub enum LoadState {
     Idle,
     Loading,
-    ShouldReload,
+    // ShouldReload,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderState {
+    Idle,
+    Rendering,
+    // ShouldRerender,
+}
+
+#[derive(Debug)]
+pub struct PathViewState {
+    loading: AtomicCell<LoadState>,
+    rendering: AtomicCell<RenderState>,
+
+    should_rerender: AtomicCell<bool>,
+    should_reload: AtomicCell<bool>,
+}
+
+impl std::default::Default for PathViewState {
+    fn default() -> Self {
+        Self {
+            loading: AtomicCell::new(LoadState::Idle),
+            rendering: AtomicCell::new(RenderState::Idle),
+
+            should_reload: AtomicCell::new(true),
+            should_rerender: AtomicCell::new(false),
+        }
+    }
+}
+
+impl PathViewState {
+    pub fn loading(&self) -> LoadState {
+        self.loading.load()
+    }
+    pub fn rendering(&self) -> RenderState {
+        self.rendering.load()
+    }
+
+    pub fn should_reload(&self) -> bool {
+        self.should_reload.load()
+    }
+
+    pub fn should_rerender(&self) -> bool {
+        self.should_rerender.load()
+    }
 }
 
 #[allow(dead_code)]
@@ -44,11 +89,17 @@ pub struct PathViewRenderer {
     pub width: usize,
     pub height: usize,
 
+    translation: AtomicCell<f32>,
+    scaling: AtomicCell<f32>,
+
     left: AtomicCell<f32>,
     right: AtomicCell<f32>,
-    state: Arc<AtomicCell<LoadState>>,
-    reload: AtomicCell<bool>,
-    should_rerender: Arc<AtomicCell<bool>>,
+
+    // state: Arc<AtomicCell<LoadState>>,
+
+    // reload: AtomicCell<bool>,
+    // should_rerender: Arc<AtomicCell<bool>>,
+    state: Arc<PathViewState>,
 
     offsets: Arc<AtomicCell<(f32, f32)>>,
 
@@ -75,6 +126,9 @@ impl PathViewRenderer {
             comp_manager.block_on_fence(fid).unwrap();
             comp_manager.free_fence(fid, false).unwrap();
             self.fence_id.store(None);
+
+            self.state.rendering.store(RenderState::Idle);
+            self.state.should_rerender.store(false);
         }
     }
 
@@ -287,12 +341,14 @@ impl PathViewRenderer {
             width,
             height,
 
+            translation: AtomicCell::new(0.0),
+            scaling: AtomicCell::new(0.0),
             left: AtomicCell::new(0.0),
             right: AtomicCell::new(1.0),
-            state: Arc::new(AtomicCell::new(LoadState::Idle)),
-            reload: AtomicCell::new(false),
-            should_rerender: Arc::new(AtomicCell::new(false)),
-
+            // state: Arc::new(AtomicCell::new(LoadState::Idle)),
+            state: Arc::new(PathViewState::default()),
+            // reload: AtomicCell::new(false),
+            // should_rerender: Arc::new(AtomicCell::new(false)),
             offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
 
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
@@ -338,22 +394,23 @@ impl PathViewRenderer {
 
             self.left.store(l_);
             self.right.store(r_);
-            self.reload.store(true);
-            self.state.store(LoadState::ShouldReload);
 
-            // self.offsets.store((l_, r_));
-            self.offsets.store((pixel_delta, 1.0));
+            // self.state.reload.store(true);
+            self.state.should_reload.store(true);
+            self.state.should_rerender.store(true);
+
+            self.translation.store(pixel_delta);
         } else {
             let r_ = (r + norm_delta).clamp(0.0, 1.0);
             let l_ = (r_ - len).clamp(0.0, 1.0);
 
             self.left.store(l_);
             self.right.store(r_);
-            self.reload.store(true);
-            self.state.store(LoadState::ShouldReload);
 
-            // self.offsets.store((l_, r_));
-            self.offsets.store((pixel_delta, 1.0));
+            self.state.should_reload.store(true);
+            self.state.should_rerender.store(true);
+
+            self.translation.store(pixel_delta);
         }
     }
 
@@ -375,33 +432,36 @@ impl PathViewRenderer {
         if l_ != l || r_ != r {
             self.left.store(l_);
             self.right.store(r_);
-            self.reload.store(true);
-            self.state.store(LoadState::ShouldReload);
 
-            // self.offsets.store((l_, r_));
+            self.state.should_reload.store(true);
+
+            self.scaling.store(delta);
         }
 
         log::warn!("new zoom: {} - {}", l_, r_);
     }
 
     pub fn should_rerender(&self) -> bool {
-        self.should_rerender.load()
+        self.state.should_rerender.load()
     }
 
-    pub fn state_should_reload(&self) -> bool {
-        matches!(self.state.load(), LoadState::ShouldReload)
+    pub fn render_idle(&self) -> bool {
+        matches!(self.state.rendering.load(), RenderState::Idle)
     }
-
-    pub fn state_idle(&self) -> bool {
-        matches!(self.state.load(), LoadState::Idle)
-    }
-
-    pub fn state_loading(&self) -> bool {
-        matches!(self.state.load(), LoadState::Loading)
+    pub fn is_rendering(&self) -> bool {
+        matches!(self.state.rendering.load(), RenderState::Rendering)
     }
 
     pub fn should_reload(&self) -> bool {
-        self.reload.load()
+        self.state.should_reload.load()
+    }
+
+    pub fn loading_idle(&self) -> bool {
+        matches!(self.state.loading.load(), LoadState::Idle)
+    }
+
+    pub fn is_loading(&self) -> bool {
+        matches!(self.state.loading.load(), LoadState::Loading)
     }
 
     pub fn load_paths_async(
@@ -426,8 +486,8 @@ impl PathViewRenderer {
 
         let buffer = self.path_buffer;
 
-        let state_cell = self.state.clone();
-        let should_rerender = self.should_rerender.clone();
+        let state = self.state.clone();
+        // let should_rerender = self.should_rerender.clone();
 
         let path_data = self.path_data.clone();
         let path_count = self.path_count.clone();
@@ -482,7 +542,8 @@ impl PathViewRenderer {
                 path_count.store(num_paths);
             }
 
-            state_cell.store(LoadState::Loading);
+            // state_cell.store(LoadState::Loading);
+            // state
 
             let data = Arc::new(path_data_local);
             let dst = buffer;
@@ -493,94 +554,20 @@ impl PathViewRenderer {
             if let Ok(complete) = copy_complete {
                 let _ = complete.await;
                 // the path buffer has been updated here
-                state_cell.store(LoadState::Idle);
-                should_rerender.store(true);
+                state.loading.store(LoadState::Idle);
+                state.should_rerender.store(true);
+                // state.ref
+                // should_rerender.store(true);
             } else {
                 log::warn!("error queing GPU task in load_paths");
-                state_cell.store(LoadState::Idle);
+                state.loading.store(LoadState::Idle);
             }
-            // gpu_tasks.queue_task(
-            // std::mem::swap(&mut lock, &mut path_data_local);
-            // path_data_local
         };
 
         reactor.spawn_forget(fut)?;
-        // let handle = reactor.spawn(fut)?;
-        // self.load_paths_handle = Some(handle);
-
-        // TODO for now hardcoded to max 64 paths
-        /*
-         */
-
-        /*
-        self.reload.store(false);
-        if !self.path_data.is_empty() {
-            app.copy_data_to_buffer::<u32, u32>(
-                &self.path_data,
-                self.path_buffer,
-            )?;
-        }
-        */
 
         Ok(())
     }
-
-    /*
-    pub fn load_paths(
-        &mut self,
-        app: &GfaestusVk,
-        reactor: &mut Reactor,
-        paths: impl IntoIterator<Item = PathId>,
-    ) -> Result<()> {
-        self.path_data.clear();
-
-        let left = self.left.load();
-        let right = self.right.load();
-
-        // TODO for now hardcoded to max 64 paths
-        for path in paths.into_iter().take(64) {
-            let steps = reactor.graph_query.path_pos_steps(path).unwrap();
-            let (_, _, path_len) = steps.last().unwrap();
-
-            let len = *path_len as f32;
-            let start = left * len;
-            let end = start + (right - left) * len;
-
-            let s = start as usize;
-            // let e = end as usize;
-
-            for x in 0..self.width {
-                let n = (x as f64) / (self.width as f64);
-                let p_ = ((n as f32) * len) as usize;
-
-                let p = s + p_;
-
-                // let p = (n * (*path_len as f64)) as usize;
-
-                let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
-                    Ok(i) => i,
-                    Err(i) => i,
-                };
-
-                let ix = ix.min(steps.len() - 1);
-
-                let (handle, _step, _pos) = steps[ix];
-
-                self.path_data.push(handle.id().0 as u32);
-            }
-        }
-
-        self.reload.store(false);
-        if !self.path_data.is_empty() {
-            app.copy_data_to_buffer::<u32, u32>(
-                &self.path_data,
-                self.path_buffer,
-            )?;
-        }
-
-        Ok(())
-    }
-    */
 
     pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
         let ix = y * self.width + x;
@@ -638,7 +625,7 @@ impl PathViewRenderer {
         val_overlay_desc: vk::DescriptorSet,
         overlay_kind: OverlayKind,
     ) -> Result<()> {
-        if !self.state_idle() {
+        if self.is_rendering() {
             return Ok(());
         }
 
@@ -648,7 +635,8 @@ impl PathViewRenderer {
         } else {
             let path_count = self.path_count.load();
             dbg!();
-            self.should_rerender.store(false);
+            self.state.should_rerender.store(false);
+            self.state.rendering.store(RenderState::Rendering);
             let fence_id = comp_manager.dispatch_with(|device, cmd_buf| {
                 let (barrier, src_stage, dst_stage) =
                     GfaestusVk::image_transition_barrier(
@@ -709,6 +697,9 @@ impl PathViewRenderer {
                     )
                 };
             })?;
+
+            self.translation.store(0.0);
+            self.scaling.store(0.0);
 
             self.fence_id.store(Some(fence_id));
         }
