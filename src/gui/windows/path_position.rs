@@ -1,4 +1,5 @@
 use crossbeam::atomic::AtomicCell;
+use futures::future::RemoteHandle;
 use handlegraph::pathhandlegraph::{
     GraphPathNames, GraphPaths, PathId, PathSequences,
 };
@@ -21,6 +22,9 @@ use crate::{
 
 lazy_static! {
     static ref CONSOLE_ADDED: AtomicCell<bool> = AtomicCell::new(false);
+    // static ref ZOOM_UPDATE_FUTURE: Mutex<Option<Box<dyn Future<Output = ()>>>> =
+    static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
+        Mutex::new(None);
 }
 
 pub struct PathPositionList {}
@@ -84,9 +88,10 @@ impl PathPositionList {
 
                                 let mut rows = Vec::new();
 
-                                let graph = reactor.graph_query.graph();
+                                let graph_query = reactor.graph_query.clone();
+                                let graph = graph_query.graph();
                                 let path_pos =
-                                    reactor.graph_query.path_positions();
+                                    graph_query.path_positions();
 
                                 let dy: f32 = 1.0 / 64.0;
                                 let oy: f32 = dy / 2.0;
@@ -173,6 +178,26 @@ impl PathPositionList {
 
                                             path_view.zoom(d);
 
+                                            let path_view_state = path_view.state.clone();
+
+                                            let fut = async move {
+                                                use futures_timer::Delay;
+                                                let delay = Delay::new(std::time::Duration::from_millis(150));
+                                                delay.await;
+
+                                                path_view_state.force_reload();
+                                            };
+
+                                            {
+                                                let mut lock = ZOOM_UPDATE_FUTURE.lock();
+
+                                                if let Ok(handle) = reactor.spawn(fut) {
+                                                    *lock = Some(handle);
+                                                } else {
+                                                    *lock = None;
+                                                }
+                                            }
+
 
                                         }
 
@@ -191,6 +216,7 @@ impl PathPositionList {
 
                                         let y = ix;
                                         let x = ((path_view.width as f32) * n) as usize;
+                                        // let x = ((path_view.width as f32) * n * 2.0) as usize;
 
                                         let node = path_view.get_node_at(x, y);
 

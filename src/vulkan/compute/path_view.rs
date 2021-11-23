@@ -75,6 +75,14 @@ impl PathViewState {
     pub fn should_rerender(&self) -> bool {
         self.should_rerender.load()
     }
+
+    pub fn force_reload(&self) {
+        self.should_reload.store(true);
+    }
+
+    pub fn force_rerender(&self) {
+        self.should_rerender.store(true);
+    }
 }
 
 #[allow(dead_code)]
@@ -101,7 +109,7 @@ pub struct PathViewRenderer {
 
     // reload: AtomicCell<bool>,
     // should_rerender: Arc<AtomicCell<bool>>,
-    state: Arc<PathViewState>,
+    pub state: Arc<PathViewState>,
 
     // offsets: Arc<AtomicCell<(f32, f32)>>,
 
@@ -348,9 +356,10 @@ impl PathViewRenderer {
             translation: Arc::new(AtomicCell::new(0.0)),
             scaling: Arc::new(AtomicCell::new(0.0)),
 
-            center: Arc::new(AtomicCell::new(0.5)),
-            radius: Arc::new(AtomicCell::new(0.5)),
-
+            center: Arc::new(AtomicCell::new(0.001)),
+            radius: Arc::new(AtomicCell::new(0.001)),
+            // center: Arc::new(AtomicCell::new(0.5)),
+            // radius: Arc::new(AtomicCell::new(0.5)),
             state: Arc::new(PathViewState::default()),
             // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
@@ -395,6 +404,9 @@ impl PathViewRenderer {
         // self.set_visible_range(0.0, 1.0);
         self.center.store(0.5);
         self.radius.store(0.5);
+
+        self.should_reload();
+        self.should_rerender();
     }
 
     pub fn set_visible_range(&self, left: f64, right: f64) {
@@ -407,6 +419,9 @@ impl PathViewRenderer {
 
         self.center.store(mid);
         self.radius.store(len);
+
+        self.should_reload();
+        self.should_rerender();
     }
 
     pub fn force_reload(&self) {
@@ -548,7 +563,8 @@ impl PathViewRenderer {
                 num_paths += 1;
 
                 // let len = (*path_len as f64) / 4096.0;
-                let len = (*path_len as f64) / 2048.0;
+                // let len = (*path_len as f64) / 2048.0;
+                let len = *path_len as f64;
                 let start = left * len;
                 let end = start + (right - left) * len;
 
@@ -566,7 +582,7 @@ impl PathViewRenderer {
                 }
 
                 for x in 0..width {
-                    let n = (x as f64) / (width * 4) as f64;
+                    let n = (x as f64) / width as f64;
                     let p_ = ((n as f64) * (end - start)) as usize;
 
                     let p = s + p_.max(1);
@@ -590,7 +606,8 @@ impl PathViewRenderer {
 
                     let (handle, _step, _pos) = steps[ix];
 
-                    path_data_local.push(handle.id().0 as u32);
+                    let v = handle.id().0 + 1;
+                    path_data_local.push(v as u32);
                 }
                 first_path = false;
             }
@@ -633,13 +650,13 @@ impl PathViewRenderer {
     pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
         let ix = y * self.width + x;
 
-        let raw = self.path_data.try_lock().and_then(|l| l.get(x).copied())?;
+        let raw = self.path_data.try_lock().and_then(|l| l.get(ix).copied())?;
 
         if raw == 0 {
             return None;
         }
 
-        let id = raw + 1;
+        let id = raw;
         let node = NodeId::from(id as u64);
 
         Some(node)
@@ -802,12 +819,6 @@ impl PathViewRenderer {
 
             let float_consts = [self.translation.load(), self.scaling.load()];
 
-            log::warn!(
-                "push constants: {:?}\t{:?}",
-                push_constants,
-                float_consts
-            );
-
             let mut bytes: Vec<u8> = Vec::with_capacity(24);
             bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
             bytes.extend_from_slice(bytemuck::cast_slice(&float_consts));
@@ -878,12 +889,6 @@ impl PathViewRenderer {
             // self.offsets.store((0.0, 1.0));
             // let float_consts = [left, right];
             let float_consts = [self.translation.load(), self.scaling.load()];
-
-            log::warn!(
-                "push constants: {:?}\t{:?}",
-                push_constants,
-                float_consts
-            );
 
             let mut bytes: Vec<u8> = Vec::with_capacity(24);
             bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
