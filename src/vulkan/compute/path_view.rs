@@ -497,7 +497,6 @@ impl PathViewRenderer {
         let buffer = self.path_buffer;
 
         let state = self.state.clone();
-        // let should_rerender = self.should_rerender.clone();
 
         let path_data = self.path_data.clone();
         let path_count = self.path_count.clone();
@@ -508,13 +507,6 @@ impl PathViewRenderer {
             let mut path_data_local = Vec::with_capacity(width * height);
 
             let mut num_paths = 0;
-            let mut first = None;
-            let mut mid = None;
-            let mut last = None;
-
-            let mut range = None;
-
-            let mut first_path = true;
 
             for path in paths.into_iter().take(64) {
                 let steps = graph.path_pos_steps(path).unwrap();
@@ -535,20 +527,6 @@ impl PathViewRenderer {
 
                     let p = s + p_;
 
-                    if first.is_none() {
-                        first = Some((n, p_, p, left, right));
-                        range = Some((start, end));
-                    }
-
-                    if x == width / 2 && first_path {
-                        mid = Some((n, p_, p, left, right));
-                    }
-
-                    if first_path {
-                        last = Some((n, p_, p, left, right));
-                    }
-                    // let p = (n * (*path_len as f64)) as usize;
-
                     let ix =
                         match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
                             Ok(i) => i,
@@ -560,17 +538,8 @@ impl PathViewRenderer {
                     let (handle, _step, _pos) = steps[ix];
 
                     path_data_local.push(handle.id().0 as u32);
-
-                    // self.path_data.push(handle.id().0 as u32);
                 }
-
-                first_path = false;
             }
-
-            println!("range: {:?}", range);
-            println!("first: {:?}", first);
-            println!("mid: {:?}", mid);
-            println!("last: {:?}", last);
             {
                 let mut lock = path_data.lock();
                 *lock = path_data_local.clone();

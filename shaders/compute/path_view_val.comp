@@ -23,6 +23,7 @@ layout (push_constant) uniform PushConstants {
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
+uint max_ix = 2048 * 64;
 
 void main() {
 
@@ -40,8 +41,24 @@ void main() {
     uint node = paths.node[ix];
 
     if (node != 0) {
-      float node_val = node_value.value[node - 1];
-      vec4 color = texture(overlay, node_val);
+      uint mid = node - 1;
+      uint left = mid == 0 ? 0 : mid - 1;
+      uint right = mid >= max_ix - 2 ? max_ix - 1 : mid + 1;
+
+      float vl = node_value.value[left];
+      float vm = node_value.value[mid];
+      float vr = node_value.value[right];
+
+      vec4 cl = texture(overlay, vl);
+      vec4 cm = texture(overlay, vm);
+      vec4 cr = texture(overlay, vr);
+
+
+      // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
+      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+
+      // float node_val = node_value.value[node - 1];
+      // vec4 color = texture(overlay, node_val);
 
       imageStore(image, pixel, color);
     }

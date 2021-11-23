@@ -19,6 +19,11 @@ layout (push_constant) uniform PushConstants {
 
 layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
 
+uint max_ix = 2048 * 64;
+
+uint clamped(uint ix) {
+  return clamp(ix, 0, max_ix);
+}
 
 void main() {
 
@@ -36,9 +41,22 @@ void main() {
     uint node = paths.node[ix];
 
     if (node != 0) {
-      // sample overlay at node
-      uint color_u = node - 1;
-      vec4 color = texelFetch(overlay, int(color_u));
+      uint mid = node - 1;
+      uint left = mid == 0 ? 0 : mid - 1;
+      uint right = mid >= max_ix - 2 ? max_ix - 1 : mid + 1;
+
+      vec4 cl = texelFetch(overlay, int(left));
+      vec4 cm = texelFetch(overlay, int(mid));
+      vec4 cr = texelFetch(overlay, int(right));
+
+      // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
+      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+
+      // uint color_u = node - 1;
+
+
+
+      // vec4 color = texelFetch(overlay, int(color_u));
 
       // write sampled value at index to output buffer
       imageStore(image, pixel, color);
