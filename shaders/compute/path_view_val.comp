@@ -32,6 +32,9 @@ void main() {
 
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
+  pixel.x += int(pc.translation);
+  pixel.x = clamp(pixel.x, 0, 2048);
+
   if (path < pc.path_count) {
     // read node at this pixel in the path
     uint node = paths.node[ix];

@@ -132,9 +132,9 @@ impl PathPositionList {
 
                                     if interact.dragged() {
                                         let delta = interact.drag_delta();
-                                        log::warn!("image drag delta: {}", delta.x);
+                                        // log::warn!("image drag delta: {}", delta.x);
 
-                                        path_view.pan(delta.x);
+                                        path_view.pan(delta.x as f64);
 
                                     }
 
@@ -153,12 +153,13 @@ impl PathPositionList {
 
 
                                             let d = if scroll_delta.y > 0.0 {
-                                                1.05
-                                            } else {
                                                 1.0 / 1.05
+                                            } else {
+                                                1.05
                                             };
 
                                             path_view.zoom(d);
+
 
                                         }
 

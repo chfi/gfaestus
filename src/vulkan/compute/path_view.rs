@@ -89,11 +89,11 @@ pub struct PathViewRenderer {
     pub width: usize,
     pub height: usize,
 
-    translation: AtomicCell<f32>,
-    scaling: AtomicCell<f32>,
+    translation: Arc<AtomicCell<f32>>,
+    scaling: Arc<AtomicCell<f32>>,
 
-    left: AtomicCell<f32>,
-    right: AtomicCell<f32>,
+    left: Arc<AtomicCell<f64>>,
+    right: Arc<AtomicCell<f64>>,
 
     // state: Arc<AtomicCell<LoadState>>,
 
@@ -343,14 +343,12 @@ impl PathViewRenderer {
             width,
             height,
 
-            translation: AtomicCell::new(0.0),
-            scaling: AtomicCell::new(0.0),
-            left: AtomicCell::new(0.0),
-            right: AtomicCell::new(1.0),
-            // state: Arc::new(AtomicCell::new(LoadState::Idle)),
+            translation: Arc::new(AtomicCell::new(0.0)),
+            scaling: Arc::new(AtomicCell::new(0.0)),
+            left: Arc::new(AtomicCell::new(0.5)),
+            right: Arc::new(AtomicCell::new(1.0)),
+
             state: Arc::new(PathViewState::default()),
-            // reload: AtomicCell::new(false),
-            // should_rerender: Arc::new(AtomicCell::new(false)),
             offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
 
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
@@ -372,7 +370,7 @@ impl PathViewRenderer {
         self.set_visible_range(0.0, 1.0);
     }
 
-    pub fn set_visible_range(&self, left: f32, right: f32) {
+    pub fn set_visible_range(&self, left: f64, right: f64) {
         let l = left.min(right).clamp(0.0, 1.0);
         let r = left.max(right).clamp(0.0, 1.0);
 
@@ -384,15 +382,19 @@ impl PathViewRenderer {
         self.state.should_reload.store(true);
     }
 
-    pub fn pan(&self, pixel_delta: f32) {
+    pub fn pan(&self, pixel_delta: f64) {
         let l = self.left.load();
         let r = self.right.load();
 
         let len = r - l;
 
-        let norm_delta = pixel_delta / (self.width as f32);
+        let t = self.translation.load();
+        self.translation.store(t + pixel_delta as f32);
+        // self.translation.fetch_update(|x| Some(x + pixel_delta));
 
-        log::warn!("norm_delta: {}", norm_delta);
+        let norm_delta = pixel_delta / (self.width as f64);
+
+        // log::warn!("norm_delta: {}", norm_delta);
 
         if norm_delta < 0.0 {
             let l_ = (l - norm_delta).clamp(0.0, 1.0);
@@ -401,11 +403,7 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
 
-            // self.state.reload.store(true);
-            // self.state.should_reload.store(true);
             self.state.should_rerender.store(true);
-
-            self.translation.store(pixel_delta);
         } else {
             let r_ = (r + norm_delta).clamp(0.0, 1.0);
             let l_ = (r_ - len).clamp(0.0, 1.0);
@@ -415,19 +413,15 @@ impl PathViewRenderer {
 
             // self.state.should_reload.store(true);
             self.state.should_rerender.store(true);
-
-            self.translation.store(pixel_delta);
         }
     }
 
-    pub fn zoom(&self, delta: f32) {
-        let delta = delta.clamp(-1.0, 1.0);
+    pub fn zoom(&self, delta: f64) {
+        let l0 = self.left.load();
+        let r0 = self.right.load();
 
-        let l = self.left.load();
-        let r = self.right.load();
-
-        let len = r - l;
-        let mid = l + (len / 2.0);
+        let len = r0 - l0;
+        let mid = l0 + (len / 2.0);
 
         let len_ = len * delta;
         let rad = len_ / 2.0;
@@ -435,17 +429,19 @@ impl PathViewRenderer {
         let l_ = (mid - rad).clamp(0.0, 1.0);
         let r_ = (mid + rad).clamp(0.0, 1.0);
 
-        if l_ != l || r_ != r {
-            self.left.store(l_);
-            self.right.store(r_);
+        let l = l_.min(r_);
+        let r = l_.max(r_);
 
-            // self.state.should_reload.store(true);
+        if l0 != l || r0 != r {
+            self.left.store(l);
+            self.right.store(r);
+
             self.state.should_rerender.store(true);
 
-            self.scaling.store(delta);
+            self.scaling.store(delta as f32);
         }
 
-        log::warn!("new zoom: {} - {}", l_, r_);
+        log::warn!("new zoom: {} - {}", l, r);
     }
 
     pub fn should_rerender(&self) -> bool {
@@ -485,6 +481,11 @@ impl PathViewRenderer {
         let left = self.left.load();
         let right = self.right.load();
 
+        log::warn!("loading with l: {}, r: {}", left, right);
+
+        let translation = self.translation.clone();
+        let scaling = self.scaling.clone();
+
         let graph = reactor.graph_query.clone();
 
         let width = self.width;
@@ -507,6 +508,13 @@ impl PathViewRenderer {
             let mut path_data_local = Vec::with_capacity(width * height);
 
             let mut num_paths = 0;
+            let mut first = None;
+            let mut mid = None;
+            let mut last = None;
+
+            let mut range = None;
+
+            let mut first_path = true;
 
             for path in paths.into_iter().take(64) {
                 let steps = graph.path_pos_steps(path).unwrap();
@@ -514,7 +522,7 @@ impl PathViewRenderer {
 
                 num_paths += 1;
 
-                let len = *path_len as f32;
+                let len = *path_len as f64;
                 let start = left * len;
                 let end = start + (right - left) * len;
 
@@ -523,10 +531,22 @@ impl PathViewRenderer {
 
                 for x in 0..width {
                     let n = (x as f64) / (width as f64);
-                    let p_ = ((n as f32) * len) as usize;
+                    let p_ = ((n as f64) * (end - start)) as usize;
 
                     let p = s + p_;
 
+                    if first.is_none() {
+                        first = Some((n, p_, p, left, right));
+                        range = Some((start, end));
+                    }
+
+                    if x == width / 2 && first_path {
+                        mid = Some((n, p_, p, left, right));
+                    }
+
+                    if first_path {
+                        last = Some((n, p_, p, left, right));
+                    }
                     // let p = (n * (*path_len as f64)) as usize;
 
                     let ix =
@@ -543,8 +563,14 @@ impl PathViewRenderer {
 
                     // self.path_data.push(handle.id().0 as u32);
                 }
+
+                first_path = false;
             }
 
+            println!("range: {:?}", range);
+            println!("first: {:?}", first);
+            println!("mid: {:?}", mid);
+            println!("last: {:?}", last);
             {
                 let mut lock = path_data.lock();
                 *lock = path_data_local.clone();
@@ -565,6 +591,9 @@ impl PathViewRenderer {
                 // the path buffer has been updated here
                 state.loading.store(LoadState::Idle);
                 state.should_rerender.store(true);
+
+                translation.store(0.0);
+                scaling.store(1.0);
             } else {
                 log::warn!("error queing GPU task in load_paths");
                 state.loading.store(LoadState::Idle);
@@ -705,9 +734,6 @@ impl PathViewRenderer {
                 };
             })?;
 
-            self.translation.store(0.0);
-            self.scaling.store(0.0);
-
             self.fence_id.store(Some(fence_id));
         }
 
@@ -721,7 +747,6 @@ impl PathViewRenderer {
         val_overlay_desc: vk::DescriptorSet,
         path_count: usize,
     ) -> Result<()> {
-        log::warn!("in dispatch()");
         let device = app.vk_context().device();
 
         unsafe {
@@ -750,9 +775,13 @@ impl PathViewRenderer {
                 0u32,
             ];
 
-            let (left, right) = self.offsets.load();
-            self.offsets.store((0.0, 1.0));
-            let float_consts = [left, right];
+            let float_consts = [self.translation.load(), self.scaling.load()];
+
+            log::warn!(
+                "push constants: {:?}\t{:?}",
+                push_constants,
+                float_consts
+            );
 
             let mut bytes: Vec<u8> = Vec::with_capacity(24);
             bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
@@ -792,7 +821,6 @@ impl PathViewRenderer {
         rgb_overlay_desc: vk::DescriptorSet,
         path_count: usize,
     ) -> Result<()> {
-        log::warn!("in dispatch()");
         let device = app.vk_context().device();
 
         unsafe {
@@ -821,9 +849,16 @@ impl PathViewRenderer {
                 0u32,
             ];
 
-            let (left, right) = self.offsets.load();
-            self.offsets.store((0.0, 1.0));
-            let float_consts = [left, right];
+            // let (left, right) = self.offsets.load();
+            // self.offsets.store((0.0, 1.0));
+            // let float_consts = [left, right];
+            let float_consts = [self.translation.load(), self.scaling.load()];
+
+            log::warn!(
+                "push constants: {:?}\t{:?}",
+                push_constants,
+                float_consts
+            );
 
             let mut bytes: Vec<u8> = Vec::with_capacity(24);
             bytes.extend_from_slice(bytemuck::cast_slice(&push_constants));
