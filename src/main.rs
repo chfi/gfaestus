@@ -244,8 +244,6 @@ fn main() {
     let mut prev_overlay: Option<usize> = None;
     let mut prev_gradient = app.shared_state().overlay_state().gradient();
 
-    let mut dispatch_timer: Option<std::time::Instant> = None;
-
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
@@ -765,8 +763,6 @@ fn node_color(id) {
                                               overlay_kind,
                             ).unwrap();
 
-                        dispatch_timer = Some(std::time::Instant::now());
-
                     }
                 }
 
@@ -795,9 +791,6 @@ fn node_color(id) {
                     if compute_manager.is_fence_ready(fid).unwrap() {
                         log::trace!("Path view fence ready");
                         path_view.block_on_fence(&mut compute_manager);
-                        if let Some(timer) = dispatch_timer {
-                            log::warn!("dispatch took {} us", timer.elapsed().as_micros());
-                        }
 
                         app.shared_state().tmp.store(true);
 

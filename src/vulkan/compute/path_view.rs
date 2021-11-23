@@ -103,6 +103,8 @@ pub struct PathViewRenderer {
 
     offsets: Arc<AtomicCell<(f32, f32)>>,
 
+    // zoom_timer: Arc<AtomicCell<Option<std::time::Instant>>>,
+
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
@@ -378,6 +380,10 @@ impl PathViewRenderer {
         self.right.store(r);
     }
 
+    pub fn force_reload(&self) {
+        self.state.should_reload.store(true);
+    }
+
     pub fn pan(&self, pixel_delta: f32) {
         let l = self.left.load();
         let r = self.right.load();
@@ -396,7 +402,7 @@ impl PathViewRenderer {
             self.right.store(r_);
 
             // self.state.reload.store(true);
-            self.state.should_reload.store(true);
+            // self.state.should_reload.store(true);
             self.state.should_rerender.store(true);
 
             self.translation.store(pixel_delta);
@@ -407,7 +413,7 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
 
-            self.state.should_reload.store(true);
+            // self.state.should_reload.store(true);
             self.state.should_rerender.store(true);
 
             self.translation.store(pixel_delta);
@@ -433,7 +439,8 @@ impl PathViewRenderer {
             self.left.store(l_);
             self.right.store(r_);
 
-            self.state.should_reload.store(true);
+            // self.state.should_reload.store(true);
+            self.state.should_rerender.store(true);
 
             self.scaling.store(delta);
         }
@@ -473,6 +480,8 @@ impl PathViewRenderer {
         // if self.load_paths_handle.is_some() {
         //     return Ok(());
         // }
+
+        self.state.should_reload.store(false);
         let left = self.left.load();
         let right = self.right.load();
 
@@ -556,8 +565,6 @@ impl PathViewRenderer {
                 // the path buffer has been updated here
                 state.loading.store(LoadState::Idle);
                 state.should_rerender.store(true);
-                // state.ref
-                // should_rerender.store(true);
             } else {
                 log::warn!("error queing GPU task in load_paths");
                 state.loading.store(LoadState::Idle);

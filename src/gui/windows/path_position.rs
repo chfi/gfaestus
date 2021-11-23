@@ -138,6 +138,10 @@ impl PathPositionList {
 
                                     }
 
+                                    if interact.drag_released() {
+                                        path_view.force_reload();
+                                    }
+
 
                                     if let Some(pos) = interact.hover_pos() {
 
