@@ -64,6 +64,11 @@ impl PathPositionList {
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
+
+                if ui.button("Reset").clicked() {
+                    path_view.reset_zoom();
+                }
+
                 if let Some(paths) = console.get_set.get_var(Self::PATHS) {
                     let paths: Vec<rhai::Dynamic> = paths.cast();
 

@@ -34,7 +34,7 @@ void main() {
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
   pixel.x += int(pc.translation);
-  pixel.x = clamp(pixel.x, 0, 2048);
+  pixel.x = clamp(pixel.x, 0, 2047);
 
   if (path < pc.path_count) {
     // read node at this pixel in the path
@@ -53,12 +53,9 @@ void main() {
       vec4 cm = texture(overlay, vm);
       vec4 cr = texture(overlay, vr);
 
-
       // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
-      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-
-      // float node_val = node_value.value[node - 1];
-      // vec4 color = texture(overlay, node_val);
+      // vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+      vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
       imageStore(image, pixel, color);
     }

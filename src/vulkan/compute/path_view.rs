@@ -39,60 +39,6 @@ pub enum RenderState {
     // ShouldRerender,
 }
 
-struct View {
-    center: AtomicCell<f64>,
-    radius: AtomicCell<f64>,
-}
-
-impl std::default::Default for View {
-    fn default() -> View {
-        View {
-            center: AtomicCell::new(View::to_view_coords(0.5)),
-            radius: AtomicCell::new(View::to_view_coords(0.5)),
-        }
-    }
-}
-
-impl View {
-    const BP_PER_PIXEL: f64 = 8.0;
-
-    fn to_view_coords(v: f64) -> f64 {
-        v * 2048.0 * 8.0
-    }
-
-    fn from_view_coords(v: f64) -> f64 {
-        v / (2048.0 * 8.0)
-    }
-
-    fn normalize(&self) {
-        let c = self.center.load();
-        let r = self.radius.load();
-
-        let zero = Self::to_view_coords(0.0);
-        let half = Self::to_view_coords(0.5);
-        let one = Self::to_view_coords(1.0);
-
-        let rad = r.clamp(zero, half);
-
-        let left = zero + rad;
-        let right = one - rad;
-
-        let center = c.clamp(left, right);
-
-        let radius = ((center - left).abs().min((center - right).abs()));
-
-        self.center.store(center);
-        self.radius.store(radius);
-    }
-
-    fn pan(&self, delta_pixels: f64) {
-        let delta = delta_pixels * Self::BP_PER_PIXEL;
-        let mut center = self.center.load();
-
-        center += delta;
-    }
-}
-
 #[derive(Debug)]
 pub struct PathViewState {
     loading: AtomicCell<LoadState>,
@@ -157,7 +103,7 @@ pub struct PathViewRenderer {
     // should_rerender: Arc<AtomicCell<bool>>,
     state: Arc<PathViewState>,
 
-    offsets: Arc<AtomicCell<(f32, f32)>>,
+    // offsets: Arc<AtomicCell<(f32, f32)>>,
 
     // zoom_timer: Arc<AtomicCell<Option<std::time::Instant>>>,
 
@@ -402,16 +348,11 @@ impl PathViewRenderer {
             translation: Arc::new(AtomicCell::new(0.0)),
             scaling: Arc::new(AtomicCell::new(0.0)),
 
-            center: Arc::new(AtomicCell::new(2048.0)),
-            radius: Arc::new(AtomicCell::new(2048.0)),
-            // left: Arc::new(AtomicCell::new(0.0)),
-            // view_width: Arc::new(AtomicCell::new(2048.0)),
-            // right: Arc::new(AtomicCell::new(1.0)),
-            // center: Arc::new(AtomicCell::new(0.5)),
-            // radius: Arc::new(AtomicCell::new(1024.0)),
-            state: Arc::new(PathViewState::default()),
-            offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
+            center: Arc::new(AtomicCell::new(0.5)),
+            radius: Arc::new(AtomicCell::new(0.5)),
 
+            state: Arc::new(PathViewState::default()),
+            // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
             path_count: Arc::new(AtomicCell::new(0)),
 
@@ -427,8 +368,33 @@ impl PathViewRenderer {
         })
     }
 
+    fn enforce_view_limits(&self) {
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        let mut new_center = center;
+        let mut new_radius = radius;
+
+        if radius > 0.5 {
+            new_radius = 0.5;
+        }
+
+        if center < radius {
+            new_center = radius;
+        }
+
+        if center + radius >= 1.0 {
+            new_center = 1.0 - radius;
+        }
+
+        self.center.store(new_center);
+        self.radius.store(new_radius);
+    }
+
     pub fn reset_zoom(&self) {
-        self.set_visible_range(0.0, 1.0);
+        // self.set_visible_range(0.0, 1.0);
+        self.center.store(0.5);
+        self.radius.store(0.5);
     }
 
     pub fn set_visible_range(&self, left: f64, right: f64) {
@@ -448,88 +414,53 @@ impl PathViewRenderer {
     }
 
     pub fn pan(&self, pixel_delta: f64) {
-        // let l = self.left.load();
-        // let r = self.right.load();
-
         let center = self.center.load();
         let radius = self.radius.load();
 
-        // let len = r - l;
-
         let t = self.translation.load();
         self.translation.store(t + pixel_delta as f32);
-        // self.translation.fetch_update(|x| Some(x + pixel_delta));
-
-        // log::warn!("norm_delta: {}", norm_delta);
-
-        // let inner_left = rad;
-        // let inner_right =
-
-        // let l_;
-        // let r_;
-
-        // let new_center =
 
         self.state.should_rerender.store(true);
 
-        let mid = center - (pixel_delta * 4.0);
-        let mid = mid.clamp(radius, 4096.0 - radius);
+        let l_lim = radius.clamp(0.0, 1.0);
+        let r_lim = (1.0 - radius).clamp(0.0, 1.0);
 
-        // let len = r_ - l_;
-        // let mid = l_ + (len / 2.0);
+        // let left = l_lim.min(r_lim);
+        // let right = l_lim.max(r_lim);
 
-        self.center.store(mid);
+        // let center_ = (center - pixel_delta).clamp(left, right);
+
+        self.center.store(center + pixel_delta);
+        // let mut center_ = center + pixel_delta;
+
+        // if center_ < 0.0 {
+        //     center_ +=
+        // }
+
+        // self.center.store(center_);
+
+        self.enforce_view_limits();
 
         log::warn!(
             "center: {}\tradius: {}",
             self.center.load(),
             self.radius.load()
         );
-        // let mid =
-
-        // self.center.
     }
 
     pub fn zoom(&self, delta: f64) {
-        let center = self.center.load();
-        let rad = self.radius.load();
+        // let center = self.center.load();
+        let radius = self.radius.load();
 
-        let l0 = center - rad;
-        let r0 = center + rad;
+        let radius_ = (radius * delta).clamp(0.000_000_1, 0.5);
 
-        let len = r0 - l0;
-        let mid = l0 + (len / 2.0);
+        self.radius.store(radius_);
 
-        let len_ = len * delta;
-        let rad = len_ / 2.0;
+        self.enforce_view_limits();
 
-        let l_ = (mid - rad).clamp(0.0, 4096.0);
-        let r_ = (mid + rad).clamp(0.0, 4096.0);
-
-        let l = l_.min(r_);
-        let r = l_.max(r_);
-
-        if l0 != l || r0 != r {
-            let len = r - l;
-            let mid = l + (len / 2.0);
-
-            self.center.store(mid);
-            self.radius.store(len / 2.0);
-
-            log::warn!(
-                "center: {}\tradius: {}",
-                self.center.load(),
-                self.radius.load()
-            );
-
-            // self.left.store(l);
-            // self.right.store(r);
-
+        if radius_ != radius {
             self.state.should_rerender.store(true);
-
             self.scaling.store(delta as f32);
-
-            log::warn!("new zoom: {} - {}", l, r);
         }
     }
 

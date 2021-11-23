@@ -34,7 +34,7 @@ void main() {
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
   pixel.x += int(pc.translation);
-  pixel.x = clamp(pixel.x, 0, 2048);
+  pixel.x = clamp(pixel.x, 0, 2047);
 
   if (path < pc.path_count) {
     // read node at this pixel in the path
@@ -50,13 +50,8 @@ void main() {
       vec4 cr = texelFetch(overlay, int(right));
 
       // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
-      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-
-      // uint color_u = node - 1;
-
-
-
-      // vec4 color = texelFetch(overlay, int(color_u));
+      // vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+      vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
       // write sampled value at index to output buffer
       imageStore(image, pixel, color);
