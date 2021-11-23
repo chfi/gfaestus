@@ -39,6 +39,60 @@ pub enum RenderState {
     // ShouldRerender,
 }
 
+struct View {
+    center: AtomicCell<f64>,
+    radius: AtomicCell<f64>,
+}
+
+impl std::default::Default for View {
+    fn default() -> View {
+        View {
+            center: AtomicCell::new(View::to_view_coords(0.5)),
+            radius: AtomicCell::new(View::to_view_coords(0.5)),
+        }
+    }
+}
+
+impl View {
+    const BP_PER_PIXEL: f64 = 8.0;
+
+    fn to_view_coords(v: f64) -> f64 {
+        v * 2048.0 * 8.0
+    }
+
+    fn from_view_coords(v: f64) -> f64 {
+        v / (2048.0 * 8.0)
+    }
+
+    fn normalize(&self) {
+        let c = self.center.load();
+        let r = self.radius.load();
+
+        let zero = Self::to_view_coords(0.0);
+        let half = Self::to_view_coords(0.5);
+        let one = Self::to_view_coords(1.0);
+
+        let rad = r.clamp(zero, half);
+
+        let left = zero + rad;
+        let right = one - rad;
+
+        let center = c.clamp(left, right);
+
+        let radius = ((center - left).abs().min((center - right).abs()));
+
+        self.center.store(center);
+        self.radius.store(radius);
+    }
+
+    fn pan(&self, delta_pixels: f64) {
+        let delta = delta_pixels * Self::BP_PER_PIXEL;
+        let mut center = self.center.load();
+
+        center += delta;
+    }
+}
+
 #[derive(Debug)]
 pub struct PathViewState {
     loading: AtomicCell<LoadState>,
@@ -92,8 +146,10 @@ pub struct PathViewRenderer {
     translation: Arc<AtomicCell<f32>>,
     scaling: Arc<AtomicCell<f32>>,
 
-    left: Arc<AtomicCell<f64>>,
-    right: Arc<AtomicCell<f64>>,
+    // left: Arc<AtomicCell<f64>>,
+    // right: Arc<AtomicCell<f64>>,
+    center: Arc<AtomicCell<f64>>,
+    radius: Arc<AtomicCell<f64>>,
 
     // state: Arc<AtomicCell<LoadState>>,
 
@@ -345,9 +401,14 @@ impl PathViewRenderer {
 
             translation: Arc::new(AtomicCell::new(0.0)),
             scaling: Arc::new(AtomicCell::new(0.0)),
-            left: Arc::new(AtomicCell::new(0.5)),
-            right: Arc::new(AtomicCell::new(1.0)),
 
+            center: Arc::new(AtomicCell::new(2048.0)),
+            radius: Arc::new(AtomicCell::new(2048.0)),
+            // left: Arc::new(AtomicCell::new(0.0)),
+            // view_width: Arc::new(AtomicCell::new(2048.0)),
+            // right: Arc::new(AtomicCell::new(1.0)),
+            // center: Arc::new(AtomicCell::new(0.5)),
+            // radius: Arc::new(AtomicCell::new(1024.0)),
             state: Arc::new(PathViewState::default()),
             offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
 
@@ -371,11 +432,15 @@ impl PathViewRenderer {
     }
 
     pub fn set_visible_range(&self, left: f64, right: f64) {
-        let l = left.min(right).clamp(0.0, 1.0);
-        let r = left.max(right).clamp(0.0, 1.0);
+        // let center =
+        let l = left.min(right).clamp(0.0, 4096.0);
+        let r = left.max(right).clamp(0.0, 4096.0);
 
-        self.left.store(l);
-        self.right.store(r);
+        let len = r - l;
+        let mid = left + (len / 2.0);
+
+        self.center.store(mid);
+        self.radius.store(len);
     }
 
     pub fn force_reload(&self) {
@@ -383,42 +448,54 @@ impl PathViewRenderer {
     }
 
     pub fn pan(&self, pixel_delta: f64) {
-        let l = self.left.load();
-        let r = self.right.load();
+        // let l = self.left.load();
+        // let r = self.right.load();
 
-        let len = r - l;
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        // let len = r - l;
 
         let t = self.translation.load();
         self.translation.store(t + pixel_delta as f32);
         // self.translation.fetch_update(|x| Some(x + pixel_delta));
 
-        let norm_delta = pixel_delta / (self.width as f64);
-
         // log::warn!("norm_delta: {}", norm_delta);
 
-        if norm_delta < 0.0 {
-            let l_ = (l - norm_delta).clamp(0.0, 1.0);
-            let r_ = (l_ + len).clamp(0.0, 1.0);
+        // let inner_left = rad;
+        // let inner_right =
 
-            self.left.store(l_);
-            self.right.store(r_);
+        // let l_;
+        // let r_;
 
-            self.state.should_rerender.store(true);
-        } else {
-            let r_ = (r + norm_delta).clamp(0.0, 1.0);
-            let l_ = (r_ - len).clamp(0.0, 1.0);
+        // let new_center =
 
-            self.left.store(l_);
-            self.right.store(r_);
+        self.state.should_rerender.store(true);
 
-            // self.state.should_reload.store(true);
-            self.state.should_rerender.store(true);
-        }
+        let mid = center - (pixel_delta * 4.0);
+        let mid = mid.clamp(radius, 4096.0 - radius);
+
+        // let len = r_ - l_;
+        // let mid = l_ + (len / 2.0);
+
+        self.center.store(mid);
+
+        log::warn!(
+            "center: {}\tradius: {}",
+            self.center.load(),
+            self.radius.load()
+        );
+        // let mid =
+
+        // self.center.
     }
 
     pub fn zoom(&self, delta: f64) {
-        let l0 = self.left.load();
-        let r0 = self.right.load();
+        let center = self.center.load();
+        let rad = self.radius.load();
+
+        let l0 = center - rad;
+        let r0 = center + rad;
 
         let len = r0 - l0;
         let mid = l0 + (len / 2.0);
@@ -426,22 +503,34 @@ impl PathViewRenderer {
         let len_ = len * delta;
         let rad = len_ / 2.0;
 
-        let l_ = (mid - rad).clamp(0.0, 1.0);
-        let r_ = (mid + rad).clamp(0.0, 1.0);
+        let l_ = (mid - rad).clamp(0.0, 4096.0);
+        let r_ = (mid + rad).clamp(0.0, 4096.0);
 
         let l = l_.min(r_);
         let r = l_.max(r_);
 
         if l0 != l || r0 != r {
-            self.left.store(l);
-            self.right.store(r);
+            let len = r - l;
+            let mid = l + (len / 2.0);
+
+            self.center.store(mid);
+            self.radius.store(len / 2.0);
+
+            log::warn!(
+                "center: {}\tradius: {}",
+                self.center.load(),
+                self.radius.load()
+            );
+
+            // self.left.store(l);
+            // self.right.store(r);
 
             self.state.should_rerender.store(true);
 
             self.scaling.store(delta as f32);
-        }
 
-        log::warn!("new zoom: {} - {}", l, r);
+            log::warn!("new zoom: {} - {}", l, r);
+        }
     }
 
     pub fn should_rerender(&self) -> bool {
@@ -478,8 +567,14 @@ impl PathViewRenderer {
         // }
 
         self.state.should_reload.store(false);
-        let left = self.left.load();
-        let right = self.right.load();
+        // let left = self.left.load();
+        // let right = self.right.load();
+
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        let left = center - radius;
+        let right = center + radius;
 
         log::warn!("loading with l: {}, r: {}", left, right);
 
@@ -508,24 +603,51 @@ impl PathViewRenderer {
 
             let mut num_paths = 0;
 
+            let mut first_path = true;
+
+            let mut first = true;
+
+            let mut first_p = None;
+            let mut last_p = None;
+
             for path in paths.into_iter().take(64) {
                 let steps = graph.path_pos_steps(path).unwrap();
                 let (_, _, path_len) = steps.last().unwrap();
 
                 num_paths += 1;
 
-                let len = *path_len as f64;
+                // let len = (*path_len as f64) / 4096.0;
+                let len = (*path_len as f64) / 2048.0;
                 let start = left * len;
                 let end = start + (right - left) * len;
 
                 let s = start as usize;
-                // let e = end as usize;
+                let e = end as usize;
+
+                if first {
+                    log::warn!(
+                        "path_len: {}\tleft: {}\tright: {}",
+                        path_len,
+                        left,
+                        right
+                    );
+                    log::warn!("start: {}\tend: {}", s, e);
+                }
 
                 for x in 0..width {
-                    let n = (x as f64) / (width as f64);
+                    let n = (x as f64) / (width * 4) as f64;
                     let p_ = ((n as f64) * (end - start)) as usize;
 
-                    let p = s + p_;
+                    let p = s + p_.max(1);
+
+                    if first_path {
+                        last_p = Some(p);
+                    }
+
+                    if first {
+                        first = false;
+                        first_p = Some(p);
+                    }
 
                     let ix =
                         match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
@@ -539,12 +661,15 @@ impl PathViewRenderer {
 
                     path_data_local.push(handle.id().0 as u32);
                 }
+                first_path = false;
             }
             {
                 let mut lock = path_data.lock();
                 *lock = path_data_local.clone();
                 path_count.store(num_paths);
             }
+
+            log::warn!("{:?}\t{:?}", first_p, last_p);
 
             // state_cell.store(LoadState::Loading);
             // state
