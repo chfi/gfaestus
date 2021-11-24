@@ -34,7 +34,23 @@ void main() {
   ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
 
   pixel.x += int(pc.translation);
-  pixel.x = clamp(pixel.x, 0, 2047);
+
+  // float del = 1024.0;
+  float del = 512.0;
+
+  float x_ = float(pixel.x) - del;
+  // float x_ = float(pixel.x);
+
+  x_ = x_ / pc.scaling;
+
+  x_ += del;
+  // x_ += (del * scaling);
+
+  pixel.x = clamp(int(floor(x_)), 0, 2047);
+  // pixel.x = clamp(int(ceil(x_)), 0, 2047);
+  // pixel.x = clamp(int(round(x_)), 0, 2047);
+  // pixel.x = clamp(pixel.x, 0, 2047);
+
 
   if (path < pc.path_count) {
     // read node at this pixel in the path

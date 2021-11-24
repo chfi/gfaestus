@@ -115,6 +115,10 @@ pub struct PathViewRenderer {
 
     // zoom_timer: Arc<AtomicCell<Option<std::time::Instant>>>,
 
+    //
+    // path_order: Arc<Mutex<Vec<PathId>>>,
+    path_order: Arc<Mutex<Vec<PathId>>>,
+
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
@@ -361,6 +365,9 @@ impl PathViewRenderer {
             // center: Arc::new(AtomicCell::new(0.5)),
             // radius: Arc::new(AtomicCell::new(0.5)),
             state: Arc::new(PathViewState::default()),
+
+            path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
+
             // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
             path_count: Arc::new(AtomicCell::new(0)),
@@ -437,22 +444,7 @@ impl PathViewRenderer {
 
         self.state.should_rerender.store(true);
 
-        let l_lim = radius.clamp(0.0, 1.0);
-        let r_lim = (1.0 - radius).clamp(0.0, 1.0);
-
-        // let left = l_lim.min(r_lim);
-        // let right = l_lim.max(r_lim);
-
-        // let center_ = (center - pixel_delta).clamp(left, right);
-
         self.center.store(center + pixel_delta);
-        // let mut center_ = center + pixel_delta;
-
-        // if center_ < 0.0 {
-        //     center_ +=
-        // }
-
-        // self.center.store(center_);
 
         self.enforce_view_limits();
 
@@ -475,7 +467,9 @@ impl PathViewRenderer {
 
         if radius_ != radius {
             self.state.should_rerender.store(true);
-            self.scaling.store(delta as f32);
+
+            let s = self.scaling.load();
+            self.scaling.store(s * delta as f32);
         }
     }
 
