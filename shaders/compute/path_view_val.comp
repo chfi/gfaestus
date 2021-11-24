@@ -46,17 +46,17 @@ void main() {
       uint right = mid >= max_ix - 2 ? max_ix - 1 : mid + 1;
 
       float vm = node_value.value[mid];
-      // float vl = node_value.value[left];
-      // float vr = node_value.value[right];
+      float vl = node_value.value[left];
+      float vr = node_value.value[right];
 
       vec4 cm = texture(overlay, vm);
-      // vec4 cl = texture(overlay, vl);
-      // vec4 cr = texture(overlay, vr);
+      vec4 cl = texture(overlay, vl);
+      vec4 cr = texture(overlay, vr);
 
-      vec4 color = cm;
+      // vec4 color = cm;
       // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
       // vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-      // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
+      vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
       imageStore(image, pixel, color);
     }

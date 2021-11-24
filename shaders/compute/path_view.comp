@@ -42,17 +42,17 @@ void main() {
 
     if (node != 0) {
       uint mid = node - 1;
-      // uint left = mid == 0 ? 0 : mid - 1;
-      // uint right = mid >= max_ix - 2 ? max_ix - 1 : mid + 1;
+      uint left = mid == 0 ? 0 : mid - 1;
+      uint right = mid >= max_ix - 2 ? max_ix - 1 : mid + 1;
 
       vec4 cm = texelFetch(overlay, int(mid));
-      // vec4 cl = texelFetch(overlay, int(left));
-      // vec4 cr = texelFetch(overlay, int(right));
+      vec4 cl = texelFetch(overlay, int(left));
+      vec4 cr = texelFetch(overlay, int(right));
 
-      vec4 color = cm;
+      // vec4 color = cm;
       // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
       // vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-      // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
+      vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
       // write sampled value at index to output buffer
       imageStore(image, pixel, color);

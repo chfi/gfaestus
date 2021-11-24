@@ -606,11 +606,12 @@ impl PathViewRenderer {
 
                     let (handle, _step, _pos) = steps[ix];
 
-                    let v = handle.id().0 + 1;
+                    let v = handle.id().0 - 1;
                     path_data_local.push(v as u32);
                 }
                 first_path = false;
             }
+
             {
                 let mut lock = path_data.lock();
                 *lock = path_data_local.clone();

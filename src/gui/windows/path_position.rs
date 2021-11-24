@@ -149,7 +149,7 @@ impl PathPositionList {
                                         // image data, so we need to
                                         // scale up the drag delta
                                         // here
-                                        let scaled_delta = 2.0 * delta.x as f64;
+                                        let scaled_delta = -2.0 * delta.x as f64;
                                         // let scaled_delta = 0.5 * delta.x as f64;
 
                                         path_view.pan(scaled_delta);
