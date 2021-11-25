@@ -48,6 +48,21 @@ pub struct PathViewState {
     should_reload: AtomicCell<bool>,
 }
 
+#[derive(Debug)]
+pub struct PathState {
+    loading: AtomicCell<LoadState>,
+    should_reload: AtomicCell<bool>,
+}
+
+impl std::default::Default for PathState {
+    fn default() -> Self {
+        Self {
+            loading: LoadState::Idle.into(),
+            should_reload: true.into(),
+        }
+    }
+}
+
 impl std::default::Default for PathViewState {
     fn default() -> Self {
         Self {
@@ -118,6 +133,7 @@ pub struct PathViewRenderer {
     //
     // path_order: Arc<Mutex<Vec<PathId>>>,
     path_order: Arc<Mutex<Vec<PathId>>>,
+    path_load_states: Arc<Vec<PathState>>,
 
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
@@ -344,6 +360,12 @@ impl PathViewRenderer {
             crate::include_shader!("compute/path_view_val.comp.spv"),
         )?;
 
+        let path_load_states: Arc<Vec<PathState>> = {
+            let mut states = Vec::new();
+            states.resize_with(64, || PathState::default());
+            Arc::new(states)
+        };
+
         dbg!();
 
         Ok(Self {
@@ -367,6 +389,7 @@ impl PathViewRenderer {
             state: Arc::new(PathViewState::default()),
 
             path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
+            path_load_states,
 
             // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
