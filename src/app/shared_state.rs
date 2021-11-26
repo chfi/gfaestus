@@ -28,8 +28,6 @@ pub struct SharedState {
     pub dark_mode: Arc<AtomicCell<bool>>,
 
     pub show_modal: Arc<AtomicCell<bool>>,
-
-    pub tmp: Arc<AtomicCell<bool>>,
 }
 
 impl SharedState {
@@ -52,8 +50,6 @@ impl SharedState {
             edges_enabled: Arc::new(true.into()),
             dark_mode: Arc::new(false.into()),
             show_modal: Arc::new(false.into()),
-
-            tmp: Arc::new(false.into()),
         }
     }
 
@@ -84,30 +80,6 @@ impl SharedState {
     pub fn dark_mode(&self) -> &Arc<AtomicCell<bool>> {
         &self.dark_mode
     }
-
-    pub fn clone_edges_enabled(&self) -> Arc<AtomicCell<bool>> {
-        self.edges_enabled.clone()
-    }
-
-    pub fn clone_mouse_pos(&self) -> Arc<AtomicCell<Point>> {
-        self.mouse_pos.clone()
-    }
-
-    pub fn clone_view(&self) -> Arc<AtomicCell<View>> {
-        self.view.clone()
-    }
-
-    pub fn set_view(&self, view: View) {
-        self.view.store(view)
-    }
-
-    pub fn set_edges_enabled(&self, to: bool) {
-        self.edges_enabled.store(to);
-    }
-
-    // pub fn clone_mouse_rect(&self) -> MouseRect {
-    //     self.mouse_rect.clone()
-    // }
 
     pub fn start_mouse_rect(&self) {
         let view = self.view();

@@ -233,7 +233,7 @@ impl InputManager {
         winit_rx: channel::Receiver<event::WindowEvent<'static>>,
         shared_state: &SharedState,
     ) -> Self {
-        let mouse_screen_pos = shared_state.clone_mouse_pos();
+        let mouse_screen_pos = shared_state.mouse_pos.clone();
 
         let gui_focus_state = shared_state.gui_focus_state.clone();
 

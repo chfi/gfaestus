@@ -17,6 +17,7 @@ use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
+use rustc_hash::FxHashMap;
 use std::sync::Arc;
 
 use crate::app::selection::SelectionBuffer;
@@ -146,6 +147,8 @@ pub struct PathViewRenderer {
     pub output_image: Texture,
 
     fence_id: AtomicCell<Option<usize>>,
+
+    initialized: AtomicCell<bool>,
 }
 
 impl PathViewRenderer {
@@ -161,6 +164,8 @@ impl PathViewRenderer {
 
             self.state.rendering.store(RenderState::Idle);
             self.state.should_rerender.store(false);
+
+            self.initialized.store(true);
         }
     }
 
@@ -404,7 +409,13 @@ impl PathViewRenderer {
             // output_allocation,
             // output_allocation_info,
             fence_id: AtomicCell::new(None),
+
+            initialized: false.into(),
         })
+    }
+
+    pub fn initialized(&self) -> bool {
+        self.initialized.load()
     }
 
     fn enforce_view_limits(&self) {
@@ -517,6 +528,147 @@ impl PathViewRenderer {
 
     pub fn is_loading(&self) -> bool {
         matches!(self.state.loading.load(), LoadState::Loading)
+    }
+
+    pub fn load_paths(
+        &self,
+        app: &GfaestusVk,
+        reactor: &mut Reactor,
+        paths: impl IntoIterator<Item = (usize, PathId)> + Send + Sync + 'static,
+    ) -> Result<()> {
+        // map from row/Y to path
+        let paths: FxHashMap<usize, PathId> = paths.into_iter().collect();
+
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        let left = center - radius;
+        let right = center + radius;
+
+        log::warn!("loading with l: {}, r: {}", left, right);
+
+        let translation = self.translation.clone();
+        let scaling = self.scaling.clone();
+
+        let graph = reactor.graph_query.clone();
+
+        let width = self.width;
+        let height = self.height;
+
+        // let
+        let gpu_tasks = reactor.gpu_tasks.clone();
+
+        let buffer = self.path_buffer;
+
+        let state = self.state.clone();
+
+        let path_data = self.path_data.clone();
+        let path_count = self.path_count.clone();
+
+        let fut = async move {
+            //
+
+            let mut path_data_local = Vec::with_capacity(width * height);
+
+            let mut num_paths = 0;
+
+            let mut first_path = true;
+
+            let mut first = true;
+
+            let mut first_p = None;
+            let mut last_p = None;
+
+            for (y_ix, path) in paths.into_iter().take(64) {
+                let steps = graph.path_pos_steps(path).unwrap();
+                let (_, _, path_len) = steps.last().unwrap();
+
+                num_paths += 1;
+
+                // let len = (*path_len as f64) / 4096.0;
+                // let len = (*path_len as f64) / 2048.0;
+                let len = *path_len as f64;
+                let start = left * len;
+                let end = start + (right - left) * len;
+
+                let s = start as usize;
+                let e = end as usize;
+
+                if first {
+                    log::warn!(
+                        "path_len: {}\tleft: {}\tright: {}",
+                        path_len,
+                        left,
+                        right
+                    );
+                    log::warn!("start: {}\tend: {}", s, e);
+                }
+
+                for x in 0..width {
+                    let n = (x as f64) / width as f64;
+                    let p_ = ((n as f64) * (end - start)) as usize;
+
+                    let p = s + p_.max(1);
+
+                    if first_path {
+                        last_p = Some(p);
+                    }
+
+                    if first {
+                        first = false;
+                        first_p = Some(p);
+                    }
+
+                    let ix =
+                        match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                            Ok(i) => i,
+                            Err(i) => i,
+                        };
+
+                    let ix = ix.min(steps.len() - 1);
+
+                    let (handle, _step, _pos) = steps[ix];
+
+                    let v = handle.id().0 - 1;
+                    path_data_local.push(v as u32);
+                }
+                first_path = false;
+            }
+
+            {
+                let mut lock = path_data.lock();
+                *lock = path_data_local.clone();
+                path_count.store(num_paths);
+            }
+
+            log::warn!("{:?}\t{:?}", first_p, last_p);
+
+            // state_cell.store(LoadState::Loading);
+            // state
+
+            let data = Arc::new(path_data_local);
+            let dst = buffer;
+            let task = GpuTask::CopyDataToBuffer { data, dst };
+
+            let copy_complete = gpu_tasks.queue_task(task);
+
+            if let Ok(complete) = copy_complete {
+                let _ = complete.await;
+                // the path buffer has been updated here
+                state.loading.store(LoadState::Idle);
+                state.should_rerender.store(true);
+
+                translation.store(0.0);
+                scaling.store(1.0);
+            } else {
+                log::warn!("error queing GPU task in load_paths");
+                state.loading.store(LoadState::Idle);
+            }
+        };
+
+        reactor.spawn_forget(fut)?;
+
+        Ok(())
     }
 
     pub fn load_paths_async(
@@ -714,7 +866,7 @@ impl PathViewRenderer {
     }
 
     pub fn dispatch_managed(
-        &mut self,
+        &self,
         comp_manager: &mut ComputeManager,
         app: &GfaestusVk,
         rgb_overlay_desc: vk::DescriptorSet,

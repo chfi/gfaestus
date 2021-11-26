@@ -399,7 +399,7 @@ fn node_color(id) {
 
     dbg!();
 
-    let mut path_view = PathViewRenderer::new(
+    let path_view = PathViewRenderer::new(
         &gfaestus,
         main_view
             .node_draw_system
@@ -719,7 +719,7 @@ fn node_color(id) {
                 // TODO this timer is just to make sure everything has
                 // been initialized; it should probably be replaced by
                 // checking the frame count
-                if timer.elapsed().as_millis() > 2000 {
+                if timer.elapsed().as_millis() > 400 {
                     let cur_overlay = app.shared_state().overlay_state().current_overlay();
                     let cur_gradient = app.shared_state().overlay_state().gradient();
 
@@ -792,7 +792,7 @@ fn node_color(id) {
                         log::trace!("Path view fence ready");
                         path_view.block_on_fence(&mut compute_manager);
 
-                        app.shared_state().tmp.store(true);
+                        // app.shared_state().tmp.store(true);
 
                         if upload_path_view_texture {
                             upload_path_view_texture = false;

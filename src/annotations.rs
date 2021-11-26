@@ -513,15 +513,6 @@ impl Annotations {
         self.annotation_default_ref_path.get(annot).copied()
     }
 
-    pub fn set_default_ref_path(&mut self, annot: &str, path: Option<PathId>) {
-        if let Some(path) = path {
-            self.annotation_default_ref_path
-                .insert(annot.to_string(), path);
-        } else {
-            self.annotation_default_ref_path.remove(annot);
-        }
-    }
-
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
         let records = Arc::new(records);
         self.gff3_annotations.insert(name.to_string(), records);

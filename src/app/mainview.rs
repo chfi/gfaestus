@@ -95,7 +95,7 @@ impl MainView {
         )?;
 
         let anim_handler = AnimHandler::new(
-            shared_state.clone_view(),
+            shared_state.view.clone(),
             Point::ZERO,
             screen_dims,
         );
@@ -160,11 +160,12 @@ impl MainView {
 
     pub fn reset_view(&self) {
         self.shared_state
-            .set_view(self.anim_handler.initial_view.load());
+            .view
+            .store(self.anim_handler.initial_view.load());
     }
 
     pub fn set_view(&self, view: View) {
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn node_id_buffer(&self) -> vk::Buffer {
@@ -288,13 +289,13 @@ impl MainView {
     pub fn set_view_center(&self, center: Point) {
         let mut view = self.shared_state.view();
         view.center = center;
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn set_view_scale(&self, scale: f32) {
         let mut view = self.shared_state.view();
         view.scale = scale;
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn update_view_animation<D: Into<ScreenDims>>(

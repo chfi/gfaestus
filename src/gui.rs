@@ -648,18 +648,16 @@ impl Gui {
             annotations,
         );
 
-        if self.shared_state.tmp.load() {
-            PathPositionList::ui(
-                &self.ctx,
-                &mut self.open_windows.path_position_list,
-                &self.console,
-                reactor,
-                &self.channels,
-                &self.shared_state,
-                path_view,
-                nodes,
-            );
-        }
+        PathPositionList::ui(
+            &self.ctx,
+            &mut self.open_windows.path_position_list,
+            &self.console,
+            reactor,
+            &self.channels,
+            &self.shared_state,
+            path_view,
+            nodes,
+        );
 
         if let Some((annot_type, annot_name)) =
             self.annotation_file_list.current_annotation()

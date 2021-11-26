@@ -514,18 +514,6 @@ impl App {
             AppMsgHandler::from_fn(|app, _nodes, (k, i, value): &(String, String, rhai::Dynamic)| {
 
                 match k.as_str() {
-                "annotation_ref_path" => {
-                    if value.as_unit().is_ok() {
-                        app.annotations.set_default_ref_path(i.as_str(), None);
-                    } else if value.type_id()
-                        == std::any::TypeId::of::<PathId>()
-                    {
-                        let value = value.to_owned();
-                        let path = value.cast::<PathId>();
-                        app.annotations
-                            .set_default_ref_path(i.as_str(), Some(path));
-                    }
-                }
                 _ => (),
 
                 }
