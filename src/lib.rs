@@ -21,6 +21,8 @@ pub mod asynchronous;
 // pub mod gluon;
 pub mod script;
 
+pub mod window;
+
 #[macro_export]
 macro_rules! include_shader {
     ($file:expr) => {

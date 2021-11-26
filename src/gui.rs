@@ -29,6 +29,7 @@ use crate::{
     universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
+    window::{GuiChannels, GuiWindows},
 };
 use crate::{app::OverlayState, geometry::*};
 
@@ -91,6 +92,9 @@ pub struct Gui {
 
     pub console: Console<'static>,
     console_down: bool,
+
+    windows: GuiWindows,
+    gui_channels: GuiChannels,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -471,6 +475,9 @@ impl Gui {
             settings.to_owned(),
             shared_state.to_owned(),
         );
+        let mut windows = GuiWindows::default();
+
+        // windows.
 
         let gui = Self {
             ctx,
@@ -499,6 +506,10 @@ impl Gui {
 
             console_down: false,
             console,
+
+            // windows: GuiWindows::default(),
+            windows,
+            gui_channels: GuiChannels::new(),
         };
 
         Ok(gui)
