@@ -549,8 +549,8 @@ impl Gui {
 
     pub fn begin_frame(
         &mut self,
-        reactor: &mut Reactor,
-        screen_rect: Option<Point>,
+        reactor: &Reactor,
+        new_screen_rect: Option<Point>,
         graph_query: &Arc<GraphQuery>,
         graph_query_worker: &GraphQueryWorker,
         annotations: &Annotations,
@@ -561,7 +561,7 @@ impl Gui {
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
 
-        let screen_rect = screen_rect.map(|p| egui::Rect {
+        let screen_rect = new_screen_rect.map(|p| egui::Rect {
             min: Point::ZERO.into(),
             max: p.into(),
         });

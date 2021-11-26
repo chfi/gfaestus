@@ -696,11 +696,7 @@ impl Console<'static> {
         );
     }
 
-    pub fn eval_input(
-        &mut self,
-        reactor: &mut Reactor,
-        print: bool,
-    ) -> Result<()> {
+    pub fn eval_input(&mut self, reactor: &Reactor, print: bool) -> Result<()> {
         debug!("evaluating: {}", &self.input_line);
 
         let input = self.input_line.to_owned();
@@ -716,7 +712,7 @@ impl Console<'static> {
 
     pub fn eval_file(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         print: bool,
         path: &str,
     ) -> Result<()> {
@@ -752,7 +748,7 @@ impl Console<'static> {
 
     fn eval_file_interval(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         handle_name: &str,
         path: &str,
     ) -> Result<()> {
@@ -796,7 +792,7 @@ impl Console<'static> {
     // NB: edit this to add new console commands that do *not* use the Rhai engine
     fn exec_console_command(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         input: &str,
     ) -> Result<bool> {
         if input.starts_with(":clear") {
@@ -942,7 +938,7 @@ impl Console<'static> {
 
     pub fn eval(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         _print: bool,
         input_line: &str,
     ) -> Result<()> {
@@ -967,7 +963,7 @@ impl Console<'static> {
 
     pub fn eval_next(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         eval_all: bool,
     ) -> Result<()> {
         if eval_all {
@@ -983,12 +979,7 @@ impl Console<'static> {
         Ok(())
     }
 
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        is_down: bool,
-        reactor: &mut Reactor,
-    ) {
+    pub fn ui(&mut self, ctx: &egui::CtxRef, is_down: bool, reactor: &Reactor) {
         {
             let mut win_defs = self.window_defs.lock();
 
