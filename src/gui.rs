@@ -29,7 +29,7 @@ use crate::{
     universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
-    window::{GuiChannels, GuiWindows},
+    window::{GuiChannels, GuiId, GuiWindows},
 };
 use crate::{app::OverlayState, geometry::*};
 
@@ -477,6 +477,70 @@ impl Gui {
         );
         let mut windows = GuiWindows::default();
 
+        {
+            let annotation_file_list = AnnotationFileList::new(
+                reactor,
+                channels.app_tx.clone(),
+                channels.gui_tx.clone(),
+            )?;
+
+            let afl_id = GuiId::new("_annotation_file_list");
+
+            windows.add_window(afl_id, "Annotation Files", |ui| {
+                todo!();
+            });
+
+            let cur_annot = annotation_file_list.current_annotation.clone();
+
+            /*
+            let gff3_list = {
+                let mut list = RecordList::new(
+                    reactor,
+                    egui::Id::new("gff3_records_list"),
+                    path_picker_source.create_picker(),
+                );
+
+                use Gff3Column as Gff;
+
+                list.set_default_columns(
+                    [Gff::Source, Gff::Type, Gff::Frame],
+                    [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand],
+                );
+
+                list
+            };
+
+            let bed_list = {
+                let mut list = RecordList::new(
+                    reactor,
+                    egui::Id::new("bed_records_list"),
+                    path_picker_source.create_picker(),
+                );
+
+                use BedColumn as Bed;
+
+                list.set_default_columns([], [Bed::Chr, Bed::Start, Bed::End]);
+
+                list
+            };
+
+
+            let gff3_window = || {
+                egui::Window::new("GFF3")
+                    .default_pos(egui::Pos2::new(600.0, 200.0))
+                    .collapsible(true)
+            };
+
+            let bed_window = || {
+                egui::Window::new("BED")
+                    .default_pos(egui::Pos2::new(600.0, 200.0))
+                    .collapsible(true)
+            };
+            */
+
+            // let show_
+        }
+
         // windows.
 
         let gui = Self {
@@ -670,54 +734,58 @@ impl Gui {
             nodes,
         );
 
-        if let Some((annot_type, annot_name)) =
-            self.annotation_file_list.current_annotation()
         {
-            match annot_type {
-                AnnotationFileType::Gff3 => {
-                    if let Some(records) = annotations.get_gff3(annot_name) {
-                        let ctx = &self.ctx;
-                        let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.channels.app_tx;
+            let read = self.annotation_file_list.current_annotation();
+            if let Some((annot_type, annot_name)) = read.as_ref() {
+                match annot_type {
+                    AnnotationFileType::Gff3 => {
+                        if let Some(records) = annotations.get_gff3(annot_name)
+                        {
+                            let ctx = &self.ctx;
+                            let open =
+                                &mut self.open_windows.annotation_records;
+                            let app_msg_tx = &self.channels.app_tx;
 
-                        let gff3_list = &mut self.gff3_list;
+                            let gff3_list = &mut self.gff3_list;
 
-                        let _resp = egui::Window::new("GFF3")
-                            .default_pos(egui::Pos2::new(600.0, 200.0))
-                            .collapsible(true)
-                            .open(open)
-                            .show(ctx, |ui| {
-                                gff3_list.ui(
-                                    ui,
-                                    graph_query_worker,
-                                    app_msg_tx,
-                                    annot_name,
-                                    records,
-                                )
-                            });
+                            let _resp = egui::Window::new("GFF3")
+                                .default_pos(egui::Pos2::new(600.0, 200.0))
+                                .collapsible(true)
+                                .open(open)
+                                .show(ctx, |ui| {
+                                    gff3_list.ui(
+                                        ui,
+                                        graph_query_worker,
+                                        app_msg_tx,
+                                        annot_name,
+                                        records,
+                                    )
+                                });
+                        }
                     }
-                }
-                AnnotationFileType::Bed => {
-                    if let Some(records) = annotations.get_bed(annot_name) {
-                        let ctx = &self.ctx;
-                        let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.channels.app_tx;
+                    AnnotationFileType::Bed => {
+                        if let Some(records) = annotations.get_bed(annot_name) {
+                            let ctx = &self.ctx;
+                            let open =
+                                &mut self.open_windows.annotation_records;
+                            let app_msg_tx = &self.channels.app_tx;
 
-                        let bed_list = &mut self.bed_list;
+                            let bed_list = &mut self.bed_list;
 
-                        let _resp = egui::Window::new("BED")
-                            .default_pos(egui::Pos2::new(600.0, 200.0))
-                            .collapsible(true)
-                            .open(open)
-                            .show(ctx, |ui| {
-                                bed_list.ui(
-                                    ui,
-                                    graph_query_worker,
-                                    app_msg_tx,
-                                    annot_name,
-                                    records,
-                                )
-                            });
+                            let _resp = egui::Window::new("BED")
+                                .default_pos(egui::Pos2::new(600.0, 200.0))
+                                .collapsible(true)
+                                .open(open)
+                                .show(ctx, |ui| {
+                                    bed_list.ui(
+                                        ui,
+                                        graph_query_worker,
+                                        app_msg_tx,
+                                        annot_name,
+                                        records,
+                                    )
+                                });
+                        }
                     }
                 }
             }

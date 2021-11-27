@@ -5,12 +5,13 @@ use std::{
 };
 
 use bstr::ByteSlice;
-use crossbeam::channel::Sender;
+use crossbeam::{atomic::AtomicCell, channel::Sender};
 
 pub mod filter;
 pub mod records_list;
 
 pub use filter::*;
+use parking_lot::{RwLock, RwLockReadGuard};
 pub use records_list::*;
 
 #[allow(unused_imports)]
@@ -140,7 +141,7 @@ pub type AnnotResult =
     std::result::Result<(AnnotationFileType, String), AnnotMsg>;
 
 pub struct AnnotationFileList {
-    current_annotation: Option<(AnnotationFileType, String)>,
+    pub current_annotation: Arc<RwLock<Option<(AnnotationFileType, String)>>>,
 
     file_picker: FilePicker,
     file_picker_open: bool,
@@ -248,7 +249,7 @@ impl AnnotationFileList {
         );
 
         Ok(Self {
-            current_annotation: None,
+            current_annotation: Arc::new(RwLock::new(None)),
 
             file_picker,
             file_picker_open: false,
@@ -258,10 +259,143 @@ impl AnnotationFileList {
         })
     }
 
-    pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
-        self.current_annotation
-            .as_ref()
-            .map(|(t, n)| (*t, n.as_str()))
+    // pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
+    pub fn current_annotation(
+        &self,
+    ) -> RwLockReadGuard<Option<(AnnotationFileType, String)>> {
+        self.current_annotation.read()
+    }
+
+    pub fn file_picker_(&mut self, ctx: &egui::CtxRef) {
+        self.file_picker.ui(ctx, &mut self.file_picker_open);
+    }
+
+    pub fn ui_(
+        &mut self,
+        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
+        annotations: &Annotations,
+        ui: &mut egui::Ui,
+    ) {
+        if let Some(result) = self.load_host.take() {
+            if let Ok((file_type, name)) = &result {
+                let mut write = self.current_annotation.write();
+                *write = Some((*file_type, name.to_owned()));
+            }
+
+            self.latest_result = Some(result);
+        }
+
+        let is_running =
+            matches!(self.latest_result, Some(Err(AnnotMsg::Running(_))));
+
+        if self.file_picker.selected_path().is_some() {
+            self.file_picker_open = false;
+        }
+
+        // self.file_picker.ui(ctx, &mut self.file_picker_open);
+
+        if ui
+            .add_enabled(
+                !is_running,
+                egui::Button::new("Choose annotation file"),
+            )
+            .clicked()
+        {
+            self.file_picker.reset_selection();
+            self.file_picker_open = true;
+        }
+
+        let _label = if let Some(path) =
+            self.file_picker.selected_path().and_then(|p| p.to_str())
+        {
+            ui.label(path)
+        } else {
+            ui.label("No file selected")
+        };
+
+        let selected_path = self.file_picker.selected_path();
+
+        if ui
+            .add_enabled(
+                !is_running && selected_path.is_some(),
+                egui::Button::new("Load"),
+            )
+            .clicked()
+        {
+            if let Some(path) = selected_path {
+                self.load_host.call(path.to_owned()).unwrap();
+            }
+        }
+
+        if is_running {
+            ui.label("Loading file");
+        }
+
+        ui.separator();
+
+        egui::ScrollArea::vertical().show(ui, |mut ui| {
+            egui::Grid::new("annotations_file_list_grid")
+                .spacing(Point::new(10.0, 5.0))
+                .striped(true)
+                .show(&mut ui, |ui| {
+                    ui.label("File name");
+
+                    ui.separator();
+                    ui.label("# Records");
+
+                    // ui.separator();
+                    // ui.label("Ref. path");
+
+                    ui.separator();
+                    ui.label("Type");
+
+                    ui.end_row();
+
+                    for (name, annot_type) in annotations.annot_names() {
+                        let record_len = match annot_type {
+                            AnnotationFileType::Gff3 => {
+                                let records =
+                                    annotations.get_gff3(name).unwrap();
+                                format!("{}", records.len())
+                            }
+                            AnnotationFileType::Bed => {
+                                let records =
+                                    annotations.get_bed(name).unwrap();
+                                format!("{}", records.len())
+                            }
+                        };
+
+                        let type_str = format!("{:?}", annot_type);
+
+                        let fields = [
+                            name.as_str(),
+                            record_len.as_str(),
+                            type_str.as_str(),
+                        ];
+
+                        let row = grid_row_label(
+                            ui,
+                            egui::Id::new(ui.id().with(name)),
+                            &fields,
+                            true,
+                        );
+
+                        if row.clicked() {
+                            {
+                                let mut write = self.current_annotation.write();
+                                *write = Some((*annot_type, name.to_string()));
+                            }
+
+                            gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::AnnotationRecords,
+                                    open: Some(true),
+                                })
+                                .unwrap();
+                        }
+                    }
+                })
+        });
     }
 
     pub fn ui(
@@ -273,7 +407,8 @@ impl AnnotationFileList {
     ) -> Option<egui::InnerResponse<Option<()>>> {
         if let Some(result) = self.load_host.take() {
             if let Ok((file_type, name)) = &result {
-                self.current_annotation = Some((*file_type, name.to_owned()));
+                let mut write = self.current_annotation.write();
+                *write = Some((*file_type, name.to_owned()));
             }
 
             self.latest_result = Some(result);
@@ -380,8 +515,14 @@ impl AnnotationFileList {
                                 );
 
                                 if row.clicked() {
-                                    self.current_annotation =
-                                        Some((*annot_type, name.to_string()));
+                                    {
+                                        let mut write =
+                                            self.current_annotation.write();
+                                        *write = Some((
+                                            *annot_type,
+                                            name.to_string(),
+                                        ));
+                                    }
 
                                     gui_msg_tx
                                         .send(GuiMsg::SetWindowOpen {
