@@ -1,7 +1,7 @@
 use crossbeam::atomic::AtomicCell;
 use futures::future::RemoteHandle;
 use handlegraph::pathhandlegraph::{
-    GraphPathNames, GraphPaths, PathId, PathSequences,
+    GraphPathNames, GraphPaths, IntoPathIds, PathId, PathSequences,
 };
 
 use lazy_static::lazy_static;
@@ -25,6 +25,8 @@ lazy_static! {
     // static ref ZOOM_UPDATE_FUTURE: Mutex<Option<Box<dyn Future<Output = ()>>>> =
     static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
         Mutex::new(None);
+
+    static ref PATH_OFFSET: AtomicCell<usize> = AtomicCell::new(0);
 }
 
 pub struct PathPositionList {}
@@ -64,226 +66,267 @@ impl PathPositionList {
             CONSOLE_ADDED.store(true);
         }
 
+        let graph_query = reactor.graph_query.clone();
+        let graph = graph_query.graph();
+
+        let path_count = graph.path_count();
+
         egui::Window::new("Path View")
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    let path_ix = PATH_OFFSET.load();
 
-                if ui.button("Reset").clicked() {
-                    path_view.reset_zoom();
-                }
+                    let at_top = path_ix == 0;
+                    let at_btm = path_ix >= (path_count.max(1) - 1);
 
-                if let Some(paths) = console.get_set.get_var(Self::PATHS) {
-                    let paths: Vec<rhai::Dynamic> = paths.cast();
+                    let up = ui.add_enabled(!at_top, egui::Button::new("Up"));
 
-                    egui::ScrollArea::vertical().show(ui, |ui| {
-                        egui::Grid::new("path_position_list_grid").show(
-                            ui,
-                            |ui| {
-                                ui.label("Path");
-                                ui.separator();
+                    let down =
+                        ui.add_enabled(!at_btm, egui::Button::new("Down"));
 
-                                ui.label("-");
-                                ui.end_row();
+                    if up.clicked() && !at_top {
+                        PATH_OFFSET.store(path_ix - 1);
+                    }
 
-                                let mut rows = Vec::new();
+                    if down.clicked() && !at_btm {
+                        PATH_OFFSET.store(path_ix + 1);
+                    }
 
-                                let graph_query = reactor.graph_query.clone();
-                                let graph = graph_query.graph();
-                                let path_pos =
-                                    graph_query.path_positions();
+                    if ui.button("Reset").clicked() {
+                        path_view.reset_zoom();
+                    }
+                });
 
-                                let dy: f32 = 1.0 / 64.0;
-                                let oy: f32 = dy / 2.0;
+                // if let Some(paths) = console.get_set.get_var(Self::PATHS) {
+                // let paths: Vec<rhai::Dynamic> = paths.cast();
 
-                                for (ix, path) in
-                                    paths.into_iter().enumerate()
-                                {
-                                    let path: PathId = path.cast();
+                let paths = graph.path_ids();
 
-                                    let path_name =
-                                        graph.get_path_name_vec(path).unwrap();
+                let paths_to_show =
+                    paths.skip(PATH_OFFSET.load()).take(64).collect::<Vec<_>>();
 
-                                    let path_len =
-                                        path_pos.path_base_len(path).unwrap()
-                                            as f32;
+                egui::ScrollArea::vertical().show(ui, |ui| {
+                    egui::Grid::new("path_position_list_grid").show(ui, |ui| {
+                        ui.label("Path");
+                        ui.separator();
 
-                                    // let mut row =
-                                    ui.label(format!("{}", path.0));
-                                    ui.separator();
+                        ui.label("-");
+                        ui.end_row();
 
-                                    ui.label(format!(
-                                        "{}",
-                                        path_name.as_bstr()
-                                    ));
+                        let mut rows = Vec::new();
 
-                                    ui.separator();
+                        // let graph_query = reactor.graph_query.clone();
+                        // let graph = graph_query.graph();
+                        let path_pos = graph_query.path_positions();
 
-                                    let y = oy + (dy * ix as f32);
+                        let dy: f32 = 1.0 / 64.0;
+                        let oy: f32 = dy / 2.0;
 
-                                    let p0 = Point::new(0.0, y);
-                                    let p1 = Point::new(1.0, y);
+                        // for (ix, path) in
+                        //     paths.skip(PATH_OFFSET.load()).enumerate()
+                        for &path in paths_to_show.iter() {
+                            // for path in paths.skip(PATH_OFFSET.load()) {
+                            // let path: PathId = path.cast();
 
-                                    let img = if path_view.initialized() {
-                                        egui::Image::new(
-                                            egui::TextureId::User(1),
-                                            Point { x: 512.0, y: 32.0 },
-                                            // Point { x: 1024.0, y: 32.0 },
-                                        )
-                                            .uv(Rect::new(p0, p1))
-                                    } else {
-                                        egui::Image::new(
-                                            egui::TextureId::User(00000),
-                                            Point { x: 512.0, y: 32.0 },
-                                            // Point { x: 1024.0, y: 32.0 },
-                                        )
-                                            .uv(Rect::new(p0, p1))
-                                    };
+                            let path_name =
+                                graph.get_path_name_vec(path).unwrap();
 
-                                    let row = ui.add(img);
+                            let path_len =
+                                path_pos.path_base_len(path).unwrap() as f32;
 
-                                    ui.end_row();
+                            // let mut row =
+                            ui.label(format!("{}", path.0));
+                            ui.separator();
 
-                                    let interact = ui.interact(
-                                        row.rect,
-                                        egui::Id::new(Self::ID).with(ix),
-                                        egui::Sense::click_and_drag()
+                            ui.label(format!("{}", path_name.as_bstr()));
+
+                            ui.separator();
+
+                            // TODO need to fetch the index from the path view order
+                            let ix = todo!();
+
+                            let y = oy + (dy * ix as f32);
+
+                            let p0 = Point::new(0.0, y);
+                            let p1 = Point::new(1.0, y);
+
+                            let img = if path_view.initialized() {
+                                egui::Image::new(
+                                    egui::TextureId::User(1),
+                                    Point { x: 512.0, y: 32.0 },
+                                    // Point { x: 1024.0, y: 32.0 },
+                                )
+                                .uv(Rect::new(p0, p1))
+                            } else {
+                                egui::Image::new(
+                                    egui::TextureId::User(00000),
+                                    Point { x: 512.0, y: 32.0 },
+                                    // Point { x: 1024.0, y: 32.0 },
+                                )
+                                .uv(Rect::new(p0, p1))
+                            };
+
+                            let row = ui.add(img);
+
+                            ui.end_row();
+
+                            let interact = ui.interact(
+                                row.rect,
+                                egui::Id::new(Self::ID).with(ix),
+                                egui::Sense::click_and_drag(),
+                            );
+
+                            if interact.dragged() {
+                                let delta = interact.drag_delta();
+                                // log::warn!("image drag delta: {}", delta.x);
+
+                                // the pan() function uses
+                                // pixels in terms of the
+                                // image data, so we need to
+                                // scale up the drag delta
+                                // here
+                                let scaled_delta = 2.0 * delta.x as f64;
+                                // let scaled_delta = 0.5 * delta.x as f64;
+
+                                path_view.pan(scaled_delta);
+                            }
+
+                            if interact.drag_released() {
+                                path_view.force_reload();
+                            }
+
+                            if let Some(pos) = interact.hover_pos() {
+                                let scroll_delta = ui.input().scroll_delta;
+
+                                if scroll_delta.y != 0.0 {
+                                    log::warn!(
+                                        "scroll delta: {}",
+                                        scroll_delta.y
                                     );
 
+                                    let d = if scroll_delta.y > 0.0 {
+                                        1.0 / 1.05
+                                    } else {
+                                        1.05
+                                    };
 
-                                    if interact.dragged() {
-                                        let delta = interact.drag_delta();
-                                        // log::warn!("image drag delta: {}", delta.x);
+                                    path_view.zoom(d);
 
-                                        // the pan() function uses
-                                        // pixels in terms of the
-                                        // image data, so we need to
-                                        // scale up the drag delta
-                                        // here
-                                        let scaled_delta = 2.0 * delta.x as f64;
-                                        // let scaled_delta = 0.5 * delta.x as f64;
+                                    let path_view_state =
+                                        path_view.state.clone();
 
-                                        path_view.pan(scaled_delta);
+                                    let fut = async move {
+                                        use futures_timer::Delay;
+                                        let delay = Delay::new(
+                                            std::time::Duration::from_millis(
+                                                150,
+                                            ),
+                                        );
+                                        delay.await;
 
-                                    }
+                                        path_view_state.force_reload();
+                                    };
 
-                                    if interact.drag_released() {
-                                        path_view.force_reload();
-                                    }
+                                    {
+                                        let mut lock =
+                                            ZOOM_UPDATE_FUTURE.lock();
 
-
-                                    if let Some(pos) = interact.hover_pos() {
-
-
-                                        let scroll_delta = ui.input().scroll_delta;
-
-                                        if scroll_delta.y != 0.0 {
-                                            log::warn!("scroll delta: {}", scroll_delta.y);
-
-
-                                            let d = if scroll_delta.y > 0.0 {
-                                                1.0 / 1.05
-                                            } else {
-                                                1.05
-                                            };
-
-                                            path_view.zoom(d);
-
-                                            let path_view_state = path_view.state.clone();
-
-                                            let fut = async move {
-                                                use futures_timer::Delay;
-                                                let delay = Delay::new(std::time::Duration::from_millis(150));
-                                                delay.await;
-
-                                                path_view_state.force_reload();
-                                            };
-
-                                            {
-                                                let mut lock = ZOOM_UPDATE_FUTURE.lock();
-
-                                                if let Ok(handle) = reactor.spawn(fut) {
-                                                    *lock = Some(handle);
-                                                } else {
-                                                    *lock = None;
-                                                }
-                                            }
-
-
-                                        }
-
-                                        let rect = interact.rect;
-
-                                        let p0 = Point::from(rect.min);
-                                        let p = Point::from(pos);
-
-                                        let width = rect.width();
-
-                                        let p_ = p - p0;
-
-                                        let n = (p_.x / width).clamp(0.0, 1.0);
-
-                                        let pos = (path_len * n) as usize;
-
-                                        let y = ix;
-                                        let x = ((path_view.width as f32) * n) as usize;
-                                        // let x = ((path_view.width as f32) * n * 2.0) as usize;
-
-                                        let node = path_view.get_node_at(x, y);
-
-
-                                        if let Some(node) = node {
-                                            let ix = (node.0 - 1) as usize;
-                                            if let Some(pos) = nodes.get(ix) {
-                                                let world = pos.center();
-
-                                                let view = shared_state.view();
-
-                                                let screen = view.world_point_to_screen(world);
-
-                                                let screen_rect = ctx.input().screen_rect();
-                                                let dims = Point::new(screen_rect.width(), screen_rect.height());
-
-                                                let screen = screen + dims / 2.0;
-
-                                                let dims = shared_state.screen_dims();
-
-                                                if screen.x > 0.0 && screen.y > 0.0 && screen.x < dims.width && screen.y < dims.height {
-                                                    egui::show_tooltip_at(ctx, egui::Id::new("path_view_tooltip"), Some(screen.into()), |ui| {
-                                                        //
-                                                        ui.label(format!("{}", node.0));
-                                                    });
-                                                }
-                                            }
-
-                                            // let msg = AppMsg::goto_node(node);
-                                            // channels.app_tx.send(msg).unwrap();
-                                        }
-
-
-                                        if interact.clicked() {
-
-
-                                            log::warn!(
-                                                "clicked at {}, pos {}, node {:?}",
-                                                n,
-                                                pos,
-                                                node
-                                            );
-
-                                            if let Some(node) = node {
-                                                let msg = AppMsg::goto_node(node);
-                                                channels.app_tx.send(msg).unwrap();
-                                            }
+                                        if let Ok(handle) = reactor.spawn(fut) {
+                                            *lock = Some(handle);
+                                        } else {
+                                            *lock = None;
                                         }
                                     }
-
-                                    rows.push(interact);
                                 }
-                            },
-                        )
-                    });
-                }
+
+                                let rect = interact.rect;
+
+                                let p0 = Point::from(rect.min);
+                                let p = Point::from(pos);
+
+                                let width = rect.width();
+
+                                let p_ = p - p0;
+
+                                let n = (p_.x / width).clamp(0.0, 1.0);
+
+                                let pos = (path_len * n) as usize;
+
+                                let y = ix;
+                                let x = ((path_view.width as f32) * n) as usize;
+                                // let x = ((path_view.width as f32) * n * 2.0) as usize;
+
+                                let node = path_view.get_node_at(x, y);
+
+                                if let Some(node) = node {
+                                    let ix = (node.0 - 1) as usize;
+                                    if let Some(pos) = nodes.get(ix) {
+                                        let world = pos.center();
+
+                                        let view = shared_state.view();
+
+                                        let screen =
+                                            view.world_point_to_screen(world);
+
+                                        let screen_rect =
+                                            ctx.input().screen_rect();
+                                        let dims = Point::new(
+                                            screen_rect.width(),
+                                            screen_rect.height(),
+                                        );
+
+                                        let screen = screen + dims / 2.0;
+
+                                        let dims = shared_state.screen_dims();
+
+                                        if screen.x > 0.0
+                                            && screen.y > 0.0
+                                            && screen.x < dims.width
+                                            && screen.y < dims.height
+                                        {
+                                            egui::show_tooltip_at(
+                                                ctx,
+                                                egui::Id::new(
+                                                    "path_view_tooltip",
+                                                ),
+                                                Some(screen.into()),
+                                                |ui| {
+                                                    //
+                                                    ui.label(format!(
+                                                        "{}",
+                                                        node.0
+                                                    ));
+                                                },
+                                            );
+                                        }
+                                    }
+
+                                    // let msg = AppMsg::goto_node(node);
+                                    // channels.app_tx.send(msg).unwrap();
+                                }
+
+                                if interact.clicked() {
+                                    log::warn!(
+                                        "clicked at {}, pos {}, node {:?}",
+                                        n,
+                                        pos,
+                                        node
+                                    );
+
+                                    if let Some(node) = node {
+                                        let msg = AppMsg::goto_node(node);
+                                        channels.app_tx.send(msg).unwrap();
+                                    }
+                                }
+                            }
+
+                            rows.push(interact);
+                        }
+                    })
+                });
+                // }
             });
     }
 }

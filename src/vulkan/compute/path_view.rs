@@ -51,14 +51,12 @@ pub struct PathViewState {
 
 #[derive(Debug)]
 pub struct PathState {
-    loading: AtomicCell<LoadState>,
     should_reload: AtomicCell<bool>,
 }
 
 impl std::default::Default for PathState {
     fn default() -> Self {
         Self {
-            loading: LoadState::Idle.into(),
             should_reload: true.into(),
         }
     }
