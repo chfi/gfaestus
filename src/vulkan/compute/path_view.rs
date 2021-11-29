@@ -574,8 +574,17 @@ impl PathViewRenderer {
         matches!(self.state.rendering.load(), RenderState::Rendering)
     }
 
+    // only reload when there's nothing currently being loaded, and at
+    // least one row should be reloaded
     pub fn should_reload(&self) -> bool {
-        self.state.should_reload.load()
+        let is_loading = self.is_loading();
+
+        let should_load = self
+            .row_states
+            .iter()
+            .any(|r| matches!(r.load(), RowState::NeedLoad(_)));
+
+        !is_loading && should_load
     }
 
     pub fn loading_idle(&self) -> bool {
@@ -615,6 +624,9 @@ impl PathViewRenderer {
             already_marked.keys().copied().collect::<FxHashSet<_>>();
         let remaining = to_mark.difference(&premarked);
 
+        let mut unused_rows = unused_rows.into_iter().collect::<Vec<_>>();
+        unused_rows.sort();
+
         for (path, ix) in remaining.copied().zip(unused_rows.into_iter()) {
             self.row_states[ix].store(RowState::NeedLoad(path));
         }
@@ -626,11 +638,7 @@ impl PathViewRenderer {
         &self,
         app: &GfaestusVk,
         reactor: &mut Reactor,
-        paths: impl IntoIterator<Item = (usize, PathId)> + Send + Sync + 'static,
     ) -> Result<()> {
-        // map from row/Y to path
-        let paths: FxHashMap<usize, PathId> = paths.into_iter().collect();
-
         let center = self.center.load();
         let radius = self.radius.load();
 
@@ -647,7 +655,6 @@ impl PathViewRenderer {
         let width = self.width;
         let height = self.height;
 
-        // let
         let gpu_tasks = reactor.gpu_tasks.clone();
 
         let buffer = self.path_buffer;
@@ -657,10 +664,10 @@ impl PathViewRenderer {
         let path_data = self.path_data.clone();
         let path_count = self.path_count.clone();
 
-        let fut = async move {
-            //
+        let rows = self.row_states.clone();
 
-            let mut path_data_local = Vec::with_capacity(width * height);
+        let fut = async move {
+            let mut loaded_paths: Vec<(usize, PathId, Vec<u32>)> = Vec::new();
 
             let mut num_paths = 0;
 
@@ -671,72 +678,97 @@ impl PathViewRenderer {
             let mut first_p = None;
             let mut last_p = None;
 
-            for (y_ix, path) in paths.into_iter().take(64) {
-                let steps = graph.path_pos_steps(path).unwrap();
-                let (_, _, path_len) = steps.last().unwrap();
+            for (y, c) in rows.iter().enumerate() {
+                let row = c.load();
 
-                num_paths += 1;
-
-                // let len = (*path_len as f64) / 4096.0;
-                // let len = (*path_len as f64) / 2048.0;
-                let len = *path_len as f64;
-                let start = left * len;
-                let end = start + (right - left) * len;
-
-                let s = start as usize;
-                let e = end as usize;
-
-                if first {
-                    log::warn!(
-                        "path_len: {}\tleft: {}\tright: {}",
-                        path_len,
-                        left,
-                        right
-                    );
-                    log::warn!("start: {}\tend: {}", s, e);
+                // num_paths is used by the shader to know how many
+                // rows it can use, so we just want the highest
+                // non-null row, since rows are always used from in order
+                if !matches!(row, RowState::Null) {
+                    num_paths = y;
                 }
 
-                for x in 0..width {
-                    let n = (x as f64) / width as f64;
-                    let p_ = ((n as f64) * (end - start)) as usize;
+                if let RowState::NeedLoad(path) = row {
+                    let mut path_row = Vec::with_capacity(width);
 
-                    let p = s + p_.max(1);
+                    let steps = graph.path_pos_steps(path).unwrap();
+                    let (_, _, path_len) = steps.last().unwrap();
 
-                    if first_path {
-                        last_p = Some(p);
-                    }
+                    // let len = (*path_len as f64) / 4096.0;
+                    // let len = (*path_len as f64) / 2048.0;
+                    let len = *path_len as f64;
+                    let start = left * len;
+                    let end = start + (right - left) * len;
+
+                    let s = start as usize;
+                    let e = end as usize;
 
                     if first {
-                        first = false;
-                        first_p = Some(p);
+                        log::warn!(
+                            "path_len: {}\tleft: {}\tright: {}",
+                            path_len,
+                            left,
+                            right
+                        );
+                        log::warn!("start: {}\tend: {}", s, e);
                     }
 
-                    let ix =
-                        match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                    for x in 0..width {
+                        let n = (x as f64) / width as f64;
+                        let p_ = ((n as f64) * (end - start)) as usize;
+
+                        let p = s + p_.max(1);
+
+                        if first_path {
+                            last_p = Some(p);
+                        }
+
+                        if first {
+                            first = false;
+                            first_p = Some(p);
+                        }
+
+                        let ix = match steps
+                            .binary_search_by_key(&p, |(_, _, p)| *p)
+                        {
                             Ok(i) => i,
                             Err(i) => i,
                         };
 
-                    let ix = ix.min(steps.len() - 1);
+                        let ix = ix.min(steps.len() - 1);
 
-                    let (handle, _step, _pos) = steps[ix];
+                        let (handle, _step, _pos) = steps[ix];
 
-                    let v = handle.id().0 - 1;
-                    path_data_local.push(v as u32);
+                        let v = handle.id().0 - 1;
+                        path_row.push(v as u32);
+                    }
+                    first_path = false;
+
+                    loaded_paths.push((y, path, path_row));
                 }
-                first_path = false;
             }
 
-            {
+            let (loaded, path_data_local): (Vec<(usize, PathId)>, Vec<u32>) = {
                 let mut lock = path_data.lock();
-                *lock = path_data_local.clone();
+
+                let mut loaded = Vec::new();
+
+                for (y, path, path_data) in loaded_paths {
+                    let offset = y * width;
+                    let end = offset + width;
+
+                    let slice = &mut lock[offset..end];
+                    slice.clone_from_slice(&path_data);
+
+                    loaded.push((y, path));
+                }
+
                 path_count.store(num_paths);
-            }
+
+                (loaded, lock.to_owned())
+            };
 
             log::warn!("{:?}\t{:?}", first_p, last_p);
-
-            // state_cell.store(LoadState::Loading);
-            // state
 
             let data = Arc::new(path_data_local);
             let dst = buffer;
@@ -749,6 +781,39 @@ impl PathViewRenderer {
                 // the path buffer has been updated here
                 state.loading.store(LoadState::Idle);
                 state.should_rerender.store(true);
+
+                for (ix, path) in loaded {
+                    let c = &self.row_states[ix];
+
+                    let row = c.load();
+
+                    match row {
+                        RowState::NeedLoad(p) => {
+                            if p == path {
+                                c.store(RowState::Loaded(p));
+                            } else if p != path {
+                                log::warn!(
+                                    "path view row {} state is inconsistent!",
+                                    ix
+                                );
+                            }
+                        }
+                        RowState::Loaded(p) => {
+                            if p != path {
+                                log::warn!(
+                                    "path view row {} state is inconsistent!",
+                                    ix
+                                );
+                            }
+                        }
+                        RowState::Null => {
+                            log::warn!(
+                                "path view row {} state loaded but is null!",
+                                ix
+                            );
+                        }
+                    }
+                }
 
                 translation.store(0.0);
                 scaling.store(1.0);
