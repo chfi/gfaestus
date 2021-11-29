@@ -17,7 +17,7 @@ use handlegraph::pathhandlegraph::PathId;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
 
 use crate::app::selection::SelectionBuffer;
@@ -39,6 +39,8 @@ pub enum RenderState {
     Rendering,
     // ShouldRerender,
 }
+
+//////////////
 
 #[derive(Debug)]
 pub struct PathViewState {
@@ -99,6 +101,52 @@ impl PathViewState {
     }
 }
 
+////////////
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum RowState {
+    Null,
+    NeedLoad(PathId),
+    Loaded(PathId),
+}
+
+impl std::default::Default for RowState {
+    fn default() -> Self {
+        Self::Null
+    }
+}
+
+impl RowState {
+    pub fn is_null(&self) -> bool {
+        *self == Self::Null
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        matches!(self, RowState::Loaded(_))
+    }
+
+    pub fn is_loaded_path(&self, path: PathId) -> bool {
+        *self == RowState::Loaded(path)
+    }
+
+    pub fn path(&self) -> Option<PathId> {
+        match *self {
+            RowState::NeedLoad(i) => Some(i),
+            RowState::Loaded(i) => Some(i),
+            RowState::Null => None,
+        }
+    }
+
+    pub fn same_path(&self, path: PathId) -> bool {
+        let this_path = match *self {
+            RowState::NeedLoad(i) => i,
+            RowState::Loaded(i) => i,
+            RowState::Null => return false,
+        };
+
+        this_path == path
+    }
+}
 #[allow(dead_code)]
 pub struct PathViewRenderer {
     rgb_pipeline: ComputePipeline,
@@ -133,6 +181,8 @@ pub struct PathViewRenderer {
     // path_order: Arc<Mutex<Vec<PathId>>>,
     path_order: Arc<Mutex<Vec<PathId>>>,
     path_load_states: Arc<Vec<PathState>>,
+
+    row_states: Arc<Vec<AtomicCell<RowState>>>,
 
     // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
@@ -369,6 +419,12 @@ impl PathViewRenderer {
             Arc::new(states)
         };
 
+        let row_states: Arc<Vec<AtomicCell<RowState>>> = {
+            let mut states = Vec::new();
+            states.resize_with(64, || RowState::default().into());
+            Arc::new(states)
+        };
+
         dbg!();
 
         Ok(Self {
@@ -393,6 +449,8 @@ impl PathViewRenderer {
 
             path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
             path_load_states,
+
+            row_states,
 
             // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
             path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
@@ -526,6 +584,42 @@ impl PathViewRenderer {
 
     pub fn is_loading(&self) -> bool {
         matches!(self.state.loading.load(), LoadState::Loading)
+    }
+
+    pub fn mark_load_paths(
+        &self,
+        paths: impl IntoIterator<Item = PathId>,
+    ) -> Result<()> {
+        let to_mark: FxHashSet<_> = paths.into_iter().collect();
+
+        let mut already_marked: FxHashMap<PathId, usize> = FxHashMap::default();
+
+        let mut unused_rows: FxHashSet<usize> = FxHashSet::default();
+
+        for (ix, row) in self.row_states.iter().enumerate() {
+            match row.load() {
+                RowState::NeedLoad(path) | RowState::Loaded(path) => {
+                    if to_mark.contains(&path) {
+                        already_marked.insert(path, ix);
+                    } else {
+                        unused_rows.insert(ix);
+                    }
+                }
+                RowState::Null => {
+                    unused_rows.insert(ix);
+                }
+            }
+        }
+
+        let premarked =
+            already_marked.keys().copied().collect::<FxHashSet<_>>();
+        let remaining = to_mark.difference(&premarked);
+
+        for (path, ix) in remaining.copied().zip(unused_rows.into_iter()) {
+            self.row_states[ix].store(RowState::NeedLoad(path));
+        }
+
+        Ok(())
     }
 
     pub fn load_paths(

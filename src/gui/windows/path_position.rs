@@ -105,7 +105,7 @@ impl PathPositionList {
                 let paths = graph.path_ids();
 
                 let paths_to_show =
-                    paths.skip(PATH_OFFSET.load()).take(64).collect::<Vec<_>>();
+                    paths.skip(PATH_OFFSET.load()).take(16).collect::<Vec<_>>();
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("path_position_list_grid").show(ui, |ui| {
