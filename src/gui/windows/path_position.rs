@@ -107,6 +107,10 @@ impl PathPositionList {
                 let paths_to_show =
                     paths.skip(PATH_OFFSET.load()).take(16).collect::<Vec<_>>();
 
+                path_view
+                    .mark_load_paths(paths_to_show.iter().copied())
+                    .unwrap();
+
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("path_position_list_grid").show(ui, |ui| {
                         ui.label("Path");
@@ -144,8 +148,7 @@ impl PathPositionList {
 
                             ui.separator();
 
-                            // TODO need to fetch the index from the path view order
-                            let ix = todo!();
+                            let ix = path_view.find_path_row(path).unwrap_or(0);
 
                             let y = oy + (dy * ix as f32);
 

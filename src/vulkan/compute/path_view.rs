@@ -162,29 +162,16 @@ pub struct PathViewRenderer {
     translation: Arc<AtomicCell<f32>>,
     scaling: Arc<AtomicCell<f32>>,
 
-    // left: Arc<AtomicCell<f64>>,
-    // right: Arc<AtomicCell<f64>>,
     center: Arc<AtomicCell<f64>>,
     radius: Arc<AtomicCell<f64>>,
 
-    // state: Arc<AtomicCell<LoadState>>,
-
-    // reload: AtomicCell<bool>,
-    // should_rerender: Arc<AtomicCell<bool>>,
     pub state: Arc<PathViewState>,
 
-    // offsets: Arc<AtomicCell<(f32, f32)>>,
-
-    // zoom_timer: Arc<AtomicCell<Option<std::time::Instant>>>,
-
-    //
-    // path_order: Arc<Mutex<Vec<PathId>>>,
     path_order: Arc<Mutex<Vec<PathId>>>,
     path_load_states: Arc<Vec<PathState>>,
 
     row_states: Arc<Vec<AtomicCell<RowState>>>,
 
-    // path_data: Vec<u32>,
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
 
@@ -441,10 +428,8 @@ impl PathViewRenderer {
             translation: Arc::new(AtomicCell::new(0.0)),
             scaling: Arc::new(AtomicCell::new(0.0)),
 
-            center: Arc::new(AtomicCell::new(0.001)),
-            radius: Arc::new(AtomicCell::new(0.001)),
-            // center: Arc::new(AtomicCell::new(0.5)),
-            // radius: Arc::new(AtomicCell::new(0.5)),
+            center: Arc::new(AtomicCell::new(0.5)),
+            radius: Arc::new(AtomicCell::new(0.5)),
             state: Arc::new(PathViewState::default()),
 
             path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
@@ -452,8 +437,7 @@ impl PathViewRenderer {
 
             row_states,
 
-            // offsets: Arc::new(AtomicCell::new((0.0, 1.0))),
-            path_data: Arc::new(Mutex::new(Vec::with_capacity(width * height))),
+            path_data: Arc::new(Mutex::new(vec![0u32; width * height])),
             path_count: Arc::new(AtomicCell::new(0)),
 
             path_buffer,
@@ -634,6 +618,16 @@ impl PathViewRenderer {
         Ok(())
     }
 
+    pub fn find_path_row(&self, path: PathId) -> Option<usize> {
+        for (ix, row) in self.row_states.iter().enumerate() {
+            if row.load().same_path(path) {
+                return Some(ix);
+            }
+        }
+
+        None
+    }
+
     pub fn load_paths(
         &self,
         app: &GfaestusVk,
@@ -777,13 +771,18 @@ impl PathViewRenderer {
             let copy_complete = gpu_tasks.queue_task(task);
 
             if let Ok(complete) = copy_complete {
+                log::error!("in copy_complete");
                 let _ = complete.await;
                 // the path buffer has been updated here
                 state.loading.store(LoadState::Idle);
                 state.should_rerender.store(true);
 
+                let mut need_load = 0;
+                let mut loaded_ = 0;
+                let mut null = 0;
+
                 for (ix, path) in loaded {
-                    let c = &self.row_states[ix];
+                    let c = &rows[ix];
 
                     let row = c.load();
 
@@ -813,158 +812,25 @@ impl PathViewRenderer {
                             );
                         }
                     }
+
+                    match c.load() {
+                        RowState::Null => null += 1,
+                        RowState::NeedLoad(_) => need_load += 1,
+                        RowState::Loaded(_) => loaded_ += 1,
+                    }
                 }
+
+                log::error!(
+                    "null: {}\tneed load: {}\tloaded: {}",
+                    null,
+                    need_load,
+                    loaded_
+                );
 
                 translation.store(0.0);
                 scaling.store(1.0);
             } else {
-                log::warn!("error queing GPU task in load_paths");
-                state.loading.store(LoadState::Idle);
-            }
-        };
-
-        reactor.spawn_forget(fut)?;
-
-        Ok(())
-    }
-
-    pub fn load_paths_async(
-        &self,
-        app: &GfaestusVk,
-        reactor: &mut Reactor,
-        paths: impl IntoIterator<Item = PathId> + Send + Sync + 'static,
-    ) -> Result<()> {
-        // if self.load_paths_handle.is_some() {
-        //     return Ok(());
-        // }
-
-        self.state.should_reload.store(false);
-        // let left = self.left.load();
-        // let right = self.right.load();
-
-        let center = self.center.load();
-        let radius = self.radius.load();
-
-        let left = center - radius;
-        let right = center + radius;
-
-        log::warn!("loading with l: {}, r: {}", left, right);
-
-        let translation = self.translation.clone();
-        let scaling = self.scaling.clone();
-
-        let graph = reactor.graph_query.clone();
-
-        let width = self.width;
-        let height = self.height;
-
-        // let
-        let gpu_tasks = reactor.gpu_tasks.clone();
-
-        let buffer = self.path_buffer;
-
-        let state = self.state.clone();
-
-        let path_data = self.path_data.clone();
-        let path_count = self.path_count.clone();
-
-        let fut = async move {
-            //
-
-            let mut path_data_local = Vec::with_capacity(width * height);
-
-            let mut num_paths = 0;
-
-            let mut first_path = true;
-
-            let mut first = true;
-
-            let mut first_p = None;
-            let mut last_p = None;
-
-            for path in paths.into_iter().take(64) {
-                let steps = graph.path_pos_steps(path).unwrap();
-                let (_, _, path_len) = steps.last().unwrap();
-
-                num_paths += 1;
-
-                // let len = (*path_len as f64) / 4096.0;
-                // let len = (*path_len as f64) / 2048.0;
-                let len = *path_len as f64;
-                let start = left * len;
-                let end = start + (right - left) * len;
-
-                let s = start as usize;
-                let e = end as usize;
-
-                if first {
-                    log::warn!(
-                        "path_len: {}\tleft: {}\tright: {}",
-                        path_len,
-                        left,
-                        right
-                    );
-                    log::warn!("start: {}\tend: {}", s, e);
-                }
-
-                for x in 0..width {
-                    let n = (x as f64) / width as f64;
-                    let p_ = ((n as f64) * (end - start)) as usize;
-
-                    let p = s + p_.max(1);
-
-                    if first_path {
-                        last_p = Some(p);
-                    }
-
-                    if first {
-                        first = false;
-                        first_p = Some(p);
-                    }
-
-                    let ix =
-                        match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
-                            Ok(i) => i,
-                            Err(i) => i,
-                        };
-
-                    let ix = ix.min(steps.len() - 1);
-
-                    let (handle, _step, _pos) = steps[ix];
-
-                    let v = handle.id().0 - 1;
-                    path_data_local.push(v as u32);
-                }
-                first_path = false;
-            }
-
-            {
-                let mut lock = path_data.lock();
-                *lock = path_data_local.clone();
-                path_count.store(num_paths);
-            }
-
-            log::warn!("{:?}\t{:?}", first_p, last_p);
-
-            // state_cell.store(LoadState::Loading);
-            // state
-
-            let data = Arc::new(path_data_local);
-            let dst = buffer;
-            let task = GpuTask::CopyDataToBuffer { data, dst };
-
-            let copy_complete = gpu_tasks.queue_task(task);
-
-            if let Ok(complete) = copy_complete {
-                let _ = complete.await;
-                // the path buffer has been updated here
-                state.loading.store(LoadState::Idle);
-                state.should_rerender.store(true);
-
-                translation.store(0.0);
-                scaling.store(1.0);
-            } else {
-                log::warn!("error queing GPU task in load_paths");
+                log::error!("error queing GPU task in load_paths");
                 state.loading.store(LoadState::Idle);
             }
         };

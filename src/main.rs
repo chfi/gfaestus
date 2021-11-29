@@ -691,6 +691,8 @@ fn node_color(id) {
                     }
 
                     if should_reload {
+                        path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
+                        /*
                         let path = gfaestus::gui::windows::PathPositionList::PATHS;
 
 
@@ -704,6 +706,7 @@ fn node_color(id) {
                                 .load_paths_async(&gfaestus, &mut app.reactor, paths)
                                 .unwrap();
                         }
+                        */
 
                     }
 
