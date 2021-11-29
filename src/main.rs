@@ -678,38 +678,8 @@ fn node_color(id) {
             Event::RedrawEventsCleared => {
 
 
-                {
-
-                    let mut should_reload = path_view.should_reload();
-
-                    let path = gfaestus::gui::windows::PathPositionList::RELOAD;
-                    if let Some(raw) = gui.console.get_set.get_var(path) {
-                        if let Ok(true) = raw.as_bool() {
-                            gui.console.get_set.set_var(path, rhai::Dynamic::from(false));
-                            should_reload |= true;
-                        }
-                    }
-
-                    if should_reload {
-                        path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
-                        /*
-                        let path = gfaestus::gui::windows::PathPositionList::PATHS;
-
-
-                        if let Some(raw_paths) = gui.console.get_set.get_var(path) {
-                            let paths: Vec<rhai::Dynamic> = raw_paths.cast();
-
-                            let paths = paths.into_iter().map(|d| d.cast::<PathId>());
-
-
-                            path_view
-                                .load_paths_async(&gfaestus, &mut app.reactor, paths)
-                                .unwrap();
-                        }
-                        */
-
-                    }
-
+                if path_view.should_reload() {
+                    path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
                 }
 
                 app.reactor

@@ -661,6 +661,8 @@ impl PathViewRenderer {
         let rows = self.row_states.clone();
 
         let fut = async move {
+            state.loading.store(LoadState::Loading);
+
             let mut loaded_paths: Vec<(usize, PathId, Vec<u32>)> = Vec::new();
 
             let mut num_paths = 0;

@@ -195,23 +195,18 @@ impl PathPositionList {
                             let p0 = Point::new(0.0, y);
                             let p1 = Point::new(1.0, y);
 
-                            let img = if path_view.initialized() {
-                                egui::Image::new(
+                            let row = if path_view.initialized() {
+                                let img = egui::Image::new(
                                     egui::TextureId::User(1),
                                     Point { x: 512.0, y: 32.0 },
                                     // Point { x: 1024.0, y: 32.0 },
                                 )
-                                .uv(Rect::new(p0, p1))
-                            } else {
-                                egui::Image::new(
-                                    egui::TextureId::User(00000),
-                                    Point { x: 512.0, y: 32.0 },
-                                    // Point { x: 1024.0, y: 32.0 },
-                                )
-                                .uv(Rect::new(p0, p1))
-                            };
+                                .uv(Rect::new(p0, p1));
 
-                            let row = ui.add(img);
+                                ui.add(img)
+                            } else {
+                                ui.label("loading")
+                            };
 
                             ui.end_row();
 
