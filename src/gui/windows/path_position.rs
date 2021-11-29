@@ -27,7 +27,12 @@ lazy_static! {
         Mutex::new(None);
 
     static ref PATH_OFFSET: AtomicCell<usize> = AtomicCell::new(0);
+
+    static ref VISIBLE_ROWS: AtomicCell<usize> = AtomicCell::new(8);
 }
+
+const MIN_ROWS: usize = 4;
+const MAX_ROWS: usize = 24;
 
 pub struct PathPositionList {}
 
@@ -36,6 +41,18 @@ impl PathPositionList {
 
     pub const PATHS: &'static str = "gui/path_position_list/paths";
     pub const RELOAD: &'static str = "gui/path_position_list/reload";
+
+    fn more_rows() {
+        let count = VISIBLE_ROWS.load();
+        VISIBLE_ROWS.store((count + 1).min(MAX_ROWS));
+    }
+
+    fn fewer_rows() {
+        let count = VISIBLE_ROWS.load();
+        if count > 5 {
+            VISIBLE_ROWS.store((count - 1).max(MIN_ROWS));
+        }
+    }
 
     pub fn ui(
         ctx: &egui::CtxRef,
@@ -99,13 +116,36 @@ impl PathPositionList {
                     }
                 });
 
+                ui.horizontal(|ui| {
+                    let vis_rows = VISIBLE_ROWS.load();
+
+                    let at_min = vis_rows == MIN_ROWS;
+                    let at_max = vis_rows >= MAX_ROWS;
+
+                    let fewer =
+                        ui.add_enabled(!at_min, egui::Button::new("Rows -"));
+
+                    let more =
+                        ui.add_enabled(!at_max, egui::Button::new("Rows +"));
+
+                    if fewer.clicked() {
+                        Self::fewer_rows();
+                    }
+
+                    if more.clicked() {
+                        Self::more_rows();
+                    }
+                });
+
                 // if let Some(paths) = console.get_set.get_var(Self::PATHS) {
                 // let paths: Vec<rhai::Dynamic> = paths.cast();
 
                 let paths = graph.path_ids();
 
-                let paths_to_show =
-                    paths.skip(PATH_OFFSET.load()).take(16).collect::<Vec<_>>();
+                let paths_to_show = paths
+                    .skip(PATH_OFFSET.load())
+                    .take(VISIBLE_ROWS.load())
+                    .collect::<Vec<_>>();
 
                 path_view
                     .mark_load_paths(paths_to_show.iter().copied())
