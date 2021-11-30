@@ -167,9 +167,8 @@ pub struct PathViewRenderer {
 
     pub state: Arc<PathViewState>,
 
-    path_order: Arc<Mutex<Vec<PathId>>>,
-    path_load_states: Arc<Vec<PathState>>,
-
+    // path_order: Arc<Mutex<Vec<PathId>>>,
+    // path_load_states: Arc<Vec<PathState>>,
     row_states: Arc<Vec<AtomicCell<RowState>>>,
     next_row_ix: AtomicCell<usize>,
 
@@ -401,11 +400,11 @@ impl PathViewRenderer {
             crate::include_shader!("compute/path_view_val.comp.spv"),
         )?;
 
-        let path_load_states: Arc<Vec<PathState>> = {
-            let mut states = Vec::new();
-            states.resize_with(64, || PathState::default());
-            Arc::new(states)
-        };
+        // let path_load_states: Arc<Vec<PathState>> = {
+        //     let mut states = Vec::new();
+        //     states.resize_with(64, || PathState::default());
+        //     Arc::new(states)
+        // };
 
         let row_states: Arc<Vec<AtomicCell<RowState>>> = {
             let mut states = Vec::new();
@@ -433,9 +432,8 @@ impl PathViewRenderer {
             radius: Arc::new(AtomicCell::new(0.5)),
             state: Arc::new(PathViewState::default()),
 
-            path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
-            path_load_states,
-
+            // path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
+            // path_load_states,
             row_states,
             next_row_ix: AtomicCell::new(0),
 
@@ -509,6 +507,12 @@ impl PathViewRenderer {
 
     pub fn force_reload(&self) {
         self.state.should_reload.store(true);
+
+        for rc in self.row_states.iter() {
+            if let RowState::Loaded(p) = rc.load() {
+                rc.store(RowState::NeedLoad(p));
+            }
+        }
     }
 
     pub fn pan(&self, pixel_delta: f64) {
@@ -520,7 +524,7 @@ impl PathViewRenderer {
 
         self.state.should_rerender.store(true);
 
-        self.center.store(center + pixel_delta);
+        self.center.store(center - pixel_delta);
 
         self.enforce_view_limits();
 
@@ -570,7 +574,7 @@ impl PathViewRenderer {
             .iter()
             .any(|r| matches!(r.load(), RowState::NeedLoad(_)));
 
-        !is_loading && should_load
+        !is_loading && (should_load || self.state.should_reload())
     }
 
     pub fn loading_idle(&self) -> bool {
@@ -585,40 +589,35 @@ impl PathViewRenderer {
         &self,
         paths: impl IntoIterator<Item = PathId>,
     ) -> Result<()> {
-        let to_mark_vec: Vec<_> = paths.into_iter().collect();
+        let mut to_mark: FxHashSet<_> = paths.into_iter().collect();
 
-        let mut to_mark: FxHashSet<_> = to_mark_vec.iter().copied().collect();
+        let states_pre =
+            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
 
-        log::warn!("paths to mark: {:?}", to_mark_vec);
-
-        log::warn!("row states before mark_load_paths update");
-        for (ix, row) in self.row_states.iter().enumerate() {
-            log::warn!("    [{:2}] - {:?}", ix, row.load());
-        }
-
-        for (ix, row) in self.row_states.iter().enumerate() {
-            match row.load() {
-                RowState::NeedLoad(path) | RowState::Loaded(path) => {
-                    to_mark.remove(&path);
+        for row in self.row_states.iter() {
+            if let RowState::Loaded(path) = row.load() {
+                if to_mark.remove(&path) {
+                    row.store(RowState::NeedLoad(path));
                 }
-                _ => (),
             }
         }
 
         for path in to_mark {
-            let next_ix = self.next_row_ix.load();
-            let rc = &self.row_states[next_ix];
-            rc.store(RowState::NeedLoad(path));
-            self.next_row_ix
-                .store((next_ix + 1) % self.row_states.len());
+            let next_ix = self
+                .next_row_ix
+                .fetch_update(|i| Some((i + 1) % self.row_states.len()))
+                .unwrap();
+
+            self.row_states[next_ix].store(RowState::NeedLoad(path));
         }
 
-        log::warn!("row states after mark_load_paths update");
-        for (ix, row) in self.row_states.iter().enumerate() {
-            log::warn!("    [{:2}] - {:?}", ix, row.load());
-        }
+        let states_post =
+            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
 
-        log::warn!("---------------------------------------");
+        log::trace!("mark_load_paths() results");
+        for (pre, post) in states_pre.into_iter().zip(states_post) {
+            log::trace!("  {:16?} -> {:?}", pre, post);
+        }
 
         Ok(())
     }
@@ -666,6 +665,7 @@ impl PathViewRenderer {
         let rows = self.row_states.clone();
 
         let fut = async move {
+            state.should_reload.store(false);
             state.loading.store(LoadState::Loading);
 
             let mut loaded_paths: Vec<(usize, PathId, Vec<u32>)> = Vec::new();

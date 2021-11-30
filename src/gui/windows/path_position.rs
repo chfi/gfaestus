@@ -26,19 +26,14 @@ use crate::{
 };
 
 lazy_static! {
-    // static ref ZOOM_UPDATE_FUTURE: Mutex<Option<Box<dyn Future<Output = ()>>>> =
     static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
         Mutex::new(None);
-
     static ref PATH_OFFSET: AtomicCell<usize> = AtomicCell::new(0);
-
     static ref VISIBLE_ROWS: AtomicCell<usize> = AtomicCell::new(8);
-
     static ref FILTERED_IDS: Mutex<Vec<PathId>> = Mutex::new(Vec::new());
-
     static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
-
     static ref PREV_HASH: AtomicCell<u64> = AtomicCell::new(0);
+    static ref MARK_PATHS: AtomicCell<bool> = AtomicCell::new(false);
 }
 
 const MIN_ROWS: usize = 4;
@@ -134,10 +129,9 @@ impl PathPositionList {
 
                     if ui.button("Reset").clicked() {
                         path_view.reset_zoom();
+                        PATH_OFFSET.store(0);
                     }
                 });
-
-                // let prev_name = NAME_FILTER.lock().to_string();
 
                 let mut filter_changed = false;
 
@@ -181,10 +175,7 @@ impl PathPositionList {
 
                 if this_hash != PREV_HASH.load() {
                     PREV_HASH.store(this_hash);
-
-                    path_view
-                        .mark_load_paths(paths_to_show.iter().copied())
-                        .unwrap();
+                    MARK_PATHS.store(true);
                 }
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
@@ -204,12 +195,7 @@ impl PathPositionList {
                         let dy: f32 = 1.0 / 64.0;
                         let oy: f32 = dy / 2.0;
 
-                        // for (ix, path) in
-                        //     paths.skip(PATH_OFFSET.load()).enumerate()
                         for &path in paths_to_show.iter() {
-                            // for path in paths.skip(PATH_OFFSET.load()) {
-                            // let path: PathId = path.cast();
-
                             let path_name =
                                 graph.get_path_name_vec(path).unwrap();
 
@@ -256,11 +242,9 @@ impl PathPositionList {
                                 let delta = interact.drag_delta();
                                 // log::warn!("image drag delta: {}", delta.x);
 
-                                // the pan() function uses
-                                // pixels in terms of the
-                                // image data, so we need to
-                                // scale up the drag delta
-                                // here
+                                // the pan() function uses pixels in
+                                // terms of the image data, so we need
+                                // to scale up the drag delta here
                                 let scaled_delta = 2.0 * delta.x as f64;
                                 // let scaled_delta = 0.5 * delta.x as f64;
 
@@ -268,7 +252,7 @@ impl PathPositionList {
                             }
 
                             if interact.drag_released() {
-                                path_view.force_reload();
+                                MARK_PATHS.store(true);
                             }
 
                             if let Some(pos) = interact.hover_pos() {
@@ -288,9 +272,6 @@ impl PathPositionList {
 
                                     path_view.zoom(d);
 
-                                    let path_view_state =
-                                        path_view.state.clone();
-
                                     let fut = async move {
                                         use futures_timer::Delay;
                                         let delay = Delay::new(
@@ -300,7 +281,7 @@ impl PathPositionList {
                                         );
                                         delay.await;
 
-                                        path_view_state.force_reload();
+                                        MARK_PATHS.store(true);
                                     };
 
                                     {
@@ -421,6 +402,14 @@ impl PathPositionList {
                         Self::more_rows();
                     }
                 });
+
+                if MARK_PATHS.load() {
+                    path_view
+                        .mark_load_paths(paths_to_show.iter().copied())
+                        .unwrap();
+
+                    MARK_PATHS.store(false);
+                }
             });
     }
 }
