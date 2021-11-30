@@ -28,6 +28,10 @@ lazy_static! {
     static ref PATH_OFFSET: AtomicCell<usize> = AtomicCell::new(0);
 
     static ref VISIBLE_ROWS: AtomicCell<usize> = AtomicCell::new(8);
+
+    static ref FILTERED_IDS: Mutex<Vec<PathId>> = Mutex::new(Vec::new());
+
+    static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
 }
 
 const MIN_ROWS: usize = 4;
@@ -48,6 +52,36 @@ impl PathPositionList {
         if count > 5 {
             VISIBLE_ROWS.store((count - 1).max(MIN_ROWS));
         }
+    }
+
+    fn apply_filter(reactor: &Reactor) {
+        let needle = NAME_FILTER.lock();
+
+        let mut filtered = FILTERED_IDS.lock();
+        filtered.clear();
+
+        // if there is no filter, only clear the filter list
+        if needle.is_empty() {
+            return;
+        }
+
+        let graph_query = reactor.graph_query.clone();
+        let graph = graph_query.graph();
+
+        let paths = graph.path_ids();
+
+        let mut name_buf = Vec::new();
+
+        filtered.extend(paths.filter_map(|p| {
+            let name = graph.get_path_name(p)?;
+            name_buf.clear();
+            name_buf.extend(name);
+
+            name_buf.contains_str(needle.as_bytes()).then(|| p)
+        }));
+
+        // TODO fix this -- not sure how it should behave, though
+        PATH_OFFSET.store(0);
     }
 
     pub fn ui(
@@ -93,36 +127,42 @@ impl PathPositionList {
                     }
                 });
 
-                ui.horizontal(|ui| {
-                    let vis_rows = VISIBLE_ROWS.load();
+                // let prev_name = NAME_FILTER.lock().to_string();
 
-                    let at_min = vis_rows == MIN_ROWS;
-                    let at_max = vis_rows >= MAX_ROWS;
+                let mut filter_changed = false;
 
-                    let fewer =
-                        ui.add_enabled(!at_min, egui::Button::new("Rows -"));
+                let name_resp = ui.horizontal(|ui| {
+                    let mut name_filter = NAME_FILTER.lock();
+                    let text_entry = ui
+                        .text_edit_singleline(&mut name_filter as &mut String);
 
-                    let more =
-                        ui.add_enabled(!at_max, egui::Button::new("Rows +"));
-
-                    if fewer.clicked() {
-                        Self::fewer_rows();
+                    if text_entry.changed() {
+                        filter_changed = true;
                     }
-
-                    if more.clicked() {
-                        Self::more_rows();
-                    }
+                    name_filter.to_string()
                 });
 
-                // if let Some(paths) = console.get_set.get_var(Self::PATHS) {
-                // let paths: Vec<rhai::Dynamic> = paths.cast();
+                let name = name_resp.inner;
 
-                let paths = graph.path_ids();
+                if filter_changed {
+                    Self::apply_filter(reactor);
+                }
 
-                let paths_to_show = paths
-                    .skip(PATH_OFFSET.load())
-                    .take(VISIBLE_ROWS.load())
-                    .collect::<Vec<_>>();
+                let paths_to_show = if name.is_empty() {
+                    graph
+                        .path_ids()
+                        .skip(PATH_OFFSET.load())
+                        .take(VISIBLE_ROWS.load())
+                        .collect::<Vec<_>>()
+                } else {
+                    FILTERED_IDS
+                        .lock()
+                        .iter()
+                        .copied()
+                        .skip(PATH_OFFSET.load())
+                        .take(VISIBLE_ROWS.load())
+                        .collect::<Vec<_>>()
+                };
 
                 path_view
                     .mark_load_paths(paths_to_show.iter().copied())
