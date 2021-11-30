@@ -21,7 +21,6 @@ use crate::{
 };
 
 lazy_static! {
-    static ref CONSOLE_ADDED: AtomicCell<bool> = AtomicCell::new(false);
     // static ref ZOOM_UPDATE_FUTURE: Mutex<Option<Box<dyn Future<Output = ()>>>> =
     static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
         Mutex::new(None);
@@ -38,9 +37,6 @@ pub struct PathPositionList {}
 
 impl PathPositionList {
     pub const ID: &'static str = "path_position_list";
-
-    pub const PATHS: &'static str = "gui/path_position_list/paths";
-    pub const RELOAD: &'static str = "gui/path_position_list/reload";
 
     fn more_rows() {
         let count = VISIBLE_ROWS.load();
@@ -64,25 +60,6 @@ impl PathPositionList {
         path_view: &PathViewRenderer,
         nodes: &[Node],
     ) {
-        // hacky but works
-        if !CONSOLE_ADDED.load() {
-            let mut paths: Vec<rhai::Dynamic> = Vec::new();
-
-            paths.push(rhai::Dynamic::from(PathId(0)));
-            paths.push(rhai::Dynamic::from(PathId(1)));
-            paths.push(rhai::Dynamic::from(PathId(2)));
-            paths.push(rhai::Dynamic::from(PathId(3)));
-
-            console.get_set.set_vars([
-                (Self::PATHS, rhai::Dynamic::from(paths)),
-                (Self::RELOAD, rhai::Dynamic::from(true)),
-            ]);
-
-            log::warn!("initialized PathPositionList");
-
-            CONSOLE_ADDED.store(true);
-        }
-
         let graph_query = reactor.graph_query.clone();
         let graph = graph_query.graph();
 
@@ -364,7 +341,27 @@ impl PathPositionList {
                         }
                     })
                 });
-                // }
+
+                ui.horizontal(|ui| {
+                    let vis_rows = VISIBLE_ROWS.load();
+
+                    let at_min = vis_rows == MIN_ROWS;
+                    let at_max = vis_rows >= MAX_ROWS;
+
+                    let fewer =
+                        ui.add_enabled(!at_min, egui::Button::new("Rows -"));
+
+                    let more =
+                        ui.add_enabled(!at_max, egui::Button::new("Rows +"));
+
+                    if fewer.clicked() {
+                        Self::fewer_rows();
+                    }
+
+                    if more.clicked() {
+                        Self::more_rows();
+                    }
+                });
             });
     }
 }

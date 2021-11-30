@@ -1352,8 +1352,6 @@ impl ConsoleShared {
 
         self.add_modal_fns(&mut engine);
 
-        self.add_path_view_fns(&mut engine);
-
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {
             use crossbeam::channel;
@@ -1512,36 +1510,6 @@ impl ConsoleShared {
         engine.register_global_module(handle.into());
 
         engine
-    }
-
-    fn add_path_view_fns(&self, engine: &mut rhai::Engine) {
-        let paths_ = super::windows::PathPositionList::PATHS;
-        let reload_ = super::windows::PathPositionList::RELOAD;
-
-        let get_set = self.get_set.clone();
-        let graph = self.graph.graph.clone();
-
-        engine.register_fn(
-            "set_path_view_list",
-            move |path_names: Vec<rhai::Dynamic>| {
-                let path_ids: Vec<_> = path_names
-                    .into_iter()
-                    .filter_map(|name| {
-                        if let Ok(name) = name.into_immutable_string() {
-                            let path_id = graph.get_path_id(name.as_bytes())?;
-                            Some(rhai::Dynamic::from(path_id))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
-
-                let mut lock = get_set.console_vars.lock();
-                lock.insert(paths_.to_string(), rhai::Dynamic::from(path_ids));
-
-                lock.insert(reload_.to_string(), rhai::Dynamic::from(true));
-            },
-        );
     }
 
     pub fn add_modal_fns(&self, engine: &mut rhai::Engine) {
