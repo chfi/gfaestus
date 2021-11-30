@@ -1,3 +1,8 @@
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
 use crossbeam::atomic::AtomicCell;
 use futures::future::RemoteHandle;
 use handlegraph::pathhandlegraph::{
@@ -32,6 +37,8 @@ lazy_static! {
     static ref FILTERED_IDS: Mutex<Vec<PathId>> = Mutex::new(Vec::new());
 
     static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
+
+    static ref PREV_HASH: AtomicCell<u64> = AtomicCell::new(0);
 }
 
 const MIN_ROWS: usize = 4;
@@ -106,8 +113,11 @@ impl PathPositionList {
                 ui.horizontal(|ui| {
                     let path_ix = PATH_OFFSET.load();
 
+                    let n_rows = VISIBLE_ROWS.load();
+
                     let at_top = path_ix == 0;
-                    let at_btm = path_ix >= (path_count.max(1) - 1);
+
+                    let at_btm = path_ix >= (path_count.max(n_rows) - n_rows);
 
                     let up = ui.add_enabled(!at_top, egui::Button::new("Up"));
 
@@ -164,9 +174,18 @@ impl PathPositionList {
                         .collect::<Vec<_>>()
                 };
 
-                path_view
-                    .mark_load_paths(paths_to_show.iter().copied())
-                    .unwrap();
+                let mut hasher = DefaultHasher::default();
+                paths_to_show.hash(&mut hasher);
+
+                let this_hash = hasher.finish();
+
+                if this_hash != PREV_HASH.load() {
+                    PREV_HASH.store(this_hash);
+
+                    path_view
+                        .mark_load_paths(paths_to_show.iter().copied())
+                        .unwrap();
+                }
 
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("path_position_list_grid").show(ui, |ui| {

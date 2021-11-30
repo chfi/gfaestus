@@ -171,6 +171,7 @@ pub struct PathViewRenderer {
     path_load_states: Arc<Vec<PathState>>,
 
     row_states: Arc<Vec<AtomicCell<RowState>>>,
+    next_row_ix: AtomicCell<usize>,
 
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
@@ -436,6 +437,7 @@ impl PathViewRenderer {
             path_load_states,
 
             row_states,
+            next_row_ix: AtomicCell::new(0),
 
             path_data: Arc::new(Mutex::new(vec![0u32; width * height])),
             path_count: Arc::new(AtomicCell::new(0)),
@@ -583,37 +585,40 @@ impl PathViewRenderer {
         &self,
         paths: impl IntoIterator<Item = PathId>,
     ) -> Result<()> {
-        let to_mark: FxHashSet<_> = paths.into_iter().collect();
+        let to_mark_vec: Vec<_> = paths.into_iter().collect();
 
-        let mut already_marked: FxHashMap<PathId, usize> = FxHashMap::default();
+        let mut to_mark: FxHashSet<_> = to_mark_vec.iter().copied().collect();
 
-        let mut unused_rows: FxHashSet<usize> = FxHashSet::default();
+        log::warn!("paths to mark: {:?}", to_mark_vec);
+
+        log::warn!("row states before mark_load_paths update");
+        for (ix, row) in self.row_states.iter().enumerate() {
+            log::warn!("    [{:2}] - {:?}", ix, row.load());
+        }
 
         for (ix, row) in self.row_states.iter().enumerate() {
             match row.load() {
                 RowState::NeedLoad(path) | RowState::Loaded(path) => {
-                    if to_mark.contains(&path) {
-                        already_marked.insert(path, ix);
-                    } else {
-                        unused_rows.insert(ix);
-                    }
+                    to_mark.remove(&path);
                 }
-                RowState::Null => {
-                    unused_rows.insert(ix);
-                }
+                _ => (),
             }
         }
 
-        let premarked =
-            already_marked.keys().copied().collect::<FxHashSet<_>>();
-        let remaining = to_mark.difference(&premarked);
-
-        let mut unused_rows = unused_rows.into_iter().collect::<Vec<_>>();
-        unused_rows.sort();
-
-        for (path, ix) in remaining.copied().zip(unused_rows.into_iter()) {
-            self.row_states[ix].store(RowState::NeedLoad(path));
+        for path in to_mark {
+            let next_ix = self.next_row_ix.load();
+            let rc = &self.row_states[next_ix];
+            rc.store(RowState::NeedLoad(path));
+            self.next_row_ix
+                .store((next_ix + 1) % self.row_states.len());
         }
+
+        log::warn!("row states after mark_load_paths update");
+        for (ix, row) in self.row_states.iter().enumerate() {
+            log::warn!("    [{:2}] - {:?}", ix, row.load());
+        }
+
+        log::warn!("---------------------------------------");
 
         Ok(())
     }
