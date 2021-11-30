@@ -686,7 +686,7 @@ impl PathViewRenderer {
                 // rows it can use, so we just want the highest
                 // non-null row, since rows are always used from in order
                 if !matches!(row, RowState::Null) {
-                    num_paths = y;
+                    num_paths = y + 1;
                 }
 
                 if let RowState::NeedLoad(path) = row {

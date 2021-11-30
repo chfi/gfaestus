@@ -57,39 +57,38 @@ void main() {
     uint c_n = paths.node[ix];
     uint r_n = paths.node[r_ix];
 
-    // if (c_n != 0) {
-      int mid = int(c_n) - 1;
-      int left = int(l_n) - 1;
-      int right = int(r_n) - 1;
+    int mid = int(c_n);
+    int left = int(l_n);
+    int right = int(r_n);
 
-      vec4 cm = texelFetch(overlay, mid);
-      vec4 cl = cm;
-      vec4 cr = cm;
+    vec4 cm = texelFetch(overlay, mid);
+    vec4 cl = cm;
+    vec4 cr = cm;
 
-      if (l_n != 0) {
-        cl = texelFetch(overlay, left);
-      }
+    if (l_n != 0) {
+      cl = texelFetch(overlay, left);
+    }
 
-      if (r_n != 0) {
-        cr = texelFetch(overlay, right);
-      }
+    if (r_n != 0) {
+      cr = texelFetch(overlay, right);
+    }
 
-      // vec4 color = cm;
-      // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
-      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-      // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
+    // vec4 color = cm;
+    // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
+    vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+    // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
 
-      if (pc.translation < 0.0 && orig_x < pc.translation) {
-        int n = int(paths.node[leftmost]);
-        color = texelFetch(overlay, n - 1);
-      } else if (pc.translation < 0.0 && orig_x >= (2048.0 - pc.translation)) {
-        int n = int(paths.node[rightmost]);
-        color = texelFetch(overlay, n - 1);
-      }
+    if (pc.translation < 0.0 && orig_x < pc.translation) {
+      int n = int(paths.node[leftmost]);
+      color = texelFetch(overlay, n);
+    } else if (pc.translation < 0.0 && orig_x >= (2048.0 - pc.translation)) {
+      int n = int(paths.node[rightmost]);
+      color = texelFetch(overlay, n);
+    }
 
-      imageStore(image, pixel, color);
-      // write sampled value at index to output buffer
+    imageStore(image, pixel, color);
+    // write sampled value at index to output buffer
     // }
 
   }
