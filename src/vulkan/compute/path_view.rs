@@ -30,14 +30,12 @@ use super::{ComputeManager, ComputePipeline};
 pub enum LoadState {
     Idle,
     Loading,
-    // ShouldReload,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RenderState {
     Idle,
     Rendering,
-    // ShouldRerender,
 }
 
 //////////////
@@ -104,7 +102,7 @@ impl PathViewState {
 ////////////
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum RowState {
+enum RowState {
     Null,
     NeedLoad(PathId),
     Loaded(PathId),
@@ -117,19 +115,19 @@ impl std::default::Default for RowState {
 }
 
 impl RowState {
-    pub fn is_null(&self) -> bool {
+    fn is_null(&self) -> bool {
         *self == Self::Null
     }
 
-    pub fn is_loaded(&self) -> bool {
+    fn is_loaded(&self) -> bool {
         matches!(self, RowState::Loaded(_))
     }
 
-    pub fn is_loaded_path(&self, path: PathId) -> bool {
+    fn is_loaded_path(&self, path: PathId) -> bool {
         *self == RowState::Loaded(path)
     }
 
-    pub fn path(&self) -> Option<PathId> {
+    fn path(&self) -> Option<PathId> {
         match *self {
             RowState::NeedLoad(i) => Some(i),
             RowState::Loaded(i) => Some(i),
@@ -137,7 +135,7 @@ impl RowState {
         }
     }
 
-    pub fn same_path(&self, path: PathId) -> bool {
+    fn same_path(&self, path: PathId) -> bool {
         let this_path = match *self {
             RowState::NeedLoad(i) => i,
             RowState::Loaded(i) => i,
@@ -167,8 +165,6 @@ pub struct PathViewRenderer {
 
     pub state: Arc<PathViewState>,
 
-    // path_order: Arc<Mutex<Vec<PathId>>>,
-    // path_load_states: Arc<Vec<PathState>>,
     row_states: Arc<Vec<AtomicCell<RowState>>>,
     next_row_ix: AtomicCell<usize>,
 
@@ -400,12 +396,6 @@ impl PathViewRenderer {
             crate::include_shader!("compute/path_view_val.comp.spv"),
         )?;
 
-        // let path_load_states: Arc<Vec<PathState>> = {
-        //     let mut states = Vec::new();
-        //     states.resize_with(64, || PathState::default());
-        //     Arc::new(states)
-        // };
-
         let row_states: Arc<Vec<AtomicCell<RowState>>> = {
             let mut states = Vec::new();
             states.resize_with(64, || RowState::default().into());
@@ -432,8 +422,6 @@ impl PathViewRenderer {
             radius: Arc::new(AtomicCell::new(0.5)),
             state: Arc::new(PathViewState::default()),
 
-            // path_order: Arc::new(Mutex::new(Vec::with_capacity(64))),
-            // path_load_states,
             row_states,
             next_row_ix: AtomicCell::new(0),
 
@@ -445,13 +433,17 @@ impl PathViewRenderer {
             path_allocation_info,
 
             output_image,
-            // output_buffer,
-            // output_allocation,
-            // output_allocation_info,
             fence_id: AtomicCell::new(None),
 
             initialized: false.into(),
         })
+    }
+
+    pub fn view(&self) -> (f64, f64) {
+        let c = self.center.load();
+        let r = self.radius.load();
+
+        (c - r, c + r)
     }
 
     pub fn initialized(&self) -> bool {
@@ -482,7 +474,6 @@ impl PathViewRenderer {
     }
 
     pub fn reset_zoom(&self) {
-        // self.set_visible_range(0.0, 1.0);
         self.center.store(0.5);
         self.radius.store(0.5);
 
@@ -491,15 +482,22 @@ impl PathViewRenderer {
     }
 
     pub fn set_visible_range(&self, left: f64, right: f64) {
-        // let center =
-        let l = left.min(right).clamp(0.0, 4096.0);
-        let r = left.max(right).clamp(0.0, 4096.0);
+        let l = left.min(right);
+        let r = left.max(right);
 
-        let len = r - l;
-        let mid = left + (len / 2.0);
+        let rad = (r - l) / 2.0;
+        let mid = left + rad;
 
         self.center.store(mid);
-        self.radius.store(len);
+        self.radius.store(rad);
+
+        self.enforce_view_limits();
+
+        log::warn!(
+            "set range to {}, {}",
+            self.center.load(),
+            self.radius.load()
+        );
 
         self.should_reload();
         self.should_rerender();
@@ -515,16 +513,19 @@ impl PathViewRenderer {
         }
     }
 
-    pub fn pan(&self, pixel_delta: f64) {
+    pub fn pan(&self, delta: f64) {
         let center = self.center.load();
-        let radius = self.radius.load();
 
-        let t = self.translation.load();
-        self.translation.store(t + pixel_delta as f32);
+        let w = self.width as f64;
+        let pixel_delta = delta * w;
+
+        let t = self.translation.load() as f64;
+        let t = (t + pixel_delta).clamp(-w, w);
+        self.translation.store(t as f32);
 
         self.state.should_rerender.store(true);
 
-        self.center.store(center - pixel_delta);
+        self.center.store(center - (delta / 2.0));
 
         self.enforce_view_limits();
 
@@ -536,7 +537,6 @@ impl PathViewRenderer {
     }
 
     pub fn zoom(&self, delta: f64) {
-        // let center = self.center.load();
         let radius = self.radius.load();
 
         let radius_ = (radius * delta).clamp(0.000_000_1, 0.5);
@@ -549,7 +549,7 @@ impl PathViewRenderer {
             self.state.should_rerender.store(true);
 
             let s = self.scaling.load();
-            self.scaling.store(s * delta as f32);
+            self.scaling.store((s * delta as f32).clamp(0.1, 10.0));
         }
     }
 

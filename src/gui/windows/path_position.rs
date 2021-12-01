@@ -34,6 +34,7 @@ lazy_static! {
     static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
     static ref PREV_HASH: AtomicCell<u64> = AtomicCell::new(0);
     static ref MARK_PATHS: AtomicCell<bool> = AtomicCell::new(false);
+    static ref VIEW_RANGE: AtomicCell<(f64, f64)> = AtomicCell::new((0.0, 1.0));
 }
 
 const MIN_ROWS: usize = 4;
@@ -101,11 +102,13 @@ impl PathPositionList {
 
         let path_count = graph.path_count();
 
-        egui::Window::new("Path View")
+        let _inner_resp = egui::Window::new("Path View")
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
+                let mut filter_changed = false;
+
+                let name_resp = ui.horizontal(|ui| {
                     let path_ix = PATH_OFFSET.load();
 
                     let n_rows = VISIBLE_ROWS.load();
@@ -131,11 +134,7 @@ impl PathPositionList {
                         path_view.reset_zoom();
                         PATH_OFFSET.store(0);
                     }
-                });
 
-                let mut filter_changed = false;
-
-                let name_resp = ui.horizontal(|ui| {
                     let mut name_filter = NAME_FILTER.lock();
                     let text_entry = ui
                         .text_edit_singleline(&mut name_filter as &mut String);
@@ -181,19 +180,57 @@ impl PathPositionList {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("path_position_list_grid").show(ui, |ui| {
                         ui.label("Path");
-                        ui.separator();
-
-                        ui.label("-");
-                        ui.end_row();
 
                         let mut rows = Vec::new();
 
-                        // let graph_query = reactor.graph_query.clone();
-                        // let graph = graph_query.graph();
                         let path_pos = graph_query.path_positions();
 
                         let dy: f32 = 1.0 / 64.0;
                         let oy: f32 = dy / 2.0;
+
+                        // let (mut left, mut right) = path_view.view();
+                        let (mut left, mut right) = VIEW_RANGE.load();
+
+                        let l = left;
+                        let r = right;
+
+                        let left_v = egui::DragValue::new::<f64>(&mut left)
+                            .speed(0.01)
+                            .clamp_range(0.0..=(r - 0.005));
+                        let right_v = egui::DragValue::new::<f64>(&mut right)
+                            .speed(0.01)
+                            .clamp_range((l + 0.005)..=1.0);
+
+                        let left_w = ui
+                            .with_layout(egui::Layout::right_to_left(), |ui| {
+                                ui.add(left_v)
+                            });
+
+                        ui.label("");
+
+                        let right_w = ui
+                            .with_layout(egui::Layout::left_to_right(), |ui| {
+                                ui.add(right_v)
+                            });
+
+                        let edges = left_w.inner.union(right_w.inner);
+
+                        if edges.dragged() {
+                            VIEW_RANGE.store((left, right));
+                        } else if !(edges.dragged() || edges.has_focus()) {
+                            VIEW_RANGE.store(path_view.view());
+                        }
+
+                        if (edges.changed()
+                            && (!edges.dragged() && !edges.has_focus()))
+                            || edges.lost_focus()
+                            || edges.drag_released()
+                        {
+                            path_view.set_visible_range(left, right);
+                            MARK_PATHS.store(true);
+                        }
+
+                        ui.end_row();
 
                         for &path in paths_to_show.iter() {
                             let path_name =
@@ -202,13 +239,7 @@ impl PathPositionList {
                             let path_len =
                                 path_pos.path_base_len(path).unwrap() as f32;
 
-                            // let mut row =
-                            ui.label(format!("{}", path.0));
-                            ui.separator();
-
                             ui.label(format!("{}", path_name.as_bstr()));
-
-                            ui.separator();
 
                             let ix = path_view.find_path_row(path).unwrap_or(0);
 
@@ -216,6 +247,16 @@ impl PathPositionList {
 
                             let p0 = Point::new(0.0, y);
                             let p1 = Point::new(1.0, y);
+
+                            let (left_pos, right_pos) = {
+                                let len = path_len as f64;
+                                ((left * len) as usize, (right * len) as usize)
+                            };
+
+                            let _left_lb = ui.with_layout(
+                                egui::Layout::right_to_left(),
+                                |ui| ui.label(left_pos),
+                            );
 
                             let row = if path_view.initialized() {
                                 let img = egui::Image::new(
@@ -230,6 +271,11 @@ impl PathPositionList {
                                 ui.label("loading")
                             };
 
+                            let _right_lb = ui.with_layout(
+                                egui::Layout::left_to_right(),
+                                |ui| ui.label(right_pos),
+                            );
+
                             ui.end_row();
 
                             let interact = ui.interact(
@@ -240,15 +286,13 @@ impl PathPositionList {
 
                             if interact.dragged() {
                                 let delta = interact.drag_delta();
-                                // log::warn!("image drag delta: {}", delta.x);
 
                                 // the pan() function uses pixels in
                                 // terms of the image data, so we need
                                 // to scale up the drag delta here
-                                let scaled_delta = 2.0 * delta.x as f64;
-                                // let scaled_delta = 0.5 * delta.x as f64;
+                                let n = delta.x / interact.rect.width();
 
-                                path_view.pan(scaled_delta);
+                                path_view.pan(n as f64);
                             }
 
                             if interact.drag_released() {
@@ -311,7 +355,6 @@ impl PathPositionList {
 
                                 let y = ix;
                                 let x = ((path_view.width as f32) * n) as usize;
-                                // let x = ((path_view.width as f32) * n * 2.0) as usize;
 
                                 let node = path_view.get_node_at(x, y);
 
@@ -357,9 +400,6 @@ impl PathPositionList {
                                             );
                                         }
                                     }
-
-                                    // let msg = AppMsg::goto_node(node);
-                                    // channels.app_tx.send(msg).unwrap();
                                 }
 
                                 if interact.clicked() {
