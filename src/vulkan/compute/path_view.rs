@@ -614,9 +614,9 @@ impl PathViewRenderer {
         let states_post =
             self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
 
-        log::trace!("mark_load_paths() results");
+        log::warn!("mark_load_paths() results");
         for (pre, post) in states_pre.into_iter().zip(states_post) {
-            log::trace!("  {:16?} -> {:?}", pre, post);
+            log::warn!("  {:16?} -> {:?}", pre, post);
         }
 
         Ok(())
