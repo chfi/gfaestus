@@ -528,12 +528,6 @@ impl PathViewRenderer {
         self.center.store(center - (delta / 2.0));
 
         self.enforce_view_limits();
-
-        log::warn!(
-            "center: {}\tradius: {}",
-            self.center.load(),
-            self.radius.load()
-        );
     }
 
     pub fn zoom(&self, delta: f64) {
@@ -591,13 +585,19 @@ impl PathViewRenderer {
     ) -> Result<()> {
         let mut to_mark: FxHashSet<_> = paths.into_iter().collect();
 
-        let states_pre =
-            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
+        let states_pre = if log::log_enabled!(log::Level::Trace) {
+            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
 
         for row in self.row_states.iter() {
-            if let RowState::Loaded(path) = row.load() {
-                if to_mark.remove(&path) {
-                    row.store(RowState::NeedLoad(path));
+            match row.load() {
+                RowState::Null => (),
+                RowState::NeedLoad(path) | RowState::Loaded(path) => {
+                    if to_mark.remove(&path) {
+                        row.store(RowState::NeedLoad(path));
+                    }
                 }
             }
         }
@@ -611,12 +611,22 @@ impl PathViewRenderer {
             self.row_states[next_ix].store(RowState::NeedLoad(path));
         }
 
-        let states_post =
-            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
+        let states_post = if log::log_enabled!(log::Level::Trace) {
+            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
 
-        log::warn!("mark_load_paths() results");
-        for (pre, post) in states_pre.into_iter().zip(states_post) {
-            log::warn!("  {:16?} -> {:?}", pre, post);
+        if log::log_enabled!(log::Level::Trace) {
+            let states_post =
+                self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
+
+            log::warn!("mark_load_paths() results");
+            for (ix, (pre, post)) in
+                states_pre.into_iter().zip(states_post).enumerate()
+            {
+                log::warn!(" {:2} - {:2?} -> {:?}", ix, pre, post);
+            }
         }
 
         Ok(())
@@ -643,7 +653,7 @@ impl PathViewRenderer {
         let left = center - radius;
         let right = center + radius;
 
-        log::warn!("loading with l: {}, r: {}", left, right);
+        // log::warn!("loading with l: {}, r: {}", left, right);
 
         let translation = self.translation.clone();
         let scaling = self.scaling.clone();
@@ -672,13 +682,6 @@ impl PathViewRenderer {
 
             let mut num_paths = 0;
 
-            let mut first_path = true;
-
-            let mut first = true;
-
-            let mut first_p = None;
-            let mut last_p = None;
-
             for (y, c) in rows.iter().enumerate() {
                 let row = c.load();
 
@@ -704,30 +707,11 @@ impl PathViewRenderer {
                     let s = start as usize;
                     let e = end as usize;
 
-                    if first {
-                        log::warn!(
-                            "path_len: {}\tleft: {}\tright: {}",
-                            path_len,
-                            left,
-                            right
-                        );
-                        log::warn!("start: {}\tend: {}", s, e);
-                    }
-
                     for x in 0..width {
                         let n = (x as f64) / width as f64;
                         let p_ = ((n as f64) * (end - start)) as usize;
 
                         let p = s + p_.max(1);
-
-                        if first_path {
-                            last_p = Some(p);
-                        }
-
-                        if first {
-                            first = false;
-                            first_p = Some(p);
-                        }
 
                         let ix = match steps
                             .binary_search_by_key(&p, |(_, _, p)| *p)
@@ -743,7 +727,6 @@ impl PathViewRenderer {
                         let v = handle.id().0 - 1;
                         path_row.push(v as u32);
                     }
-                    first_path = false;
 
                     loaded_paths.push((y, path, path_row));
                 }
@@ -769,8 +752,6 @@ impl PathViewRenderer {
                 (loaded, lock.to_owned())
             };
 
-            log::warn!("{:?}\t{:?}", first_p, last_p);
-
             let data = Arc::new(path_data_local);
             let dst = buffer;
             let task = GpuTask::CopyDataToBuffer { data, dst };
@@ -778,7 +759,7 @@ impl PathViewRenderer {
             let copy_complete = gpu_tasks.queue_task(task);
 
             if let Ok(complete) = copy_complete {
-                log::error!("in copy_complete");
+                log::trace!("in copy_complete");
                 let _ = complete.await;
                 // the path buffer has been updated here
                 state.loading.store(LoadState::Idle);
@@ -799,16 +780,16 @@ impl PathViewRenderer {
                                 c.store(RowState::Loaded(p));
                             } else if p != path {
                                 log::warn!(
-                                    "path view row {} state is inconsistent!",
-                                    ix
+                                    "path view row {} state is inconsistent! {:?} was replaced by {:?}",
+                                    ix, path, p
                                 );
                             }
                         }
                         RowState::Loaded(p) => {
                             if p != path {
                                 log::warn!(
-                                    "path view row {} state is inconsistent!",
-                                    ix
+                                    "path view row {} state is inconsistent! should load {:?}, is {:?}",
+                                    ix, path, p
                                 );
                             }
                         }
@@ -827,7 +808,7 @@ impl PathViewRenderer {
                     }
                 }
 
-                log::error!(
+                log::trace!(
                     "null: {}\tneed load: {}\tloaded: {}",
                     null,
                     need_load,

@@ -175,16 +175,13 @@ impl PathPositionList {
 
                 let row_height = 32.0;
 
-                // egui::ScrollArea::vertical().show(ui, |ui| {
                 egui::ScrollArea::vertical()
                     .max_height((VISIBLE_ROWS.load() as f32) * row_height)
                     .show_rows(
                         ui,
-                        row_height, // todo actually calculate this
+                        row_height, // todo actually calculate this??
                         num_rows,
                         |ui, range| {
-                            log::error!("range: {:?}", range);
-
                             path_range = range;
                             if path_range.start > path_range.end {
                                 path_range = path_range.end..path_range.end
@@ -209,7 +206,6 @@ impl PathPositionList {
                                     let dy: f32 = 1.0 / 64.0;
                                     let oy: f32 = dy / 2.0;
 
-                                    // let (mut left, mut right) = path_view.view();
                                     let (mut left, mut right) =
                                         VIEW_RANGE.load();
 
@@ -261,8 +257,11 @@ impl PathPositionList {
 
                                     ui.end_row();
 
-                                    for &path in
-                                        paths_to_show[path_range.clone()].iter()
+                                    for (i_ix, &path) in paths_to_show
+                                        .iter()
+                                        .enumerate()
+                                        .skip(row_range.0)
+                                        .take(row_range.1 - row_range.0)
                                     {
                                         let path_name = graph
                                             .get_path_name_vec(path)
@@ -322,7 +321,7 @@ impl PathPositionList {
 
                                         let interact = ui.interact(
                                             row.rect,
-                                            egui::Id::new(Self::ID).with(ix),
+                                            egui::Id::new(Self::ID).with(i_ix),
                                             egui::Sense::click_and_drag(),
                                         );
 
@@ -363,12 +362,11 @@ impl PathPositionList {
                                                 path_view.zoom(d);
 
                                                 let fut = async move {
-                                                    use futures_timer::Delay;
-                                                    let delay = Delay::new(
-                                            std::time::Duration::from_millis(
-                                                150,
-                                            ),
-                                        );
+                                                    let delay = futures_timer::Delay::new(
+                                                        std::time::Duration::from_millis(
+                                                            150,
+                                                        ),
+                                                    );
                                                     delay.await;
 
                                                     MARK_PATHS.store(true);
@@ -511,12 +509,8 @@ impl PathPositionList {
                 });
 
                 if MARK_PATHS.load() {
-                    // path_range.start
-                    log::error!("range: {:?}", path_range);
                     let to_mark = paths_to_show[path_range].iter().copied();
-
                     path_view.mark_load_paths(to_mark).unwrap();
-
                     MARK_PATHS.store(false);
                 }
             });
