@@ -424,10 +424,7 @@ impl GradientPicker {
                         let mut current_gradient =
                             self.overlay_state.gradient();
 
-                        let den = self.gradient_names.len() as f32;
-                        let dy = 1.0 / den;
-                        // let dy: f32 = 1.0 / 38.0;
-                        // let oy: f32 = dy / 2.0;
+                        let dy = 1.0 / 64.0;
 
                         for (ix, (gradient_name, name)) in
                             self.gradient_names.iter().enumerate()

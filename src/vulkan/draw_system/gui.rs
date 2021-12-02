@@ -293,35 +293,6 @@ impl GuiPipeline {
                             vx_offset as i32,
                             0,
                         )
-                        /*
-                        device.cmd_bind_pipeline(
-                            cmd_buf,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.tex_1d_pipeline,
-                        );
-
-                        let desc_write = self
-                            .gradient_descriptor_write(texture_id, gradients);
-
-                        let desc_writes = [desc_write];
-
-                        push_descriptor.cmd_push_descriptor_set(
-                            cmd_buf,
-                            vk::PipelineBindPoint::GRAPHICS,
-                            self.tex_1d_pipeline_layout,
-                            0,
-                            &desc_writes,
-                        );
-
-                        use vk::ShaderStageFlags as Flags;
-                        device.cmd_push_constants(
-                            cmd_buf,
-                            self.tex_1d_pipeline_layout,
-                            Flags::VERTEX,
-                            0,
-                            &pc_bytes,
-                        );
-                        */
                     }
                 }
             };
