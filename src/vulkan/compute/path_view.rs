@@ -230,8 +230,6 @@ impl PathViewRenderer {
             (buffer, allocation, allocation_info)
         };
 
-        dbg!();
-
         let output_image = {
             let format = vk::Format::R8G8B8A8_UNORM;
 
@@ -250,8 +248,6 @@ impl PathViewRenderer {
 
             texture
         };
-
-        dbg!();
 
         let descriptor_pool = {
             let buffer_size = vk::DescriptorPoolSize {
@@ -276,8 +272,6 @@ impl PathViewRenderer {
             unsafe { device.create_descriptor_pool(&pool_info, None) }
         }?;
 
-        dbg!();
-
         let descriptor_set_layout = Self::create_descriptor_set_layout(device)?;
 
         let descriptor_sets = {
@@ -290,8 +284,6 @@ impl PathViewRenderer {
 
             unsafe { device.allocate_descriptor_sets(&alloc_info) }
         }?;
-
-        dbg!();
 
         let buffer_desc_set = descriptor_sets[0];
 
@@ -332,8 +324,6 @@ impl PathViewRenderer {
             unsafe { device.update_descriptor_sets(&desc_writes, &[]) };
         }
 
-        dbg!();
-
         let pipeline_layout = {
             use vk::ShaderStageFlags as Flags;
 
@@ -355,8 +345,6 @@ impl PathViewRenderer {
 
             unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
-
-        dbg!();
 
         let rgb_pipeline = ComputePipeline::new(
             device,
@@ -387,8 +375,6 @@ impl PathViewRenderer {
             unsafe { device.create_pipeline_layout(&layout_info, None) }
         }?;
 
-        dbg!();
-
         let val_pipeline = ComputePipeline::new(
             device,
             descriptor_set_layout,
@@ -401,8 +387,6 @@ impl PathViewRenderer {
             states.resize_with(64, || RowState::default().into());
             Arc::new(states)
         };
-
-        dbg!();
 
         Ok(Self {
             rgb_pipeline,
@@ -525,7 +509,10 @@ impl PathViewRenderer {
 
         self.state.should_rerender.store(true);
 
-        self.center.store(center - (delta / 2.0));
+        let r = self.radius.load();
+
+        // self.center.store(center - delta);
+        self.center.store(center - (2.0 * r * delta));
 
         self.enforce_view_limits();
     }
@@ -856,22 +843,17 @@ impl PathViewRenderer {
         &self,
         comp_manager: &mut ComputeManager,
     ) -> Result<bool> {
-        dbg!();
         if let Some(fid) = self.fence_id.load() {
-            dbg!();
             if comp_manager.is_fence_ready(fid)? {
-                dbg!();
                 comp_manager.block_on_fence(fid).unwrap();
                 comp_manager.free_fence(fid, false).unwrap();
                 self.fence_id.store(None);
 
                 Ok(true)
             } else {
-                dbg!();
                 Ok(false)
             }
         } else {
-            dbg!();
             Ok(false)
         }
     }
@@ -889,11 +871,9 @@ impl PathViewRenderer {
         }
 
         if let Some(fid) = self.fence_id.load() {
-            dbg!();
             // handle this, but how
         } else {
             let path_count = self.path_count.load();
-            dbg!();
             self.state.should_rerender.store(false);
             self.state.rendering.store(RenderState::Rendering);
             let fence_id = comp_manager.dispatch_with(|device, cmd_buf| {

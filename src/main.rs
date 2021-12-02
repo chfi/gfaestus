@@ -702,7 +702,7 @@ fn node_color(id) {
                             // rerender_path_view ||
                             cur_gradient != prev_gradient)
                     {
-                        log::warn!("doing the paths");
+                        // log::warn!("doing the paths");
 
                         prev_overlay = cur_overlay;
                         prev_gradient = cur_gradient;

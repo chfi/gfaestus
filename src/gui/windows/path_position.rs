@@ -126,10 +126,12 @@ impl PathPositionList {
 
                     if up.clicked() && !at_top {
                         PATH_OFFSET.store(path_ix - 1);
+                        MARK_PATHS.store(true);
                     }
 
                     if down.clicked() && !at_btm {
                         PATH_OFFSET.store(path_ix + 1);
+                        MARK_PATHS.store(true);
                     }
 
                     if ui.button("Reset").clicked() {
@@ -161,6 +163,7 @@ impl PathPositionList {
                     (filtered.iter().copied().collect::<Vec<_>>(), len)
                 };
 
+                /*
                 let mut hasher = DefaultHasher::default();
                 paths_to_show.hash(&mut hasher);
 
@@ -170,17 +173,21 @@ impl PathPositionList {
                     PREV_HASH.store(this_hash);
                     MARK_PATHS.store(true);
                 }
+                */
 
                 let mut path_range = 0..num_rows;
 
                 let row_height = 32.0;
 
                 egui::ScrollArea::vertical()
-                    .max_height((VISIBLE_ROWS.load() as f32) * row_height)
+                    // .auto_shrink([true, true])
+                    // .max_height((VISIBLE_ROWS.load() as f32) * row_height)
+                    // .enable_scrolling(false)
                     .show_rows(
                         ui,
                         row_height, // todo actually calculate this??
-                        num_rows,
+                        VISIBLE_ROWS.load(),
+                        // num_rows,
                         |ui, range| {
                             path_range = range;
                             if path_range.start > path_range.end {
@@ -260,8 +267,10 @@ impl PathPositionList {
                                     for (i_ix, &path) in paths_to_show
                                         .iter()
                                         .enumerate()
-                                        .skip(row_range.0)
-                                        .take(row_range.1 - row_range.0)
+                                        // .skip(row_range.0)
+                                        // .take(row_range.1 - row_range.0)
+                                        .skip(PATH_OFFSET.load())
+                                        .take(VISIBLE_ROWS.load())
                                     {
                                         let path_name = graph
                                             .get_path_name_vec(path)
@@ -509,7 +518,8 @@ impl PathPositionList {
                 });
 
                 if MARK_PATHS.load() {
-                    let to_mark = paths_to_show[path_range].iter().copied();
+                    // let to_mark = paths_to_show[path_range].iter().copied();
+                    let to_mark = paths_to_show.iter().copied().skip(PATH_OFFSET.load()).take(VISIBLE_ROWS.load());
                     path_view.mark_load_paths(to_mark).unwrap();
                     MARK_PATHS.store(false);
                 }
