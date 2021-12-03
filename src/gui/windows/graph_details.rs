@@ -20,7 +20,7 @@ use bstr::ByteSlice;
 use crate::{app::AppMsg, context::ContextEntry, geometry::*};
 use crate::{graph_query::GraphQuery, gui::util::grid_row_label};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct NodeDetails {
     node_id: Arc<AtomicCell<Option<NodeId>>>,
     fetched_node: Option<NodeId>,
@@ -30,6 +30,9 @@ pub struct NodeDetails {
     paths: Vec<(PathId, StepPtr, usize)>,
 
     unique_paths: Vec<PathId>,
+
+    col_widths_hdr: AtomicCell<[f32; 3]>,
+    col_widths: AtomicCell<[f32; 3]>,
 }
 
 impl std::default::Default for NodeDetails {
@@ -41,6 +44,9 @@ impl std::default::Default for NodeDetails {
             degree: (0, 0),
             paths: Vec::new(),
             unique_paths: Vec::new(),
+
+            col_widths_hdr: [0.0; 3].into(),
+            col_widths: [0.0; 3].into(),
         }
     }
 }
@@ -163,23 +169,42 @@ impl NodeDetails {
 
                     ui.separator();
 
-                    let separator = || egui::Separator::default().spacing(1.0);
-
                     let num_rows = self.paths.len();
                     let row_height = 12.0;
+
+                    let [w0, w1, w2] = {
+                        let mut ws = [0.0f32; 3];
+
+                        let prev_hdr = self.col_widths_hdr.load();
+                        let prev = self.col_widths.load();
+
+                        let prevs =
+                            prev_hdr.iter().zip(prev).map(|(h, r)| h.max(r));
+
+                        for (w, prev) in ws.iter_mut().zip(prevs) {
+                            *w = prev
+                        }
+
+                        ws
+                    };
 
                     let header = egui::Grid::new(
                         "node_details_path_list_header",
                     )
                     .show(ui, |ui| {
-                        ui.label("Path");
-                        ui.add(separator());
+                        let mut g = |w: f32, l: &str| {
+                            let label = egui::Label::new(l);
+                            let g0 = label.layout(ui);
+                            let s0 = g0.size().x;
+                            ui.add_sized([w.max(s0), g0.size().y], label);
+                            s0
+                        };
 
-                        ui.label("Step");
-                        ui.add(separator());
+                        let c0 = g(w0, "Path");
+                        let c1 = g(w1, "Step");
+                        let c2 = g(w2, "Base pos");
 
-                        ui.label("Base pos");
-                        ui.end_row();
+                        self.col_widths_hdr.store([c0, c1, c2]);
                     });
 
                     egui::ScrollArea::vertical().show_rows(
@@ -223,7 +248,7 @@ impl NodeDetails {
                                         let fields: [&str; 3] =
                                             [&name, &step_str, &pos_str];
 
-                                        let row = grid_row_label(
+                                        let inner = grid_row_label(
                                             ui,
                                             egui::Id::new(ui.id().with(
                                                 format!(
@@ -233,8 +258,16 @@ impl NodeDetails {
                                                 ),
                                             )),
                                             &fields,
-                                            true,
+                                            false,
+                                            Some(&[w0, w1, w2]),
                                         );
+
+                                        let ws = &inner.inner;
+
+                                        self.col_widths
+                                            .store([ws[0], ws[1], ws[2]]);
+
+                                        let row = inner.response;
 
                                         if row.clicked() {
                                             path_details_id_cell
@@ -275,6 +308,9 @@ pub struct NodeList {
     node_details_id: Arc<AtomicCell<Option<NodeId>>>,
 
     range: AtomicCell<(usize, usize)>,
+
+    col_widths_hdr: AtomicCell<[f32; 5]>,
+    col_widths: AtomicCell<[f32; 5]>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -323,8 +359,15 @@ impl NodeList {
             node_details_id,
 
             range: (0, 0).into(),
+
+            col_widths_hdr: [0.0; 5].into(),
+            col_widths: [0.0; 5].into(),
         }
     }
+
+    // fn update_col_widths(&self, new: [f32; 5]) {
+    //     let mut col_widths = self.col_widths
+    // }
 
     pub fn set_filtered(&mut self, nodes: &[NodeId]) {
         self.filtered_nodes.clear();
@@ -406,23 +449,47 @@ impl NodeList {
                     nodes.len()
                 ));
 
-                let header =
-                    egui::Grid::new("node_list_grid_header").show(ui, |ui| {
-                        ui.label("Node");
-                        ui.label("Degree");
-                        ui.label("Seq. len");
-                        ui.label("Unique paths");
-                        ui.label("Total paths");
-                        ui.end_row();
-                    });
+                let [w0, w1, w2, w3, w4] = {
+                    let mut ws = [0.0f32; 5];
+
+                    let prev_hdr = self.col_widths_hdr.load();
+                    let prev = self.col_widths.load();
+
+                    let prevs =
+                        prev_hdr.iter().zip(prev).map(|(h, r)| h.max(r));
+
+                    for (w, prev) in ws.iter_mut().zip(prevs) {
+                        *w = prev
+                    }
+
+                    ws
+                };
+
+                egui::Grid::new("node_list_grid_header").show(ui, |ui| {
+                    let widths = {
+                        let mut g = |w: f32, l: &str| {
+                            let label = egui::Label::new(l);
+                            let g0 = label.layout(ui);
+                            let s0 = g0.size().x;
+                            ui.add_sized([w.max(s0), g0.size().y], label);
+                            s0
+                        };
+                        let c0 = g(w0, "Node");
+                        let c1 = g(w1, "Degree");
+                        let c2 = g(w2, "Seq. len");
+                        let c3 = g(w3, "Unique paths");
+                        let c4 = g(w4, "Total paths");
+                        [c0, c1, c2, c3, c4]
+                    };
+
+                    self.col_widths_hdr.store(widths);
+                });
 
                 egui::ScrollArea::vertical().show_rows(
                     ui,
                     row_height,
                     num_rows,
                     |ui, range| {
-                        ui.set_min_width(header.response.rect.width());
-
                         egui::Grid::new("node_list_grid").striped(true).show(
                             ui,
                             |ui| {
@@ -481,12 +548,21 @@ impl NodeList {
                                         &step_count,
                                     ];
 
-                                    let row = grid_row_label(
+                                    let inner = grid_row_label(
                                         ui,
                                         egui::Id::new(ui.id().with(ix)),
                                         &fields,
                                         false,
+                                        Some(&[w0, w1, w2, w3, w4]),
                                     );
+
+                                    let ws = &inner.inner;
+
+                                    self.col_widths.store([
+                                        ws[0], ws[1], ws[2], ws[3], ws[4],
+                                    ]);
+
+                                    let row = inner.response;
 
                                     if row.clicked() {
                                         node_id_cell.store(Some(node_id));

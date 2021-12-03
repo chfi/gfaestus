@@ -94,12 +94,14 @@ impl LabelSetList {
                                 let fields: [&str; 2] =
                                     [&view_name, &visible_str];
 
-                                let row = grid_row_label(
+                                let inner = grid_row_label(
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
                                     false,
+                                    None,
                                 );
+                                let row = inner.response;
 
                                 if row.clicked() {
                                     if let Some(visibility) =
@@ -373,12 +375,15 @@ impl AnnotationFileList {
                             type_str.as_str(),
                         ];
 
-                        let row = grid_row_label(
+                        let inner = grid_row_label(
                             ui,
                             egui::Id::new(ui.id().with(name)),
                             &fields,
                             true,
+                            None,
                         );
+
+                        let row = inner.response;
 
                         if row.clicked() {
                             {
@@ -507,12 +512,15 @@ impl AnnotationFileList {
                                     type_str.as_str(),
                                 ];
 
-                                let row = grid_row_label(
+                                let inner = grid_row_label(
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
                                     true,
+                                    None,
                                 );
+
+                                let row = inner.response;
 
                                 if row.clicked() {
                                     {

@@ -322,12 +322,15 @@ impl PathList {
                                     let fields: [&str; 3] =
                                         [&path_name, &step_count, &base_count];
 
-                                    let row = grid_row_label(
+                                    let inner = grid_row_label(
                                         ui,
                                         egui::Id::new(ui.id().with(ix)),
                                         &fields,
                                         false,
+                                        None,
                                     );
+
+                                    let row = inner.response;
 
                                     if row.clicked() {
                                         path_id_cell.store(Some(path_id));
@@ -723,12 +726,15 @@ impl StepList {
                         let fields: [&str; 3] =
                             [&handle_str, &step_ptr_str, &pos_str];
 
-                        let row = grid_row_label(
+                        let inner = grid_row_label(
                             ui,
                             egui::Id::new(ui.id().with(slot_ix)),
                             &fields,
                             true,
+                            None,
                         );
+
+                        let row = inner.response;
 
                         if row.clicked() {
                             node_details_id_cell.store(Some(handle.id()));

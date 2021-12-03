@@ -167,9 +167,10 @@ where
             egui::Id::new(ui.id().with(index)),
             &fields_ref,
             false,
+            None,
         );
 
-        resp
+        resp.response
     }
 
     fn select_record(
