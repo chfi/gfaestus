@@ -133,7 +133,7 @@ impl NodeDetails {
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(450.0, 200.0))
             .open(open_node_details)
-            .show(ctx, |mut ui| {
+            .show(ctx, |ui| {
                 if let Some(node_id) = self.node_id.load() {
                     ui.set_min_height(200.0);
                     ui.set_max_width(200.0);
@@ -168,28 +168,39 @@ impl NodeDetails {
                     let num_rows = self.paths.len();
                     let row_height = 12.0;
 
+                    let header = egui::Grid::new(
+                        "node_details_path_list_header",
+                    )
+                    .show(ui, |ui| {
+                        ui.label("Path");
+                        ui.add(separator());
+
+                        ui.label("Step");
+                        ui.add(separator());
+
+                        ui.label("Base pos");
+                        ui.end_row();
+                    });
+
                     egui::ScrollArea::vertical().show_rows(
                         ui,
                         row_height,
                         num_rows,
                         |ui, range| {
-                            //
+                            ui.set_min_width(header.response.rect.width());
 
                             egui::Grid::new("node_details_path_list")
                                 .spacing(Point { x: 10.0, y: 5.0 })
                                 .striped(true)
                                 .show(ui, |ui| {
-                                    ui.label("Path");
-                                    ui.add(separator());
+                                    let take_n = range.start.max(range.end)
+                                        - range.start;
 
-                                    ui.label("Step");
-                                    ui.add(separator());
-
-                                    ui.label("Base pos");
-                                    ui.end_row();
-
-                                    for (path_id, step_ptr, pos) in
-                                        self.paths.iter()
+                                    for (path_id, step_ptr, pos) in self
+                                        .paths
+                                        .iter()
+                                        .skip(range.start)
+                                        .take(take_n)
                                     {
                                         let path_name = graph_query
                                             .graph()
@@ -244,72 +255,6 @@ impl NodeDetails {
                                 });
                         },
                     );
-                    /*
-                    egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
-                        egui::Grid::new("node_details_path_list")
-                            .spacing(Point { x: 10.0, y: 5.0 })
-                            .striped(true)
-                            .show(&mut ui, |ui| {
-                                ui.label("Path");
-                                ui.add(separator());
-
-                                ui.label("Step");
-                                ui.add(separator());
-
-                                ui.label("Base pos");
-                                ui.end_row();
-
-                                for (path_id, step_ptr, pos) in
-                                    self.paths.iter()
-                                {
-                                    let path_name = graph_query
-                                        .graph()
-                                        .get_path_name_vec(*path_id);
-
-                                    let name = if let Some(name) = path_name {
-                                        format!("{}", name.as_bstr())
-                                    } else {
-                                        format!("Path ID {}", path_id.0)
-                                    };
-
-                                    let step_str = format!(
-                                        "{}",
-                                        step_ptr.to_vector_value()
-                                    );
-
-                                    let pos_str = format!("{}", pos);
-
-                                    let fields: [&str; 3] =
-                                        [&name, &step_str, &pos_str];
-
-                                    let row = grid_row_label(
-                                        ui,
-                                        egui::Id::new(ui.id().with(format!(
-                                            "path_{}_{}",
-                                            path_id.0,
-                                            step_ptr.to_vector_value()
-                                        ))),
-                                        &fields,
-                                        true,
-                                    );
-
-                                    if row.clicked() {
-                                        path_details_id_cell
-                                            .store(Some(*path_id));
-                                        *open_path_details = true;
-                                    }
-
-                                    if row.clicked_by(
-                                        egui::PointerButton::Secondary,
-                                    ) {
-                                        ctx_tx
-                                            .send(ContextEntry::Path(*path_id))
-                                            .unwrap();
-                                    }
-                                }
-                            });
-                    });
-                    */
                     ui.shrink_width_to_current();
                 } else {
                     ui.label("Examine a node by picking it from the node list");
@@ -318,68 +263,6 @@ impl NodeDetails {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct NodeListSlot {
-    node_id: NodeId,
-    sequence: Vec<u8>,
-    degree: (usize, usize),
-
-    paths: Vec<(PathId, StepPtr, usize)>,
-    unique_paths: Vec<PathId>,
-    visible: bool,
-}
-
-impl NodeListSlot {
-    pub fn from_id(graph_query: &GraphQuery, node_id: NodeId) -> Self {
-        let visible = true;
-
-        let graph = graph_query.graph();
-
-        let handle = Handle::pack(node_id, false);
-
-        let sequence = graph.sequence_vec(handle);
-
-        let degree_l = graph.neighbors(handle, Direction::Left).count();
-        let degree_r = graph.neighbors(handle, Direction::Right).count();
-
-        let degree = (degree_l, degree_r);
-
-        let paths_fwd =
-            graph_query.handle_positions(Handle::pack(node_id, false));
-        let paths_rev =
-            graph_query.handle_positions(Handle::pack(node_id, true));
-
-        let paths_len = paths_fwd.as_ref().map(|v| v.len()).unwrap_or_default()
-            + paths_rev.as_ref().map(|v| v.len()).unwrap_or_default();
-
-        let mut paths = Vec::with_capacity(paths_len);
-        let mut unique_paths = Vec::with_capacity(paths_len);
-        if let Some(p) = paths_fwd {
-            paths.extend_from_slice(&p);
-            unique_paths.extend(p.iter().map(|(path, _, _)| path));
-        }
-        if let Some(p) = paths_rev {
-            paths.extend_from_slice(&p);
-            unique_paths.extend(p.iter().map(|(path, _, _)| path));
-        }
-
-        unique_paths.sort();
-        unique_paths.dedup();
-
-        Self {
-            node_id,
-            sequence,
-            degree,
-            paths,
-            unique_paths,
-
-            visible,
-        }
-    }
-}
-
-// pub struct
-
 #[derive(Debug)]
 pub struct NodeList {
     // probably not needed as I can assume compact node IDs
@@ -387,24 +270,16 @@ pub struct NodeList {
 
     filtered_nodes: Vec<NodeId>,
 
-    // page: usize,
-    // page_size: usize,
-    // page_count: usize,
-
-    // slots: Vec<NodeListSlot>,
-
-    // update_slots: bool,
     apply_filter: AtomicCell<bool>,
 
     node_details_id: Arc<AtomicCell<Option<NodeId>>>,
+
+    range: AtomicCell<(usize, usize)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NodeListMsg {
     ApplyFilter(Option<bool>),
-    NextPage,
-    PrevPage,
-    SetPage(usize),
     SetFiltered(Vec<NodeId>),
 }
 
@@ -416,36 +291,12 @@ impl NodeList {
             NodeListMsg::ApplyFilter(apply) => {
                 if let Some(apply) = apply {
                     self.apply_filter.store(apply);
-                    // TODO only update when necessary
-                    // self.update_slots = true;
                 } else {
                     self.apply_filter.fetch_xor(true);
-                    // self.update_slots = true;
                 }
-            }
-            NodeListMsg::NextPage => {
-                // if self.page < self.page_count {
-                //     self.page += 1;
-                //     self.update_slots = true;
-                // }
-            }
-            NodeListMsg::PrevPage => {
-                // if self.page > 0 {
-                //     self.page -= 1;
-                //     self.update_slots = true;
-                // }
-            }
-            NodeListMsg::SetPage(page) => {
-                // let page = page.clamp(0, self.page_count);
-                // if self.page != page {
-                //     self.page = page;
-                //     self.update_slots = true;
-                // }
             }
             NodeListMsg::SetFiltered(nodes) => {
                 self.set_filtered(&nodes);
-                // std::mem::swap(&mut nodes, &mut self.filtered_nodes);
-                // self.update_slots = true;
             }
         }
     }
@@ -458,47 +309,26 @@ impl NodeList {
         let graph = graph_query.graph();
         let node_count = graph.node_count();
 
-        let page_size = page_size.min(node_count);
-
         let mut all_nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
         all_nodes.sort();
 
-        let page_count = node_count / page_size;
-
         let filtered_nodes: Vec<NodeId> = Vec::new();
-
-        let mut slots: Vec<NodeListSlot> = Vec::with_capacity(page_size);
-
-        for &node in all_nodes[0..page_size].iter() {
-            let slot = NodeListSlot::from_id(graph_query, node);
-
-            slots.push(slot);
-        }
 
         Self {
             all_nodes,
             filtered_nodes,
 
-            // page: 0,
-            // page_count,
-            // page_size,
-
-            // slots,
-
-            // update_slots: false,
             apply_filter: true.into(),
 
             node_details_id,
+
+            range: (0, 0).into(),
         }
     }
 
     pub fn set_filtered(&mut self, nodes: &[NodeId]) {
         self.filtered_nodes.clear();
         self.filtered_nodes.extend(nodes.iter().copied());
-
-        // if self.apply_filter.load() {
-        //     self.update_slots = true;
-        // }
     }
 
     pub fn ui(
@@ -517,60 +347,10 @@ impl NodeList {
             &self.filtered_nodes
         };
 
-        // this'll need fixing
-        // let start =
-        //     (self.page * self.page_size).min(nodes.len() - self.page_size);
-        // let end = start + self.page_size;
-
-        /*
-        if self.update_slots {
-            let page_start = (self.page * self.page_size)
-                .min(nodes.len() - (nodes.len() % self.page_size));
-            let page_end = (page_start + self.page_size).min(nodes.len());
-
-            for slot in self.slots.iter_mut() {
-                slot.visible = false;
-            }
-
-            for (slot, node) in
-                self.slots.iter_mut().zip(&nodes[page_start..page_end])
-            {
-                slot.visible = true;
-
-                slot.node_id = *node;
-
-                let handle = Handle::pack(*node, false);
-
-                slot.sequence.clear();
-                slot.sequence.extend(graph_query.graph().sequence(handle));
-
-                slot.paths.clear();
-                slot.unique_paths.clear();
-
-                let paths_fwd = graph_query.handle_positions(handle);
-                let paths_rev = graph_query.handle_positions(handle.flip());
-
-                if let Some(p) = paths_fwd {
-                    slot.paths.extend_from_slice(&p);
-                    slot.unique_paths.extend(p.iter().map(|(path, _, _)| path));
-                }
-                if let Some(p) = paths_rev {
-                    slot.paths.extend_from_slice(&p);
-                    slot.unique_paths.extend(p.iter().map(|(path, _, _)| path));
-                }
-
-                slot.unique_paths.sort();
-                slot.unique_paths.dedup();
-            }
-
-            self.update_slots = false;
-        }
-        */
-
         egui::Window::new("Nodes")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(200.0, 200.0))
-            .show(ctx, |mut ui| {
+            .show(ctx, |ui| {
                 ui.set_min_height(300.0);
                 ui.set_max_width(200.0);
 
@@ -594,48 +374,19 @@ impl NodeList {
                     }
                 });
 
-                // let page = &mut self.page;
-                // let page_count = self.page_count;
-                // let update_slots = &mut self.update_slots;
-
                 let apply_filter = &self.apply_filter;
 
                 if ui.selectable_label(filter, "Show only selected").clicked() {
                     apply_filter.store(!filter);
-                    // *update_slots = true;
                 }
-
-                // ui.label(format!("Page {}/{}", *page + 1, page_count + 1));
 
                 ui.horizontal(|ui| {
                     if ui.button("Top").clicked() {
                         ui.scroll_to_cursor(egui::Align::TOP)
-                        // if *page != 0 {
-                        //     *page = 0;
-                        //     *update_slots = true;
-                        // }
                     }
-
-                    // if ui.button("Prev").clicked() {
-                    //     if *page > 0 {
-                    //         *page -= 1;
-                    //         *update_slots = true;
-                    //     }
-                    // }
-
-                    // if ui.button("Next").clicked() {
-                    //     if *page < page_count {
-                    //         *page += 1;
-                    //         *update_slots = true;
-                    //     }
-                    // }
 
                     if ui.button("Bottom").clicked() {
                         ui.scroll_to_cursor(egui::Align::BOTTOM)
-                        // if *page != page_count {
-                        //     *page = page_count;
-                        //     *update_slots = true;
-                        // }
                     }
                 });
 
@@ -645,35 +396,36 @@ impl NodeList {
                 let row_height = ui.fonts()[text_style].row_height();
 
                 let num_rows = nodes.len();
-                // let num_rows = if self.apply_filter.load() {
-                // let num_rows = if apply_filter {
-                //     self.filtered_nodes.len()
-                // } else {
-                //     graph_query.graph.node_count()
-                // };
+
+                let (start, end) = self.range.load();
+
+                ui.label(format!(
+                    "Showing {}-{} out of {} nodes",
+                    start,
+                    end,
+                    nodes.len()
+                ));
+
+                let header =
+                    egui::Grid::new("node_list_grid_header").show(ui, |ui| {
+                        ui.label("Node");
+                        ui.label("Degree");
+                        ui.label("Seq. len");
+                        ui.label("Unique paths");
+                        ui.label("Total paths");
+                        ui.end_row();
+                    });
 
                 egui::ScrollArea::vertical().show_rows(
                     ui,
                     row_height,
                     num_rows,
                     |ui, range| {
-                        ui.label(format!(
-                            "Showing {}-{} out of {} nodes",
-                            range.start,
-                            range.end,
-                            nodes.len()
-                        ));
-                        //
+                        ui.set_min_width(header.response.rect.width());
+
                         egui::Grid::new("node_list_grid").striped(true).show(
                             ui,
                             |ui| {
-                                ui.label("Node");
-                                ui.label("Degree");
-                                ui.label("Seq. len");
-                                ui.label("Unique paths");
-                                ui.label("Total paths");
-                                ui.end_row();
-
                                 let n =
                                     range.start.max(range.end) - range.start;
 
@@ -750,63 +502,6 @@ impl NodeList {
                                             .unwrap();
                                     }
                                 }
-
-                                /*
-                                for (ix, slot) in self.slots.iter().enumerate() {
-                                    if slot.visible {
-                                        let node_id = format!("{}", slot.node_id);
-
-                                        let degree = format!(
-                                            "({}, {})",
-                                            slot.degree.0, slot.degree.1
-                                        );
-
-                                        let seq_len =
-                                            format!("{}", slot.sequence.len());
-
-                                        let uniq_paths = format!(
-                                            "{}",
-                                            slot.unique_paths.len() // slot.paths.len()
-                                        );
-
-                                        let step_count = format!(
-                                            "{}",
-                                            slot.paths.len() // slot.paths.len()
-                                        );
-
-                                        let fields: [&str; 5] = [
-                                            &node_id,
-                                            &degree,
-                                            &seq_len,
-                                            &uniq_paths,
-                                            &step_count,
-                                        ];
-
-                                        let row = grid_row_label(
-                                            ui,
-                                            egui::Id::new(ui.id().with(ix)),
-                                            &fields,
-                                            false,
-                                        );
-
-                                        if row.clicked() {
-                                            node_id_cell.store(Some(slot.node_id));
-
-                                            *open_node_details = true;
-                                        }
-
-                                        if row.clicked_by(
-                                            egui::PointerButton::Secondary,
-                                        ) {
-                                            ctx_tx
-                                                .send(ContextEntry::Node(
-                                                    slot.node_id,
-                                                ))
-                                                .unwrap();
-                                        }
-                                    }
-                                }
-                                */
                             },
                         );
                     },
