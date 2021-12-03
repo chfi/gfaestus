@@ -24,6 +24,8 @@ use crate::{
     reactor::{Host, Outbox, Reactor},
 };
 
+use crate::gui::util as gui_util;
+
 use crate::graph_query::GraphQuery;
 use crate::{
     app::{AppMsg, Select},
@@ -222,20 +224,13 @@ impl PathList {
                     *open_path_details = !*open_path_details;
                 }
 
-                ui.horizontal(|ui| {
-                    if ui.button("Top").clicked() {
-                        ui.scroll_to_cursor(egui::Align::TOP)
-                    }
-
-                    if ui.button("Bottom").clicked() {
-                        ui.scroll_to_cursor(egui::Align::BOTTOM)
-                    }
-                });
+                let scroll_align = gui_util::add_scroll_buttons(ui);
 
                 let path_id_cell = &self.path_details_id;
 
                 let num_rows = paths.len();
-                let row_height = 12.0;
+                let text_style = egui::TextStyle::Body;
+                let row_height = ui.fonts()[text_style].row_height();
 
                 let [w0, w1, w2] = self.col_widths.get();
 
@@ -251,7 +246,7 @@ impl PathList {
                         self.col_widths.set_hdr(&inner.inner);
                     });
 
-                egui::ScrollArea::vertical().show_rows(
+                gui_util::scrolled_area(ui, num_rows, scroll_align).show_rows(
                     ui,
                     row_height,
                     num_rows,
@@ -335,7 +330,6 @@ impl PathList {
 
     pub fn new(
         graph_query: &GraphQuery,
-        page_size: usize,
         path_details_id: Arc<AtomicCell<Option<PathId>>>,
     ) -> Self {
         let graph = graph_query.graph();
@@ -387,19 +381,12 @@ impl StepRange {
     }
 }
 
-// enum StepsMsg {
-//     Error(String),
-// }
-
 type StepsResult =
     std::result::Result<(PathId, usize, Vec<(Handle, StepPtr, usize)>), String>;
 
 pub struct StepList {
     fetched_path_id: Option<PathId>,
 
-    // page: usize,
-    // page_size: usize,
-    // page_count: usize,
     steps_host: Host<PathId, StepsResult>,
     latest_result: Option<StepsResult>,
 
@@ -491,15 +478,7 @@ impl StepList {
             &[]
         };
 
-        ui.horizontal(|ui| {
-            if ui.button("Top").clicked() {
-                ui.scroll_to_cursor(egui::Align::TOP)
-            }
-
-            if ui.button("Bottom").clicked() {
-                ui.scroll_to_cursor(egui::Align::BOTTOM)
-            }
-        });
+        let scroll_align = gui_util::add_scroll_buttons(ui);
 
         let range_filter = &mut self.range_filter;
 
@@ -581,7 +560,8 @@ impl StepList {
         }
 
         let num_rows = steps.len();
-        let row_height = 12.0;
+        let text_style = egui::TextStyle::Body;
+        let row_height = ui.fonts()[text_style].row_height();
 
         let [w0, w1, w2] = self.col_widths.get();
 
@@ -597,7 +577,7 @@ impl StepList {
                 self.col_widths.set_hdr(&inner.inner);
             });
 
-        egui::ScrollArea::vertical().show_rows(
+        gui_util::scrolled_area(ui, num_rows, scroll_align).show_rows(
             ui,
             row_height,
             num_rows,

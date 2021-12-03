@@ -220,7 +220,7 @@ impl AppViewState {
         let path_details =
             ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
-        let path_list_state = PathList::new(graph_query, 15, path_id_cell);
+        let path_list_state = PathList::new(graph_query, path_id_cell);
         let path_list = ViewStateChannel::<PathList, ()>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);

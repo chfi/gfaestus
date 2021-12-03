@@ -1,4 +1,40 @@
 use crossbeam::atomic::AtomicCell;
+use std::cell::RefCell;
+use std::rc::Rc;
+// use parking_lot::RefCell
+
+#[derive(Default)]
+pub struct ColumnWidthsVec {
+    widths_hdr: Rc<RefCell<Vec<f32>>>,
+    widths: Rc<RefCell<Vec<f32>>>,
+}
+
+impl ColumnWidthsVec {
+    pub fn get(&self) -> Vec<f32> {
+        let prev_hdr = self.widths_hdr.borrow();
+        let prev = self.widths.borrow();
+        // let mut ws = [0.0f32; N];
+
+        // let prev_hdr = self.widths_hdr.load();
+        // let prev = self.widths.load();
+
+        let prevs = prev_hdr.iter().zip(prev.iter()).map(|(h, r)| h.max(*r));
+
+        prevs.collect()
+    }
+
+    pub fn set_hdr(&self, widths: &[f32]) {
+        let mut ws = self.widths_hdr.borrow_mut();
+        ws.clear();
+        ws.extend_from_slice(widths);
+    }
+
+    pub fn set(&self, widths: &[f32]) {
+        let mut ws = self.widths.borrow_mut();
+        ws.clear();
+        ws.extend_from_slice(widths);
+    }
+}
 
 pub struct ColumnWidths<const N: usize> {
     widths_hdr: AtomicCell<[f32; N]>,
@@ -86,9 +122,15 @@ pub fn grid_row_label(
     let mut row: Option<egui::Response> = None;
 
     let cols = fields.len();
-    let prev_widths = prev_widths
+    let mut prev_widths = prev_widths
         .map(|ws| Vec::from(ws))
         .unwrap_or(vec![0.0f32; cols]);
+
+    if prev_widths.len() < fields.len() {
+        for _ in 0..(cols - prev_widths.len()) {
+            prev_widths.push(0.0);
+        }
+    }
 
     let mut widths = vec![0.0f32; cols];
 
@@ -134,4 +176,44 @@ pub fn grid_row_label(
         inner: widths,
         response: row,
     }
+}
+
+pub fn add_scroll_buttons(ui: &mut egui::Ui) -> Option<egui::Align> {
+    ui.horizontal(|ui| {
+        let mut r = None;
+        if ui.button("Top").clicked() {
+            r = Some(egui::Align::TOP);
+        }
+
+        if ui.button("Bottom").clicked() {
+            r = Some(egui::Align::BOTTOM);
+        }
+
+        r
+    })
+    .inner
+}
+
+pub fn scrolled_area(
+    ui: &mut egui::Ui,
+    num_rows: usize,
+    scroll_align: Option<egui::Align>,
+) -> egui::ScrollArea {
+    let text_style = egui::TextStyle::Body;
+    let row_height = ui.fonts()[text_style].row_height();
+    let spacing = ui.style().spacing.item_spacing.y;
+
+    let mut scroll_area = egui::ScrollArea::vertical();
+
+    if let Some(align) = scroll_align {
+        let h = row_height + spacing;
+        let offset = match align {
+            egui::Align::Min => 0.0,
+            egui::Align::Max => h * (num_rows + 1) as f32,
+            _ => 0.0,
+        };
+        scroll_area = scroll_area.scroll_offset(offset);
+    }
+
+    scroll_area
 }

@@ -16,6 +16,8 @@ use crate::{
     gui::{util::grid_row_label, windows::graph_picker::PathPicker},
 };
 
+use crate::gui::util::{self as gui_util, ColumnWidthsVec};
+
 use super::{filter::RecordFilter, ColumnPickerMany, OverlayLabelSetCreator};
 
 pub struct RecordList<C>
@@ -26,9 +28,6 @@ where
     current_file: Option<String>,
 
     filtered_records: Vec<usize>,
-
-    offset: usize,
-    slot_count: usize,
 
     filter_open: bool,
     filters: HashMap<String, RecordFilter<C::ColumnKey>>,
@@ -43,6 +42,8 @@ where
 
     creator_open: bool,
     creator: OverlayLabelSetCreator<C>,
+
+    col_widths: ColumnWidthsVec,
 }
 
 impl<C> RecordList<C>
@@ -62,9 +63,6 @@ where
 
             filtered_records,
 
-            offset: 0,
-            slot_count: 15,
-            // slot_count: 20,
             filter_open: false,
             filters: HashMap::default(),
 
@@ -81,6 +79,8 @@ where
                 reactor,
                 egui::Id::new("overlay_label_set_creator"),
             ),
+
+            col_widths: ColumnWidthsVec::default(),
         }
     }
 
@@ -114,7 +114,8 @@ where
             .map(|(ix, _)| ix);
 
         if let Some(ix) = ix {
-            self.offset = ix;
+            // TODO fix this
+            // self.offset = ix;
         }
     }
 
@@ -162,13 +163,18 @@ where
         let fields_ref: Vec<&str> =
             fields.iter().map(|f| f.as_str()).collect::<Vec<_>>();
 
+        let widths = self.col_widths.get();
+
         let resp = grid_row_label(
             ui,
             egui::Id::new(ui.id().with(index)),
             &fields_ref,
             false,
-            None,
+            Some(&widths),
+            // None,
         );
+
+        self.col_widths.set(&resp.inner);
 
         resp.response
     }
@@ -233,8 +239,6 @@ where
             "filter complete, showing {} out of {} records",
             filtered, total
         );
-
-        self.offset = 0;
     }
 
     fn clear_filter(&mut self) {
@@ -440,110 +444,100 @@ where
 
         let enabled_columns = self.enabled_columns.get(file_name).unwrap();
 
-        let mut spacing = ui.spacing().item_spacing;
-        spacing.y = 3.0;
-
-        self.slot_count = {
-            // top part is around 250px, round up to 300px to be on the safe side
-            let usable_height = ui.input().screen_rect.height() - 300.0;
-
-            // again, roughly 30px
-            let row_height = 30.0;
-
-            (usable_height / row_height) as usize
-        };
-
         let record_count = if self.filtered_records.is_empty() {
             records.records().len()
         } else {
             self.filtered_records.len()
         };
 
-        let end = {
-            let end = self.offset + self.slot_count;
-
-            if end > record_count {
-                if record_count > self.slot_count {
-                    self.offset = record_count - self.slot_count;
-                } else {
-                    self.offset = 0;
-                }
-            }
-
-            end
-        };
-
+        /*
         let label_str = format!(
             "Rows {} - {} out of {}",
-            self.offset + 1,
+            // self.offset + 1,
             end + 1,
             record_count
         );
         ui.label(label_str);
+        */
 
-        let grid = egui::Grid::new("record_list_grid")
-            .striped(true)
-            .spacing(spacing)
-            .show(ui, |ui| {
-                ui.label(C::ColumnKey::seq_id().to_string());
-                ui.label(C::ColumnKey::start().to_string());
-                ui.label(C::ColumnKey::end().to_string());
+        let scroll_align = gui_util::add_scroll_buttons(ui);
+        let num_rows = record_count;
 
-                let mut mandatory = records.mandatory_columns();
-                mandatory.retain(|c| {
-                    c != &C::ColumnKey::seq_id()
-                        && c != &C::ColumnKey::start()
-                        && c != &C::ColumnKey::end()
-                });
+        let text_style = egui::TextStyle::Body;
+        let row_height = ui.fonts()[text_style].row_height();
 
-                for col in mandatory {
-                    if enabled_columns.get_column(&col) {
-                        ui.label(col.to_string());
-                    }
+        let widths = self.col_widths.get();
+
+        let header = egui::Grid::new("record_list_header").show(ui, |ui| {
+            let c0 = C::ColumnKey::seq_id().to_string();
+            let c1 = C::ColumnKey::start().to_string();
+            let c2 = C::ColumnKey::end().to_string();
+
+            let mut columns = vec![c0, c1, c2];
+
+            let mut mandatory = records.mandatory_columns();
+            mandatory.retain(|c| {
+                c != &C::ColumnKey::seq_id()
+                    && c != &C::ColumnKey::start()
+                    && c != &C::ColumnKey::end()
+            });
+
+            for col in mandatory.into_iter().chain(records.optional_columns()) {
+                if enabled_columns.get_column(&col) {
+                    columns.push(col.to_string());
                 }
+            }
 
-                for col in records.optional_columns() {
-                    if enabled_columns.get_column(&col) {
-                        ui.label(col.to_string());
-                    }
-                }
+            let fields: Vec<&str> =
+                columns.iter().map(|s| s.as_str()).collect();
 
-                ui.end_row();
+            let inner = grid_row_label(
+                ui,
+                egui::Id::new("record_list_header__"),
+                &fields,
+                false,
+                Some(&widths),
+            );
+            self.col_widths.set_hdr(&inner.inner);
+        });
 
-                for i in 0..self.slot_count {
-                    let row_record = if self.filtered_records.is_empty() {
-                        records.records().get(self.offset + i).map(|record| {
-                            (
-                                self.ui_row(
-                                    ui,
-                                    file_name,
-                                    records.as_ref(),
-                                    record,
-                                    i,
-                                ),
-                                record,
-                            )
-                        })
+        gui_util::scrolled_area(ui, num_rows, scroll_align).show_rows(
+            ui,
+            row_height,
+            num_rows,
+            |ui, range| {
+                ui.set_min_width(header.response.rect.width());
+
+                let take_n = range.start.max(range.end) - range.start;
+
+                egui::Grid::new("record_list_grid").show(ui, |ui| {
+                    let records_iter = if self.filtered_records.is_empty() {
+                        Box::new(records.records().iter())
+                            as Box<dyn Iterator<Item = _>>
                     } else {
-                        self.filtered_records.get(self.offset + i).and_then(
-                            |&ix| {
-                                let record = records.records().get(ix)?;
-                                let row = self.ui_row(
-                                    ui,
-                                    file_name,
-                                    records.as_ref(),
-                                    record,
-                                    i,
-                                );
-                                Some((row, record))
-                            },
-                        )
+                        let indices = &self.filtered_records;
+                        Box::new(
+                            indices
+                                .iter()
+                                .copied()
+                                .filter_map(|ix| records.records().get(ix)),
+                        ) as Box<dyn Iterator<Item = _>>
                     };
 
-                    if let Some((row, record)) = row_record {
+                    for (ix, record) in
+                        records_iter.enumerate().skip(range.start).take(take_n)
+                    {
+                        let row = self.ui_row(
+                            ui,
+                            file_name,
+                            records.as_ref(),
+                            record,
+                            ix,
+                        );
+
                         let row_interact = ui.interact(
                             row.rect,
-                            egui::Id::new(ui.id().with(i)),
+                            egui::Id::new(ui.id().with(ix)),
                             egui::Sense::click(),
                         );
 
@@ -558,29 +552,9 @@ where
                             app_msg_tx.send(AppMsg::goto_selection()).unwrap();
                         }
                     }
-                }
-            });
-
-        if grid.response.hover_pos().is_some() {
-            let scroll = ui.input().scroll_delta;
-            if scroll.y.abs() >= 4.0 {
-                let sig = (scroll.y.signum() as isize) * -1;
-                let delta = sig * ((scroll.y.abs() as isize) / 4);
-
-                let mut offset = self.offset as isize;
-
-                offset += delta;
-
-                let end = records
-                    .records()
-                    .len()
-                    .checked_sub(self.slot_count)
-                    .unwrap_or(records.records().len().min(self.slot_count));
-
-                offset = offset.clamp(0, end as isize);
-                self.offset = offset as usize;
-            }
-        }
+                });
+            },
+        );
 
         let enabled_columns = self.enabled_columns.get_mut(file_name).unwrap();
         enabled_columns.ui(

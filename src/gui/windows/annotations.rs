@@ -59,10 +59,10 @@ impl LabelSetList {
         egui::Window::new("Label sets")
             .id(egui::Id::new(Self::ID))
             .open(open)
-            .show(ctx, |mut ui| {
-                egui::ScrollArea::vertical().show(&mut ui, |mut ui| {
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("label_set_list_grid").striped(true).show(
-                        &mut ui,
+                        ui,
                         |ui| {
                             ui.label("Name");
                             ui.label("Visible");
