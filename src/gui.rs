@@ -1006,15 +1006,9 @@ impl Gui {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
-        gradients: &Gradients,
     ) -> Result<()> {
-        self.draw_system.draw(
-            cmd_buf,
-            render_pass,
-            framebuffers,
-            screen_dims,
-            gradients,
-        )
+        self.draw_system
+            .draw(cmd_buf, render_pass, framebuffers, screen_dims)
     }
 
     pub fn push_event(&mut self, event: egui::Event) {

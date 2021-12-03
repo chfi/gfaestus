@@ -1160,7 +1160,6 @@ fn node_color(id) {
                             gui_pass,
                             framebuffers,
                             size.into(),
-                            &gradients,
                         )
                         .unwrap();
 

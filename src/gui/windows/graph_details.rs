@@ -356,7 +356,6 @@ impl NodeList {
         } else {
             &self.filtered_nodes
         };
-
         egui::Window::new("Nodes")
             .id(egui::Id::new(Self::ID))
             .default_pos(egui::Pos2::new(200.0, 200.0))
@@ -390,20 +389,26 @@ impl NodeList {
                     apply_filter.store(!filter);
                 }
 
-                ui.horizontal(|ui| {
-                    if ui.button("Top").clicked() {
-                        ui.scroll_to_cursor(egui::Align::TOP)
-                    }
+                let scroll_align = ui
+                    .horizontal(|ui| {
+                        let mut r = None;
+                        if ui.button("Top").clicked() {
+                            r = Some(egui::Align::TOP);
+                        }
 
-                    if ui.button("Bottom").clicked() {
-                        ui.scroll_to_cursor(egui::Align::BOTTOM)
-                    }
-                });
+                        if ui.button("Bottom").clicked() {
+                            r = Some(egui::Align::BOTTOM);
+                        }
+
+                        r
+                    })
+                    .inner;
 
                 let node_id_cell = &self.node_details_id;
 
                 let text_style = egui::TextStyle::Body;
                 let row_height = ui.fonts()[text_style].row_height();
+                let spacing = ui.style().spacing.item_spacing.y;
 
                 let num_rows = nodes.len();
 
@@ -437,99 +442,111 @@ impl NodeList {
                     self.col_widths.set_hdr(&ws);
                 });
 
-                egui::ScrollArea::vertical().show_rows(
-                    ui,
-                    row_height,
-                    num_rows,
-                    |ui, range| {
-                        egui::Grid::new("node_list_grid").striped(true).show(
-                            ui,
-                            |ui| {
-                                let n =
-                                    range.start.max(range.end) - range.start;
+                let mut scroll_area = egui::ScrollArea::vertical();
 
-                                let graph = graph_query.graph();
+                if let Some(align) = scroll_align {
+                    let h = row_height + spacing;
+                    let offset = match align {
+                        egui::Align::Min => 0.0,
+                        egui::Align::Max => h * (num_rows + 1) as f32,
+                        _ => 0.0,
+                    };
+                    scroll_area = scroll_area.scroll_offset(offset);
+                }
 
-                                for (ix, node_id) in nodes
-                                    .iter()
-                                    .copied()
-                                    .enumerate()
-                                    .skip(range.start)
-                                    .take(n)
+                scroll_area.show_rows(ui, row_height, num_rows, |ui, range| {
+                    egui::Grid::new("node_list_grid").striped(true).show(
+                        ui,
+                        |ui| {
+                            let n = range.start.max(range.end) - range.start;
+
+                            let graph = graph_query.graph();
+
+                            for (ix, node_id) in nodes
+                                .iter()
+                                .copied()
+                                .enumerate()
+                                .skip(range.start)
+                                .take(n)
+                            {
+                                let node_id_lb = format!("{}", node_id);
+                                let handle = Handle::pack(node_id, false);
+
+                                let deg_l =
+                                    graph.degree(handle, Direction::Left);
+                                let deg_r =
+                                    graph.degree(handle, Direction::Right);
+
+                                let degree = format!("({}, {})", deg_l, deg_r);
+
+                                let seq_len =
+                                    format!("{}", graph.node_len(handle));
+
+                                let mut path_count = 0;
+                                let mut uniq_count = 0;
+
+                                let mut seen_paths: FxHashSet<PathId> =
+                                    FxHashSet::default();
+
+                                if let Some(steps) =
+                                    graph.steps_on_handle(handle)
                                 {
-                                    let node_id_lb = format!("{}", node_id);
-                                    let handle = Handle::pack(node_id, false);
-
-                                    let deg_l =
-                                        graph.degree(handle, Direction::Left);
-                                    let deg_r =
-                                        graph.degree(handle, Direction::Right);
-
-                                    let degree =
-                                        format!("({}, {})", deg_l, deg_r);
-
-                                    let seq_len =
-                                        format!("{}", graph.node_len(handle));
-
-                                    let mut path_count = 0;
-                                    let mut uniq_count = 0;
-
-                                    let mut seen_paths: FxHashSet<PathId> =
-                                        FxHashSet::default();
-
-                                    if let Some(steps) =
-                                        graph.steps_on_handle(handle)
-                                    {
-                                        for (path, _) in steps {
-                                            if seen_paths.insert(path) {
-                                                uniq_count += 1;
-                                            }
-                                            path_count += 1;
+                                    for (path, _) in steps {
+                                        if seen_paths.insert(path) {
+                                            uniq_count += 1;
                                         }
-                                    }
-
-                                    let uniq_paths = format!("{}", uniq_count);
-
-                                    let step_count = format!("{}", path_count);
-
-                                    let fields: [&str; 5] = [
-                                        &node_id_lb,
-                                        &degree,
-                                        &seq_len,
-                                        &uniq_paths,
-                                        &step_count,
-                                    ];
-
-                                    let inner = grid_row_label(
-                                        ui,
-                                        egui::Id::new(ui.id().with(ix)),
-                                        &fields,
-                                        false,
-                                        Some(&widths),
-                                    );
-
-                                    self.col_widths.set(&inner.inner);
-
-                                    let row = inner.response;
-
-                                    if row.clicked() {
-                                        node_id_cell.store(Some(node_id));
-
-                                        *open_node_details = true;
-                                    }
-
-                                    if row.clicked_by(
-                                        egui::PointerButton::Secondary,
-                                    ) {
-                                        ctx_tx
-                                            .send(ContextEntry::Node(node_id))
-                                            .unwrap();
+                                        path_count += 1;
                                     }
                                 }
-                            },
-                        );
-                    },
-                );
+
+                                let uniq_paths = format!("{}", uniq_count);
+
+                                let step_count = format!("{}", path_count);
+
+                                let fields: [&str; 5] = [
+                                    &node_id_lb,
+                                    &degree,
+                                    &seq_len,
+                                    &uniq_paths,
+                                    &step_count,
+                                ];
+
+                                let inner = grid_row_label(
+                                    ui,
+                                    egui::Id::new(ui.id().with(ix)),
+                                    &fields,
+                                    false,
+                                    Some(&widths),
+                                );
+
+                                self.col_widths.set(&inner.inner);
+
+                                let row = inner.response;
+
+                                if row.clicked() {
+                                    node_id_cell.store(Some(node_id));
+
+                                    *open_node_details = true;
+                                }
+
+                                if row
+                                    .clicked_by(egui::PointerButton::Secondary)
+                                {
+                                    ctx_tx
+                                        .send(ContextEntry::Node(node_id))
+                                        .unwrap();
+                                }
+                            }
+                        },
+                    );
+
+                    /*
+                    if let Some(align) = scroll_align {
+                        // ui.scroll_to_cursor(align)
+                        ui.scroll_to_cursor(align);
+                    }
+                    */
+                });
 
                 ui.shrink_width_to_current();
             })
