@@ -446,6 +446,8 @@ impl Gui {
                 path_picker_source.create_picker(),
             );
 
+            list.add_scroll_console_setter(&console, "gff3_records_scroll_ix");
+
             use Gff3Column as Gff;
 
             list.set_default_columns(
@@ -462,6 +464,8 @@ impl Gui {
                 egui::Id::new("bed_records_list"),
                 path_picker_source.create_picker(),
             );
+
+            list.add_scroll_console_setter(&console, "bed_records_scroll_ix");
 
             use BedColumn as Bed;
 

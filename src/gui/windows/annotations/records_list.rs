@@ -90,12 +90,14 @@ where
         }
     }
 
-    pub fn add_scroll_console_setter(&self, console: &mut Console, name: &str) {
+    pub fn add_scroll_console_setter(&mut self, console: &Console, name: &str) {
         let to_ix = self.scroll_to_index.clone();
 
-        // console.get_set.add_setter(name,
-
-        //
+        console.get_set.add_setter(name, move |v: rhai::Dynamic| {
+            if let Ok(v) = v.as_int() {
+                to_ix.store(Some(v as usize));
+            }
+        });
     }
 
     pub fn set_default_columns(
@@ -515,60 +517,64 @@ where
             self.col_widths.set_hdr(&inner.inner);
         });
 
-        gui_util::scrolled_area(ui, num_rows, scroll_align).show_rows(
-            ui,
-            row_height,
-            num_rows,
-            |ui, range| {
-                ui.set_min_width(header.response.rect.width());
+        let mut scroll_area =
+            gui_util::scrolled_area(ui, num_rows, scroll_align);
 
-                let take_n = range.start.max(range.end) - range.start;
+        if let Some(ix) = self.scroll_to_index.load() {
+            self.scroll_to_index.store(None);
+            let offset = (ix as f32) * row_height;
+            scroll_area = scroll_area.scroll_offset(offset);
+        };
 
-                egui::Grid::new("record_list_grid").show(ui, |ui| {
-                    let records_iter = if self.filtered_records.is_empty() {
-                        Box::new(records.records().iter())
-                            as Box<dyn Iterator<Item = _>>
-                    } else {
-                        let indices = &self.filtered_records;
-                        Box::new(
-                            indices
-                                .iter()
-                                .copied()
-                                .filter_map(|ix| records.records().get(ix)),
-                        ) as Box<dyn Iterator<Item = _>>
-                    };
+        scroll_area.show_rows(ui, row_height, num_rows, |ui, range| {
+            ui.set_min_width(header.response.rect.width());
 
-                    for (ix, record) in
-                        records_iter.enumerate().skip(range.start).take(take_n)
-                    {
-                        let row = self.ui_row(
-                            ui,
-                            file_name,
-                            records.as_ref(),
+            let take_n = range.start.max(range.end) - range.start;
+
+            egui::Grid::new("record_list_grid").show(ui, |ui| {
+                let records_iter = if self.filtered_records.is_empty() {
+                    Box::new(records.records().iter())
+                        as Box<dyn Iterator<Item = _>>
+                } else {
+                    let indices = &self.filtered_records;
+                    Box::new(
+                        indices
+                            .iter()
+                            .copied()
+                            .filter_map(|ix| records.records().get(ix)),
+                    ) as Box<dyn Iterator<Item = _>>
+                };
+
+                for (ix, record) in
+                    records_iter.enumerate().skip(range.start).take(take_n)
+                {
+                    let row = self.ui_row(
+                        ui,
+                        file_name,
+                        records.as_ref(),
+                        record,
+                        ix,
+                    );
+
+                    let row_interact = ui.interact(
+                        row.rect,
+                        egui::Id::new(ui.id().with(ix)),
+                        egui::Sense::click(),
+                    );
+
+                    if row_interact.clicked() {
+                        self.select_record(
+                            app_msg_tx,
+                            graph_query.graph(),
                             record,
-                            ix,
                         );
-
-                        let row_interact = ui.interact(
-                            row.rect,
-                            egui::Id::new(ui.id().with(ix)),
-                            egui::Sense::click(),
-                        );
-
-                        if row_interact.clicked() {
-                            self.select_record(
-                                app_msg_tx,
-                                graph_query.graph(),
-                                record,
-                            );
-                        }
-                        if row_interact.double_clicked() {
-                            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
-                        }
                     }
-                });
-            },
-        );
+                    if row_interact.double_clicked() {
+                        app_msg_tx.send(AppMsg::goto_selection()).unwrap();
+                    }
+                }
+            });
+        });
 
         let enabled_columns = self.enabled_columns.get_mut(file_name).unwrap();
         enabled_columns.ui(

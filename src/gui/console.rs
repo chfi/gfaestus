@@ -1202,9 +1202,9 @@ pub struct GetSetTruth {
 
 impl GetSetTruth {
     pub fn add_setter(
-        &mut self,
+        &self,
         key: &str,
-        setter: Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>,
+        setter: impl Fn(rhai::Dynamic) + Send + Sync + 'static,
     ) {
         let mut get_setters = self.get_set.write();
 
