@@ -431,6 +431,14 @@ impl Gui {
             channels.gui_tx.clone(),
         )?;
 
+        let console = Console::new(
+            reactor,
+            graph_query,
+            channels.clone(),
+            settings.to_owned(),
+            shared_state.to_owned(),
+        );
+
         let gff3_list = {
             let mut list = RecordList::new(
                 reactor,
@@ -462,13 +470,6 @@ impl Gui {
             list
         };
 
-        let console = Console::new(
-            reactor,
-            graph_query,
-            channels.clone(),
-            settings.to_owned(),
-            shared_state.to_owned(),
-        );
         let mut windows = GuiWindows::default();
 
         {

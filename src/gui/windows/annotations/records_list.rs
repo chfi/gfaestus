@@ -2,12 +2,14 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use bstr::ByteSlice;
+use crossbeam::atomic::AtomicCell;
 use handlegraph::pathhandlegraph::PathId;
 use rustc_hash::FxHashSet;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+use crate::gui::console::Console;
 use crate::reactor::Reactor;
 use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
@@ -42,6 +44,8 @@ where
 
     creator_open: bool,
     creator: OverlayLabelSetCreator<C>,
+
+    pub(super) scroll_to_index: Arc<AtomicCell<Option<usize>>>,
 
     col_widths: ColumnWidthsVec,
 }
@@ -81,7 +85,17 @@ where
             ),
 
             col_widths: ColumnWidthsVec::default(),
+
+            scroll_to_index: Arc::new(None.into()),
         }
+    }
+
+    pub fn add_scroll_console_setter(&self, console: &mut Console, name: &str) {
+        let to_ix = self.scroll_to_index.clone();
+
+        // console.get_set.add_setter(name,
+
+        //
     }
 
     pub fn set_default_columns(

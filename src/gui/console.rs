@@ -47,7 +47,7 @@ use crate::{
     graph_query::GraphQuery,
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 pub mod wizard;
 
@@ -156,14 +156,27 @@ impl Console<'static> {
         // These macros add to the keys available with the `get` and `set` console functions
         let mut get_set = GetSetTruth::default();
 
+        // get_set.add_get_set($name, get_set)
+
         macro_rules! add_t {
             ($type:ty, $name:literal, $arc:expr) => {
-                get_set.add_arc_atomic_cell_get_set(
+                let arc = $arc.clone();
+
+                get_set.add_get_set(
                     $name,
-                    $arc,
-                    |x| rhai::Dynamic::from(x),
-                    |x: rhai::Dynamic| x.try_cast::<$type>(),
-                );
+                    // $arc,
+                    move |x: Option<rhai::Dynamic>| {
+                        let v = arc.load();
+
+                        if let Some(x) = x {
+                            if let Some(v) = x.try_cast::<$type>() {
+                                arc.store(v);
+                            }
+                        }
+
+                        rhai::Dynamic::from(v)
+                    },
+                )
             };
         }
 
@@ -178,19 +191,20 @@ impl Console<'static> {
         macro_rules! add_nested_cast {
             ($ubo:expr, $field:tt, $type:ty) => {{
                 let name = stringify!($field);
+                let ubo = $ubo.clone();
 
-                get_set.add_arc_atomic_cell_get_set(
-                    name,
-                    $ubo,
-                    move |cont| rhai::Dynamic::from(cont.$field),
-                    {
-                        let ubo = $ubo.clone();
-                        move |val: rhai::Dynamic| {
-                            let x = val.try_cast::<$type>()?;
-                            let mut ubo = ubo.load();
-                            ubo.$field = x;
-                            Some(ubo)
+                get_set.add_get_set(
+                    &name,
+                    move |val: Option<rhai::Dynamic>| {
+                        let res = ubo.load();
+                        if let Some(new) =
+                            val.and_then(|v| v.try_cast::<$type>())
+                        {
+                            let mut v = ubo.load();
+                            v.$field = new;
+                            ubo.store(v);
                         }
+                        rhai::Dynamic::from(res)
                     },
                 );
             }};
@@ -201,18 +215,21 @@ impl Console<'static> {
                 let nw = $obj.clone();
                 let nw_ = $obj.clone();
 
-                get_set.add_dynamic(
+                get_set.add_get_set(
                     stringify!($get),
-                    move || nw.$get(),
-                    move |v| {
-                        nw_.$set(v);
+                    move |val: Option<rhai::Dynamic>| {
+                        let r = rhai::Dynamic::from(nw.$get());
+                        if let Some(v) = val {
+                            nw_.$set(v.cast());
+                        }
+                        r
                     },
-                )
+                );
             };
         }
 
-        add_t!(f32, "label_radius", settings.label_radius().clone());
-        add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
+        add_t!(f32, "label_radius", settings.label_radius());
+        add_t!(Point, "mouse_pos", &shared_state.mouse_pos);
 
         add_t!(
             rgb::RGB<f32>,
@@ -233,28 +250,6 @@ impl Console<'static> {
 
         let e1 = edge.clone();
         let e2 = edge.clone();
-
-        get_set.add_dynamic(
-            "tess_levels",
-            move || {
-                let tl = e1.load().tess_levels;
-                let get = |ix| rhai::Dynamic::from(tl[ix]);
-                vec![get(0), get(1), get(2), get(3), get(4)]
-            },
-            move |tess_vec: Vec<rhai::Dynamic>| {
-                let get = |ix| {
-                    tess_vec
-                        .get(ix)
-                        .cloned()
-                        .and_then(|v: rhai::Dynamic| v.try_cast())
-                        .unwrap_or(0.0f32)
-                };
-                let arr = [get(0), get(1), get(2), get(3), get(4)];
-                let mut ubo = e2.load();
-                ubo.tess_levels = arr;
-                e2.store(ubo);
-            },
-        );
 
         add_nested_cell!(
             settings.node_width().clone(),
@@ -338,8 +333,7 @@ impl Console<'static> {
             result_rx,
 
             graph: graph.clone(),
-            // graph: graph.graph.clone(),
-            // path_positions: graph.path_positions.clone(),
+
             modules: Arc::new(Mutex::new(Vec::new())),
 
             key_code_map,
@@ -1193,24 +1187,69 @@ impl Console<'static> {
     }
 }
 
+type GetSetDyn =
+    Box<dyn Fn(Option<rhai::Dynamic>) -> rhai::Dynamic + Send + Sync + 'static>;
+
 /// Holds both the closures used with the `get` and `set` commands
 /// (defined in [`ConsoleShared::create_engine`]), and the generic
 /// console variable map, accessible via (`get_var` and `set_var`).
 #[derive(Default)]
 pub struct GetSetTruth {
-    getters:
-        HashMap<String, Box<dyn Fn() -> rhai::Dynamic + Send + Sync + 'static>>,
-    setters:
-        HashMap<String, Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>>,
+    get_set: RwLock<HashMap<String, GetSetDyn>>,
 
     pub console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
 }
 
 impl GetSetTruth {
-    pub fn get(&self, key: &str) -> Option<rhai::Dynamic> {
-        let getter = self.getters.get(key)?;
-        Some(getter())
+    pub fn add_setter(
+        &mut self,
+        key: &str,
+        setter: Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>,
+    ) {
+        let mut get_setters = self.get_set.write();
+
+        let val = Box::new(move |val: Option<rhai::Dynamic>| {
+            if let Some(val) = val {
+                setter(val);
+                rhai::Dynamic::from(false)
+            } else {
+                rhai::Dynamic::from(true)
+            }
+        }) as GetSetDyn;
+
+        get_setters.insert(key.to_string(), val);
     }
+
+    pub fn add_get_set(
+        &self,
+        key: &str,
+        get_set: impl Fn(Option<rhai::Dynamic>) -> rhai::Dynamic
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        let mut get_setters = self.get_set.write();
+        get_setters.insert(key.to_string(), Box::new(get_set));
+    }
+
+    pub fn get(&self, key: &str) -> Option<rhai::Dynamic> {
+        let get_setters = self.get_set.read();
+        let gs = get_setters.get(key)?;
+        let v = gs(None);
+        Some(v)
+    }
+
+    pub fn set(&self, key: &str, val: rhai::Dynamic) -> Option<rhai::Dynamic> {
+        let get_setters = self.get_set.read();
+        let gs = get_setters.get(key)?;
+        let v = gs(Some(val));
+        Some(v)
+    }
+
+    // pub fn get(&self, key: &str) -> Option<rhai::Dynamic> {
+    //     let getter = self.getters.get(key)?;
+    //     Some(getter())
+    // }
 
     pub fn get_var(&self, key: &str) -> Option<rhai::Dynamic> {
         let lock = self.console_vars.lock();
@@ -1218,11 +1257,11 @@ impl GetSetTruth {
         Some(val)
     }
 
-    pub fn set(&self, key: &str, val: rhai::Dynamic) {
-        if let Some(setter) = self.setters.get(key) {
-            setter(val);
-        }
-    }
+    // pub fn set(&self, key: &str, val: rhai::Dynamic) {
+    //     if let Some(setter) = self.setters.get(key) {
+    //         setter(val);
+    //     }
+    // }
 
     pub fn set_vars<'a>(
         &self,
@@ -1244,6 +1283,7 @@ impl GetSetTruth {
         lock.insert(name.to_string(), val);
     }
 
+    /*
     pub fn add_arc_atomic_cell_get_set<T>(
         &mut self,
         name: &str,
@@ -1269,27 +1309,7 @@ impl GetSetTruth {
         self.setters.insert(name.to_string(), Box::new(setter) as _);
     }
 
-    pub fn add_dynamic<T>(
-        &mut self,
-        name: &str,
-        get: impl Fn() -> T + Send + Sync + 'static,
-        set: impl Fn(T) + Send + Sync + 'static,
-    ) where
-        T: Clone + Send + Sync + 'static,
-    {
-        let getter = move || {
-            let v = get();
-            rhai::Dynamic::from(v)
-        };
-
-        let setter = move |val: rhai::Dynamic| {
-            let val: T = val.cast();
-            set(val);
-        };
-
-        self.getters.insert(name.to_string(), Box::new(getter) as _);
-        self.setters.insert(name.to_string(), Box::new(setter) as _);
-    }
+    */
 }
 
 impl ConsoleShared {
@@ -1466,9 +1486,7 @@ impl ConsoleShared {
         let get_set = self.get_set.clone();
         engine.register_result_fn("get", move |name: &str| {
             get_set
-                .getters
                 .get(name)
-                .map(|get| get())
                 .ok_or(format!("Setting `{}` not found", name).into())
         });
 
@@ -1477,11 +1495,10 @@ impl ConsoleShared {
         engine.register_result_fn(
             "set",
             move |name: &str, val: rhai::Dynamic| {
-                get_set
-                    .setters
-                    .get(name)
-                    .map(|set| set(val))
-                    .ok_or(format!("Setting `{}` not found", name).into())
+                if get_set.set(name, val).is_none() {
+                    return Err(format!("Setting `{}` not found", name).into());
+                }
+                Ok(())
             },
         );
 
