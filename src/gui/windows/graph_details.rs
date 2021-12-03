@@ -17,10 +17,11 @@ use std::sync::Arc;
 
 use bstr::ByteSlice;
 
-use crate::{app::AppMsg, context::ContextEntry, geometry::*};
+use crate::{
+    app::AppMsg, context::ContextEntry, geometry::*, gui::util::ColumnWidths,
+};
 use crate::{graph_query::GraphQuery, gui::util::grid_row_label};
 
-#[derive(Debug)]
 pub struct NodeDetails {
     node_id: Arc<AtomicCell<Option<NodeId>>>,
     fetched_node: Option<NodeId>,
@@ -31,8 +32,7 @@ pub struct NodeDetails {
 
     unique_paths: Vec<PathId>,
 
-    col_widths_hdr: AtomicCell<[f32; 3]>,
-    col_widths: AtomicCell<[f32; 3]>,
+    col_widths: ColumnWidths<3>,
 }
 
 impl std::default::Default for NodeDetails {
@@ -45,8 +45,7 @@ impl std::default::Default for NodeDetails {
             paths: Vec::new(),
             unique_paths: Vec::new(),
 
-            col_widths_hdr: [0.0; 3].into(),
-            col_widths: [0.0; 3].into(),
+            col_widths: Default::default(),
         }
     }
 }
@@ -152,7 +151,6 @@ impl NodeDetails {
                     if node_label.clicked_by(egui::PointerButton::Secondary) {
                         ctx_tx.send(ContextEntry::Node(node_id)).unwrap();
                     }
-                    // let node_label = ui.label(format!("Node {}", node_id));
 
                     ui.separator();
 
@@ -172,39 +170,20 @@ impl NodeDetails {
                     let num_rows = self.paths.len();
                     let row_height = 12.0;
 
-                    let [w0, w1, w2] = {
-                        let mut ws = [0.0f32; 3];
-
-                        let prev_hdr = self.col_widths_hdr.load();
-                        let prev = self.col_widths.load();
-
-                        let prevs =
-                            prev_hdr.iter().zip(prev).map(|(h, r)| h.max(r));
-
-                        for (w, prev) in ws.iter_mut().zip(prevs) {
-                            *w = prev
-                        }
-
-                        ws
-                    };
+                    let [w0, w1, w2] = self.col_widths.get();
 
                     let header = egui::Grid::new(
                         "node_details_path_list_header",
                     )
                     .show(ui, |ui| {
-                        let mut g = |w: f32, l: &str| {
-                            let label = egui::Label::new(l);
-                            let g0 = label.layout(ui);
-                            let s0 = g0.size().x;
-                            ui.add_sized([w.max(s0), g0.size().y], label);
-                            s0
-                        };
-
-                        let c0 = g(w0, "Path");
-                        let c1 = g(w1, "Step");
-                        let c2 = g(w2, "Base pos");
-
-                        self.col_widths_hdr.store([c0, c1, c2]);
+                        let inner = grid_row_label(
+                            ui,
+                            egui::Id::new("node_details_path_list_header__"),
+                            &["Path", "Step", "Base pos"],
+                            false,
+                            Some(&[w0, w1, w2]),
+                        );
+                        self.col_widths.set_hdr(&inner.inner);
                     });
 
                     egui::ScrollArea::vertical().show_rows(
@@ -265,7 +244,7 @@ impl NodeDetails {
                                         let ws = &inner.inner;
 
                                         self.col_widths
-                                            .store([ws[0], ws[1], ws[2]]);
+                                            .set(&[ws[0], ws[1], ws[2]]);
 
                                         let row = inner.response;
 
@@ -296,7 +275,6 @@ impl NodeDetails {
     }
 }
 
-#[derive(Debug)]
 pub struct NodeList {
     // probably not needed as I can assume compact node IDs
     all_nodes: Vec<NodeId>,
@@ -309,8 +287,7 @@ pub struct NodeList {
 
     range: AtomicCell<(usize, usize)>,
 
-    col_widths_hdr: AtomicCell<[f32; 5]>,
-    col_widths: AtomicCell<[f32; 5]>,
+    col_widths: ColumnWidths<5>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -339,11 +316,9 @@ impl NodeList {
 
     pub fn new(
         graph_query: &GraphQuery,
-        page_size: usize,
         node_details_id: Arc<AtomicCell<Option<NodeId>>>,
     ) -> Self {
         let graph = graph_query.graph();
-        let node_count = graph.node_count();
 
         let mut all_nodes = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
         all_nodes.sort();
@@ -360,14 +335,9 @@ impl NodeList {
 
             range: (0, 0).into(),
 
-            col_widths_hdr: [0.0; 5].into(),
-            col_widths: [0.0; 5].into(),
+            col_widths: Default::default(),
         }
     }
-
-    // fn update_col_widths(&self, new: [f32; 5]) {
-    //     let mut col_widths = self.col_widths
-    // }
 
     pub fn set_filtered(&mut self, nodes: &[NodeId]) {
         self.filtered_nodes.clear();
@@ -449,40 +419,25 @@ impl NodeList {
                     nodes.len()
                 ));
 
-                let [w0, w1, w2, w3, w4] = {
-                    let mut ws = [0.0f32; 5];
-
-                    let prev_hdr = self.col_widths_hdr.load();
-                    let prev = self.col_widths.load();
-
-                    let prevs =
-                        prev_hdr.iter().zip(prev).map(|(h, r)| h.max(r));
-
-                    for (w, prev) in ws.iter_mut().zip(prevs) {
-                        *w = prev
-                    }
-
-                    ws
-                };
+                let widths = self.col_widths.get();
 
                 egui::Grid::new("node_list_grid_header").show(ui, |ui| {
-                    let widths = {
-                        let mut g = |w: f32, l: &str| {
-                            let label = egui::Label::new(l);
-                            let g0 = label.layout(ui);
-                            let s0 = g0.size().x;
-                            ui.add_sized([w.max(s0), g0.size().y], label);
-                            s0
-                        };
-                        let c0 = g(w0, "Node");
-                        let c1 = g(w1, "Degree");
-                        let c2 = g(w2, "Seq. len");
-                        let c3 = g(w3, "Unique paths");
-                        let c4 = g(w4, "Total paths");
-                        [c0, c1, c2, c3, c4]
-                    };
+                    let inner = grid_row_label(
+                        ui,
+                        egui::Id::new("node_list_grid_header__"),
+                        &[
+                            "Node",
+                            "Degree",
+                            "Seq. len",
+                            "Unique paths",
+                            "Total paths",
+                        ],
+                        false,
+                        Some(&widths),
+                    );
 
-                    self.col_widths_hdr.store(widths);
+                    let ws = inner.inner;
+                    self.col_widths.set_hdr(&ws);
                 });
 
                 egui::ScrollArea::vertical().show_rows(
@@ -553,14 +508,10 @@ impl NodeList {
                                         egui::Id::new(ui.id().with(ix)),
                                         &fields,
                                         false,
-                                        Some(&[w0, w1, w2, w3, w4]),
+                                        Some(&widths),
                                     );
 
-                                    let ws = &inner.inner;
-
-                                    self.col_widths.store([
-                                        ws[0], ws[1], ws[2], ws[3], ws[4],
-                                    ]);
+                                    self.col_widths.set(&inner.inner);
 
                                     let row = inner.response;
 

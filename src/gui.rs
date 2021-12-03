@@ -210,8 +210,7 @@ impl AppViewState {
             node_details_state,
         );
 
-        let node_list_state =
-            NodeList::new(graph_query, 15, node_id_cell.clone());
+        let node_list_state = NodeList::new(graph_query, node_id_cell.clone());
         let node_list =
             ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 

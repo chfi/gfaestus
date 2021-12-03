@@ -1,3 +1,59 @@
+use crossbeam::atomic::AtomicCell;
+
+pub struct ColumnWidths<const N: usize> {
+    widths_hdr: AtomicCell<[f32; N]>,
+    widths: AtomicCell<[f32; N]>,
+}
+
+impl<const N: usize> ColumnWidths<N> {
+    pub fn get(&self) -> [f32; N] {
+        let mut ws = [0.0f32; N];
+
+        let prev_hdr = self.widths_hdr.load();
+        let prev = self.widths.load();
+
+        let prevs = prev_hdr.iter().zip(prev).map(|(h, r)| h.max(r));
+
+        for (w, prev) in ws.iter_mut().zip(prevs) {
+            *w = prev
+        }
+
+        ws
+    }
+
+    pub fn set_hdr(&self, widths: &[f32]) {
+        let mut ws = self.widths_hdr.load();
+
+        for (ix, w) in ws.iter_mut().enumerate() {
+            if let Some(new_w) = widths.get(ix).copied() {
+                *w = new_w;
+            }
+        }
+        self.widths_hdr.store(ws);
+    }
+
+    pub fn set(&self, widths: &[f32]) {
+        let mut ws = self.widths.load();
+
+        for (ix, w) in ws.iter_mut().enumerate() {
+            if let Some(new_w) = widths.get(ix).copied() {
+                *w = new_w;
+            }
+        }
+        self.widths.store(ws);
+    }
+}
+
+impl<const N: usize> std::default::Default for ColumnWidths<N> {
+    fn default() -> Self {
+        let arr = [0.0; N];
+        Self {
+            widths_hdr: arr.into(),
+            widths: arr.into(),
+        }
+    }
+}
+
 fn add_label_width(
     ui: &mut egui::Ui,
     width: f32,
@@ -7,7 +63,14 @@ fn add_label_width(
     let galley = label.layout(ui);
     let size = galley.size();
     let real_width = size.x;
-    let resp = ui.add_sized([width.max(real_width), size.y], label);
+
+    let resp = ui
+        .with_layout(egui::Layout::right_to_left(), |ui| {
+            ui.set_min_width(width.max(real_width));
+            ui.add(label)
+        })
+        .response;
+
     (real_width, resp)
 }
 
@@ -19,9 +82,6 @@ pub fn grid_row_label(
     prev_widths: Option<&[f32]>,
 ) -> egui::InnerResponse<Vec<f32>> {
     assert!(!fields.is_empty());
-
-    // let mut fields = fields_strs.into_iter();
-    // let mut row = ui.label(*fields.next().unwrap());
 
     let mut row: Option<egui::Response> = None;
 
