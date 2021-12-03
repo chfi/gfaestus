@@ -241,10 +241,7 @@ impl NodeDetails {
                                             Some(&[w0, w1, w2]),
                                         );
 
-                                        let ws = &inner.inner;
-
-                                        self.col_widths
-                                            .set(&[ws[0], ws[1], ws[2]]);
+                                        self.col_widths.set(&inner.inner);
 
                                         let row = inner.response;
 

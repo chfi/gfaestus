@@ -175,7 +175,7 @@ pub struct AppViewState {
     node_list: ViewStateChannel<NodeList, NodeListMsg>,
     node_details: ViewStateChannel<NodeDetails, NodeDetailsMsg>,
 
-    path_list: ViewStateChannel<PathList, PathListMsg>,
+    path_list: ViewStateChannel<PathList, ()>,
     path_details: ViewStateChannel<PathDetails, ()>,
 
     // theme_editor: ThemeEditor,
@@ -221,8 +221,7 @@ impl AppViewState {
             ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
         let path_list_state = PathList::new(graph_query, 15, path_id_cell);
-        let path_list =
-            ViewStateChannel::<PathList, PathListMsg>::new(path_list_state);
+        let path_list = ViewStateChannel::<PathList, ()>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);
         let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(
@@ -284,10 +283,6 @@ impl AppViewState {
         });
 
         self.node_details.apply_received(|state, msg| {
-            state.apply_msg(msg);
-        });
-
-        self.path_list.apply_received(|state, msg| {
             state.apply_msg(msg);
         });
     }
