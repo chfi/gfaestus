@@ -187,6 +187,10 @@ impl GuiPipeline {
 
         for (ix, &(start, ix_count)) in self.vertices.ranges.iter().enumerate()
         {
+            if ix_count == 0 {
+                continue;
+            }
+
             let vx_offset = self.vertices.vertex_offsets[ix];
 
             let clip = self.vertices.clips[ix];
