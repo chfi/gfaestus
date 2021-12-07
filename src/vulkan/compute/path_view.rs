@@ -1182,10 +1182,101 @@ pub struct Path1DLayout {
     pub total_len: usize,
 
     pub path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>>,
+
+    node_offsets: Vec<usize>,
 }
 
 impl Path1DLayout {
     // pub fn
+
+    // fn load_path(&self, view: (usize, usize), path: PathId, width: usize) -> Vec<(PathId, Vec<u32>)>
+    fn load_path(
+        &self,
+        view: (usize, usize),
+        path: PathId,
+        width: usize,
+    ) -> Vec<u32> {
+        let mut res = Vec::new();
+
+        let path_ranges = self.path_ranges.get(&path).unwrap();
+
+        let w = width as f64;
+        for i in 0..width {
+            let x = i as f64;
+
+            let pos = Self::pos_for_pixel(view, w, x);
+
+            if Self::sample_path(path_ranges, pos) {
+                let node = self.node_at_pos(pos);
+                res.push(node.0 as u32);
+            } else {
+                res.push(0u32);
+            }
+        }
+
+        res
+    }
+
+    fn pos_for_pixel(view: (usize, usize), width: f64, px_x: f64) -> usize {
+        let (l0, r0) = view;
+        let (l, r) = (l0.min(r0), l0.max(r0));
+
+        let len = r - l;
+        let bp_per_pixel = (len as f64) / width;
+
+        let d_i = bp_per_pixel as usize;
+
+        l + (bp_per_pixel * px_x) as usize
+    }
+
+    fn node_at_pixel(
+        &self,
+        view: (usize, usize),
+        width: f64,
+        px_x: f64,
+    ) -> NodeId {
+        let pos = Self::pos_for_pixel(view, width, px_x);
+
+        self.node_at_pos(pos)
+    }
+
+    // fn node_at_pos(&self, pos: usize) -> Option<NodeId> {
+
+    fn node_at_pos(&self, pos: usize) -> NodeId {
+        let bin_ix = self.node_offsets.binary_search(&pos);
+
+        // TODO the Err branch here might be off by one
+        let ix = match bin_ix {
+            Ok(ix) => ix,
+            Err(ix) => ix,
+        };
+
+        NodeId::from((ix + 1) as u64)
+    }
+
+    fn sample_path(path_range: &[std::ops::Range<usize>], pos: usize) -> bool {
+        let bin_ix = path_range.binary_search_by(|range| {
+            use std::cmp::Ordering;
+            if pos < range.start {
+                Ordering::Less
+            } else if pos >= range.start && pos < range.end {
+                Ordering::Equal
+            } else {
+                Ordering::Greater
+            }
+        });
+
+        match bin_ix {
+            Ok(ix) => path_range
+                .get(ix)
+                .and_then(|r| r.contains(&pos).then(|| true))
+                .unwrap_or(false),
+            Err(_ix) => {
+                false
+                // path_range.get(ix).and_then(|r| r.contains(pos)).unwrap_or(false)
+            }
+        }
+    }
 
     pub fn new(graph: &PackedGraph) -> Self {
         let nodes = {
@@ -1196,25 +1287,23 @@ impl Path1DLayout {
 
         let path_count = graph.path_count();
 
-        // let mut open_ranges: FxHashMap<PathId, usize> =
-        //     FxHashMap::default();
-
         let mut open_ranges: Vec<Option<usize>> = vec![None; path_count];
-        // let mut path_ranges: FxHashMap
 
         let mut path_ranges: Vec<Vec<std::ops::Range<usize>>> =
             vec![Vec::new(); path_count];
 
         let mut total_len = 0usize;
-        // let mut x_offset = 0f64;
 
-        // let mut paths_on_handle = Vec::new();
         let mut paths_on_handle = FxHashSet::default();
+
+        let mut node_offsets = Vec::with_capacity(nodes.len());
 
         for node in nodes {
             let handle = Handle::pack(node, false);
 
             let len = graph.node_len(handle);
+
+            node_offsets.push(total_len);
 
             let x0 = total_len;
 
@@ -1283,6 +1372,7 @@ impl Path1DLayout {
         Self {
             total_len,
             path_ranges,
+            node_offsets,
         }
     }
 }
