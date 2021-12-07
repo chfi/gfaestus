@@ -13,7 +13,11 @@ use crossbeam::atomic::AtomicCell;
 use futures::future::RemoteHandle;
 // use futures::lock::Mutex;
 use handlegraph::handle::{Handle, NodeId};
-use handlegraph::pathhandlegraph::PathId;
+use handlegraph::handlegraph::{IntoHandles, IntoSequences};
+use handlegraph::packedgraph::PackedGraph;
+use handlegraph::pathhandlegraph::{
+    GraphPathsSteps, IntoNodeOccurrences, PathId, PathStep,
+};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use parking_lot::Mutex;
@@ -629,6 +633,46 @@ impl PathViewRenderer {
         None
     }
 
+    pub fn load_paths_1d(
+        &self,
+        app: &GfaestusVk,
+        reactor: &mut Reactor,
+        layout: (),
+    ) -> Result<()> {
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        let left = center - radius;
+        let right = center + radius;
+
+        // log::warn!("loading with l: {}, r: {}", left, right);
+
+        let translation = self.translation.clone();
+        let scaling = self.scaling.clone();
+
+        let graph = reactor.graph_query.clone();
+
+        let width = self.width;
+        let height = self.height;
+
+        let gpu_tasks = reactor.gpu_tasks.clone();
+
+        let buffer = self.path_buffer;
+
+        let state = self.state.clone();
+
+        let path_data = self.path_data.clone();
+        let path_count = self.path_count.clone();
+
+        let rows = self.row_states.clone();
+
+        let fut = async move {};
+
+        todo!();
+
+        Ok(())
+    }
+
     pub fn load_paths(
         &self,
         app: &GfaestusVk,
@@ -1130,5 +1174,50 @@ impl PathViewRenderer {
             unsafe { device.create_descriptor_set_layout(&layout_info, None) }?;
 
         Ok(layout)
+    }
+}
+
+#[derive(Clone, Default)]
+pub struct Path1DLayout {
+    total_len: usize,
+
+    path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>>,
+}
+
+impl Path1DLayout {
+    pub fn new(graph: &PackedGraph) -> Self {
+        let nodes = {
+            let mut ns = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+            ns.sort();
+            ns
+        };
+
+        let mut open_ranges: FxHashMap<PathId, Option<usize>> =
+            FxHashMap::default();
+
+        let mut path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>> =
+            FxHashMap::default();
+
+        let mut total_len = 0usize;
+        // let mut x_offset = 0f64;
+
+        for node in nodes {
+            let handle = Handle::pack(node, false);
+
+            let len = graph.node_len(handle);
+
+            let x0 = total_len;
+            let x1 = total_len + len;
+
+            if let Some(steps) = graph.steps_on_handle(handle) {
+                //
+
+                for (path, _step) in steps {
+                    unimplemented!();
+                }
+            }
+
+            total_len += len;
+        }
     }
 }
