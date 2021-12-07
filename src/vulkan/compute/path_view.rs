@@ -16,7 +16,7 @@ use handlegraph::handle::{Handle, NodeId};
 use handlegraph::handlegraph::{IntoHandles, IntoSequences};
 use handlegraph::packedgraph::PackedGraph;
 use handlegraph::pathhandlegraph::{
-    GraphPathsSteps, IntoNodeOccurrences, PathId, PathStep,
+    GraphPaths, GraphPathsSteps, IntoNodeOccurrences, PathId, PathStep,
 };
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -1177,14 +1177,16 @@ impl PathViewRenderer {
     }
 }
 
-#[derive(Clone, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct Path1DLayout {
-    total_len: usize,
+    pub total_len: usize,
 
-    path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>>,
+    pub path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>>,
 }
 
 impl Path1DLayout {
+    // pub fn
+
     pub fn new(graph: &PackedGraph) -> Self {
         let nodes = {
             let mut ns = graph.handles().map(|h| h.id()).collect::<Vec<_>>();
@@ -1192,14 +1194,22 @@ impl Path1DLayout {
             ns
         };
 
-        let mut open_ranges: FxHashMap<PathId, Option<usize>> =
-            FxHashMap::default();
+        let path_count = graph.path_count();
 
-        let mut path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>> =
-            FxHashMap::default();
+        // let mut open_ranges: FxHashMap<PathId, usize> =
+        //     FxHashMap::default();
+
+        let mut open_ranges: Vec<Option<usize>> = vec![None; path_count];
+        // let mut path_ranges: FxHashMap
+
+        let mut path_ranges: Vec<Vec<std::ops::Range<usize>>> =
+            vec![Vec::new(); path_count];
 
         let mut total_len = 0usize;
         // let mut x_offset = 0f64;
+
+        // let mut paths_on_handle = Vec::new();
+        let mut paths_on_handle = FxHashSet::default();
 
         for node in nodes {
             let handle = Handle::pack(node, false);
@@ -1207,17 +1217,72 @@ impl Path1DLayout {
             let len = graph.node_len(handle);
 
             let x0 = total_len;
-            let x1 = total_len + len;
 
-            if let Some(steps) = graph.steps_on_handle(handle) {
-                //
+            paths_on_handle.clear();
+            paths_on_handle.extend(
+                graph
+                    .steps_on_handle(handle)
+                    .into_iter()
+                    .flatten()
+                    .map(|(path, _)| path),
+            );
 
-                for (path, _step) in steps {
-                    unimplemented!();
+            for (ix, (open, past)) in open_ranges
+                .iter_mut()
+                .zip(path_ranges.iter_mut())
+                .enumerate()
+            {
+                let path = PathId(ix as u64);
+
+                let offset = x0;
+                let on_path = paths_on_handle.contains(&path);
+
+                // if let (Some(s), false) = (open, on_path) {
+                //     past.push(*s..offset);
+                //     *open = None;
+                // } else if let (None, true) = (open, on_path) {
+                //     *open = Some(offset);
+                // }
+
+                // if on_path && open.is_none() {
+                //     *open = Some(offset);
+                // } else if let Some(s) = open {
+                //     past.push(*s..offset);
+                //     *open = None;
+                // }
+
+                if let Some(s) = open {
+                    if !on_path {
+                        past.push(*s..offset);
+                        *open = None;
+                    }
+                } else {
+                    if on_path {
+                        *open = Some(offset);
+                    }
                 }
             }
 
             total_len += len;
+        }
+
+        for (open, past) in open_ranges.iter_mut().zip(path_ranges.iter_mut()) {
+            if let Some(s) = open {
+                past.push(*s..total_len);
+                *open = None;
+            }
+        }
+
+        let path_ranges: FxHashMap<PathId, Vec<std::ops::Range<usize>>> =
+            path_ranges
+                .into_iter()
+                .enumerate()
+                .map(|(ix, ranges)| (PathId(ix as u64), ranges))
+                .collect();
+
+        Self {
+            total_len,
+            path_ranges,
         }
     }
 }

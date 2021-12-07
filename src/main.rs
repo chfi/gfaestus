@@ -7,7 +7,7 @@ use gfaestus::context::{ContextEntry, ContextMenu};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
 use gfaestus::script::plugins::colors::{hash_bytes, hash_color};
-use gfaestus::vulkan::compute::path_view::PathViewRenderer;
+use gfaestus::vulkan::compute::path_view::{Path1DLayout, PathViewRenderer};
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use gfaestus::vulkan::texture::{Gradients, Gradients_, Texture};
@@ -174,6 +174,30 @@ fn main() {
     let t = std::time::Instant::now();
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+
+    let layout_1d = Path1DLayout::new(graph_query.graph());
+
+    {
+        use bstr::ByteSlice;
+
+        for (path, ranges) in layout_1d.path_ranges.iter() {
+            let path_name =
+                graph_query.graph().get_path_name_vec(*path).unwrap();
+
+            println!("PathId {:2}\tName: {}", path.0, path_name.as_bstr());
+
+            for (ix, rng) in ranges.iter().take(20).enumerate() {
+                if ix != 0 {
+                    print!(", ");
+                }
+                print!("{:?}", rng);
+            }
+
+            println!();
+        }
+    }
+
+    // println!("{:?}", layout_1d);
 
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
