@@ -11,7 +11,7 @@ use handlegraph::pathhandlegraph::{
 
 use lazy_static::lazy_static;
 
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use bstr::ByteSlice;
 use parking_lot::Mutex;
@@ -25,6 +25,13 @@ use crate::{
     vulkan::compute::path_view::PathViewRenderer,
 };
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum SortOrder {
+    PathId,
+    Name,
+    LengthBp,
+}
+
 lazy_static! {
     static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
         Mutex::new(None);
@@ -37,6 +44,8 @@ lazy_static! {
     static ref VIEW_RANGE: AtomicCell<(f64, f64)> = AtomicCell::new((0.0, 1.0));
     static ref ROW_RANGE: AtomicCell<(usize, usize)> =
         (0, std::usize::MAX).into();
+    static ref SORT_ORDER: AtomicCell<SortOrder> = SortOrder::PathId.into();
+    static ref REV_SORT: AtomicCell<bool> = false.into();
 }
 
 const MIN_ROWS: usize = 4;
@@ -110,6 +119,8 @@ impl PathPositionList {
             .show(ctx, |ui| {
                 let mut filter_changed = false;
 
+                let mut to_mark: Vec<PathId> = Vec::new();
+
                 let name_resp = ui.horizontal(|ui| {
                     let path_ix = PATH_OFFSET.load();
 
@@ -155,25 +166,58 @@ impl PathPositionList {
                     Self::apply_filter(reactor);
                 }
 
-                let (paths_to_show, num_rows) = if name.is_empty() {
-                    (graph.path_ids().collect::<Vec<_>>(), graph.path_count())
-                } else {
-                    let filtered = FILTERED_IDS.lock();
-                    let len = filtered.len();
-                    (filtered.iter().copied().collect::<Vec<_>>(), len)
+                ui.horizontal(|ui| {
+                    let mut order = SORT_ORDER.load();
+                    let rev = REV_SORT.load();
+                    ui.selectable_value(&mut order, SortOrder::PathId, "Path Id");
+                    ui.selectable_value(&mut order, SortOrder::Name, "Path Name");
+                    ui.selectable_value(&mut order, SortOrder::LengthBp, "Path Length");
+
+                    if ui.selectable_label(rev, "Reverse Sort").clicked() {
+                        REV_SORT.fetch_xor(true);
+                    };
+                    SORT_ORDER.store(order);
+
+                });
+
+                let sort_order = SORT_ORDER.load();
+                let rev_sort = REV_SORT.load();
+
+                let (paths_to_show, num_rows) = {
+                    let path_ids = match sort_order {
+                        SortOrder::PathId => &path_view.path_id_order,
+                        SortOrder::Name => &path_view.path_name_order,
+                        SortOrder::LengthBp => &path_view.path_length_order,
+                    };
+
+                    (path_ids, graph.path_count())
                 };
 
-                /*
-                let mut hasher = DefaultHasher::default();
-                paths_to_show.hash(&mut hasher);
 
-                let this_hash = hasher.finish();
+                let paths_to_show: Box<dyn Iterator<Item = _>>  = if name.is_empty() {
 
-                if this_hash != PREV_HASH.load() {
-                    PREV_HASH.store(this_hash);
-                    MARK_PATHS.store(true);
-                }
-                */
+                    if rev_sort {
+                        Box::new(paths_to_show.iter().rev()) as _
+                    } else {
+                        Box::new(paths_to_show.iter()) as _
+                    }
+
+                } else {
+                    let filtered = FILTERED_IDS.lock();
+                    let filtered = filtered.iter().copied().collect::<FxHashSet<_>>();
+
+
+                    if rev_sort {
+                        Box::new(paths_to_show.iter().rev().filter(move |path| {
+                            filtered.contains(path)
+                        })) as _
+                    } else {
+                        Box::new(paths_to_show.iter().filter(move |path| {
+                            filtered.contains(path)
+                        })) as _
+                    }
+                };
+
 
                 let mut path_range = 0..num_rows;
 
@@ -265,13 +309,16 @@ impl PathPositionList {
                                     ui.end_row();
 
                                     for (i_ix, &path) in paths_to_show
-                                        .iter()
+                                        // .iter()
                                         .enumerate()
                                         // .skip(row_range.0)
                                         // .take(row_range.1 - row_range.0)
                                         .skip(PATH_OFFSET.load())
                                         .take(VISIBLE_ROWS.load())
                                     {
+
+                                        to_mark.push(path);
+
                                         let path_name = graph
                                             .get_path_name_vec(path)
                                             .unwrap();
@@ -518,8 +565,6 @@ impl PathPositionList {
                 });
 
                 if MARK_PATHS.load() {
-                    // let to_mark = paths_to_show[path_range].iter().copied();
-                    let to_mark = paths_to_show.iter().copied().skip(PATH_OFFSET.load()).take(VISIBLE_ROWS.load());
                     path_view.mark_load_paths(to_mark).unwrap();
                     MARK_PATHS.store(false);
                 }

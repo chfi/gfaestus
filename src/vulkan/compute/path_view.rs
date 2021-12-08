@@ -20,8 +20,7 @@ use handlegraph::pathhandlegraph::{
     GraphPathNames, GraphPaths, GraphPathsSteps, IntoNodeOccurrences,
     IntoPathIds, PathId, PathStep,
 };
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
+
 use parking_lot::Mutex;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::sync::Arc;
@@ -151,6 +150,7 @@ impl RowState {
         this_path == path
     }
 }
+
 #[allow(dead_code)]
 pub struct PathViewRenderer {
     rgb_pipeline: ComputePipeline,
@@ -177,8 +177,9 @@ pub struct PathViewRenderer {
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
 
-    path_name_order: Vec<PathId>,
-    path_length_order: Vec<PathId>,
+    pub path_id_order: Vec<PathId>,
+    pub path_name_order: Vec<PathId>,
+    pub path_length_order: Vec<PathId>,
 
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
@@ -411,6 +412,9 @@ impl PathViewRenderer {
         let (mut path_names, mut path_lens): (Vec<_>, Vec<_>) =
             path_name_lens.unzip();
 
+        let mut path_id_order = g.path_ids().collect::<Vec<_>>();
+        path_id_order.sort();
+
         path_names.sort_by(|(_, n0), (_, n1)| n0.cmp(&n1));
         let path_name_order = path_names.into_iter().map(|(p, _)| p).collect();
 
@@ -441,6 +445,7 @@ impl PathViewRenderer {
             path_data: Arc::new(Mutex::new(vec![0u32; width * height])),
             path_count: Arc::new(AtomicCell::new(0)),
 
+            path_id_order,
             path_name_order,
             path_length_order,
 
@@ -509,7 +514,7 @@ impl PathViewRenderer {
 
         self.enforce_view_limits();
 
-        log::warn!(
+        log::trace!(
             "set range to {}, {}",
             self.center.load(),
             self.radius.load()
@@ -666,8 +671,6 @@ impl PathViewRenderer {
 
         let left = center - radius;
         let right = center + radius;
-
-        // log::warn!("loading with l: {}, r: {}", left, right);
 
         let translation = self.translation.clone();
         let scaling = self.scaling.clone();
@@ -1300,8 +1303,6 @@ impl Path1DLayout {
             //     Ordering::Less
             // }
         });
-
-        log::warn!("bin_ix: {:?}", bin_ix);
 
         match bin_ix {
             Ok(ix) => path_range
