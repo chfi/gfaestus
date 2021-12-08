@@ -95,6 +95,8 @@ pub struct Gui {
 
     windows: GuiWindows,
     gui_channels: GuiChannels,
+
+    path_view: PathPositionList,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -380,6 +382,7 @@ impl Gui {
         channels: &AppChannels,
         settings: AppSettings,
         graph_query: &Arc<GraphQuery>,
+        path_view_renderer: &Arc<PathViewRenderer>,
     ) -> Result<Self> {
         let render_pass = app.render_passes.gui;
 
@@ -476,7 +479,10 @@ impl Gui {
 
         let mut windows = GuiWindows::default();
 
+        {}
+
         {
+            /*
             let annotation_file_list = AnnotationFileList::new(
                 reactor,
                 channels.app_tx.clone(),
@@ -490,6 +496,7 @@ impl Gui {
             });
 
             let cur_annot = annotation_file_list.current_annotation.clone();
+            */
 
             /*
             let gff3_list = {
@@ -542,6 +549,8 @@ impl Gui {
 
         // windows.
 
+        let path_view = PathPositionList::new(path_view_renderer.clone());
+
         let gui = Self {
             ctx,
             frame_input,
@@ -570,9 +579,10 @@ impl Gui {
             console_down: false,
             console,
 
-            // windows: GuiWindows::default(),
             windows,
             gui_channels: GuiChannels::new(),
+
+            path_view,
         };
 
         Ok(gui)
@@ -630,7 +640,6 @@ impl Gui {
         annotations: &Annotations,
         labels: &Labels,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
-        path_view: &PathViewRenderer,
         nodes: &[Node],
     ) {
         let mut raw_input = self.frame_input.into_raw_input();
@@ -722,14 +731,14 @@ impl Gui {
             annotations,
         );
 
-        PathPositionList::ui(
+        self.path_view.ui(
+            // PathPositionList::ui(
             &self.ctx,
             &mut self.open_windows.path_position_list,
             &self.console,
             reactor,
             &self.channels,
             &self.shared_state,
-            path_view,
             nodes,
         );
 

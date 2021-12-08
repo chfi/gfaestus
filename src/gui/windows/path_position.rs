@@ -4,12 +4,12 @@ use handlegraph::pathhandlegraph::{
     GraphPathNames, GraphPaths, IntoPathIds, PathId,
 };
 
-use lazy_static::lazy_static;
-
+use parking_lot::Mutex;
 use rustc_hash::FxHashSet;
 
+use std::sync::Arc;
+
 use bstr::ByteSlice;
-use parking_lot::Mutex;
 
 use crate::gui::util as gui_util;
 
@@ -29,30 +29,45 @@ pub enum SortOrder {
     LengthBp,
 }
 
-lazy_static! {
-    static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
-        Mutex::new(None);
-    static ref FILTERED_IDS: Mutex<Vec<PathId>> = Mutex::new(Vec::new());
-    static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
-    static ref PREV_HASH: AtomicCell<u64> = AtomicCell::new(0);
-    static ref MARK_PATHS: AtomicCell<bool> = AtomicCell::new(false);
-    static ref VIEW_RANGE: AtomicCell<(f64, f64)> = AtomicCell::new((0.0, 1.0));
-    static ref ROW_RANGE: AtomicCell<(usize, usize)> =
-        (0, std::usize::MAX).into();
-    static ref SORT_ORDER: AtomicCell<SortOrder> = SortOrder::PathId.into();
-    static ref REV_SORT: AtomicCell<bool> = false.into();
-    static ref MOUSE_OVER_IMG: AtomicCell<bool> = false.into();
-}
+pub struct PathPositionList {
+    zoom_update: Mutex<Option<RemoteHandle<()>>>,
 
-pub struct PathPositionList {}
+    filtered_ids: FxHashSet<PathId>,
+    name_filter: String,
+
+    mark_paths: Arc<AtomicCell<bool>>,
+
+    view_range: AtomicCell<(f64, f64)>,
+
+    sort_order: AtomicCell<SortOrder>,
+    rev_sort: AtomicCell<bool>,
+
+    mouse_over_img: AtomicCell<bool>,
+
+    path_view_renderer: Arc<PathViewRenderer>,
+}
 
 impl PathPositionList {
     pub const ID: &'static str = "path_position_list";
 
-    fn apply_filter(reactor: &Reactor) {
-        let needle = NAME_FILTER.lock();
+    pub fn new(path_view_renderer: Arc<PathViewRenderer>) -> Self {
+        Self {
+            zoom_update: Mutex::new(None),
+            filtered_ids: FxHashSet::default(),
+            name_filter: String::new(),
+            mark_paths: Arc::new(true.into()),
+            view_range: (0.0, 1.0).into(),
+            sort_order: SortOrder::PathId.into(),
+            rev_sort: false.into(),
+            mouse_over_img: false.into(),
+            path_view_renderer,
+        }
+    }
 
-        let mut filtered = FILTERED_IDS.lock();
+    fn apply_filter(&mut self, reactor: &Reactor) {
+        let needle = &self.name_filter;
+
+        let filtered = &mut self.filtered_ids;
         filtered.clear();
 
         // if there is no filter, only clear the filter list
@@ -77,13 +92,13 @@ impl PathPositionList {
     }
 
     pub fn ui(
+        &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
         console: &Console,
         reactor: &Reactor,
         channels: &AppChannels,
         shared_state: &SharedState,
-        path_view: &PathViewRenderer,
         nodes: &[Node],
     ) {
         let graph_query = reactor.graph_query.clone();
@@ -101,49 +116,49 @@ impl PathPositionList {
 
                 let name_resp = ui.horizontal(|ui| {
                     if ui.button("Reset").clicked() {
-                        path_view.reset_zoom();
+                        self.path_view_renderer.reset_zoom();
                     }
 
-                    let mut name_filter = NAME_FILTER.lock();
                     let text_entry = ui
-                        .text_edit_singleline(&mut name_filter as &mut String);
+                        .text_edit_singleline(&mut self.name_filter);
 
                     if text_entry.changed() {
                         filter_changed = true;
                     }
-                    name_filter.to_string()
+
+                    self.name_filter.to_string()
                 });
 
                 let name = name_resp.inner;
 
                 if filter_changed {
-                    Self::apply_filter(reactor);
+                    self.apply_filter(reactor);
                 }
 
                 let scroll_align = gui_util::add_scroll_buttons(ui);
 
                 ui.horizontal(|ui| {
-                    let mut order = SORT_ORDER.load();
-                    let rev = REV_SORT.load();
+                    let mut order = self.sort_order.load();
+                    let rev = self.rev_sort.load();
                     ui.selectable_value(&mut order, SortOrder::PathId, "Path Id");
                     ui.selectable_value(&mut order, SortOrder::Name, "Path Name");
                     ui.selectable_value(&mut order, SortOrder::LengthBp, "Path Length");
 
                     if ui.selectable_label(rev, "Reverse Sort").clicked() {
-                        REV_SORT.fetch_xor(true);
+                        self.rev_sort.fetch_xor(true);
                     };
-                    SORT_ORDER.store(order);
+                    self.sort_order.store(order);
 
                 });
 
-                let sort_order = SORT_ORDER.load();
-                let rev_sort = REV_SORT.load();
+                let sort_order = self.sort_order.load();
+                let rev_sort = self.rev_sort.load();
 
                 let (paths_to_show, num_rows) = {
                     let path_ids = match sort_order {
-                        SortOrder::PathId => &path_view.path_id_order,
-                        SortOrder::Name => &path_view.path_name_order,
-                        SortOrder::LengthBp => &path_view.path_length_order,
+                        SortOrder::PathId => &self.path_view_renderer.path_id_order,
+                        SortOrder::Name => &self.path_view_renderer.path_name_order,
+                        SortOrder::LengthBp => &self.path_view_renderer.path_length_order,
                     };
 
                     (path_ids, graph.path_count())
@@ -159,9 +174,10 @@ impl PathPositionList {
                     }
 
                 } else {
-                    let filtered = FILTERED_IDS.lock();
-                    let filtered = filtered.iter().copied().collect::<FxHashSet<_>>();
+                    // let filtered = FILTERED_IDS.lock();
+                    // let filtered = filtered.iter().copied().collect::<FxHashSet<_>>();
 
+                    let filtered = self.filtered_ids.clone();
 
                     if rev_sort {
                         Box::new(paths_to_show.iter().rev().filter(move |path| {
@@ -178,8 +194,8 @@ impl PathPositionList {
 
                 let row_height = 32.0;
 
-                let enable_scrolling = !MOUSE_OVER_IMG.load();
-                MOUSE_OVER_IMG.store(false);
+                let enable_scrolling = !self.mouse_over_img.load();
+                self.mouse_over_img.store(false);
 
                 // egui::ScrollArea::vertical()
                 gui_util::scrolled_area(ui, num_rows, scroll_align)
@@ -199,14 +215,6 @@ impl PathPositionList {
                                 path_range = path_range.end..path_range.end
                             }
 
-                            let row_range = (path_range.start, path_range.end);
-
-
-                            if row_range != ROW_RANGE.load() {
-                                MARK_PATHS.store(true);
-                                ROW_RANGE.store(row_range);
-                            }
-
                             egui::Grid::new("path_position_list_grid").show(
                                 ui,
                                 |ui| {
@@ -220,7 +228,7 @@ impl PathPositionList {
                                     let oy: f32 = dy / 2.0;
 
                                     let (mut left, mut right) =
-                                        VIEW_RANGE.load();
+                                        self.view_range.load();
 
                                     let l = left;
                                     let r = right;
@@ -250,11 +258,11 @@ impl PathPositionList {
                                         left_w.inner.union(right_w.inner);
 
                                     if edges.dragged() {
-                                        VIEW_RANGE.store((left, right));
+                                        self.view_range.store((left, right));
                                     } else if !(edges.dragged()
                                         || edges.has_focus())
                                     {
-                                        VIEW_RANGE.store(path_view.view());
+                                        self.view_range.store(self.path_view_renderer.view());
                                     }
 
                                     if (edges.changed()
@@ -263,9 +271,9 @@ impl PathPositionList {
                                         || edges.lost_focus()
                                         || edges.drag_released()
                                     {
-                                        path_view
+                                        self.path_view_renderer
                                             .set_visible_range(left, right);
-                                        MARK_PATHS.store(true);
+                                        self.mark_paths.store(true);
                                     }
 
                                     ui.end_row();
@@ -292,7 +300,7 @@ impl PathPositionList {
                                             path_name.as_bstr()
                                         ));
 
-                                        let ix = path_view
+                                        let ix = self.path_view_renderer
                                             .find_path_row(path)
                                             .unwrap_or(0);
 
@@ -314,7 +322,7 @@ impl PathPositionList {
                                             |ui| ui.label(left_pos),
                                         );
 
-                                        let row = if path_view.initialized() {
+                                        let row = if self.path_view_renderer.initialized() {
                                             let img = egui::Image::new(
                                                 egui::TextureId::User(1),
                                                 Point { x: 512.0, y: 32.0 },
@@ -348,16 +356,16 @@ impl PathPositionList {
                                             let n =
                                                 delta.x / interact.rect.width();
 
-                                            path_view.pan(n as f64);
+                                            self.path_view_renderer.pan(n as f64);
                                         }
 
                                         if interact.drag_released() {
-                                            MARK_PATHS.store(true);
+                                            self.mark_paths.store(true);
                                         }
 
                                         if let Some(pos) = interact.hover_pos()
                                         {
-                                            MOUSE_OVER_IMG.fetch_or(true);
+                                            self.mouse_over_img.fetch_or(true);
 
                                             let scroll_delta =
                                                 ui.input().scroll_delta;
@@ -375,8 +383,9 @@ impl PathPositionList {
                                                     1.05
                                                 };
 
-                                                path_view.zoom(d);
+                                                self.path_view_renderer.zoom(d);
 
+                                                let mark_paths = self.mark_paths.clone();
                                                 let fut = async move {
                                                     let delay = futures_timer::Delay::new(
                                                         std::time::Duration::from_millis(
@@ -385,19 +394,20 @@ impl PathPositionList {
                                                     );
                                                     delay.await;
 
-                                                    MARK_PATHS.store(true);
+                                                    mark_paths.store(true);
                                                 };
 
                                                 {
-                                                    let mut lock =
-                                                        ZOOM_UPDATE_FUTURE
-                                                            .lock();
+
+                                                    let mut lock = self.zoom_update.lock();
 
                                                     if let Ok(handle) =
                                                         reactor.spawn(fut)
                                                     {
+                                                        // self.zoom_update = Some(handle);
                                                         *lock = Some(handle);
                                                     } else {
+                                                        // self.zoom_update = None;
                                                         *lock = None;
                                                     }
                                                 }
@@ -418,12 +428,12 @@ impl PathPositionList {
                                             let pos = (path_len * n) as usize;
 
                                             let y = ix;
-                                            let x = ((path_view.width as f32)
+                                            let x = ((self.path_view_renderer.width as f32)
                                                 * n)
                                                 as usize;
 
                                             let node =
-                                                path_view.get_node_at(x, y);
+                                                self.path_view_renderer.get_node_at(x, y);
 
                                             if let Some(node) = node {
                                                 let ix = (node.0 - 1) as usize;
@@ -503,9 +513,9 @@ impl PathPositionList {
                         },
                     );
 
-                if MARK_PATHS.load() {
-                    path_view.mark_load_paths(to_mark).unwrap();
-                    MARK_PATHS.store(false);
+                if self.mark_paths.load() {
+                    self.path_view_renderer.mark_load_paths(to_mark).unwrap();
+                    self.mark_paths.store(false);
                 }
             });
     }

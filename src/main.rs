@@ -320,6 +320,24 @@ fn main() {
     )
     .unwrap();
 
+    let path_view = Arc::new(
+        PathViewRenderer::new(
+            &gfaestus,
+            main_view
+                .node_draw_system
+                .pipelines
+                .pipeline_rgb
+                .descriptor_set_layout,
+            main_view
+                .node_draw_system
+                .pipelines
+                .pipeline_value
+                .descriptor_set_layout,
+            &graph_query,
+        )
+        .unwrap(),
+    );
+
     let shared_state = app.shared_state().clone();
     let channels = app.channels().clone();
     let settings = app.settings.clone();
@@ -331,6 +349,7 @@ fn main() {
         &channels,
         settings,
         &graph_query,
+        &path_view,
     )
     .unwrap();
 
@@ -450,22 +469,6 @@ fn node_color(id) {
         .unwrap();
 
     dbg!();
-
-    let path_view = PathViewRenderer::new(
-        &gfaestus,
-        main_view
-            .node_draw_system
-            .pipelines
-            .pipeline_rgb
-            .descriptor_set_layout,
-        main_view
-            .node_draw_system
-            .pipelines
-            .pipeline_value
-            .descriptor_set_layout,
-        &graph_query,
-    )
-    .unwrap();
 
     let mut upload_path_view_texture = true;
 
@@ -935,7 +938,6 @@ fn node_color(id) {
                     annotations,
                     labels,
                     context_menu.tx(),
-                    &path_view,
                     universe.layout().nodes(),
                 );
 
