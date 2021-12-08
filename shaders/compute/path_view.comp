@@ -58,7 +58,7 @@ void main() {
     uint r_n = paths.node[r_ix];
 
     if (c_n == 0) {
-      imageStore(image, pixel, vec4(1.0, 1.0, 1.0, 1.0));
+      imageStore(image, pixel, vec4(1.0, 1.0, 1.0, 0.0));
 
     } else {
       int mid = int(c_n) - 1;
@@ -82,7 +82,6 @@ void main() {
       vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
       // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
 
-
       if (pc.translation < 0.0 && orig_x < pc.translation) {
         int n = int(paths.node[leftmost]);
         color = texelFetch(overlay, n);
@@ -92,11 +91,7 @@ void main() {
       }
 
       imageStore(image, pixel, color);
-      // write sampled value at index to output buffer
-      // }
     }
-
-
 
   }
 }

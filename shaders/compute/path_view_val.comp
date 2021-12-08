@@ -53,23 +53,28 @@ void main() {
     uint c_n = paths.node[ix];
     uint r_n = paths.node[r_ix];
 
-    int mid = int(c_n);
-    int left = int(l_n);
-    int right = int(r_n);
+    if (c_n == 0) {
+      imageStore(image, pixel, vec4(1.0, 1.0, 1.0, 0.0));
 
-    float vm = node_value.value[mid];
-    float vl = node_value.value[left];
-    float vr = node_value.value[right];
+    } else {
+      int mid = int(c_n) - 1;
+      int left = int(l_n) - 1;
+      int right = int(r_n) - 1;
 
-    vec4 cm = texture(overlay, vm);
-    vec4 cl = texture(overlay, vl);
-    vec4 cr = texture(overlay, vr);
+      float vm = node_value.value[mid];
+      float vl = node_value.value[left];
+      float vr = node_value.value[right];
 
-    // vec4 color = cm;
-    // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
-    vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
-    // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
+      vec4 cm = texture(overlay, vm);
+      vec4 cl = texture(overlay, vl);
+      vec4 cr = texture(overlay, vr);
 
-    imageStore(image, pixel, color);
+      // vec4 color = cm;
+      // vec4 color = (0.3 * cl) + (0.3 * cr) + (0.5 * cm);
+      vec4 color = (0.2 * cl) + (0.2 * cr) + (0.6 * cm);
+      // vec4 color = (0.1 * cl) + (0.1 * cr) + (0.8 * cm);
+
+      imageStore(image, pixel, color);
+    }
   }
 }
