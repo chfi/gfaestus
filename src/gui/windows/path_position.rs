@@ -1,20 +1,17 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    hash::{Hash, Hasher},
-};
-
 use crossbeam::atomic::AtomicCell;
 use futures::future::RemoteHandle;
 use handlegraph::pathhandlegraph::{
-    GraphPathNames, GraphPaths, IntoPathIds, PathId, PathSequences,
+    GraphPathNames, GraphPaths, IntoPathIds, PathId,
 };
 
 use lazy_static::lazy_static;
 
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::FxHashSet;
 
 use bstr::ByteSlice;
 use parking_lot::Mutex;
+
+use crate::gui::util as gui_util;
 
 use crate::{
     app::{AppChannels, AppMsg, SharedState},
@@ -35,8 +32,6 @@ pub enum SortOrder {
 lazy_static! {
     static ref ZOOM_UPDATE_FUTURE: Mutex<Option<RemoteHandle<()>>> =
         Mutex::new(None);
-    static ref PATH_OFFSET: AtomicCell<usize> = AtomicCell::new(0);
-    static ref VISIBLE_ROWS: AtomicCell<usize> = AtomicCell::new(8);
     static ref FILTERED_IDS: Mutex<Vec<PathId>> = Mutex::new(Vec::new());
     static ref NAME_FILTER: Mutex<String> = Mutex::new(String::new());
     static ref PREV_HASH: AtomicCell<u64> = AtomicCell::new(0);
@@ -46,27 +41,13 @@ lazy_static! {
         (0, std::usize::MAX).into();
     static ref SORT_ORDER: AtomicCell<SortOrder> = SortOrder::PathId.into();
     static ref REV_SORT: AtomicCell<bool> = false.into();
+    static ref MOUSE_OVER_IMG: AtomicCell<bool> = false.into();
 }
-
-const MIN_ROWS: usize = 4;
-const MAX_ROWS: usize = 24;
 
 pub struct PathPositionList {}
 
 impl PathPositionList {
     pub const ID: &'static str = "path_position_list";
-
-    fn more_rows() {
-        let count = VISIBLE_ROWS.load();
-        VISIBLE_ROWS.store((count + 1).min(MAX_ROWS));
-    }
-
-    fn fewer_rows() {
-        let count = VISIBLE_ROWS.load();
-        if count > 5 {
-            VISIBLE_ROWS.store((count - 1).max(MIN_ROWS));
-        }
-    }
 
     fn apply_filter(reactor: &Reactor) {
         let needle = NAME_FILTER.lock();
@@ -93,9 +74,6 @@ impl PathPositionList {
 
             name_buf.contains_str(needle.as_bytes()).then(|| p)
         }));
-
-        // TODO fix this -- not sure how it should behave, though
-        PATH_OFFSET.store(0);
     }
 
     pub fn ui(
@@ -122,32 +100,8 @@ impl PathPositionList {
                 let mut to_mark: Vec<PathId> = Vec::new();
 
                 let name_resp = ui.horizontal(|ui| {
-                    let path_ix = PATH_OFFSET.load();
-
-                    let n_rows = VISIBLE_ROWS.load();
-
-                    let at_top = path_ix == 0;
-
-                    let at_btm = path_ix >= (path_count.max(n_rows) - n_rows);
-
-                    let up = ui.add_enabled(!at_top, egui::Button::new("Up"));
-
-                    let down =
-                        ui.add_enabled(!at_btm, egui::Button::new("Down"));
-
-                    if up.clicked() && !at_top {
-                        PATH_OFFSET.store(path_ix - 1);
-                        MARK_PATHS.store(true);
-                    }
-
-                    if down.clicked() && !at_btm {
-                        PATH_OFFSET.store(path_ix + 1);
-                        MARK_PATHS.store(true);
-                    }
-
                     if ui.button("Reset").clicked() {
                         path_view.reset_zoom();
-                        PATH_OFFSET.store(0);
                     }
 
                     let mut name_filter = NAME_FILTER.lock();
@@ -165,6 +119,8 @@ impl PathPositionList {
                 if filter_changed {
                     Self::apply_filter(reactor);
                 }
+
+                let scroll_align = gui_util::add_scroll_buttons(ui);
 
                 ui.horizontal(|ui| {
                     let mut order = SORT_ORDER.load();
@@ -218,27 +174,33 @@ impl PathPositionList {
                     }
                 };
 
-
                 let mut path_range = 0..num_rows;
 
                 let row_height = 32.0;
 
-                egui::ScrollArea::vertical()
+                let enable_scrolling = !MOUSE_OVER_IMG.load();
+                MOUSE_OVER_IMG.store(false);
+
+                // egui::ScrollArea::vertical()
+                gui_util::scrolled_area(ui, num_rows, scroll_align)
                     // .auto_shrink([true, true])
                     // .max_height((VISIBLE_ROWS.load() as f32) * row_height)
-                    // .enable_scrolling(false)
+                    .enable_scrolling(enable_scrolling)
                     .show_rows(
                         ui,
                         row_height, // todo actually calculate this??
-                        VISIBLE_ROWS.load(),
-                        // num_rows,
+                        // VISIBLE_ROWS.load(),
+                        num_rows,
                         |ui, range| {
+
+                            let take_n = range.start.max(range.end) - range.start;
                             path_range = range;
                             if path_range.start > path_range.end {
                                 path_range = path_range.end..path_range.end
                             }
 
                             let row_range = (path_range.start, path_range.end);
+
 
                             if row_range != ROW_RANGE.load() {
                                 MARK_PATHS.store(true);
@@ -309,12 +271,9 @@ impl PathPositionList {
                                     ui.end_row();
 
                                     for (i_ix, &path) in paths_to_show
-                                        // .iter()
                                         .enumerate()
-                                        // .skip(row_range.0)
-                                        // .take(row_range.1 - row_range.0)
-                                        .skip(PATH_OFFSET.load())
-                                        .take(VISIBLE_ROWS.load())
+                                        .skip(path_range.start)
+                                        .take(take_n)
                                     {
 
                                         to_mark.push(path);
@@ -359,7 +318,6 @@ impl PathPositionList {
                                             let img = egui::Image::new(
                                                 egui::TextureId::User(1),
                                                 Point { x: 512.0, y: 32.0 },
-                                                // Point { x: 1024.0, y: 32.0 },
                                             )
                                             .uv(Rect::new(p0, p1));
 
@@ -399,14 +357,16 @@ impl PathPositionList {
 
                                         if let Some(pos) = interact.hover_pos()
                                         {
+                                            MOUSE_OVER_IMG.fetch_or(true);
+
                                             let scroll_delta =
                                                 ui.input().scroll_delta;
 
                                             if scroll_delta.y != 0.0 {
-                                                log::warn!(
-                                                    "scroll delta: {}",
-                                                    scroll_delta.y
-                                                );
+                                                // log::warn!(
+                                                //     "scroll delta: {}",
+                                                //     scroll_delta.y
+                                                // );
 
                                                 let d = if scroll_delta.y > 0.0
                                                 {
@@ -542,27 +502,6 @@ impl PathPositionList {
                             )
                         },
                     );
-
-                ui.horizontal(|ui| {
-                    let vis_rows = VISIBLE_ROWS.load();
-
-                    let at_min = vis_rows == MIN_ROWS;
-                    let at_max = vis_rows >= MAX_ROWS;
-
-                    let fewer =
-                        ui.add_enabled(!at_min, egui::Button::new("Rows -"));
-
-                    let more =
-                        ui.add_enabled(!at_max, egui::Button::new("Rows +"));
-
-                    if fewer.clicked() {
-                        Self::fewer_rows();
-                    }
-
-                    if more.clicked() {
-                        Self::more_rows();
-                    }
-                });
 
                 if MARK_PATHS.load() {
                     path_view.mark_load_paths(to_mark).unwrap();
