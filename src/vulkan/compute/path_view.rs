@@ -1,4 +1,5 @@
 use crate::geometry::{Point, Rect};
+use crate::graph_query::GraphQuery;
 use crate::overlays::OverlayKind;
 use crate::reactor::Reactor;
 use crate::vulkan::texture::Texture;
@@ -16,7 +17,8 @@ use handlegraph::handle::{Handle, NodeId};
 use handlegraph::handlegraph::{IntoHandles, IntoSequences};
 use handlegraph::packedgraph::PackedGraph;
 use handlegraph::pathhandlegraph::{
-    GraphPaths, GraphPathsSteps, IntoNodeOccurrences, PathId, PathStep,
+    GraphPathNames, GraphPaths, GraphPathsSteps, IntoNodeOccurrences,
+    IntoPathIds, PathId, PathStep,
 };
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -175,6 +177,9 @@ pub struct PathViewRenderer {
     path_data: Arc<Mutex<Vec<u32>>>,
     path_count: Arc<AtomicCell<usize>>,
 
+    path_name_order: Vec<PathId>,
+    path_length_order: Vec<PathId>,
+
     path_buffer: vk::Buffer,
     path_allocation: vk_mem::Allocation,
     path_allocation_info: vk_mem::AllocationInfo,
@@ -208,6 +213,7 @@ impl PathViewRenderer {
         app: &GfaestusVk,
         rgb_overlay_desc_layout: vk::DescriptorSetLayout,
         val_overlay_desc_layout: vk::DescriptorSetLayout,
+        graph: &GraphQuery,
     ) -> Result<Self> {
         let width = 2048;
         let height = 64;
@@ -392,6 +398,25 @@ impl PathViewRenderer {
             Arc::new(states)
         };
 
+        let g = graph.graph();
+        let path_pos = graph.path_positions();
+
+        let path_name_lens = g.path_ids().filter_map(|p| {
+            let name = g.get_path_name_vec(p)?;
+            let len = path_pos.path_base_len(p)?;
+
+            Some(((p, name), (p, len)))
+        });
+
+        let (mut path_names, mut path_lens): (Vec<_>, Vec<_>) =
+            path_name_lens.unzip();
+
+        path_names.sort_by(|(_, n0), (_, n1)| n0.cmp(&n1));
+        let path_name_order = path_names.into_iter().map(|(p, _)| p).collect();
+
+        path_lens.sort_by_key(|(_, n)| *n);
+        let path_length_order = path_lens.into_iter().map(|(p, _)| p).collect();
+
         Ok(Self {
             rgb_pipeline,
             val_pipeline,
@@ -415,6 +440,9 @@ impl PathViewRenderer {
 
             path_data: Arc::new(Mutex::new(vec![0u32; width * height])),
             path_count: Arc::new(AtomicCell::new(0)),
+
+            path_name_order,
+            path_length_order,
 
             path_buffer,
             path_allocation,

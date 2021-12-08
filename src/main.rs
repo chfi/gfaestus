@@ -463,6 +463,7 @@ fn node_color(id) {
             .pipelines
             .pipeline_value
             .descriptor_set_layout,
+        &graph_query,
     )
     .unwrap();
 
