@@ -175,7 +175,7 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
-    let layout_1d = Path1DLayout::new(graph_query.graph());
+    let layout_1d = Arc::new(Path1DLayout::new(graph_query.graph()));
 
     {
         use bstr::ByteSlice;
@@ -703,7 +703,8 @@ fn node_color(id) {
 
 
                 if path_view.should_reload() {
-                    path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
+                    path_view.load_paths_1d(&gfaestus, &mut app.reactor, &layout_1d).unwrap();
+                    // path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
                 }
 
                 app.reactor

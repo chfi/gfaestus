@@ -637,7 +637,7 @@ impl PathViewRenderer {
         &self,
         app: &GfaestusVk,
         reactor: &mut Reactor,
-        layout: (),
+        layout: &Arc<Path1DLayout>,
     ) -> Result<()> {
         let center = self.center.load();
         let radius = self.radius.load();
@@ -666,9 +666,131 @@ impl PathViewRenderer {
 
         let rows = self.row_states.clone();
 
-        let fut = async move {};
+        let view = (
+            left * layout.total_len as f64,
+            right * layout.total_len as f64,
+        );
+        let view = (view.0 as usize, view.1 as usize);
 
-        todo!();
+        let layout_ = layout.clone();
+
+        let fut = async move {
+            state.should_reload.store(false);
+            state.loading.store(LoadState::Loading);
+
+            let mut loaded_paths: Vec<(usize, PathId, Vec<u32>)> = Vec::new();
+
+            let mut num_paths = 0;
+
+            for (y, c) in rows.iter().enumerate() {
+                let row = c.load();
+
+                // num_paths is used by the shader to know how many
+                // rows it can use, so we just want the highest
+                // non-null row, since rows are always used from in order
+                if !matches!(row, RowState::Null) {
+                    num_paths = y + 1;
+                }
+
+                if let RowState::NeedLoad(path) = row {
+                    let path_row = layout_.load_path(view, path, width);
+
+                    loaded_paths.push((y, path, path_row));
+                }
+            }
+
+            let (loaded, path_data_local): (Vec<(usize, PathId)>, Vec<u32>) = {
+                let mut lock = path_data.lock();
+
+                let mut loaded = Vec::new();
+
+                for (y, path, path_data) in loaded_paths {
+                    let offset = y * width;
+                    let end = offset + width;
+
+                    let slice = &mut lock[offset..end];
+                    slice.clone_from_slice(&path_data);
+
+                    loaded.push((y, path));
+                }
+
+                path_count.store(num_paths);
+
+                (loaded, lock.to_owned())
+            };
+
+            let data = Arc::new(path_data_local);
+            let dst = buffer;
+            let task = GpuTask::CopyDataToBuffer { data, dst };
+
+            let copy_complete = gpu_tasks.queue_task(task);
+
+            if let Ok(complete) = copy_complete {
+                log::trace!("in copy_complete");
+                let _ = complete.await;
+                // the path buffer has been updated here
+                state.loading.store(LoadState::Idle);
+                state.should_rerender.store(true);
+
+                let mut need_load = 0;
+                let mut loaded_ = 0;
+                let mut null = 0;
+
+                for (ix, path) in loaded {
+                    let c = &rows[ix];
+
+                    let row = c.load();
+
+                    match row {
+                        RowState::NeedLoad(p) => {
+                            if p == path {
+                                c.store(RowState::Loaded(p));
+                            } else if p != path {
+                                log::warn!(
+                                    "path view row {} state is inconsistent! {:?} was replaced by {:?}",
+                                    ix, path, p
+                                );
+                            }
+                        }
+                        RowState::Loaded(p) => {
+                            if p != path {
+                                log::warn!(
+                                    "path view row {} state is inconsistent! should load {:?}, is {:?}",
+                                    ix, path, p
+                                );
+                            }
+                        }
+                        RowState::Null => {
+                            log::warn!(
+                                "path view row {} state loaded but is null!",
+                                ix
+                            );
+                        }
+                    }
+
+                    match c.load() {
+                        RowState::Null => null += 1,
+                        RowState::NeedLoad(_) => need_load += 1,
+                        RowState::Loaded(_) => loaded_ += 1,
+                    }
+                }
+
+                log::trace!(
+                    "null: {}\tneed load: {}\tloaded: {}",
+                    null,
+                    need_load,
+                    loaded_
+                );
+
+                translation.store(0.0);
+                scaling.store(1.0);
+            } else {
+                log::error!("error queing GPU task in load_paths");
+                state.loading.store(LoadState::Idle);
+            }
+        };
+
+        reactor.spawn_forget(fut)?;
 
         Ok(())
     }
