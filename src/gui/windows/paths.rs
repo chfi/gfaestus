@@ -114,7 +114,7 @@ pub struct PathDetails {
 impl PathDetails {
     const ID: &'static str = "path_details_window";
 
-    pub fn new(reactor: &mut Reactor) -> Self {
+    pub fn new(reactor: &Reactor) -> Self {
         Self {
             path_details: Default::default(),
             step_list: StepList::new(reactor, 15),
@@ -398,7 +398,7 @@ pub struct StepList {
 }
 
 impl StepList {
-    fn new(reactor: &mut Reactor, page_size: usize) -> Self {
+    fn new(reactor: &Reactor, page_size: usize) -> Self {
         let graph_query = reactor.graph_query.clone();
 
         let steps_host = reactor.create_host(

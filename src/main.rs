@@ -344,11 +344,10 @@ fn main() {
 
     let mut gui = Gui::new(
         &gfaestus,
-        &mut app.reactor,
+        &app.reactor,
         shared_state,
         &channels,
         settings,
-        &graph_query,
         &path_view,
     )
     .unwrap();
@@ -931,12 +930,8 @@ fn node_color(id) {
                 let labels = &app.labels;
 
                 gui.begin_frame(
-                    reactor,
-                    Some(dims.into()),
+                    &app,
                     &graph_query,
-                    &graph_query_worker,
-                    annotations,
-                    labels,
                     context_menu.tx(),
                     universe.layout().nodes(),
                 );

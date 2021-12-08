@@ -138,11 +138,12 @@ impl Console<'static> {
 
     pub fn new(
         reactor: &Reactor,
-        graph: &Arc<GraphQuery>,
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
     ) -> Self {
+        let graph = reactor.graph_query.clone();
+
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
 
@@ -332,7 +333,7 @@ impl Console<'static> {
             result_tx,
             result_rx,
 
-            graph: graph.clone(),
+            graph,
 
             modules: Arc::new(Mutex::new(Vec::new())),
 

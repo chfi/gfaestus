@@ -14,7 +14,7 @@ use crate::reactor::Reactor;
 use crate::{
     annotations::{AnnotationCollection, AnnotationRecord, ColumnKey},
     app::AppMsg,
-    graph_query::{GraphQuery, GraphQueryWorker},
+    graph_query::GraphQuery,
     gui::{util::grid_row_label, windows::graph_picker::PathPicker},
 };
 
@@ -55,7 +55,7 @@ where
     C: AnnotationCollection + Send + Sync + 'static,
 {
     pub fn new(
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         id: egui::Id,
         path_picker: PathPicker,
     ) -> Self {
@@ -269,7 +269,7 @@ where
     pub fn ui(
         &mut self,
         ui: &mut egui::Ui,
-        graph_query: &GraphQueryWorker,
+        graph_query: &GraphQuery,
         app_msg_tx: &crossbeam::channel::Sender<AppMsg>,
         file_name: &str,
         records: &Arc<C>,
@@ -563,11 +563,7 @@ where
                     );
 
                     if row_interact.clicked() {
-                        self.select_record(
-                            app_msg_tx,
-                            graph_query.graph(),
-                            record,
-                        );
+                        self.select_record(app_msg_tx, graph_query, record);
                     }
                     if row_interact.double_clicked() {
                         app_msg_tx.send(AppMsg::goto_selection()).unwrap();

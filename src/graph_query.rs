@@ -47,7 +47,7 @@ impl GraphQueryWorker {
         result
     }
 
-    pub fn graph(&self) -> &GraphQuery {
+    pub fn graph(&self) -> &Arc<GraphQuery> {
         &self.graph_query
     }
 }

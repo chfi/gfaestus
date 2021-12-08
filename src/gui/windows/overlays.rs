@@ -183,7 +183,7 @@ pub struct OverlayCreator {
 impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
-    pub fn new(reactor: &mut Reactor) -> Result<Self> {
+    pub fn new(reactor: &Reactor) -> Result<Self> {
         let pwd = std::fs::canonicalize("./").unwrap();
 
         let mut file_picker = FilePicker::new(

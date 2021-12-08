@@ -38,7 +38,7 @@ use crate::{
     app::channels::OverlayCreatorMsg,
     app::AppMsg,
     geometry::Point,
-    graph_query::{GraphQuery, GraphQueryWorker},
+    graph_query::GraphQuery,
     gui::{util::grid_row_label, GuiMsg, Windows},
     overlays::OverlayData,
     reactor::{Host, Outbox, Reactor},
@@ -157,7 +157,7 @@ impl AnnotationFileList {
     pub const ID: &'static str = "annotation_file_list";
 
     pub fn new(
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         app_msg_tx: Sender<AppMsg>,
         gui_msg_tx: Sender<GuiMsg>,
     ) -> Result<Self> {
@@ -801,7 +801,7 @@ impl<C> OverlayLabelSetCreator<C>
 where
     C: AnnotationCollection + Send + Sync + 'static,
 {
-    pub fn new(reactor: &mut Reactor, id: egui::Id) -> Self {
+    pub fn new(reactor: &Reactor, id: egui::Id) -> Self {
         let graph = reactor.graph_query.clone();
         let overlay_tx = reactor.overlay_create_tx.clone();
 
@@ -921,7 +921,8 @@ where
         &mut self,
         ctx: &egui::CtxRef,
         app_msg_tx: &Sender<AppMsg>,
-        graph: &GraphQueryWorker,
+        // graph: &GraphQueryWorker,
+        graph: &GraphQuery,
         open: &mut bool,
         file_name: &str,
         path_id: PathId,
@@ -936,8 +937,7 @@ where
         }
 
         if Some(path_id) != self.path_id {
-            let path_name =
-                graph.graph().graph().get_path_name_vec(path_id).unwrap();
+            let path_name = graph.graph().get_path_name_vec(path_id).unwrap();
             let path_name = path_name.to_str().unwrap().to_string();
             self.path_id = Some(path_id);
             self.path_name = path_name;
@@ -1084,7 +1084,7 @@ where
 
                 if create_label_set {
                     if let Some(label_set) = calculate_annotation_set(
-                        graph.graph(),
+                        graph,
                         records.as_ref(),
                         filtered_records,
                         path_id,

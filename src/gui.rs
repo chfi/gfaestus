@@ -22,9 +22,10 @@ use crate::{
         AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
         Gff3Records, Labels,
     },
-    app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
+    app::{
+        App, AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState,
+    },
     context::ContextEntry,
-    graph_query::GraphQueryWorker,
     reactor::Reactor,
     universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
@@ -188,13 +189,13 @@ pub struct AppViewState {
 
 impl AppViewState {
     pub fn new(
-        reactor: &mut Reactor,
-        graph_query: &Arc<GraphQuery>,
+        reactor: &Reactor,
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
         _dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
     ) -> Self {
+        let graph_query = reactor.graph_query.clone();
         let graph = graph_query.graph();
 
         let stats = GraphStats {
@@ -212,7 +213,7 @@ impl AppViewState {
             node_details_state,
         );
 
-        let node_list_state = NodeList::new(graph_query, node_id_cell.clone());
+        let node_list_state = NodeList::new(&graph_query, node_id_cell.clone());
         let node_list =
             ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
@@ -222,7 +223,7 @@ impl AppViewState {
         let path_details =
             ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
-        let path_list_state = PathList::new(graph_query, path_id_cell);
+        let path_list_state = PathList::new(&graph_query, path_id_cell);
         let path_list = ViewStateChannel::<PathList, ()>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);
@@ -376,17 +377,18 @@ impl GuiFocusState {
 
 impl Gui {
     pub fn new(
-        app: &GfaestusVk,
-        reactor: &mut Reactor,
+        gfaestus: &GfaestusVk,
+        reactor: &Reactor,
         shared_state: SharedState,
         channels: &AppChannels,
         settings: AppSettings,
-        graph_query: &Arc<GraphQuery>,
         path_view_renderer: &Arc<PathViewRenderer>,
     ) -> Result<Self> {
-        let render_pass = app.render_passes.gui;
+        let graph_query = reactor.graph_query.clone();
 
-        let draw_system = GuiPipeline::new(app, render_pass)?;
+        let render_pass = gfaestus.render_passes.gui;
+
+        let draw_system = GuiPipeline::new(gfaestus, render_pass)?;
 
         let ctx = egui::CtxRef::default();
 
@@ -415,7 +417,6 @@ impl Gui {
 
         let view_state = AppViewState::new(
             reactor,
-            graph_query,
             &settings,
             &shared_state,
             shared_state.overlay_state().clone(),
@@ -426,7 +427,7 @@ impl Gui {
 
         let clipboard_ctx = ClipboardProvider::new().unwrap();
 
-        let mut path_picker_source = PathPickerSource::new(graph_query)?;
+        let mut path_picker_source = PathPickerSource::new(&graph_query)?;
 
         let annotation_file_list = AnnotationFileList::new(
             reactor,
@@ -436,7 +437,6 @@ impl Gui {
 
         let console = Console::new(
             reactor,
-            graph_query,
             channels.clone(),
             settings.to_owned(),
             shared_state.to_owned(),
@@ -479,7 +479,24 @@ impl Gui {
 
         let mut windows = GuiWindows::default();
 
-        {}
+        {
+            /*
+            let path_view_id = egui::Id::new("path_view_window");
+
+            let mut path_view_state = PathPositionList::new(path_view_renderer.clone());
+
+            let
+
+            windows.add_window(path_view_id, "Path View", move |ui: &mut egui::Ui| {
+                // path_view_state.ui_impl(ui,
+                //                         &console,
+                //                         reactor,
+                //                         channels,
+                //                         &shared_state,
+                //                         nodes)
+            });
+            */
+        }
 
         {
             /*
@@ -633,15 +650,20 @@ impl Gui {
 
     pub fn begin_frame(
         &mut self,
-        reactor: &Reactor,
-        new_screen_rect: Option<Point>,
-        graph_query: &Arc<GraphQuery>,
-        graph_query_worker: &GraphQueryWorker,
-        annotations: &Annotations,
-        labels: &Labels,
+        app: &App,
+        graph_query: &GraphQuery,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
         nodes: &[Node],
     ) {
+        let App {
+            reactor,
+            annotations,
+            labels,
+            ..
+        } = app;
+
+        let new_screen_rect: Option<Point> = Some(app.dims().into());
+
         let mut raw_input = self.frame_input.into_raw_input();
 
         let screen_rect = new_screen_rect.map(|p| egui::Rect {
@@ -763,7 +785,7 @@ impl Gui {
                                 .show(ctx, |ui| {
                                     gff3_list.ui(
                                         ui,
-                                        graph_query_worker,
+                                        graph_query,
                                         app_msg_tx,
                                         annot_name,
                                         records,
@@ -787,7 +809,7 @@ impl Gui {
                                 .show(ctx, |ui| {
                                     bed_list.ui(
                                         ui,
-                                        graph_query_worker,
+                                        graph_query,
                                         app_msg_tx,
                                         annot_name,
                                         records,

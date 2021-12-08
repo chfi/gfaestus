@@ -75,7 +75,7 @@ impl Reactor {
         }
     }
 
-    pub fn create_host<F, I, T>(&mut self, func: F) -> Host<I, T>
+    pub fn create_host<F, I, T>(&self, func: F) -> Host<I, T>
     where
         T: Send + Sync + 'static,
         I: Send + Sync + 'static,
