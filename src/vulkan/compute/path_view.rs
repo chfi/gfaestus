@@ -695,6 +695,10 @@ impl PathViewRenderer {
                 if let RowState::NeedLoad(path) = row {
                     let path_row = layout_.load_path(view, path, width);
 
+                    let to_show =
+                        path_row.iter().copied().take(20).collect::<Vec<_>>();
+                    // println!("{}\t{:?}", y, to_show);
+
                     loaded_paths.push((y, path, path_row));
                 }
             }
@@ -877,7 +881,7 @@ impl PathViewRenderer {
 
                         let (handle, _step, _pos) = steps[ix];
 
-                        let v = handle.id().0 - 1;
+                        let v = handle.id().0;
                         path_row.push(v as u32);
                     }
 
@@ -1376,15 +1380,53 @@ impl Path1DLayout {
         NodeId::from((ix + 1) as u64)
     }
 
-    fn sample_path(path_range: &[std::ops::Range<usize>], pos: usize) -> bool {
+    pub fn sample_path_dbg(
+        path_range: &[std::ops::Range<usize>],
+        pos: usize,
+    ) -> bool {
         let bin_ix = path_range.binary_search_by(|range| {
-            use std::cmp::Ordering;
-            if pos < range.start {
-                Ordering::Less
-            } else if pos >= range.start && pos < range.end {
-                Ordering::Equal
-            } else {
-                Ordering::Greater
+            use std::cmp::Ordering::*;
+
+            match (pos.cmp(&range.start), pos.cmp(&range.end)) {
+                (Less, _) => Greater,
+                (Equal | Greater, Less) => Equal,
+                _ => Less,
+            }
+
+            // use std::cmp::Ordering;
+            // if pos < range.start {
+            //     // Ordering::Less
+            //     Ordering::Greater
+            // } else if pos >= range.start && pos < range.end {
+            //     Ordering::Equal
+            // } else {
+            //     // Ordering::Greater
+            //     Ordering::Less
+            // }
+        });
+
+        log::warn!("bin_ix: {:?}", bin_ix);
+
+        match bin_ix {
+            Ok(ix) => path_range
+                .get(ix)
+                .and_then(|r| r.contains(&pos).then(|| true))
+                .unwrap_or(false),
+            Err(_ix) => false,
+        }
+    }
+
+    pub fn sample_path(
+        path_range: &[std::ops::Range<usize>],
+        pos: usize,
+    ) -> bool {
+        let bin_ix = path_range.binary_search_by(|range| {
+            use std::cmp::Ordering::*;
+
+            match (pos.cmp(&range.start), pos.cmp(&range.end)) {
+                (Less, _) => Greater,
+                (Equal | Greater, Less) => Equal,
+                _ => Less,
             }
         });
 
@@ -1393,10 +1435,7 @@ impl Path1DLayout {
                 .get(ix)
                 .and_then(|r| r.contains(&pos).then(|| true))
                 .unwrap_or(false),
-            Err(_ix) => {
-                false
-                // path_range.get(ix).and_then(|r| r.contains(pos)).unwrap_or(false)
-            }
+            Err(_ix) => false,
         }
     }
 

@@ -180,21 +180,49 @@ fn main() {
     {
         use bstr::ByteSlice;
 
-        for (path, ranges) in layout_1d.path_ranges.iter() {
+        for (path, ranges) in layout_1d.path_ranges.iter().take(1) {
             let path_name =
                 graph_query.graph().get_path_name_vec(*path).unwrap();
 
             println!("PathId {:2}\tName: {}", path.0, path_name.as_bstr());
+            print!(" > ");
+
+            // for ix in 0..20 {
+            for ix in [0, 4, 16, 32, 58, 59, 60, 61, 62, 63] {
+                if ix != 0 {
+                    print!(", ");
+                }
+
+                let sample = Path1DLayout::sample_path_dbg(&ranges, ix);
+
+                let s = if sample { "1" } else { "0" };
+
+                print!("{:2} - {}", ix, s);
+            }
+
+            println!();
+            print!(" > ");
 
             for (ix, rng) in ranges.iter().take(20).enumerate() {
                 if ix != 0 {
                     print!(", ");
                 }
+
                 print!("{:?}", rng);
+                // let sample = Path1DLayout::sample_path_dbg(&ranges, ix);
+
+                // let s = if sample { "1" } else { "0" };
+
+                // print!("{:2} - {}", ix, s);
             }
 
             println!();
         }
+
+        // let first_range = ranges.first().unwrap();
+
+        /*
+         */
     }
 
     // println!("{:?}", layout_1d);
