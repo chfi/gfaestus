@@ -731,8 +731,8 @@ fn node_color(id) {
 
 
                 if path_view.should_reload() {
-                    path_view.load_paths_1d(&gfaestus, &mut app.reactor, &layout_1d).unwrap();
-                    // path_view.load_paths(&gfaestus, &mut app.reactor).unwrap();
+                    path_view.load_paths_1d(&mut app.reactor, &layout_1d).unwrap();
+                    // path_view.load_paths(&mut app.reactor).unwrap();
                 }
 
                 app.reactor

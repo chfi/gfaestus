@@ -602,12 +602,6 @@ impl PathViewRenderer {
             self.row_states[next_ix].store(RowState::NeedLoad(path));
         }
 
-        let states_post = if log::log_enabled!(log::Level::Trace) {
-            self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>()
-        } else {
-            Vec::new()
-        };
-
         if log::log_enabled!(log::Level::Trace) {
             let states_post =
                 self.row_states.iter().map(|s| s.load()).collect::<Vec<_>>();
@@ -633,11 +627,11 @@ impl PathViewRenderer {
         None
     }
 
-    pub fn load_paths_1d(
+    pub fn load_paths_impl(
         &self,
-        app: &GfaestusVk,
         reactor: &mut Reactor,
-        layout: &Arc<Path1DLayout>,
+        loader: impl Fn(PathId) -> Vec<u32> + Send + Sync + 'static,
+        // layout: &Arc<Path1DLayout>,
     ) -> Result<()> {
         let center = self.center.load();
         let radius = self.radius.load();
@@ -666,14 +660,6 @@ impl PathViewRenderer {
 
         let rows = self.row_states.clone();
 
-        let view = (
-            left * layout.total_len as f64,
-            right * layout.total_len as f64,
-        );
-        let view = (view.0 as usize, view.1 as usize);
-
-        let layout_ = layout.clone();
-
         let fut = async move {
             state.should_reload.store(false);
             state.loading.store(LoadState::Loading);
@@ -693,11 +679,7 @@ impl PathViewRenderer {
                 }
 
                 if let RowState::NeedLoad(path) = row {
-                    let path_row = layout_.load_path(view, path, width);
-
-                    let to_show =
-                        path_row.iter().copied().take(20).collect::<Vec<_>>();
-                    // println!("{}\t{:?}", y, to_show);
+                    let path_row = loader(path);
 
                     loaded_paths.push((y, path, path_row));
                 }
@@ -799,10 +781,10 @@ impl PathViewRenderer {
         Ok(())
     }
 
-    pub fn load_paths(
+    pub fn load_paths_1d(
         &self,
-        app: &GfaestusVk,
         reactor: &mut Reactor,
+        layout: &Arc<Path1DLayout>,
     ) -> Result<()> {
         let center = self.center.load();
         let radius = self.radius.load();
@@ -810,179 +792,65 @@ impl PathViewRenderer {
         let left = center - radius;
         let right = center + radius;
 
-        // log::warn!("loading with l: {}, r: {}", left, right);
+        let width = self.width;
 
-        let translation = self.translation.clone();
-        let scaling = self.scaling.clone();
+        let view = (
+            left * layout.total_len as f64,
+            right * layout.total_len as f64,
+        );
+        let view = (view.0 as usize, view.1 as usize);
+
+        let layout = layout.clone();
+        self.load_paths_impl(reactor, move |path| {
+            layout.load_path(view, path, width)
+        })
+    }
+
+    pub fn load_paths(&self, reactor: &mut Reactor) -> Result<()> {
+        let center = self.center.load();
+        let radius = self.radius.load();
+
+        let left = center - radius;
+        let right = center + radius;
 
         let graph = reactor.graph_query.clone();
 
         let width = self.width;
-        let height = self.height;
 
-        let gpu_tasks = reactor.gpu_tasks.clone();
+        self.load_paths_impl(reactor, move |path| {
+            let mut path_row = Vec::with_capacity(width);
 
-        let buffer = self.path_buffer;
+            let steps = graph.path_pos_steps(path).unwrap();
+            let (_, _, path_len) = steps.last().unwrap();
 
-        let state = self.state.clone();
+            let len = *path_len as f64;
+            let start = left * len;
+            let end = start + (right - left) * len;
 
-        let path_data = self.path_data.clone();
-        let path_count = self.path_count.clone();
+            let s = start as usize;
+            let e = end as usize;
 
-        let rows = self.row_states.clone();
+            for x in 0..width {
+                let n = (x as f64) / width as f64;
+                let p_ = ((n as f64) * (end - start)) as usize;
 
-        let fut = async move {
-            state.should_reload.store(false);
-            state.loading.store(LoadState::Loading);
+                let p = s + p_.max(1);
 
-            let mut loaded_paths: Vec<(usize, PathId, Vec<u32>)> = Vec::new();
+                let ix = match steps.binary_search_by_key(&p, |(_, _, p)| *p) {
+                    Ok(i) => i,
+                    Err(i) => i,
+                };
 
-            let mut num_paths = 0;
+                let ix = ix.min(steps.len() - 1);
 
-            for (y, c) in rows.iter().enumerate() {
-                let row = c.load();
+                let (handle, _step, _pos) = steps[ix];
 
-                // num_paths is used by the shader to know how many
-                // rows it can use, so we just want the highest
-                // non-null row, since rows are always used from in order
-                if !matches!(row, RowState::Null) {
-                    num_paths = y + 1;
-                }
-
-                if let RowState::NeedLoad(path) = row {
-                    let mut path_row = Vec::with_capacity(width);
-
-                    let steps = graph.path_pos_steps(path).unwrap();
-                    let (_, _, path_len) = steps.last().unwrap();
-
-                    // let len = (*path_len as f64) / 4096.0;
-                    // let len = (*path_len as f64) / 2048.0;
-                    let len = *path_len as f64;
-                    let start = left * len;
-                    let end = start + (right - left) * len;
-
-                    let s = start as usize;
-                    let e = end as usize;
-
-                    for x in 0..width {
-                        let n = (x as f64) / width as f64;
-                        let p_ = ((n as f64) * (end - start)) as usize;
-
-                        let p = s + p_.max(1);
-
-                        let ix = match steps
-                            .binary_search_by_key(&p, |(_, _, p)| *p)
-                        {
-                            Ok(i) => i,
-                            Err(i) => i,
-                        };
-
-                        let ix = ix.min(steps.len() - 1);
-
-                        let (handle, _step, _pos) = steps[ix];
-
-                        let v = handle.id().0;
-                        path_row.push(v as u32);
-                    }
-
-                    loaded_paths.push((y, path, path_row));
-                }
+                let v = handle.id().0;
+                path_row.push(v as u32);
             }
 
-            let (loaded, path_data_local): (Vec<(usize, PathId)>, Vec<u32>) = {
-                let mut lock = path_data.lock();
-
-                let mut loaded = Vec::new();
-
-                for (y, path, path_data) in loaded_paths {
-                    let offset = y * width;
-                    let end = offset + width;
-
-                    let slice = &mut lock[offset..end];
-                    slice.clone_from_slice(&path_data);
-
-                    loaded.push((y, path));
-                }
-
-                path_count.store(num_paths);
-
-                (loaded, lock.to_owned())
-            };
-
-            let data = Arc::new(path_data_local);
-            let dst = buffer;
-            let task = GpuTask::CopyDataToBuffer { data, dst };
-
-            let copy_complete = gpu_tasks.queue_task(task);
-
-            if let Ok(complete) = copy_complete {
-                log::trace!("in copy_complete");
-                let _ = complete.await;
-                // the path buffer has been updated here
-                state.loading.store(LoadState::Idle);
-                state.should_rerender.store(true);
-
-                let mut need_load = 0;
-                let mut loaded_ = 0;
-                let mut null = 0;
-
-                for (ix, path) in loaded {
-                    let c = &rows[ix];
-
-                    let row = c.load();
-
-                    match row {
-                        RowState::NeedLoad(p) => {
-                            if p == path {
-                                c.store(RowState::Loaded(p));
-                            } else if p != path {
-                                log::warn!(
-                                    "path view row {} state is inconsistent! {:?} was replaced by {:?}",
-                                    ix, path, p
-                                );
-                            }
-                        }
-                        RowState::Loaded(p) => {
-                            if p != path {
-                                log::warn!(
-                                    "path view row {} state is inconsistent! should load {:?}, is {:?}",
-                                    ix, path, p
-                                );
-                            }
-                        }
-                        RowState::Null => {
-                            log::warn!(
-                                "path view row {} state loaded but is null!",
-                                ix
-                            );
-                        }
-                    }
-
-                    match c.load() {
-                        RowState::Null => null += 1,
-                        RowState::NeedLoad(_) => need_load += 1,
-                        RowState::Loaded(_) => loaded_ += 1,
-                    }
-                }
-
-                log::trace!(
-                    "null: {}\tneed load: {}\tloaded: {}",
-                    null,
-                    need_load,
-                    loaded_
-                );
-
-                translation.store(0.0);
-                scaling.store(1.0);
-            } else {
-                log::error!("error queing GPU task in load_paths");
-                state.loading.store(LoadState::Idle);
-            }
-        };
-
-        reactor.spawn_forget(fut)?;
-
-        Ok(())
+            path_row
+        })
     }
 
     pub fn get_node_at(&self, x: usize, y: usize) -> Option<NodeId> {
