@@ -328,9 +328,9 @@ impl MainView {
             .map(|nid| NodeId::from(nid as u64));
 
         if let Some(node) = hover_node {
-            log::warn!("calling produce_context from main");
+            // log::warn!("calling produce_context from main");
             ctx.produce_context(|| {
-                log::warn!("producing context from main view: {:?}", node);
+                // log::warn!("producing context from main view: {:?}", node);
                 node
             });
             // ctx.prod

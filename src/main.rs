@@ -4,8 +4,8 @@ use crossbeam::atomic::AtomicCell;
 use futures::SinkExt;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
 use gfaestus::context::{
-    copy_node_id_action, pan_to_node_action, ContextEntry, ContextMenu,
-    ContextMgr,
+    copy_node_id_action, debug_context_action, pan_to_node_action,
+    ContextEntry, ContextMenu, ContextMgr,
 };
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
@@ -16,7 +16,7 @@ use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
 use gfaestus::vulkan::texture::{Gradients, Gradients_, Texture};
 
 use parking_lot::RwLock;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
 
 use winit::event::{ElementState, Event, MouseButton, WindowEvent};
@@ -495,8 +495,18 @@ fn node_color(id) {
 
     let mut context_mgr = ContextMgr::default();
 
+    gfaestus::context::set_debug_type_name::<NodeId>("NodeId");
+    gfaestus::context::set_debug_type_name::<PathId>("PathId");
+    gfaestus::context::set_debug_type_name::<FxHashSet<NodeId>>(
+        "FxHashSet<NodeId>",
+    );
+    gfaestus::context::set_debug_type_name::<Arc<FxHashSet<NodeId>>>(
+        "Arc<FxHashSet<NodeId>>",
+    );
+
     context_mgr.register_action("Copy node ID", copy_node_id_action());
     context_mgr.register_action("Pan to node!!!!", pan_to_node_action());
+    context_mgr.register_action("Debug print", debug_context_action());
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
@@ -972,7 +982,7 @@ fn node_color(id) {
                     cluster_tree.draw_labels(labels, &gui.ctx, shared_state);
                 }
 
-                context_mgr.end_frame();
+                // context_mgr.end_frame();
 
                 let meshes = gui.end_frame();
 

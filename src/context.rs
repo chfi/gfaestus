@@ -19,8 +19,10 @@ use handlegraph::{
 };
 
 use bstr::ByteSlice;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rustc_hash::{FxHashMap, FxHashSet};
+
+use lazy_static::lazy_static;
 
 use crate::{
     app::{selection::NodeSelection, App, AppChannels, AppMsg, SharedState},
@@ -34,6 +36,7 @@ pub struct OverGraph {}
 
 #[derive(Default, Clone)]
 pub struct Context {
+    // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
     values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
@@ -102,8 +105,15 @@ impl ContextAction_ {
 
 pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InitState {
+    Null,
+    Initializing,
+    Ready,
+}
+
 pub struct ContextMgr {
-    initialized: AtomicCell<bool>,
+    init: AtomicCell<InitState>,
 
     load_context_this_frame: Arc<AtomicCell<bool>>,
     context_menu_open: Arc<AtomicCell<bool>>,
@@ -111,19 +121,44 @@ pub struct ContextMgr {
     pub ctx_tx: channel::Sender<(TypeId, CtxVal)>,
     ctx_rx: channel::Receiver<(TypeId, CtxVal)>,
 
-    frame_context: AtomicCell<Arc<Context>>,
+    frame_context: Arc<Context>,
     frame_active: AtomicCell<bool>,
 
     // context_order: RwLock<Vec<String>>,
     context_actions: RwLock<HashMap<String, ContextAction_>>,
 
     position: Arc<AtomicCell<Point>>,
+
+    type_names: RwLock<FxHashMap<TypeId, String>>,
     // context_types: FxHashMap<String, TypeId>,
     // contexts: FxHashMap<
     //     TypeId,
     //     Option<Box<dyn std::any::Any + Send + Sync + 'static>>,
     // >,
     // context_actions: FxHashMap<String, ()>,
+}
+
+lazy_static! {
+    static ref TYPE_NAME_MAP: Arc<Mutex<FxHashMap<TypeId, String>>> =
+        Arc::new(Mutex::new(FxHashMap::default()));
+}
+
+pub fn debug_context_action() -> ContextAction_ {
+    ContextAction_::new(&[], |_clipboard, _app, ctx| {
+        log::warn!("Active Contexts");
+
+        let type_names = TYPE_NAME_MAP.lock();
+
+        for (type_id, _val) in ctx.values.iter() {
+            let name = if let Some(n) = type_names.get(type_id) {
+                n.to_string()
+            } else {
+                format!("{:?}", type_id)
+            };
+
+            log::warn!("{}", name);
+        }
+    })
 }
 
 pub fn copy_node_id_action() -> ContextAction_ {
@@ -196,7 +231,7 @@ impl std::default::Default for ContextMgr {
         let (ctx_tx, ctx_rx) = channel::unbounded();
 
         Self {
-            initialized: false.into(),
+            init: InitState::Null.into(),
             ctx_tx,
             ctx_rx,
             load_context_this_frame: Arc::new(false.into()),
@@ -205,9 +240,18 @@ impl std::default::Default for ContextMgr {
             frame_active: false.into(),
             // context_order: RwLock::new(Vec::default()),
             context_actions: RwLock::new(HashMap::default()),
+            type_names: RwLock::new(FxHashMap::default()),
             position: Arc::new(Point::ZERO.into()),
         }
     }
+}
+
+pub fn set_debug_type_name<T>(name: &str)
+where
+    T: std::any::Any + Send + Sync + 'static,
+{
+    let mut type_names = TYPE_NAME_MAP.lock();
+    type_names.insert(TypeId::of::<T>(), name.to_string());
 }
 
 impl ContextMgr {
@@ -219,27 +263,44 @@ impl ContextMgr {
         }
     }
 
+    pub fn set_debug_type_name<T>(&self, name: &str)
+    where
+        T: std::any::Any + Send + Sync + 'static,
+    {
+        if self.initializing() {
+            log::warn!("setting debug type name for {}", name);
+            set_debug_type_name::<T>(name);
+        }
+    }
+
+    fn initializing(&self) -> bool {
+        matches!(self.init.load(), InitState::Initializing)
+    }
+
     pub fn produce_context<T, F>(&self, prod: F)
     where
         T: std::any::Any + Send + Sync + 'static,
         F: FnOnce() -> T,
     {
         let type_id = TypeId::of::<T>();
-        log::warn!("in produce_context for {:?}", type_id);
+        // log::warn!("in produce_context for {:?}", type_id);
         if self.load_context_this_frame.load() {
-            log::warn!("it's happening!!!");
+            // log::warn!("it's happening!!!");
             let value = prod();
             self.ctx_tx.send((type_id, Arc::new(value))).unwrap();
         }
 
         // if !self.initialized.load() {
 
+        // type_names: RwLock::new(FxHashMap::default()),
         // }
     }
 
     pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
         ctx.memory().open_popup(Self::popup_id());
+
         if !self.context_menu_open.load() {
+            log::warn!("setting load_context_this_frame to true");
             self.load_context_this_frame.store(true);
         }
         self.context_menu_open.store(true);
@@ -254,42 +315,63 @@ impl ContextMgr {
         self.context_menu_open.store(false);
     }
 
-    pub fn begin_frame(&self) {
+    // pub fn begin_frame(&self) {
+    pub fn begin_frame(&mut self) {
         // if !self.initialized.load() {
         //     self.initialized.store(false);
         //     self.frame_active.store(true);
         //     return;
         // }
 
+        if matches!(self.init.load(), InitState::Null) {
+            self.init.store(InitState::Initializing);
+            // self.frame_active.store(true);
+            return;
+        }
+
+        if matches!(self.init.load(), InitState::Initializing) {
+            // self.frame_active.store(true);
+            self.init.store(InitState::Ready);
+        }
+
+        /*
         if self.frame_active.load() {
             log::error!("ContextMgr::begin_frame() has already been called before end_frame()");
 
             self.end_frame();
         }
+        */
 
-        let mut context = Context::default();
+        // let mut context = Context::default();
 
+        let mut context = Arc::make_mut(&mut self.frame_context);
+
+        // log::warn!("loading context");
         while let Ok((type_id, ctx_val)) = self.ctx_rx.try_recv() {
+            // log::warn!("{:?}\t{:?}", type_id, ctx_val);
             context.values.insert(type_id, ctx_val);
         }
 
-        self.frame_context.store(Arc::new(context));
+        // log::warn!("created context");
+        // self.frame_context.store(Arc::new(context));
+        // self.frame_active.store(true);
         self.frame_active.store(true);
     }
 
-    pub fn frame_context(&self) -> Option<Arc<Context>> {
-        if self.frame_active.load() {
-            let ctx = self.frame_context.take();
-            self.frame_context.store(ctx.clone());
-            Some(ctx)
-        } else {
-            None
-        }
+    pub fn frame_context(&self) -> &Arc<Context> {
+        &self.frame_context
     }
 
+    /*
     pub fn end_frame(&self) {
+        if matches!(self.init.load(), InitState::Initializing) {
+            // self.init.store(InitState::Initializing);
+            // self.frame_active.store(true);
+            return;
+        }
+
         if self.frame_active.load() {
-            self.frame_context.take();
+            // self.frame_context.take();
             self.frame_active.store(false);
         } else {
             log::error!(
@@ -297,6 +379,7 @@ impl ContextMgr {
             );
         }
     }
+    */
 
     const ID: &'static str = "context_menu";
 
@@ -312,6 +395,10 @@ impl ContextMgr {
         app: &App,
         clipboard: &mut ClipboardContext,
     ) {
+        if !matches!(self.init.load(), InitState::Ready) {
+            return;
+        }
+
         if !self.frame_active.load() {
             log::error!("call begin_frame() before show()");
         }
@@ -336,10 +423,10 @@ impl ContextMgr {
                     frame.show(ui, |ui| {
                         let actions = self.context_actions.read();
 
-                        let context = self.frame_context.take();
+                        let context = &self.frame_context;
 
                         for (name, action) in actions.iter() {
-                            if action.is_applicable(&context) {
+                            if action.is_applicable(context) {
                                 if ui.button(name).clicked() {
                                     action
                                         .apply_action(clipboard, app, &context);
@@ -356,6 +443,7 @@ impl ContextMgr {
                 || popup_response.clicked_elsewhere()
                 || should_close.load()
             {
+                self.close_context_menu();
                 egui_ctx.memory().close_popup();
             }
         }
