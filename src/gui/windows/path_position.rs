@@ -205,6 +205,8 @@ impl PathPositionList {
                 num_rows,
                 |ui, range| {
                     let take_n = range.start.max(range.end) - range.start;
+                    let take_n = take_n.min(64);
+
                     path_range = range;
                     if path_range.start > path_range.end {
                         path_range = path_range.end..path_range.end

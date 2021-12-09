@@ -602,8 +602,6 @@ impl Gui {
 
             windows,
             gui_channels: GuiChannels::new(),
-
-            path_view,
         };
 
         Ok(gui)
