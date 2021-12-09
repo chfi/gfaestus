@@ -103,13 +103,19 @@ impl ContextAction_ {
 pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
 
 pub struct ContextMgr {
+    load_context_this_frame: Arc<AtomicCell<bool>>,
+    context_menu_open: Arc<AtomicCell<bool>>,
+
     pub ctx_tx: channel::Sender<(TypeId, CtxVal)>,
     ctx_rx: channel::Receiver<(TypeId, CtxVal)>,
 
     frame_context: AtomicCell<Arc<Context>>,
     frame_active: AtomicCell<bool>,
 
+    // context_order: RwLock<Vec<String>>,
     context_actions: RwLock<HashMap<String, ContextAction_>>,
+
+    position: Arc<AtomicCell<Point>>,
     // context_types: FxHashMap<String, TypeId>,
     // contexts: FxHashMap<
     //     TypeId,
@@ -130,7 +136,8 @@ fn copy_node_id_action() -> ContextAction_ {
 }
 
 fn pan_to_node_action() -> ContextAction_ {
-    let req = [TypeId::of::<OverGraph>()];
+    // let req = [TypeId::of::<OverGraph>()];
+    let req = [];
 
     ContextAction_::new(&req, |clipboard, app: &App, ctx| {
         let (result_tx, mut result_rx) =
@@ -189,9 +196,13 @@ impl std::default::Default for ContextMgr {
         Self {
             ctx_tx,
             ctx_rx,
+            load_context_this_frame: Arc::new(false.into()),
+            context_menu_open: Arc::new(false.into()),
             frame_context: Arc::new(Context::default()).into(),
             frame_active: false.into(),
+            // context_order: RwLock::new(Vec::default()),
             context_actions: RwLock::new(HashMap::default()),
+            position: Arc::new(Point::ZERO.into()),
         }
     }
 }
@@ -232,6 +243,66 @@ impl ContextMgr {
             log::error!(
                 "ContextMgr::end_frame() was called before begin_frame()"
             );
+        }
+    }
+
+    const ID: &'static str = "context_menu";
+
+    const POPUP_ID: &'static str = "context_menu_popup_id";
+
+    fn popup_id() -> egui::Id {
+        egui::Id::new(Self::POPUP_ID)
+    }
+
+    pub fn show(
+        &self,
+        egui_ctx: &egui::CtxRef,
+        app: &App,
+        clipboard: &mut ClipboardContext,
+    ) {
+        if !self.frame_active.load() {
+            log::error!("call begin_frame() before show()");
+        }
+
+        if egui_ctx.memory().is_popup_open(Self::popup_id()) {
+            let screen_pos = self.position.load();
+
+            let should_close = AtomicCell::new(false);
+
+            /*
+            let mut process = |action: ContextAction| {
+                // self.process(reactor, clipboard, action, &self.contexts);
+                should_close.store(true);
+            };
+            */
+
+            let popup_response = egui::Area::new(Self::ID)
+                .order(egui::Order::Foreground)
+                .fixed_pos(screen_pos)
+                .show(egui_ctx, |ui| {
+                    let frame = egui::Frame::popup(ui.style());
+                    frame.show(ui, |ui| {
+                        let actions = self.context_actions.read();
+
+                        let context = self.frame_context.take();
+
+                        for (name, action) in actions.iter() {
+                            if ui.button(name).clicked() {
+                                action.apply_action(clipboard, app, &context);
+                            }
+                        }
+                    });
+                });
+
+            let popup_response = popup_response.response;
+
+            if egui_ctx.input().key_pressed(egui::Key::Escape)
+                || popup_response.clicked()
+                || popup_response.clicked_elsewhere()
+                || should_close.load()
+            {
+                egui_ctx.memory().close_popup();
+            }
         }
     }
 }
