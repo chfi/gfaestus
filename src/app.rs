@@ -40,8 +40,8 @@ use crate::{
 };
 
 pub struct App {
-    shared_state: SharedState,
-    channels: AppChannels,
+    pub shared_state: SharedState,
+    pub channels: AppChannels,
     pub settings: AppSettings,
 
     layout_boundary: Rect,

@@ -9,7 +9,11 @@ use handlegraph::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::{app::AppMsg, overlays::OverlayKind};
+use crate::{
+    app::AppMsg,
+    overlays::OverlayKind,
+    window::{GuiId, GuiWindows},
+};
 use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
@@ -63,6 +67,7 @@ impl MenuBar {
         ctx: &egui::CtxRef,
         open_windows: &'a mut super::OpenWindows,
         app_msg_tx: &Sender<AppMsg>,
+        windows: &GuiWindows,
     ) {
         let settings = &mut open_windows.settings;
 
@@ -72,7 +77,8 @@ impl MenuBar {
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
-        let path_view = &mut open_windows.path_position_list;
+
+        // let path_view = &mut open_windows.path_position_list;
 
         let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
@@ -92,8 +98,15 @@ impl MenuBar {
 
                     ui.separator();
 
-                    if ui.selectable_label(*path_view, "Path View").clicked() {
-                        *path_view = !*path_view;
+                    let path_view_id = egui::Id::new("path_view_window");
+                    let gui_id = GuiId::new(path_view_id);
+
+                    let path_view = windows.is_open(gui_id);
+
+                    if ui.selectable_label(path_view, "Path View").clicked() {
+                        windows.set_open(gui_id, !path_view);
+                        // windows.toggle_open(gui_id);
+                        // *path_view = !*path_view;
                     }
                 });
 

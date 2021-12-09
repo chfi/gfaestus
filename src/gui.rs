@@ -96,8 +96,6 @@ pub struct Gui {
 
     windows: GuiWindows,
     gui_channels: GuiChannels,
-
-    path_view: PathPositionList,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -305,8 +303,6 @@ pub struct OpenWindows {
     paths: bool,
     path_details: bool,
 
-    path_position_list: bool,
-
     themes: bool,
     overlays: bool,
     overlay_creator: bool,
@@ -326,8 +322,6 @@ impl std::default::Default for OpenWindows {
 
             paths: false,
             path_details: false,
-
-            path_position_list: false,
 
             themes: false,
             overlays: false,
@@ -377,13 +371,15 @@ impl GuiFocusState {
 
 impl Gui {
     pub fn new(
+        app: &App,
         gfaestus: &GfaestusVk,
-        reactor: &Reactor,
-        shared_state: SharedState,
-        channels: &AppChannels,
-        settings: AppSettings,
         path_view_renderer: &Arc<PathViewRenderer>,
     ) -> Result<Self> {
+        let reactor = &app.reactor;
+        let channels = app.channels();
+        let shared_state = app.shared_state().clone();
+        let settings = app.settings.clone();
+
         let graph_query = reactor.graph_query.clone();
 
         let render_pass = gfaestus.render_passes.gui;
@@ -480,22 +476,32 @@ impl Gui {
         let mut windows = GuiWindows::default();
 
         {
-            /*
             let path_view_id = egui::Id::new("path_view_window");
+            let gui_id = GuiId::new(path_view_id);
 
-            let mut path_view_state = PathPositionList::new(path_view_renderer.clone());
+            let mut path_view_state =
+                PathPositionList::new(path_view_renderer.clone());
 
-            let
+            windows.add_window(
+                gui_id,
+                "Path View",
+                move |app: &App, ui: &mut egui::Ui, nodes: &[Node]| {
+                    let App {
+                        reactor,
+                        channels,
+                        shared_state,
+                        ..
+                    } = app;
 
-            windows.add_window(path_view_id, "Path View", move |ui: &mut egui::Ui| {
-                // path_view_state.ui_impl(ui,
-                //                         &console,
-                //                         reactor,
-                //                         channels,
-                //                         &shared_state,
-                //                         nodes)
-            });
-            */
+                    path_view_state.ui_impl(
+                        ui,
+                        reactor,
+                        channels,
+                        shared_state,
+                        nodes,
+                    );
+                },
+            );
         }
 
         {
@@ -565,8 +571,6 @@ impl Gui {
         }
 
         // windows.
-
-        let path_view = PathPositionList::new(path_view_renderer.clone());
 
         let gui = Self {
             ctx,
@@ -651,7 +655,6 @@ impl Gui {
     pub fn begin_frame(
         &mut self,
         app: &App,
-        graph_query: &GraphQuery,
         ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
         nodes: &[Node],
     ) {
@@ -661,6 +664,8 @@ impl Gui {
             labels,
             ..
         } = app;
+
+        let graph_query = reactor.graph_query.as_ref();
 
         let new_screen_rect: Option<Point> = Some(app.dims().into());
 
@@ -699,6 +704,7 @@ impl Gui {
             &self.ctx,
             &mut self.open_windows,
             &self.channels.app_tx,
+            &self.windows,
         );
 
         self.console.ui(&self.ctx, self.console_down, reactor);
@@ -753,16 +759,22 @@ impl Gui {
             annotations,
         );
 
-        self.path_view.ui(
-            // PathPositionList::ui(
-            &self.ctx,
-            &mut self.open_windows.path_position_list,
-            &self.console,
-            reactor,
-            &self.channels,
-            &self.shared_state,
-            nodes,
-        );
+        {
+            let path_view_id = egui::Id::new("path_view_window");
+            let gui_id = GuiId::new(path_view_id);
+
+            let open = self.windows.get_open_arc(gui_id).unwrap();
+            let mut is_open = open.load();
+
+            let window = egui::Window::new("Path View")
+                .id(path_view_id)
+                .open(&mut is_open);
+
+            self.windows
+                .show_in_window(&app, &self.ctx, nodes, gui_id, window);
+
+            open.store(is_open);
+        }
 
         {
             let read = self.annotation_file_list.current_annotation();
@@ -924,10 +936,7 @@ impl Gui {
 
             if let (Some(path), Some(node)) = (path, node) {
                 let handle = Handle::pack(node, false);
-                // let steps = graph_query.graph.steps_on_handle(handle);
                 let positions = &graph_query.path_positions;
-
-                // let positions = graph_query.path_positions.handle_positions_iter(
 
                 let positions = graph_query.handle_positions_iter(handle);
 

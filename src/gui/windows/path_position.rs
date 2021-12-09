@@ -93,7 +93,7 @@ impl PathPositionList {
     pub fn ui_impl(
         &mut self,
         ui: &mut egui::Ui,
-        console: &Console,
+        // console: &Console,
         reactor: &Reactor,
         channels: &AppChannels,
         shared_state: &SharedState,
@@ -480,7 +480,7 @@ impl PathPositionList {
         &mut self,
         ctx: &egui::CtxRef,
         open: &mut bool,
-        console: &Console,
+        // console: &Console,
         reactor: &Reactor,
         channels: &AppChannels,
         shared_state: &SharedState,
@@ -492,7 +492,7 @@ impl PathPositionList {
             .show(ctx, |ui| {
                 self.ui_impl(
                     ui,
-                    console,
+                    // console,
                     reactor,
                     channels,
                     shared_state,

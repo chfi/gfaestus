@@ -8,6 +8,8 @@ use std::{
     sync::Arc,
 };
 
+use crate::{app::App, universe::Node};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum WindowRoot {
     Main,
@@ -58,8 +60,47 @@ pub struct WrapWin {
 
     title: String,
 
-    show: Box<dyn FnMut(&mut egui::Ui) + Send + Sync>,
+    show: Box<dyn FnMut(&App, &mut egui::Ui, &[Node]) + Send + Sync>,
 }
+
+/*
+pub trait AnySendSync: std::any::Any + Send + Sync + 'static {}
+impl<T: std::any::Any + Send + Sync + 'static> AnySendSync for T {}
+
+pub struct WrapWinT<T: AnySendSync> {
+    id: egui::Id,
+
+    title: String,
+
+    type_id: TypeId,
+
+    show: Box<dyn Fn(&mut egui::Ui, &mut Box<T>) + Send + Sync>,
+
+    window_state: Box<T>,
+}
+
+pub struct WrapWin_ {
+    id: egui::Id,
+
+    title: String,
+
+    type_id: TypeId,
+
+    show: Box<dyn Fn(&mut egui::Ui, &mut Box<dyn AnySendSync>) + Send + Sync>,
+
+    window_state: Box<dyn AnySendSync>,
+    // show: Box<dyn FnMut(&mut egui::Ui, &mut Box<dyn std::any::Any + Send + Sync>) + Send + Sync>,
+}
+
+impl<T: AnySendSync> WrapWinT<T> {
+    pub fn new<F>(title: &str, show: F, state: T) -> Self
+    where
+        F: Fn(&mut egui::Ui, &mut T) + Send + Sync,
+    {
+        unimplemented!();
+    }
+}
+*/
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct GuiId(u64);
@@ -214,11 +255,20 @@ pub struct GuiWindows {
 }
 
 impl GuiWindows {
+    pub fn open_windows(&self) -> Vec<GuiId> {
+        self.open_windows
+            .iter()
+            .filter_map(|(id, v)| if v.load() { Some(*id) } else { None })
+            .collect()
+    }
+
     // pub fn show_in(&self, id: GuiId, ui: &mut Ui) -> Option<()> {
     pub fn show_in_window(
         &self,
-        id: GuiId,
+        app: &App,
         ctx: &egui::CtxRef,
+        nodes: &[Node],
+        id: GuiId,
         window: egui::Window,
     ) -> Option<()> {
         let cell = self.open_windows.get(&id)?;
@@ -229,7 +279,7 @@ impl GuiWindows {
             let mut lock = w.lock();
 
             window.open(&mut open).show(ctx, |ui| {
-                (lock.show)(ui);
+                (lock.show)(app, ui, nodes);
             });
         }
 
@@ -240,7 +290,7 @@ impl GuiWindows {
 
     pub fn add_window<F>(&mut self, id: GuiId, title: &str, f: F)
     where
-        F: FnMut(&mut egui::Ui) + Send + Sync + 'static,
+        F: FnMut(&App, &mut egui::Ui, &[Node]) + Send + Sync + 'static,
     {
         let wrap_win = WrapWin {
             id: egui::Id::new(id),
@@ -252,13 +302,27 @@ impl GuiWindows {
         self.open_windows.insert(id, Arc::new(false.into()));
     }
 
-    pub fn is_open(&self, id: GuiId) -> Option<bool> {
-        let cell = self.open_windows.get(&id)?;
-        Some(cell.load())
+    pub fn is_open(&self, id: GuiId) -> bool {
+        self.open_windows
+            .get(&id)
+            .map(|c| c.load())
+            .unwrap_or(false)
     }
 
     pub fn get_open_arc(&self, id: GuiId) -> Option<&Arc<AtomicCell<bool>>> {
         self.open_windows.get(&id)
+    }
+
+    pub fn set_open(&self, id: GuiId, open: bool) {
+        if let Some(o) = self.open_windows.get(&id) {
+            o.store(open);
+        }
+    }
+
+    pub fn toggle_open(&self, id: GuiId) {
+        if let Some(o) = self.open_windows.get(&id) {
+            o.fetch_xor(true);
+        }
     }
 }
 

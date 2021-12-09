@@ -338,19 +338,7 @@ fn main() {
         .unwrap(),
     );
 
-    let shared_state = app.shared_state().clone();
-    let channels = app.channels().clone();
-    let settings = app.settings.clone();
-
-    let mut gui = Gui::new(
-        &gfaestus,
-        &app.reactor,
-        shared_state,
-        &channels,
-        settings,
-        &path_view,
-    )
-    .unwrap();
+    let mut gui = Gui::new(&app, &gfaestus, &path_view).unwrap();
 
     // create default overlays
     {
@@ -924,14 +912,8 @@ fn node_color(id) {
 
                 let _ = gui.console.eval_next(&mut app.reactor, true);
 
-                let dims = app.dims();
-                let reactor = &mut app.reactor;
-                let annotations = &app.annotations;
-                let labels = &app.labels;
-
                 gui.begin_frame(
                     &app,
-                    &graph_query,
                     context_menu.tx(),
                     universe.layout().nodes(),
                 );
