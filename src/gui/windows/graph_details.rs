@@ -18,7 +18,10 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 
 use crate::{
-    app::AppMsg, context::ContextEntry, geometry::*, gui::util::ColumnWidths,
+    app::AppMsg,
+    context::{ContextEntry, ContextMgr},
+    geometry::*,
+    gui::util::ColumnWidths,
 };
 
 use crate::gui::util as gui_util;
@@ -131,7 +134,7 @@ impl NodeDetails {
         ctx: &egui::CtxRef,
         path_details_id_cell: &AtomicCell<Option<PathId>>,
         open_path_details: &mut bool,
-        ctx_tx: &Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         if self.need_fetch() {
             self.fetch(graph_query);
@@ -151,9 +154,13 @@ impl NodeDetails {
                             .sense(egui::Sense::click()),
                     );
 
-                    if node_label.clicked_by(egui::PointerButton::Secondary) {
-                        ctx_tx.send(ContextEntry::Node(node_id)).unwrap();
+                    if node_label.hovered() {
+                        ctx_mgr.produce_context(|| node_id);
                     }
+
+                    // if node_label.clicked_by(egui::PointerButton::Secondary) {
+                    //     ctx_tx.send(ContextEntry::Node(node_id)).unwrap();
+                    // }
 
                     ui.separator();
 
@@ -254,6 +261,12 @@ impl NodeDetails {
                                             *open_path_details = true;
                                         }
 
+                                        if row.hovered() {
+                                            ctx_mgr
+                                                .produce_context(|| *path_id);
+                                        }
+
+                                        /*
                                         if row.clicked_by(
                                             egui::PointerButton::Secondary,
                                         ) {
@@ -263,6 +276,7 @@ impl NodeDetails {
                                                 ))
                                                 .unwrap();
                                         }
+                                        */
                                     }
                                 });
                         });
@@ -349,7 +363,7 @@ impl NodeList {
         app_msg_tx: &Sender<AppMsg>,
         open_node_details: &mut bool,
         graph_query: &GraphQuery,
-        ctx_tx: &Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let filter = self.apply_filter.load();
 
@@ -513,6 +527,11 @@ impl NodeList {
                                         *open_node_details = true;
                                     }
 
+                                    if row.hovered() {
+                                        ctx_mgr.produce_context(|| node_id);
+                                    }
+
+                                    /*
                                     if row.clicked_by(
                                         egui::PointerButton::Secondary,
                                     ) {
@@ -520,6 +539,7 @@ impl NodeList {
                                             .send(ContextEntry::Node(node_id))
                                             .unwrap();
                                     }
+                                    */
                                 }
                             },
                         );

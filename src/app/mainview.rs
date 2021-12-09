@@ -13,6 +13,7 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
+    context::ContextMgr,
     vulkan::texture::GradientTexture,
 };
 use crate::{
@@ -316,6 +317,38 @@ impl MainView {
             mouse_world,
         ) {
             self.anim_handler.send_anim_def(anim_def);
+        }
+    }
+
+    pub fn produce_context(&self, ctx: &ContextMgr) {
+        let mouse_pos = self.shared_state.mouse_pos();
+
+        let hover_node = self
+            .read_node_id_at(mouse_pos)
+            .map(|nid| NodeId::from(nid as u64));
+
+        if let Some(node) = hover_node {
+            log::warn!("calling produce_context from main");
+            ctx.produce_context(|| {
+                log::warn!("producing context from main view: {:?}", node);
+                node
+            });
+            // ctx.prod
+
+            // tx.send(ContextEntry::Node(node)).unwrap();
+        }
+
+        // TODO use Arc and Arc::make_mut on the selection_set field
+        // to handle this in a much nicer way
+        let nodes = self.selection_buffer.selection_set();
+
+        if !nodes.is_empty() {
+            ctx.produce_context(|| {
+                let nodes: FxHashSet<_> = nodes.to_owned();
+                nodes
+            });
+
+            // tx.send(ContextEntry::Selection { nodes }).unwrap();
         }
     }
 

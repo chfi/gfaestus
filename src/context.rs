@@ -219,13 +219,15 @@ impl ContextMgr {
         }
     }
 
-    pub fn produce_context<F, T>(&self, prod: F)
+    pub fn produce_context<T, F>(&self, prod: F)
     where
         T: std::any::Any + Send + Sync + 'static,
         F: FnOnce() -> T,
     {
+        let type_id = TypeId::of::<T>();
+        log::warn!("in produce_context for {:?}", type_id);
         if self.load_context_this_frame.load() {
-            let type_id = TypeId::of::<T>();
+            log::warn!("it's happening!!!");
             let value = prod();
             self.ctx_tx.send((type_id, Arc::new(value))).unwrap();
         }

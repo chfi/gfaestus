@@ -25,7 +25,7 @@ use crate::{
     app::{
         App, AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState,
     },
-    context::ContextEntry,
+    context::{ContextEntry, ContextMgr},
     reactor::Reactor,
     universe::Node,
     vulkan::compute::path_view::PathViewRenderer,
@@ -653,7 +653,8 @@ impl Gui {
     pub fn begin_frame(
         &mut self,
         app: &App,
-        ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
+        // ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
         nodes: &[Node],
     ) {
         let App {
@@ -879,7 +880,7 @@ impl Gui {
                     &self.channels.app_tx,
                     node_details,
                     graph_query,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
 
@@ -890,7 +891,7 @@ impl Gui {
                     &self.ctx,
                     path_details_id_cell,
                     path_details,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
         }
@@ -909,7 +910,7 @@ impl Gui {
                     &self.channels.app_tx,
                     path_details,
                     graph_query,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
 
@@ -921,7 +922,7 @@ impl Gui {
                     node_details_id_cell,
                     node_details,
                     &self.channels.app_tx,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
         }

@@ -19,7 +19,7 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    context::ContextEntry,
+    context::{ContextEntry, ContextMgr},
     gui::util::{grid_row_label, ColumnWidths},
     reactor::{Host, Outbox, Reactor},
 };
@@ -129,7 +129,7 @@ impl PathDetails {
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
         app_msg_tx: &Sender<AppMsg>,
-        ctx_tx: &Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         self.path_details.fetch(graph_query)?;
 
@@ -190,7 +190,7 @@ impl PathDetails {
                         graph_query,
                         node_details_id_cell,
                         open_node_details,
-                        ctx_tx,
+                        ctx_mgr,
                     );
 
                     ui.shrink_width_to_current();
@@ -210,7 +210,7 @@ impl PathList {
         _app_msg_tx: &Sender<AppMsg>,
         open_path_details: &mut bool,
         graph_query: &GraphQuery,
-        ctx_tx: &Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         let paths = &self.all_paths;
 
@@ -311,13 +311,17 @@ impl PathList {
                                         *open_path_details = true;
                                     }
 
-                                    if row.clicked_by(
-                                        egui::PointerButton::Secondary,
-                                    ) {
-                                        ctx_tx
-                                            .send(ContextEntry::Path(path_id))
-                                            .unwrap();
+                                    if row.hovered() {
+                                        ctx_mgr.produce_context(|| path_id);
                                     }
+
+                                    // if row.clicked_by(
+                                    //     egui::PointerButton::Secondary,
+                                    // ) {
+                                    //     ctx_tx
+                                    //         .send(ContextEntry::Path(path_id))
+                                    //         .unwrap();
+                                    // }
                                 }
                             },
                         );
@@ -451,7 +455,7 @@ impl StepList {
         _graph_query: &GraphQuery,
         node_details_id_cell: &AtomicCell<Option<NodeId>>,
         open_node_details: &mut bool,
-        ctx_tx: &Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
     ) -> egui::InnerResponse<()> {
         if let Some(result) = self.steps_host.take() {
             if let Ok((_path, path_base_len, steps)) = &result {
@@ -629,11 +633,15 @@ impl StepList {
                                 *open_node_details = true;
                             }
 
-                            if row.clicked_by(egui::PointerButton::Secondary) {
-                                ctx_tx
-                                    .send(ContextEntry::Node(handle.id()))
-                                    .unwrap();
+                            if row.hovered() {
+                                ctx_mgr.produce_context(|| handle.id())
                             }
+
+                            // if row.clicked_by(egui::PointerButton::Secondary) {
+                            //     ctx_tx
+                            //         .send(ContextEntry::Node(handle.id()))
+                            //         .unwrap();
+                            // }
                         }
                     })
             },

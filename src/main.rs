@@ -734,6 +734,12 @@ fn node_color(id) {
                 for er in edge_renderer.iter_mut() {
                     er.write_ubo(&edge_ubo).unwrap();
                 }
+
+                let focus = &app.shared_state().gui_focus_state;
+                if !focus.mouse_over_gui() {
+                    main_view.produce_context(&context_mgr);
+                    // main_view.send_context(context_menu.tx());
+                }
             }
             Event::RedrawEventsCleared => {
 
@@ -929,13 +935,14 @@ fn node_color(id) {
 
                 let _ = gui.console.eval_next(&mut app.reactor, true);
 
-                gui.begin_frame(
-                    &app,
-                    context_menu.tx(),
-                    universe.layout().nodes(),
-                );
 
                 context_mgr.begin_frame();
+
+                gui.begin_frame(
+                    &app,
+                    &context_mgr,
+                    universe.layout().nodes(),
+                );
 
                 context_mgr.show(&gui.ctx, &app, &mut gui.clipboard_ctx);
 
