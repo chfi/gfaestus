@@ -41,16 +41,28 @@ pub struct Context {
 }
 
 impl Context {
-    fn get<T: std::any::Any + Send + Sync + 'static>(&self) -> Option<&Arc<T>> {
+    fn get<T: std::any::Any + Send + Sync + 'static>(&self) -> Option<&T> {
         let type_id = TypeId::of::<T>();
         let val = self.values.get(&type_id)?;
         val.downcast_ref()
     }
 
+    /*
+    fn get_arc<T: std::any::Any + Send + Sync + 'static>(
+        &self,
+    ) -> Option<Arc<T>> {
+        let type_id = TypeId::of::<T>();
+        let val = self.values.get(&type_id)?;
+        val.to_owned().downcast()
+        // val.downcast_ref()
+    }
+    */
+
     fn get_raw<T: std::any::Any>(
         &self,
     ) -> Option<&Arc<dyn std::any::Any + Send + Sync + 'static>> {
         let type_id = TypeId::of::<T>();
+        dbg!();
         self.values.get(&type_id)
     }
 }
@@ -166,9 +178,8 @@ pub fn copy_node_id_action() -> ContextAction_ {
     ContextAction_::new(&req, |clipboard, app, ctx| {
         let node_id = ctx.get::<NodeId>().unwrap();
         let contents = node_id.0.to_string();
-        log::warn!("totally copying to clipboard here: {}", contents);
-        // todo support clipboard access here
-        // let _ = clipboard.set_contents(contents);
+        log::warn!("setting clipboard: {}", contents);
+        clipboard.set_contents(contents).unwrap();
     })
 }
 
@@ -251,6 +262,7 @@ where
     T: std::any::Any + Send + Sync + 'static,
 {
     let mut type_names = TYPE_NAME_MAP.lock();
+    log::warn!("inserting {:?} -> {}", TypeId::of::<T>(), name);
     type_names.insert(TypeId::of::<T>(), name.to_string());
 }
 
@@ -344,18 +356,32 @@ impl ContextMgr {
 
         // let mut context = Context::default();
 
-        let mut context = Arc::make_mut(&mut self.frame_context);
+        if self.load_context_this_frame.load() {
+            let mut context = Arc::make_mut(&mut self.frame_context);
+            let type_names = TYPE_NAME_MAP.lock();
 
-        // log::warn!("loading context");
-        while let Ok((type_id, ctx_val)) = self.ctx_rx.try_recv() {
-            // log::warn!("{:?}\t{:?}", type_id, ctx_val);
-            context.values.insert(type_id, ctx_val);
+            log::warn!("loading context");
+            while let Ok((type_id, ctx_val)) = self.ctx_rx.try_recv() {
+                let name = if let Some(n) = type_names.get(&type_id) {
+                    n.to_string()
+                } else {
+                    format!("{:?}", type_id)
+                };
+                log::warn!("{}", name);
+                context.values.insert(type_id, ctx_val);
+            }
+            self.load_context_this_frame.store(false);
         }
+
+        // for (type_id, _val) in ctx.values.iter() {
+
+        //     log::warn!("{}", name);
+        // }
 
         // log::warn!("created context");
         // self.frame_context.store(Arc::new(context));
         // self.frame_active.store(true);
-        self.frame_active.store(true);
+        // self.frame_active.store(true);
     }
 
     pub fn frame_context(&self) -> &Arc<Context> {
@@ -399,9 +425,9 @@ impl ContextMgr {
             return;
         }
 
-        if !self.frame_active.load() {
-            log::error!("call begin_frame() before show()");
-        }
+        // if !self.frame_active.load() {
+        //     log::error!("call begin_frame() before show()");
+        // }
 
         if egui_ctx.memory().is_popup_open(Self::popup_id()) {
             let screen_pos = self.position.load();

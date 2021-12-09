@@ -946,15 +946,12 @@ fn node_color(id) {
                 let _ = gui.console.eval_next(&mut app.reactor, true);
 
 
-                context_mgr.begin_frame();
-
                 gui.begin_frame(
                     &app,
                     &context_mgr,
                     universe.layout().nodes(),
                 );
 
-                context_mgr.show(&gui.ctx, &app, &mut gui.clipboard_ctx);
 
                 modal_handler.show(&gui.ctx);
 
@@ -983,6 +980,10 @@ fn node_color(id) {
                 }
 
                 // context_mgr.end_frame();
+
+
+                context_mgr.begin_frame();
+                context_mgr.show(&gui.ctx, &app, &mut gui.clipboard_ctx);
 
                 let meshes = gui.end_frame();
 
