@@ -103,6 +103,8 @@ impl ContextAction_ {
 pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
 
 pub struct ContextMgr {
+    initialized: AtomicCell<bool>,
+
     load_context_this_frame: Arc<AtomicCell<bool>>,
     context_menu_open: Arc<AtomicCell<bool>>,
 
@@ -124,7 +126,7 @@ pub struct ContextMgr {
     // context_actions: FxHashMap<String, ()>,
 }
 
-fn copy_node_id_action() -> ContextAction_ {
+pub fn copy_node_id_action() -> ContextAction_ {
     let req = [TypeId::of::<NodeId>()];
     ContextAction_::new(&req, |clipboard, app, ctx| {
         let node_id = ctx.get::<NodeId>().unwrap();
@@ -135,7 +137,7 @@ fn copy_node_id_action() -> ContextAction_ {
     })
 }
 
-fn pan_to_node_action() -> ContextAction_ {
+pub fn pan_to_node_action() -> ContextAction_ {
     // let req = [TypeId::of::<OverGraph>()];
     let req = [];
 
@@ -194,6 +196,7 @@ impl std::default::Default for ContextMgr {
         let (ctx_tx, ctx_rx) = channel::unbounded();
 
         Self {
+            initialized: false.into(),
             ctx_tx,
             ctx_rx,
             load_context_this_frame: Arc::new(false.into()),
@@ -208,7 +211,54 @@ impl std::default::Default for ContextMgr {
 }
 
 impl ContextMgr {
+    pub fn register_action(&self, name: &str, action: ContextAction_) {
+        let mut actions = self.context_actions.write();
+
+        if actions.insert(name.to_string(), action).is_some() {
+            log::warn!("context action overwritten: {}", name);
+        }
+    }
+
+    pub fn produce_context<F, T>(&self, prod: F)
+    where
+        T: std::any::Any + Send + Sync + 'static,
+        F: FnOnce() -> T,
+    {
+        if self.load_context_this_frame.load() {
+            let type_id = TypeId::of::<T>();
+            let value = prod();
+            self.ctx_tx.send((type_id, Arc::new(value))).unwrap();
+        }
+
+        // if !self.initialized.load() {
+
+        // }
+    }
+
+    pub fn open_context_menu(&self, ctx: &egui::CtxRef) {
+        ctx.memory().open_popup(Self::popup_id());
+        if !self.context_menu_open.load() {
+            self.load_context_this_frame.store(true);
+        }
+        self.context_menu_open.store(true);
+    }
+
+    pub fn set_position(&self, pos: Point) {
+        self.position.store(pos);
+    }
+
+    pub fn close_context_menu(&self) {
+        self.load_context_this_frame.store(false);
+        self.context_menu_open.store(false);
+    }
+
     pub fn begin_frame(&self) {
+        // if !self.initialized.load() {
+        //     self.initialized.store(false);
+        //     self.frame_active.store(true);
+        //     return;
+        // }
+
         if self.frame_active.load() {
             log::error!("ContextMgr::begin_frame() has already been called before end_frame()");
 
@@ -287,8 +337,11 @@ impl ContextMgr {
                         let context = self.frame_context.take();
 
                         for (name, action) in actions.iter() {
-                            if ui.button(name).clicked() {
-                                action.apply_action(clipboard, app, &context);
+                            if action.is_applicable(&context) {
+                                if ui.button(name).clicked() {
+                                    action
+                                        .apply_action(clipboard, app, &context);
+                                }
                             }
                         }
                     });

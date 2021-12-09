@@ -3,7 +3,10 @@ use compute::EdgePreprocess;
 use crossbeam::atomic::AtomicCell;
 use futures::SinkExt;
 use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::context::{ContextEntry, ContextMenu};
+use gfaestus::context::{
+    copy_node_id_action, pan_to_node_action, ContextEntry, ContextMenu,
+    ContextMgr,
+};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
 use gfaestus::script::plugins::colors::{hash_bytes, hash_color};
@@ -490,6 +493,11 @@ fn node_color(id) {
     let mut context_menu = ContextMenu::new(&app);
     let open_context = AtomicCell::new(false);
 
+    let mut context_mgr = ContextMgr::default();
+
+    context_mgr.register_action("Copy node ID", copy_node_id_action());
+    context_mgr.register_action("Pan to node!!!!", pan_to_node_action());
+
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
     //     FxHashMap::default();
@@ -551,14 +559,20 @@ fn node_color(id) {
 
                         let focus = &app.shared_state().gui_focus_state;
 
+                        // context_mgr.begin_frame();
+                        // context_mgr.
+                        context_mgr.open_context_menu(&gui.ctx);
+                        context_mgr.set_position(app.shared_state().mouse_pos());
+
+                        /*
                         // this whole thing should be handled better
                         if !focus.mouse_over_gui() {
                             main_view.send_context(context_menu.tx());
                         }
 
                         open_context.store(true);
-                        // context_menu.open_context_menu(&gui.ctx);
                         context_menu.set_position(app.shared_state().mouse_pos());
+                        */
                 }
             }
         }
@@ -599,10 +613,13 @@ fn node_color(id) {
                     if let Some(selected) = app.selected_nodes() {
 
                         log::warn!("sending selection");
+                        /*
                         context_menu
                             .tx()
                             .send(ContextEntry::Selection { nodes: selected.to_owned() })
+
                             .unwrap();
+                        */
 
                         let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                         nodes.sort();
@@ -918,20 +935,25 @@ fn node_color(id) {
                     universe.layout().nodes(),
                 );
 
+                context_mgr.begin_frame();
+
+                context_mgr.show(&gui.ctx, &app, &mut gui.clipboard_ctx);
+
                 modal_handler.show(&gui.ctx);
 
-                {
-                    let ctx = &gui.ctx;
-                    let clipboard = &mut gui.clipboard_ctx;
 
-                    if open_context.load() {
-                        context_menu.recv_contexts();
-                        context_menu.open_context_menu(&gui.ctx);
-                        open_context.store(false);
-                    }
+                // {
+                //     let ctx = &gui.ctx;
+                //     let clipboard = &mut gui.clipboard_ctx;
 
-                    context_menu.show(ctx, &app.reactor, clipboard);
-                }
+                    // if open_context.load() {
+                    //     context_menu.recv_contexts();
+                    //     context_menu.open_context_menu(&gui.ctx);
+                    //     open_context.store(false);
+                    // }
+
+                    // context_menu.show(ctx, &app.reactor, clipboard);
+                // }
 
                 {
                     let shared_state = app.shared_state();
@@ -942,6 +964,8 @@ fn node_color(id) {
                                                       view);
                     cluster_tree.draw_labels(labels, &gui.ctx, shared_state);
                 }
+
+                context_mgr.end_frame();
 
                 let meshes = gui.end_frame();
 
