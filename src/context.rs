@@ -1,4 +1,5 @@
 use std::{
+    any::TypeId,
     collections::{HashMap, HashSet},
     path::PathBuf,
     sync::Arc,
@@ -18,13 +19,237 @@ use handlegraph::{
 };
 
 use bstr::ByteSlice;
-use rustc_hash::FxHashSet;
+use parking_lot::RwLock;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     app::{selection::NodeSelection, App, AppChannels, AppMsg, SharedState},
     geometry::{Point, Rect},
     reactor::{ModalError, ModalHandler, ModalSuccess, Reactor},
 };
+
+///////////////
+
+pub struct OverGraph {}
+
+#[derive(Default, Clone)]
+pub struct Context {
+    values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
+}
+
+impl Context {
+    fn get<T: std::any::Any + Send + Sync + 'static>(&self) -> Option<&Arc<T>> {
+        let type_id = TypeId::of::<T>();
+        let val = self.values.get(&type_id)?;
+        val.downcast_ref()
+    }
+
+    fn get_raw<T: std::any::Any>(
+        &self,
+    ) -> Option<&Arc<dyn std::any::Any + Send + Sync + 'static>> {
+        let type_id = TypeId::of::<T>();
+        self.values.get(&type_id)
+    }
+}
+
+#[derive(Clone)]
+pub struct ContextAction_ {
+    // name: Arc<String>,
+    req: Arc<FxHashSet<TypeId>>,
+    action: Arc<
+        dyn Fn(&mut ClipboardContext, &App, &Context) + Send + Sync + 'static,
+    >,
+}
+
+impl ContextAction_ {
+    pub fn new(
+        // name: &str,
+        req: &[TypeId],
+        action: impl Fn(&mut ClipboardContext, &App, &Context)
+            + Send
+            + Sync
+            + 'static,
+    ) -> Self {
+        let req = Arc::new(req.iter().copied().collect());
+        let action = Arc::new(action) as Arc<_>;
+
+        Self {
+            // name: name.to_string(),
+            req,
+            action,
+        }
+    }
+
+    pub fn is_applicable(&self, ctx: &Context) -> bool {
+        self.req.iter().all(|r| ctx.values.contains_key(r))
+    }
+
+    pub fn apply_action(
+        &self,
+        clipboard: &mut ClipboardContext,
+        app: &App,
+        ctx: &Context,
+    ) -> Option<()> {
+        if !self.is_applicable(ctx) {
+            return None;
+        }
+
+        (self.action)(clipboard, app, ctx);
+
+        Some(())
+    }
+}
+
+pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
+
+pub struct ContextMgr {
+    pub ctx_tx: channel::Sender<(TypeId, CtxVal)>,
+    ctx_rx: channel::Receiver<(TypeId, CtxVal)>,
+
+    frame_context: AtomicCell<Arc<Context>>,
+    frame_active: AtomicCell<bool>,
+
+    context_actions: RwLock<HashMap<String, ContextAction_>>,
+    // context_types: FxHashMap<String, TypeId>,
+    // contexts: FxHashMap<
+    //     TypeId,
+    //     Option<Box<dyn std::any::Any + Send + Sync + 'static>>,
+    // >,
+    // context_actions: FxHashMap<String, ()>,
+}
+
+fn copy_node_id_action() -> ContextAction_ {
+    let req = [TypeId::of::<NodeId>()];
+    ContextAction_::new(&req, |clipboard, app, ctx| {
+        let node_id = ctx.get::<NodeId>().unwrap();
+        let contents = node_id.0.to_string();
+        log::warn!("totally copying to clipboard here: {}", contents);
+        // todo support clipboard access here
+        // let _ = clipboard.set_contents(contents);
+    })
+}
+
+fn pan_to_node_action() -> ContextAction_ {
+    let req = [TypeId::of::<OverGraph>()];
+
+    ContextAction_::new(&req, |clipboard, app: &App, ctx| {
+        let (result_tx, mut result_rx) =
+            futures::channel::mpsc::channel::<Option<String>>(1);
+
+        let first_run = AtomicCell::new(true);
+
+        let callback = move |text: &mut String, ui: &mut egui::Ui| {
+            ui.label("Enter node ID");
+            let text_box = ui.text_edit_singleline(text);
+
+            if first_run.fetch_and(false) {
+                text_box.request_focus();
+            }
+
+            if text_box.lost_focus() && ui.input().key_pressed(egui::Key::Enter)
+            {
+                return Ok(ModalSuccess::Success);
+            }
+
+            Err(ModalError::Continue)
+        };
+
+        let prepared = ModalHandler::prepare_callback(
+            &app.shared_state.show_modal,
+            String::new(),
+            callback,
+            result_tx,
+        );
+
+        app.channels.modal_tx.send(prepared).unwrap();
+
+        let graph = app.reactor.graph_query.graph.clone();
+        let app_tx = app.channels.app_tx.clone();
+
+        app.reactor
+            .spawn_forget(async move {
+                let value = result_rx.next().await.flatten();
+
+                if let Some(parsed) = value.and_then(|v| v.parse::<u64>().ok())
+                {
+                    let node_id = NodeId::from(parsed);
+                    if graph.has_node(node_id) {
+                        app_tx.send(AppMsg::goto_node(node_id)).unwrap();
+                    }
+                }
+            })
+            .unwrap();
+    })
+}
+
+impl std::default::Default for ContextMgr {
+    fn default() -> Self {
+        let (ctx_tx, ctx_rx) = channel::unbounded();
+
+        Self {
+            ctx_tx,
+            ctx_rx,
+            frame_context: Arc::new(Context::default()).into(),
+            frame_active: false.into(),
+            context_actions: RwLock::new(HashMap::default()),
+        }
+    }
+}
+
+impl ContextMgr {
+    pub fn begin_frame(&self) {
+        if self.frame_active.load() {
+            log::error!("ContextMgr::begin_frame() has already been called before end_frame()");
+
+            self.end_frame();
+        }
+
+        let mut context = Context::default();
+
+        while let Ok((type_id, ctx_val)) = self.ctx_rx.try_recv() {
+            context.values.insert(type_id, ctx_val);
+        }
+
+        self.frame_context.store(Arc::new(context));
+        self.frame_active.store(true);
+    }
+
+    pub fn frame_context(&self) -> Option<Arc<Context>> {
+        if self.frame_active.load() {
+            let ctx = self.frame_context.take();
+            self.frame_context.store(ctx.clone());
+            Some(ctx)
+        } else {
+            None
+        }
+    }
+
+    pub fn end_frame(&self) {
+        if self.frame_active.load() {
+            self.frame_context.take();
+            self.frame_active.store(false);
+        } else {
+            log::error!(
+                "ContextMgr::end_frame() was called before begin_frame()"
+            );
+        }
+    }
+}
+
+/*
+pub struct ContextMgr {
+    ctx_tx: channel::Sender<()>,   // each frame all contexts are sent here
+    ctx_rx: channel::Receiver<()>, //
+
+    frame_contexts: Vec<()>,
+}
+
+pub struct Context {
+    context_type: TypeId,
+}
+*/
+
+///////////////
 
 #[derive(Debug, Clone)]
 pub enum ContextEntry {
