@@ -153,6 +153,75 @@ pub struct ContextMgr {
 lazy_static! {
     static ref TYPE_NAME_MAP: Arc<Mutex<FxHashMap<TypeId, String>>> =
         Arc::new(Mutex::new(FxHashMap::default()));
+    static ref NAME_TYPE_MAP: Arc<Mutex<FxHashMap<String, TypeId>>> =
+        Arc::new(Mutex::new(FxHashMap::default()));
+}
+
+pub fn rhai_context_action(
+    script_path: &str,
+    engine: rhai::Engine,
+    // ) -> anyhow::Result<ContextAction_> {
+) -> anyhow::Result<()> {
+    let ast = engine.compile_file(script_path.into())?;
+    let module =
+        rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine)?;
+
+    let signs = module.gen_fn_signatures().collect::<Vec<_>>();
+    log::warn!("signs: {:?}", signs);
+
+    if let Some(types) = module.get_var("context_types") {
+        dbg!();
+        // let types
+        let types: rhai::Array = types.cast();
+
+        for t in types {
+            if let Ok(name) = t.into_immutable_string() {
+                log::warn!("  -  {}", name);
+            }
+        }
+    } else {
+        log::warn!("missing var???");
+    }
+
+    log::warn!("iter_var");
+    for (name, val) in module.iter_var() {
+        let v = match val.clone().into_string() {
+            Ok(s) => s,
+            Err(s) => s.to_string(),
+        };
+        log::warn!("{} - {}", name, v);
+    }
+
+    let mut req: FxHashSet<TypeId> = FxHashSet::default();
+
+    let map = NAME_TYPE_MAP.lock();
+
+    log::warn!("iter_literal_variables");
+
+    for (name, is_const, val) in ast.iter_literal_variables(true, true) {
+        log::warn!("{} \t {:?}", name, val);
+
+        if let Some(array) = val.try_cast::<rhai::Array>() {
+            for val in array {
+                if let Ok(v) = val.into_immutable_string() {
+                    if let Some(t) = map.get(v.as_str()) {
+                        req.insert(*t);
+                    }
+                    log::warn!(" >> type! {}", v);
+                }
+            }
+        }
+    }
+
+    log::warn!("req: {:?}", req);
+
+    log::warn!("iter_functions");
+
+    for script_fn in ast.iter_functions() {
+        log::warn!("{:?}", script_fn);
+    }
+
+    Ok(())
 }
 
 pub fn debug_context_action() -> ContextAction_ {
@@ -257,13 +326,15 @@ impl std::default::Default for ContextMgr {
     }
 }
 
-pub fn set_debug_type_name<T>(name: &str)
+pub fn set_type_name<T>(name: &str)
 where
     T: std::any::Any + Send + Sync + 'static,
 {
     let mut type_names = TYPE_NAME_MAP.lock();
+    let mut name_types = NAME_TYPE_MAP.lock();
     log::warn!("inserting {:?} -> {}", TypeId::of::<T>(), name);
     type_names.insert(TypeId::of::<T>(), name.to_string());
+    name_types.insert(name.to_string(), TypeId::of::<T>());
 }
 
 impl ContextMgr {
@@ -275,15 +346,15 @@ impl ContextMgr {
         }
     }
 
-    pub fn set_debug_type_name<T>(&self, name: &str)
-    where
-        T: std::any::Any + Send + Sync + 'static,
-    {
-        if self.initializing() {
-            log::warn!("setting debug type name for {}", name);
-            set_debug_type_name::<T>(name);
-        }
-    }
+    // pub fn set_debug_type_name<T>(&self, name: &str)
+    // where
+    //     T: std::any::Any + Send + Sync + 'static,
+    // {
+    //     if self.initializing() {
+    //         log::warn!("setting debug type name for {}", name);
+    //         set_type_name::<T>(name);
+    //     }
+    // }
 
     fn initializing(&self) -> bool {
         matches!(self.init.load(), InitState::Initializing)
