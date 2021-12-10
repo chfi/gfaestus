@@ -9,7 +9,7 @@ use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::atomic::AtomicCell;
 use crossbeam::channel;
 
-use futures::StreamExt;
+use futures::{FutureExt, StreamExt};
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
     handlegraph::*,
@@ -71,14 +71,14 @@ impl Context {
 pub struct ContextAction_ {
     // name: Arc<String>,
     req: Arc<FxHashSet<TypeId>>,
-    action: Arc<dyn Fn(&App, &Context) + Send + Sync + 'static>,
+    action: Arc<dyn Fn(Arc<Context>) + Send + Sync + 'static>,
 }
 
 impl ContextAction_ {
     pub fn new(
         // name: &str,
         req: &[TypeId],
-        action: impl Fn(&App, &Context) + Send + Sync + 'static,
+        action: impl Fn(Arc<Context>) + Send + Sync + 'static,
     ) -> Self {
         let req = Arc::new(req.iter().copied().collect());
         let action = Arc::new(action) as Arc<_>;
@@ -94,12 +94,12 @@ impl ContextAction_ {
         self.req.iter().all(|r| ctx.values.contains_key(r))
     }
 
-    pub fn apply_action(&self, app: &App, ctx: &Context) -> Option<()> {
+    pub fn apply_action(&self, app: &App, ctx: &Arc<Context>) -> Option<()> {
         if !self.is_applicable(ctx) {
             return None;
         }
 
-        (self.action)(app, ctx);
+        (self.action)(ctx.clone());
 
         Some(())
     }
@@ -160,8 +160,8 @@ pub fn rhai_context_action(
     context_mgr: &mut ContextMgr,
     script_path: &str,
     mut engine: rhai::Engine,
-    // ) -> anyhow::Result<ContextAction_> {
-) -> anyhow::Result<()> {
+) -> anyhow::Result<ContextAction_> {
+    // ) -> anyhow::Result<()> {
     let mut req__: Arc<Mutex<FxHashSet<TypeId>>> =
         Arc::new(Mutex::new(FxHashSet::default()));
 
@@ -170,27 +170,6 @@ pub fn rhai_context_action(
     log::warn!("in rhai_context_action");
 
     let type_names = context_mgr.ctx_type_map.clone();
-
-    /*
-    engine.on_var(move |name, index, eval_ctx| {
-        log::error!("{:#?}", eval_ctx);
-
-        log::warn!("on_var({}, {}, _)", name, index);
-
-        let map = type_names.name_to_id.read();
-
-        if let Some(type_id) = map.get(name) {
-            log::warn!("found type id for {}", name);
-            let mut req_lock = req_inner.lock();
-            req_lock.insert(*type_id);
-            Ok(Some(rhai::Dynamic::from(name.to_string())))
-        } else {
-            Ok(None)
-        }
-
-        //
-    });
-    */
 
     log::warn!("what's this then");
 
@@ -249,13 +228,23 @@ pub fn rhai_context_action(
         log::warn!("{:?}", script_fn);
     }
 
-    Ok(())
+    let reqs: Vec<_> = req.into_iter().collect();
+
+    let action_fn = rhai::Func::<(Arc<Context>,), ()>::create_from_ast(
+        engine, ast, "action",
+    );
+
+    let action = ContextAction_::new(&reqs, move |ctx| {
+        action_fn(ctx).unwrap();
+    });
+
+    Ok(action)
 }
 
 pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {
     let type_names = ctx_mgr.ctx_type_map.clone();
 
-    ContextAction_::new(&[], move |_app, ctx| {
+    ContextAction_::new(&[], move |ctx| {
         log::warn!("Active Contexts");
 
         let id_to_name = type_names.id_to_name.read();
@@ -272,21 +261,35 @@ pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {
     })
 }
 
-pub fn copy_node_id_action() -> ContextAction_ {
+pub fn copy_node_id_action(app: &App) -> ContextAction_ {
+    let app_msg_tx = app.channels.app_tx.clone();
+
     let req = [TypeId::of::<NodeId>()];
-    ContextAction_::new(&req, |app, ctx| {
+
+    ContextAction_::new(&req, move |ctx| {
         let node_id = ctx.get::<NodeId>().unwrap();
         let contents = node_id.0.to_string();
         log::warn!("setting clipboard: {}", contents);
+        app_msg_tx
+            .send(AppMsg::set_clipboard_contents(&contents))
+            .unwrap();
         // clipboard.set_contents(contents).unwrap();
     })
 }
 
-pub fn pan_to_node_action() -> ContextAction_ {
-    // let req = [TypeId::of::<OverGraph>()];
+pub fn pan_to_node_action(app: &App) -> ContextAction_ {
     let req = [];
 
-    ContextAction_::new(&req, |app: &App, ctx| {
+    let channels = app.channels.clone();
+
+    let graph = app.reactor.graph_query.graph.clone();
+    let app_tx = app.channels.app_tx.clone();
+    let show_modal = app.shared_state.show_modal.clone();
+    let modal_tx = app.channels.modal_tx.clone();
+
+    let futures_tx = app.reactor.future_tx.clone();
+
+    ContextAction_::new(&req, move |ctx| {
         let (result_tx, mut result_rx) =
             futures::channel::mpsc::channel::<Option<String>>(1);
 
@@ -309,30 +312,29 @@ pub fn pan_to_node_action() -> ContextAction_ {
         };
 
         let prepared = ModalHandler::prepare_callback(
-            &app.shared_state.show_modal,
+            &show_modal,
             String::new(),
             callback,
             result_tx,
         );
 
-        app.channels.modal_tx.send(prepared).unwrap();
+        modal_tx.send(prepared).unwrap();
 
-        let graph = app.reactor.graph_query.graph.clone();
-        let app_tx = app.channels.app_tx.clone();
+        let graph = graph.clone();
+        let app_tx = app_tx.clone();
 
-        app.reactor
-            .spawn_forget(async move {
-                let value = result_rx.next().await.flatten();
+        let fut = async move {
+            let value = result_rx.next().await.flatten();
 
-                if let Some(parsed) = value.and_then(|v| v.parse::<u64>().ok())
-                {
-                    let node_id = NodeId::from(parsed);
-                    if graph.has_node(node_id) {
-                        app_tx.send(AppMsg::goto_node(node_id)).unwrap();
-                    }
+            if let Some(parsed) = value.and_then(|v| v.parse::<u64>().ok()) {
+                let node_id = NodeId::from(parsed);
+                if graph.has_node(node_id) {
+                    app_tx.send(AppMsg::goto_node(node_id)).unwrap();
                 }
-            })
-            .unwrap();
+            }
+        };
+
+        futures_tx.send(Box::pin(fut) as _).unwrap();
     })
 }
 

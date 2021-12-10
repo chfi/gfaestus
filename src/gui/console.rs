@@ -1374,6 +1374,21 @@ impl ConsoleShared {
         self.add_modal_fns(&mut engine);
 
         let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn(
+            "send_app_msg",
+            move |id: &str, val: rhai::Dynamic| {
+                app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_clipboard_contents", move |text: &str| {
+            app_msg_tx
+                .send(AppMsg::set_clipboard_contents(text))
+                .unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {
             use crossbeam::channel;
 

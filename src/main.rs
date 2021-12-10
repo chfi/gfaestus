@@ -522,8 +522,8 @@ fn node_color(id) {
 
     let dbg_action = debug_context_action(&context_mgr);
 
-    context_mgr.register_action("Copy node ID", copy_node_id_action());
-    context_mgr.register_action("Pan to node!!!!", pan_to_node_action());
+    context_mgr.register_action("Copy node ID", copy_node_id_action(&app));
+    context_mgr.register_action("Pan to node!!!!", pan_to_node_action(&app));
     context_mgr.register_action("Debug print", dbg_action);
 
     let ctx_action = gfaestus::context::rhai_context_action(
