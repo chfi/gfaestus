@@ -71,19 +71,14 @@ impl Context {
 pub struct ContextAction_ {
     // name: Arc<String>,
     req: Arc<FxHashSet<TypeId>>,
-    action: Arc<
-        dyn Fn(&mut ClipboardContext, &App, &Context) + Send + Sync + 'static,
-    >,
+    action: Arc<dyn Fn(&App, &Context) + Send + Sync + 'static>,
 }
 
 impl ContextAction_ {
     pub fn new(
         // name: &str,
         req: &[TypeId],
-        action: impl Fn(&mut ClipboardContext, &App, &Context)
-            + Send
-            + Sync
-            + 'static,
+        action: impl Fn(&App, &Context) + Send + Sync + 'static,
     ) -> Self {
         let req = Arc::new(req.iter().copied().collect());
         let action = Arc::new(action) as Arc<_>;
@@ -99,17 +94,12 @@ impl ContextAction_ {
         self.req.iter().all(|r| ctx.values.contains_key(r))
     }
 
-    pub fn apply_action(
-        &self,
-        clipboard: &mut ClipboardContext,
-        app: &App,
-        ctx: &Context,
-    ) -> Option<()> {
+    pub fn apply_action(&self, app: &App, ctx: &Context) -> Option<()> {
         if !self.is_applicable(ctx) {
             return None;
         }
 
-        (self.action)(clipboard, app, ctx);
+        (self.action)(app, ctx);
 
         Some(())
     }
@@ -181,7 +171,10 @@ pub fn rhai_context_action(
 
     let type_names = context_mgr.ctx_type_map.clone();
 
+    /*
     engine.on_var(move |name, index, eval_ctx| {
+        log::error!("{:#?}", eval_ctx);
+
         log::warn!("on_var({}, {}, _)", name, index);
 
         let map = type_names.name_to_id.read();
@@ -197,22 +190,42 @@ pub fn rhai_context_action(
 
         //
     });
+    */
 
-    let ast = engine.compile_file(script_path.into())?;
+    log::warn!("what's this then");
+
+    let ast = engine.compile_file(script_path.into());
+    if ast.is_err() {
+        log::warn!("{:?}", ast);
+    }
+    let ast = ast?;
     let module =
-        rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine)?;
+        rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine);
+
+    if module.is_err() {
+        log::warn!("{:?}", module);
+    }
+    let module = module?;
 
     let signs = module.gen_fn_signatures().collect::<Vec<_>>();
     log::warn!("signs: {:?}", signs);
 
+    let mut req: FxHashSet<TypeId> = FxHashSet::default();
+
+    let name_to_id = context_mgr.ctx_type_map.name_to_id.read();
+
     if let Some(types) = module.get_var("context_types") {
+        log::warn!("whoooaaaat??????");
         dbg!();
         // let types
         let types: rhai::Array = types.cast();
 
         for t in types {
             if let Ok(name) = t.into_immutable_string() {
-                log::warn!("  -  {}", name);
+                if let Some(type_id) = name_to_id.get(name.as_str()) {
+                    req.insert(*type_id);
+                    log::warn!("  -  {}", name);
+                }
             }
         }
     } else {
@@ -228,34 +241,6 @@ pub fn rhai_context_action(
         log::warn!("{} - {}", name, v);
     }
 
-    // let mut req: FxHashSet<TypeId> = FxHashSet::default();
-
-    /*
-    let map = NAME_TYPE_MAP.lock();
-
-    log::warn!("iter_literal_variables");
-
-    for (name, is_const, val) in ast.iter_literal_variables(true, true) {
-        log::warn!("{} \t {:?}", name, val);
-
-        if let Some(array) = val.try_cast::<rhai::Array>() {
-            for val in array {
-                if let Ok(v) = val.into_immutable_string() {
-                    if let Some(t) = map.get(v.as_str()) {
-                        req.insert(*t);
-                    }
-                    log::warn!(" >> type! {}", v);
-                }
-            }
-        }
-    }
-    */
-
-    let req: FxHashSet<TypeId> = {
-        let lock = req__.lock();
-        lock.to_owned()
-    };
-
     log::warn!("req: {:?}", req);
 
     log::warn!("iter_functions");
@@ -270,7 +255,7 @@ pub fn rhai_context_action(
 pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {
     let type_names = ctx_mgr.ctx_type_map.clone();
 
-    ContextAction_::new(&[], move |_clipboard, _app, ctx| {
+    ContextAction_::new(&[], move |_app, ctx| {
         log::warn!("Active Contexts");
 
         let id_to_name = type_names.id_to_name.read();
@@ -289,11 +274,11 @@ pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {
 
 pub fn copy_node_id_action() -> ContextAction_ {
     let req = [TypeId::of::<NodeId>()];
-    ContextAction_::new(&req, |clipboard, app, ctx| {
+    ContextAction_::new(&req, |app, ctx| {
         let node_id = ctx.get::<NodeId>().unwrap();
         let contents = node_id.0.to_string();
         log::warn!("setting clipboard: {}", contents);
-        clipboard.set_contents(contents).unwrap();
+        // clipboard.set_contents(contents).unwrap();
     })
 }
 
@@ -301,7 +286,7 @@ pub fn pan_to_node_action() -> ContextAction_ {
     // let req = [TypeId::of::<OverGraph>()];
     let req = [];
 
-    ContextAction_::new(&req, |clipboard, app: &App, ctx| {
+    ContextAction_::new(&req, |app: &App, ctx| {
         let (result_tx, mut result_rx) =
             futures::channel::mpsc::channel::<Option<String>>(1);
 
@@ -566,12 +551,7 @@ impl ContextMgr {
         egui::Id::new(Self::POPUP_ID)
     }
 
-    pub fn show(
-        &self,
-        egui_ctx: &egui::CtxRef,
-        app: &App,
-        clipboard: &mut ClipboardContext,
-    ) {
+    pub fn show(&self, egui_ctx: &egui::CtxRef, app: &App) {
         if !matches!(self.init.load(), InitState::Ready) {
             return;
         }
@@ -605,8 +585,7 @@ impl ContextMgr {
                         for (name, action) in actions.iter() {
                             if action.is_applicable(context) {
                                 if ui.button(name).clicked() {
-                                    action
-                                        .apply_action(clipboard, app, &context);
+                                    action.apply_action(app, &context);
                                 }
                             }
                         }

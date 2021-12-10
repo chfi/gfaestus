@@ -84,8 +84,6 @@ pub struct Gui {
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
 
-    pub clipboard_ctx: ClipboardContext,
-
     gff3_list: RecordList<Gff3Records>,
     bed_list: RecordList<BedRecords>,
 
@@ -421,7 +419,7 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
-        let clipboard_ctx = ClipboardProvider::new().unwrap();
+        // let clipboard_ctx = ClipboardProvider::new().unwrap();
 
         let mut path_picker_source = PathPickerSource::new(&graph_query)?;
 
@@ -590,8 +588,7 @@ impl Gui {
 
             dropped_file,
 
-            clipboard_ctx,
-
+            // clipboard_ctx,
             gff3_list,
             bed_list,
 
@@ -1001,11 +998,14 @@ impl Gui {
         }
     }
 
-    pub fn end_frame(&mut self) -> Vec<egui::ClippedMesh> {
+    pub fn end_frame(
+        &mut self,
+        reactor: &mut Reactor,
+    ) -> Vec<egui::ClippedMesh> {
         let (output, shapes) = self.ctx.end_frame();
 
         if !output.copied_text.is_empty() {
-            self.clipboard_ctx.set_contents(output.copied_text).unwrap();
+            reactor.set_clipboard_contents(&output.copied_text, true);
         }
 
         self.ctx.tessellate(shapes)
@@ -1059,7 +1059,7 @@ impl Gui {
         self.frame_input.events.push(event);
     }
 
-    pub fn apply_received_gui_msgs(&mut self) {
+    pub fn apply_received_gui_msgs(&mut self, reactor: &mut Reactor) {
         while let Ok(msg) = self.channels.gui_rx.try_recv() {
             match msg {
                 GuiMsg::SetWindowOpen { window, open } => {
@@ -1115,10 +1115,8 @@ impl Gui {
                     self.frame_input.events.push(egui::Event::Copy);
                 }
                 GuiMsg::Paste => {
-                    if let Ok(text) = &self.clipboard_ctx.get_contents() {
-                        self.frame_input
-                            .events
-                            .push(egui::Event::Text(text.clone()));
+                    if let Some(text) = reactor.get_clipboard_contents(true) {
+                        self.frame_input.events.push(egui::Event::Text(text));
                     }
                 }
                 GuiMsg::SetModifiers(mods) => {

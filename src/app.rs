@@ -140,6 +140,10 @@ impl AppMsg {
         }
     }
 
+    pub fn set_clipboard_contents(contents: &str) -> Self {
+        Self::raw("set_clipboard_contents", contents.to_string())
+    }
+
     pub fn add_gff3_records(records: Gff3Records) -> Self {
         Self::raw("add_gff3_records", records)
     }
@@ -354,6 +358,13 @@ impl App {
         let mut new_handler = |name: &str, handler: AppMsgHandler| {
             handlers.insert(name.to_string(), Arc::new(handler))
         };
+
+        new_handler(
+            "set_clipboard_contents",
+            AppMsgHandler::from_fn(|app, nodes, contents: &String| {
+                app.reactor.set_clipboard_contents(contents, true);
+            }),
+        );
 
         new_handler(
             "goto_node",

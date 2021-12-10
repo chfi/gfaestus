@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::channel::{Receiver, Sender};
 use futures::{future::RemoteHandle, task::SpawnExt, Future};
 
@@ -11,6 +12,8 @@ pub use modal::*;
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
 use paired::*;
+use parking_lot::lock_api::RawMutex;
+use parking_lot::Mutex;
 
 use crate::app::channels::OverlayCreatorMsg;
 use crate::app::AppChannels;
@@ -27,6 +30,8 @@ pub struct Reactor {
     pub overlay_create_rx: Receiver<OverlayCreatorMsg>,
 
     pub gpu_tasks: Arc<GpuTasks>,
+
+    pub clipboard_ctx: Arc<Mutex<ClipboardContext>>,
 
     pub future_tx:
         Sender<Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
@@ -58,6 +63,9 @@ impl Reactor {
             }
         });
 
+        let clipboard_ctx =
+            Arc::new(Mutex::new(ClipboardProvider::new().unwrap()));
+
         Self {
             thread_pool,
             rayon_pool,
@@ -66,12 +74,34 @@ impl Reactor {
 
             gpu_tasks: Arc::new(GpuTasks::default()),
 
+            clipboard_ctx,
+
             overlay_create_tx: channels.new_overlay_tx.clone(),
             overlay_create_rx: channels.new_overlay_rx.clone(),
 
             future_tx: task_tx,
             // task_rx,
             _task_thread,
+        }
+    }
+
+    pub fn set_clipboard_contents(&self, contents: &str, block: bool) {
+        if block {
+            let mut ctx = self.clipboard_ctx.lock();
+            ctx.set_contents(contents.to_string()).unwrap();
+        } else if let Some(mut ctx) = self.clipboard_ctx.try_lock() {
+            ctx.set_contents(contents.to_string()).unwrap();
+        }
+    }
+
+    pub fn get_clipboard_contents(&self, block: bool) -> Option<String> {
+        if block {
+            let mut ctx = self.clipboard_ctx.lock();
+            ctx.get_contents().ok()
+        } else if let Some(mut ctx) = self.clipboard_ctx.try_lock() {
+            ctx.get_contents().ok()
+        } else {
+            None
         }
     }
 

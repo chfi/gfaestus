@@ -507,6 +507,7 @@ fn node_color(id) {
         set_type_name!(NodeId);
         set_type_name!(PathId);
         set_type_name!(FxHashSet<NodeId>);
+        // context_mgr.set_type_name::<FxHashSet<NodeId>>("FxHashSet<NodeId>");
     }
 
     // context_mgr.set_type_name_ez::<NodeId>();
@@ -733,7 +734,7 @@ fn node_color(id) {
                     );
                 }
 
-                gui.apply_received_gui_msgs();
+                gui.apply_received_gui_msgs(&mut app.reactor);
 
                 while let Ok(main_view_msg) = main_view.main_view_msg_rx().try_recv() {
                     main_view.apply_msg(main_view_msg);
@@ -1006,9 +1007,9 @@ fn node_color(id) {
 
 
                 context_mgr.begin_frame();
-                context_mgr.show(&gui.ctx, &app, &mut gui.clipboard_ctx);
+                context_mgr.show(&gui.ctx, &app);
 
-                let meshes = gui.end_frame();
+                let meshes = gui.end_frame(&mut app.reactor);
 
                 gui.upload_egui_texture(&gfaestus).unwrap();
 
