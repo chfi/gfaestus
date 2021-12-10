@@ -497,19 +497,39 @@ fn node_color(id) {
 
     let engine = gui.console.create_engine();
 
-    gfaestus::context::set_type_name::<NodeId>("NodeId");
-    gfaestus::context::set_type_name::<PathId>("PathId");
-    gfaestus::context::set_type_name::<FxHashSet<NodeId>>("FxHashSet<NodeId>");
-    gfaestus::context::set_type_name::<Arc<FxHashSet<NodeId>>>(
-        "Arc<FxHashSet<NodeId>>",
-    );
+    {
+        macro_rules! set_type_name {
+            ($type:ty) => {
+                context_mgr.set_type_name::<$type>(stringify!($type));
+            };
+        }
+
+        set_type_name!(NodeId);
+        set_type_name!(PathId);
+        set_type_name!(FxHashSet<NodeId>);
+    }
+
+    // context_mgr.set_type_name_ez::<NodeId>();
+    // context_mgr.set_type_name_ez::<PathId>();
+    // context_mgr.set_type_name_ez::<FxHashSet<NodeId>>();
+    // gfaestus::context::set_type_name::<NodeId>("NodeId");
+    // gfaestus::context::set_type_name::<PathId>("PathId");
+    // gfaestus::context::set_type_name::<FxHashSet<NodeId>>("FxHashSet<NodeId>");
+    // gfaestus::context::set_type_name::<Arc<FxHashSet<NodeId>>>(
+    //     "Arc<FxHashSet<NodeId>>",
+    // );
+
+    let dbg_action = debug_context_action(&context_mgr);
 
     context_mgr.register_action("Copy node ID", copy_node_id_action());
     context_mgr.register_action("Pan to node!!!!", pan_to_node_action());
-    context_mgr.register_action("Debug print", debug_context_action());
+    context_mgr.register_action("Debug print", dbg_action);
 
-    let ctx_action =
-        gfaestus::context::rhai_context_action("src/action.rhai", engine);
+    let ctx_action = gfaestus::context::rhai_context_action(
+        &mut context_mgr,
+        "src/action.rhai",
+        engine,
+    );
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =

@@ -124,7 +124,15 @@ enum InitState {
     Ready,
 }
 
+#[derive(Default)]
+struct CtxTypeMap {
+    id_to_name: RwLock<FxHashMap<TypeId, String>>,
+    name_to_id: RwLock<HashMap<String, TypeId>>,
+}
+
 pub struct ContextMgr {
+    ctx_type_map: Arc<CtxTypeMap>,
+
     init: AtomicCell<InitState>,
 
     load_context_this_frame: Arc<AtomicCell<bool>>,
@@ -140,8 +148,7 @@ pub struct ContextMgr {
     context_actions: RwLock<HashMap<String, ContextAction_>>,
 
     position: Arc<AtomicCell<Point>>,
-
-    type_names: RwLock<FxHashMap<TypeId, String>>,
+    // type_names: RwLock<FxHashMap<TypeId, String>>,
     // context_types: FxHashMap<String, TypeId>,
     // contexts: FxHashMap<
     //     TypeId,
@@ -150,18 +157,47 @@ pub struct ContextMgr {
     // context_actions: FxHashMap<String, ()>,
 }
 
+/*
 lazy_static! {
     static ref TYPE_NAME_MAP: Arc<Mutex<FxHashMap<TypeId, String>>> =
         Arc::new(Mutex::new(FxHashMap::default()));
     static ref NAME_TYPE_MAP: Arc<Mutex<FxHashMap<String, TypeId>>> =
         Arc::new(Mutex::new(FxHashMap::default()));
 }
+*/
 
 pub fn rhai_context_action(
+    context_mgr: &mut ContextMgr,
     script_path: &str,
-    engine: rhai::Engine,
+    mut engine: rhai::Engine,
     // ) -> anyhow::Result<ContextAction_> {
 ) -> anyhow::Result<()> {
+    let mut req__: Arc<Mutex<FxHashSet<TypeId>>> =
+        Arc::new(Mutex::new(FxHashSet::default()));
+
+    let req_inner = req__.clone();
+
+    log::warn!("in rhai_context_action");
+
+    let type_names = context_mgr.ctx_type_map.clone();
+
+    engine.on_var(move |name, index, eval_ctx| {
+        log::warn!("on_var({}, {}, _)", name, index);
+
+        let map = type_names.name_to_id.read();
+
+        if let Some(type_id) = map.get(name) {
+            log::warn!("found type id for {}", name);
+            let mut req_lock = req_inner.lock();
+            req_lock.insert(*type_id);
+            Ok(Some(rhai::Dynamic::from(name.to_string())))
+        } else {
+            Ok(None)
+        }
+
+        //
+    });
+
     let ast = engine.compile_file(script_path.into())?;
     let module =
         rhai::Module::eval_ast_as_new(rhai::Scope::new(), &ast, &engine)?;
@@ -192,8 +228,9 @@ pub fn rhai_context_action(
         log::warn!("{} - {}", name, v);
     }
 
-    let mut req: FxHashSet<TypeId> = FxHashSet::default();
+    // let mut req: FxHashSet<TypeId> = FxHashSet::default();
 
+    /*
     let map = NAME_TYPE_MAP.lock();
 
     log::warn!("iter_literal_variables");
@@ -212,6 +249,12 @@ pub fn rhai_context_action(
             }
         }
     }
+    */
+
+    let req: FxHashSet<TypeId> = {
+        let lock = req__.lock();
+        lock.to_owned()
+    };
 
     log::warn!("req: {:?}", req);
 
@@ -224,14 +267,16 @@ pub fn rhai_context_action(
     Ok(())
 }
 
-pub fn debug_context_action() -> ContextAction_ {
-    ContextAction_::new(&[], |_clipboard, _app, ctx| {
+pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {
+    let type_names = ctx_mgr.ctx_type_map.clone();
+
+    ContextAction_::new(&[], move |_clipboard, _app, ctx| {
         log::warn!("Active Contexts");
 
-        let type_names = TYPE_NAME_MAP.lock();
+        let id_to_name = type_names.id_to_name.read();
 
         for (type_id, _val) in ctx.values.iter() {
-            let name = if let Some(n) = type_names.get(type_id) {
+            let name = if let Some(n) = id_to_name.get(type_id) {
                 n.to_string()
             } else {
                 format!("{:?}", type_id)
@@ -320,21 +365,11 @@ impl std::default::Default for ContextMgr {
             frame_active: false.into(),
             // context_order: RwLock::new(Vec::default()),
             context_actions: RwLock::new(HashMap::default()),
-            type_names: RwLock::new(FxHashMap::default()),
+            // type_names: RwLock::new(FxHashMap::default()),
             position: Arc::new(Point::ZERO.into()),
+            ctx_type_map: Arc::new(CtxTypeMap::default()),
         }
     }
-}
-
-pub fn set_type_name<T>(name: &str)
-where
-    T: std::any::Any + Send + Sync + 'static,
-{
-    let mut type_names = TYPE_NAME_MAP.lock();
-    let mut name_types = NAME_TYPE_MAP.lock();
-    log::warn!("inserting {:?} -> {}", TypeId::of::<T>(), name);
-    type_names.insert(TypeId::of::<T>(), name.to_string());
-    name_types.insert(name.to_string(), TypeId::of::<T>());
 }
 
 impl ContextMgr {
@@ -346,15 +381,60 @@ impl ContextMgr {
         }
     }
 
-    // pub fn set_debug_type_name<T>(&self, name: &str)
-    // where
-    //     T: std::any::Any + Send + Sync + 'static,
-    // {
-    //     if self.initializing() {
-    //         log::warn!("setting debug type name for {}", name);
-    //         set_type_name::<T>(name);
-    //     }
-    // }
+    pub fn set_type_name_ez<T>(&self)
+    where
+        T: std::any::Any + Send + Sync + 'static,
+    {
+        let name = std::any::type_name::<T>();
+        self.set_type_name::<T>(name);
+    }
+
+    pub fn set_type_name<T>(&self, name: &str)
+    where
+        T: std::any::Any + Send + Sync + 'static,
+    {
+        let mut id_to_name = self.ctx_type_map.id_to_name.write();
+        let mut name_to_id = self.ctx_type_map.name_to_id.write();
+
+        log::warn!("{}", name);
+
+        let type_id = TypeId::of::<T>();
+
+        if let Some(old_name) = id_to_name.insert(type_id, name.to_string()) {
+            log::warn!(
+                "{:?} - replaced name \"{}\" -> \"{}\"",
+                type_id,
+                old_name,
+                name
+            );
+        }
+
+        if let Some(old_id) = name_to_id.insert(name.to_string(), type_id) {
+            log::warn!(
+                "\"{}\" - replaced id {:?} -> {:?}",
+                name,
+                old_id,
+                type_id
+            );
+        }
+
+        /*
+
+        {
+            let type_names = self.ctx_type_map.id_to_name.read();
+            if type_names.contains_key(&type_id) {
+                log::warn!("
+            }
+        }
+        */
+
+        /*
+        if self.initializing() {
+            log::warn!("setting debug type name for {}", name);
+            set_type_name::<T>(name);
+        }
+        */
+    }
 
     fn initializing(&self) -> bool {
         matches!(self.init.load(), InitState::Initializing)
@@ -429,7 +509,7 @@ impl ContextMgr {
 
         if self.load_context_this_frame.load() {
             let mut context = Arc::make_mut(&mut self.frame_context);
-            let type_names = TYPE_NAME_MAP.lock();
+            let type_names = self.ctx_type_map.id_to_name.read();
 
             log::warn!("loading context");
             while let Ok((type_id, ctx_val)) = self.ctx_rx.try_recv() {
