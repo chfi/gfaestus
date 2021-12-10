@@ -37,14 +37,23 @@ pub struct OverGraph {}
 #[derive(Default, Clone)]
 pub struct Context {
     // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
+    // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
     values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
 impl Context {
-    fn get<T: std::any::Any + Send + Sync + 'static>(&self) -> Option<&T> {
+    fn get<T: std::any::Any + Clone + Send + Sync + 'static>(
+        &self,
+    ) -> Option<&T> {
         let type_id = TypeId::of::<T>();
         let val = self.values.get(&type_id)?;
         val.downcast_ref()
+    }
+
+    // fn get_dyn<T: std::any::Any + Clone + Send + Sync + 'static>(&self) -> Option<&T> {
+    fn get_dyn(&self, type_id: TypeId) -> Option<rhai::Dynamic> {
+        let val = self.values.get(&type_id)?;
+        Some(rhai::Dynamic::from(val.to_owned()))
     }
 
     /*
@@ -160,8 +169,32 @@ pub fn rhai_context_action(
     context_mgr: &mut ContextMgr,
     script_path: &str,
     mut engine: rhai::Engine,
-) -> anyhow::Result<ContextAction_> {
+) -> anyhow::Result<(String, ContextAction_)> {
     // ) -> anyhow::Result<()> {
+
+    engine.on_print(|x| {
+        log::warn!("ctx > {}", x);
+    });
+
+    engine.register_type_with_name::<Context>("Context");
+    engine.register_type_with_name::<Arc<Context>>("Arc<Context>");
+
+    let type_names = context_mgr.ctx_type_map.clone();
+
+    engine.register_fn(
+        "get",
+        move |ctx: &mut Arc<Context>, type_name: &str| {
+            log::warn!("locking name_to_id");
+            let name_to_id = type_names.name_to_id.read();
+            log::warn!("getting type id for {}", type_name);
+            let id = name_to_id.get(type_name).unwrap();
+            log::warn!("getting context");
+            let val = ctx.get_dyn(*id).unwrap();
+            log::warn!("got value: {:?}", val);
+            val
+        },
+    );
+
     let mut req__: Arc<Mutex<FxHashSet<TypeId>>> =
         Arc::new(Mutex::new(FxHashSet::default()));
 
@@ -194,23 +227,30 @@ pub fn rhai_context_action(
     let name_to_id = context_mgr.ctx_type_map.name_to_id.read();
 
     if let Some(types) = module.get_var("context_types") {
-        log::warn!("whoooaaaat??????");
-        dbg!();
-        // let types
         let types: rhai::Array = types.cast();
 
         for t in types {
             if let Ok(name) = t.into_immutable_string() {
                 if let Some(type_id) = name_to_id.get(name.as_str()) {
                     req.insert(*type_id);
-                    log::warn!("  -  {}", name);
                 }
             }
         }
-    } else {
-        log::warn!("missing var???");
     }
 
+    let action_name = if let Some(name) = module.get_var("name") {
+        if let Ok(name) = name.into_immutable_string() {
+            name.to_string()
+        } else {
+            "something went wrong".to_string()
+        }
+    } else {
+        "something went wrong".to_string()
+    };
+
+    log::warn!("name: {}", action_name);
+
+    /*
     log::warn!("iter_var");
     for (name, val) in module.iter_var() {
         let v = match val.clone().into_string() {
@@ -219,14 +259,17 @@ pub fn rhai_context_action(
         };
         log::warn!("{} - {}", name, v);
     }
+    */
 
     log::warn!("req: {:?}", req);
 
+    /*
     log::warn!("iter_functions");
 
     for script_fn in ast.iter_functions() {
         log::warn!("{:?}", script_fn);
     }
+    */
 
     let reqs: Vec<_> = req.into_iter().collect();
 
@@ -238,7 +281,7 @@ pub fn rhai_context_action(
         action_fn(ctx).unwrap();
     });
 
-    Ok(action)
+    Ok((action_name, action))
 }
 
 pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction_ {

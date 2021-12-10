@@ -526,11 +526,14 @@ fn node_color(id) {
     context_mgr.register_action("Pan to node!!!!", pan_to_node_action(&app));
     context_mgr.register_action("Debug print", dbg_action);
 
-    let ctx_action = gfaestus::context::rhai_context_action(
+    let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
         &mut context_mgr,
         "src/action.rhai",
         engine,
-    );
+    )
+    .unwrap();
+
+    context_mgr.register_action(&action_name, ctx_action);
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
