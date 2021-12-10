@@ -38,22 +38,23 @@ pub struct OverGraph {}
 pub struct Context {
     // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
     // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
-    values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
+    values: FxHashMap<TypeId, Arc<rhai::Dynamic>>,
+    // values: FxHashMap<TypeId, Arc<dyn std::any::Any + Send + Sync + 'static>>,
 }
 
 impl Context {
-    fn get<T: std::any::Any + Clone + Send + Sync + 'static>(
+    // pub fn read_lock<T: Any + Clone>(&self) ->
+    fn read_lock<T: std::any::Any + Clone>(
         &self,
-    ) -> Option<&T> {
+    ) -> Option<rhai::DynamicReadLock<'_, T>> {
         let type_id = TypeId::of::<T>();
         let val = self.values.get(&type_id)?;
-        val.downcast_ref()
+        val.read_lock()
     }
 
-    // fn get_dyn<T: std::any::Any + Clone + Send + Sync + 'static>(&self) -> Option<&T> {
     fn get_dyn(&self, type_id: TypeId) -> Option<rhai::Dynamic> {
         let val = self.values.get(&type_id)?;
-        Some(rhai::Dynamic::from(val.to_owned()))
+        Some((val as &rhai::Dynamic).to_owned())
     }
 
     /*
@@ -67,13 +68,13 @@ impl Context {
     }
     */
 
-    fn get_raw<T: std::any::Any>(
-        &self,
-    ) -> Option<&Arc<dyn std::any::Any + Send + Sync + 'static>> {
-        let type_id = TypeId::of::<T>();
-        dbg!();
-        self.values.get(&type_id)
-    }
+    // fn get_raw<T: std::any::Any>(
+    //     &self,
+    // ) -> Option<&Arc<dyn std::any::Any + Send + Sync + 'static>> {
+    //     let type_id = TypeId::of::<T>();
+    //     dbg!();
+    //     self.values.get(&type_id)
+    // }
 }
 
 #[derive(Clone)]
@@ -114,7 +115,7 @@ impl ContextAction_ {
     }
 }
 
-pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
+// pub type CtxVal = Arc<dyn std::any::Any + Send + Sync + 'static>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum InitState {
@@ -137,8 +138,8 @@ pub struct ContextMgr {
     load_context_this_frame: Arc<AtomicCell<bool>>,
     context_menu_open: Arc<AtomicCell<bool>>,
 
-    pub ctx_tx: channel::Sender<(TypeId, CtxVal)>,
-    ctx_rx: channel::Receiver<(TypeId, CtxVal)>,
+    ctx_tx: channel::Sender<(TypeId, rhai::Dynamic)>,
+    ctx_rx: channel::Receiver<(TypeId, rhai::Dynamic)>,
 
     frame_context: Arc<Context>,
     frame_active: AtomicCell<bool>,
@@ -184,13 +185,9 @@ pub fn rhai_context_action(
     engine.register_fn(
         "get",
         move |ctx: &mut Arc<Context>, type_name: &str| {
-            log::warn!("locking name_to_id");
             let name_to_id = type_names.name_to_id.read();
-            log::warn!("getting type id for {}", type_name);
             let id = name_to_id.get(type_name).unwrap();
-            log::warn!("getting context");
             let val = ctx.get_dyn(*id).unwrap();
-            log::warn!("got value: {:?}", val);
             val
         },
     );
@@ -310,7 +307,7 @@ pub fn copy_node_id_action(app: &App) -> ContextAction_ {
     let req = [TypeId::of::<NodeId>()];
 
     ContextAction_::new(&req, move |ctx| {
-        let node_id = ctx.get::<NodeId>().unwrap();
+        let node_id = ctx.read_lock::<NodeId>().unwrap();
         let contents = node_id.0.to_string();
         log::warn!("setting clipboard: {}", contents);
         app_msg_tx
@@ -472,7 +469,7 @@ impl ContextMgr {
 
     pub fn produce_context<T, F>(&self, prod: F)
     where
-        T: std::any::Any + Send + Sync + 'static,
+        T: std::any::Any + Clone + Send + Sync + 'static,
         F: FnOnce() -> T,
     {
         let type_id = TypeId::of::<T>();
@@ -480,7 +477,10 @@ impl ContextMgr {
         if self.load_context_this_frame.load() {
             // log::warn!("it's happening!!!");
             let value = prod();
-            self.ctx_tx.send((type_id, Arc::new(value))).unwrap();
+            self.ctx_tx
+                .send((type_id, rhai::Dynamic::from(value).into_shared()))
+                // .send((type_id, rhai::Dynamic::from(value)))
+                .unwrap();
         }
 
         // if !self.initialized.load() {
@@ -549,7 +549,7 @@ impl ContextMgr {
                     format!("{:?}", type_id)
                 };
                 log::warn!("{}", name);
-                context.values.insert(type_id, ctx_val);
+                context.values.insert(type_id, Arc::new(ctx_val));
             }
             self.load_context_this_frame.store(false);
         }

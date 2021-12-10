@@ -1383,6 +1383,7 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("set_clipboard_contents", move |text: &str| {
+            log::warn!("setting clipboard contents to {}", text);
             app_msg_tx
                 .send(AppMsg::set_clipboard_contents(text))
                 .unwrap();
