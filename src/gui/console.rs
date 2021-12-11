@@ -413,6 +413,8 @@ impl Console<'static> {
 
         let mut engine = shared.create_engine();
 
+        // engine.register_static_module("app", shared.app_module());
+
         // Bind a Rhai function to execute when the given key is
         // pressed. See the virtual_key_code_map() function below for
         // which keys are available.
@@ -442,6 +444,7 @@ impl Console<'static> {
                         let modules = modules.lock();
                         for module in modules.iter() {
                             engine.register_global_module(module.clone());
+                            engine.register_static_module(name, module)
                         }
                     }
 
@@ -1763,6 +1766,105 @@ impl ConsoleShared {
             "overlay_id",
             move |overlay: (usize, OverlayKind, String)| (overlay.0, overlay.1),
         );
+    }
+
+    // contains things like appmsg, clipboard activity, etc.
+    fn app_module(&self) -> rhai::Module {
+        let mut module = rhai::Module::new();
+
+        module.set_id("app");
+
+        let graph = self.graph.clone();
+        module.set_native_fn("get_graph", move || Ok(graph.graph.clone()));
+
+        let graph = self.graph.clone();
+        module.set_native_fn("get_graph_dyn", move || {
+            Ok(rhai::Dynamic::from(graph.graph.clone()))
+        });
+
+        let graph = self.graph.clone();
+        module.set_var("graph", graph);
+
+        let graph = self.graph.clone();
+        let var = rhai::Dynamic::from(graph);
+        module.set_var("graph_dyn", var);
+
+        module
+    }
+
+    fn view_module(&self) -> rhai::Module {
+        let mut module = rhai::Module::new();
+
+        module.set_id("view");
+
+        module.set_getter_fn("scale", |v: &mut View| Ok(v.scale));
+        module.set_setter_fn("scale", |v: &mut View, s| {
+            v.scale = s;
+            Ok(())
+        });
+
+        module.set_getter_fn("center", |v: &mut View| Ok(v.center));
+        module.set_setter_fn("center", |v: &mut View, s| {
+            v.center = s;
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("get_view", move || Ok(view.load()));
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_view", move |v: View| {
+            view.store(v);
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("goto_node", move |node: NodeId| {
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("goto_node", move |node: i64| {
+            let node = NodeId::from(node as u64);
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_view_origin", move |p: Point| {
+            let mut v = view.load();
+            v.center = p;
+            view.store(v);
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_scale", move |s: f32| {
+            let mut v = view.load();
+            v.scale = s;
+            view.store(v);
+            Ok(())
+        });
+
+        let mouse = self.shared_state.mouse_pos.clone();
+        let view = self.shared_state.view.clone();
+        let screen_dims = self.shared_state.screen_dims.clone();
+
+        module.set_native_fn("get_cursor_world", move || {
+            let screen = mouse.load();
+            let view = view.load();
+            let dims = screen_dims.load();
+            Ok(view.screen_point_to_world(dims, screen))
+        });
+
+        module
     }
 
     fn add_view_fns(&self, engine: &mut Engine) {
