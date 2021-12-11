@@ -1,12 +1,7 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use crossbeam::atomic::AtomicCell;
-use futures::SinkExt;
-use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::context::{
-    copy_node_id_action, debug_context_action, pan_to_node_action,
-    ContextEntry, ContextMenu, ContextMgr,
-};
+use gfaestus::context::{debug_context_action, pan_to_node_action, ContextMgr};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
 use gfaestus::script::plugins::colors::{hash_bytes, hash_color};
@@ -18,6 +13,7 @@ use gfaestus::vulkan::texture::{Gradients, Gradients_, Texture};
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use winit::event::{ElementState, Event, MouseButton, WindowEvent};
 use winit::event_loop::ControlFlow;
@@ -490,7 +486,6 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let mut context_menu = ContextMenu::new(&app);
     let open_context = AtomicCell::new(false);
 
     let mut context_mgr = ContextMgr::default();
@@ -520,10 +515,18 @@ fn node_color(id) {
 
     let dbg_action = debug_context_action(&context_mgr);
 
-    context_mgr.register_action("Copy node ID", copy_node_id_action(&app));
-    context_mgr.register_action("Pan to node!!!!", pan_to_node_action(&app));
+    // context_mgr.register_action("Copy node ID", copy_node_id_action(&app));
+    // context_mgr.register_action("Pan to node!!!!", pan_to_node_action(&app));
     context_mgr.register_action("Debug print", dbg_action);
 
+    context_mgr
+        .load_rhai_modules(
+            PathBuf::from("./scripts/context_actions/"),
+            &gui.console,
+        )
+        .unwrap();
+
+    /*
     let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
         &mut context_mgr,
         "src/action.rhai",
@@ -539,8 +542,9 @@ fn node_color(id) {
         gui.console.create_engine(),
     )
     .unwrap();
+    */
 
-    context_mgr.register_action(&action_name, ctx_action);
+    // context_mgr.register_action(&action_name, ctx_action);
 
     // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
     // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
@@ -600,23 +604,8 @@ fn node_color(id) {
             if let WindowEvent::MouseInput { state, button, .. } = event {
                 if *state == ElementState::Pressed &&
                     *button == MouseButton::Right {
-
-                        let focus = &app.shared_state().gui_focus_state;
-
-                        // context_mgr.begin_frame();
-                        // context_mgr.
                         context_mgr.open_context_menu(&gui.ctx);
                         context_mgr.set_position(app.shared_state().mouse_pos());
-
-                        /*
-                        // this whole thing should be handled better
-                        if !focus.mouse_over_gui() {
-                            main_view.send_context(context_menu.tx());
-                        }
-
-                        open_context.store(true);
-                        context_menu.set_position(app.shared_state().mouse_pos());
-                        */
                 }
             }
         }

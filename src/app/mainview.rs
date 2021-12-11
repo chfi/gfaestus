@@ -11,14 +11,11 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::view::{ScreenDims, View};
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
     context::ContextMgr,
     vulkan::texture::GradientTexture,
-};
-use crate::{
-    context::ContextEntry,
-    view::{ScreenDims, View},
 };
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
@@ -328,14 +325,7 @@ impl MainView {
             .map(|nid| NodeId::from(nid as u64));
 
         if let Some(node) = hover_node {
-            // log::warn!("calling produce_context from main");
-            ctx.produce_context(|| {
-                // log::warn!("producing context from main view: {:?}", node);
-                node
-            });
-            // ctx.prod
-
-            // tx.send(ContextEntry::Node(node)).unwrap();
+            ctx.produce_context(|| node);
         }
 
         // TODO use Arc and Arc::make_mut on the selection_set field
@@ -347,26 +337,6 @@ impl MainView {
                 let nodes: FxHashSet<_> = nodes.to_owned();
                 nodes
             });
-
-            // tx.send(ContextEntry::Selection { nodes }).unwrap();
-        }
-    }
-
-    pub fn send_context(&self, tx: &Sender<ContextEntry>) {
-        let mouse_pos = self.shared_state.mouse_pos();
-
-        let hover_node = self
-            .read_node_id_at(mouse_pos)
-            .map(|nid| NodeId::from(nid as u64));
-
-        if let Some(node) = hover_node {
-            tx.send(ContextEntry::Node(node)).unwrap();
-        }
-
-        let nodes = self.selection_buffer.selection_set().to_owned();
-
-        if !nodes.is_empty() {
-            tx.send(ContextEntry::Selection { nodes }).unwrap();
         }
     }
 

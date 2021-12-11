@@ -18,10 +18,7 @@ use std::sync::Arc;
 use bstr::ByteSlice;
 
 use crate::{
-    app::AppMsg,
-    context::{ContextEntry, ContextMgr},
-    geometry::*,
-    gui::util::ColumnWidths,
+    app::AppMsg, context::ContextMgr, geometry::*, gui::util::ColumnWidths,
 };
 
 use crate::gui::util as gui_util;

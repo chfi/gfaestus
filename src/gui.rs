@@ -25,7 +25,7 @@ use crate::{
     app::{
         App, AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState,
     },
-    context::{ContextEntry, ContextMgr},
+    context::ContextMgr,
     reactor::Reactor,
     universe::Node,
     vulkan::compute::path_view::PathViewRenderer,

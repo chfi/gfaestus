@@ -3,5 +3,5 @@ export const context_types = ["NodeId"];
 
 fn action(context) {
   let node = context.get("NodeId");
-  set_clipboard_contents(node.to_string());
+  app::set_clipboard_contents(node.to_string());
 }

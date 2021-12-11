@@ -19,7 +19,7 @@ use bstr::ByteSlice;
 use rustc_hash::FxHashSet;
 
 use crate::{
-    context::{ContextEntry, ContextMgr},
+    context::ContextMgr,
     gui::util::{grid_row_label, ColumnWidths},
     reactor::{Host, Outbox, Reactor},
 };
