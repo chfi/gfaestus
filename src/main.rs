@@ -304,9 +304,9 @@ fn main() {
 
     let mut input_manager = InputManager::new(winit_rx, app.shared_state());
 
-    input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
-        println!("i'm a bound command!");
-    });
+    // input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
+    //     println!("i'm a bound command!");
+    // });
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
@@ -681,14 +681,6 @@ fn node_color(id) {
                             .send(NodeListMsg::SetFiltered(Vec::new()));
 
                         main_view.clear_node_selection().unwrap();
-                    }
-                }
-
-                while let Ok((key_code, command)) = app.channels().binds_rx.try_recv() {
-                    if let Some(cmd) = command {
-                        input_manager.add_binding(key_code, cmd);
-                        // input_manager.add_binding(key_code, Box::new(cmd));
-                    } else {
                     }
                 }
 

@@ -924,45 +924,6 @@ impl Gui {
             }
         }
 
-        // [hacky] temporary way to show path positions as tooltip
-
-        {
-            let path = self.shared_state.chosen_path.load();
-            let node = self.shared_state.hover_node.load();
-
-            if let (Some(path), Some(node)) = (path, node) {
-                let handle = Handle::pack(node, false);
-                let positions = &graph_query.path_positions;
-
-                let positions = graph_query.handle_positions_iter(handle);
-
-                if let Some(pos) = positions {
-                    egui::show_tooltip(
-                        &self.ctx,
-                        egui::Id::new("path_position_tooltip"),
-                        |ui| {
-                            ui.label(format!(
-                                "Path {}, Node {}",
-                                path.0, node.0
-                            ));
-                            // ui.label(format!("Path {:?}, Node {}", path.0, node.0));
-                            // for (step_path, ptr, bp) in pos
-                            pos.filter_map(|(step_path, ptr, bp)| {
-                                if step_path == path {
-                                    Some(bp)
-                                } else {
-                                    None
-                                }
-                            })
-                            .for_each(|bp| {
-                                ui.label(format!("{} bp", bp));
-                            });
-                        },
-                    );
-                }
-            }
-        }
-
         {
             let debug = &mut view_state.settings.debug;
             let inspection = &mut debug.egui_inspection;
