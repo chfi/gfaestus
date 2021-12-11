@@ -495,8 +495,6 @@ fn node_color(id) {
 
     let mut context_mgr = ContextMgr::default();
 
-    let engine = gui.console.create_engine();
-
     {
         macro_rules! set_type_name {
             ($type:ty) => {
@@ -529,7 +527,16 @@ fn node_color(id) {
     let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
         &mut context_mgr,
         "src/action.rhai",
-        engine,
+        gui.console.create_engine(),
+    )
+    .unwrap();
+
+    context_mgr.register_action(&action_name, ctx_action);
+
+    let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
+        &mut context_mgr,
+        "src/path_action.rhai",
+        gui.console.create_engine(),
     )
     .unwrap();
 

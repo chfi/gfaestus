@@ -21,12 +21,13 @@ pub fn create_engine() -> Engine {
     let mut engine = Engine::new();
 
     engine.register_type::<NodeId>();
-
-    engine.register_fn("to_string", |n: &mut NodeId| n.0.to_string());
-
     engine.register_type::<Handle>();
     engine.register_type::<PathId>();
     engine.register_type::<NodeSelection>();
+
+    engine.register_fn("to_string", |i: &mut NodeId| i.0.to_string());
+    engine.register_fn("to_string", |i: &mut PathId| i.0.to_string());
+    engine.register_fn("to_string", |i: &mut Handle| format!("{:?}", i));
 
     let handle = exported_module!(plugins::handle_plugin);
     let graph = exported_module!(plugins::graph_plugin);
