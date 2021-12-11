@@ -49,6 +49,8 @@ use crate::{
 
 use parking_lot::{Mutex, RwLock};
 
+use lazy_static::lazy_static;
+
 pub mod wizard;
 
 use wizard::*;
@@ -413,7 +415,8 @@ impl Console<'static> {
 
         let mut engine = shared.create_engine();
 
-        // engine.register_static_module("app", shared.app_module());
+        engine.register_static_module("app", shared.app_module());
+        engine.register_static_module("db", shared.db_module());
 
         // Bind a Rhai function to execute when the given key is
         // pressed. See the virtual_key_code_map() function below for
@@ -444,7 +447,7 @@ impl Console<'static> {
                         let modules = modules.lock();
                         for module in modules.iter() {
                             engine.register_global_module(module.clone());
-                            engine.register_static_module(name, module)
+                            // engine.register_static_module(name, module)
                         }
                     }
 
@@ -1768,26 +1771,210 @@ impl ConsoleShared {
         );
     }
 
+    fn selection_module(&self) -> Arc<rhai::Module> {
+        // lazy_static! {
+        //     static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+        //         Mutex::new(None);
+        // }
+
+        // let mut cache = CACHE.lock();
+
+        // if let Some(module) = cache.as_ref() {
+        //     return module.clone();
+        // }
+
+        // TODO better versions of all of these:
+
+        /*
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection", move || {
+            NodeSelection { nodes: result }
+        });
+
+        // TODO probably... don't do it like this
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection_center", move || {
+            use crossbeam::channel;
+            let (rect, _) = rx.recv().unwrap();
+
+            rect.center()
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |selection: NodeSelection| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        // this version is used if the input is a single node
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |node: NodeId| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: Some(node).into_iter().collect(),
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_selection", move || {
+            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_rect", move |p0: Point, p1: Point| {
+            app_msg_tx.send(AppMsg::goto_rect((p0, p1).into())).unwrap();
+        });
+
+        let graph = self.graph.graph.clone();
+        engine.register_fn(
+            "path_selection",
+            move |path: PathId| -> NodeSelection {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                selection
+            },
+        );
+
+        // variant of the above that takes a path name instead of ID, for convenience
+        let graph = self.graph.graph.clone();
+        engine.register_result_fn("path_selection", move |path_name: &str| {
+            if let Some(path) = graph.get_path_id(path_name.as_bytes()) {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                Ok(selection)
+            } else {
+                Err("The provided path does not exist".into())
+            }
+        });
+        */
+
+        unimplemented!();
+    }
+
+    fn db_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing db_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("db");
+
+        // Actually add the `get` and `set` functions, see Console::new as well
+        let get_set = self.get_set.clone();
+        module.set_native_fn("get", move |name: &str| {
+            get_set
+                .get(name)
+                .ok_or(format!("Setting `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn("set", move |name: &str, val: rhai::Dynamic| {
+            if get_set.set(name, val).is_none() {
+                return Err(format!("Setting `{}` not found", name).into());
+            }
+            Ok(())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn("get_var", move |name: &str| {
+            let lock = get_set.console_vars.try_lock();
+            let val = lock.and_then(|l| l.get(name).cloned());
+            val.ok_or(format!("Global variable `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn(
+            "set_var",
+            move |name: &str, val: rhai::Dynamic| {
+                let mut lock = get_set.console_vars.lock();
+                lock.insert(name.to_string(), val);
+                Ok(())
+            },
+        );
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
     // contains things like appmsg, clipboard activity, etc.
-    fn app_module(&self) -> rhai::Module {
+    fn app_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing app_module");
+
         let mut module = rhai::Module::new();
 
         module.set_id("app");
 
         let graph = self.graph.clone();
-        module.set_native_fn("get_graph", move || Ok(graph.graph.clone()));
+        module.set_var("graph", graph.graph.clone());
+        module.set_var("path_pos_index", graph.path_positions.clone());
 
-        let graph = self.graph.clone();
-        module.set_native_fn("get_graph_dyn", move || {
-            Ok(rhai::Dynamic::from(graph.graph.clone()))
+        let app_msg_tx = self.channels.app_tx.clone();
+
+        module.set_native_fn(
+            "send_app_msg",
+            move |id: &str, val: rhai::Dynamic| {
+                app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
+                Ok(())
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("set_clipboard_contents", move |text: &str| {
+            // log::warn!("setting clipboard contents to {}", text);
+            app_msg_tx
+                .send(AppMsg::set_clipboard_contents(text))
+                .unwrap();
+            Ok(())
         });
 
-        let graph = self.graph.clone();
-        module.set_var("graph", graph);
+        // engine.register_fn(
+        //     "send_app_msg",
+        //     move |id: &str, val: rhai::Dynamic| {
+        //         app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
+        //     },
+        // );
 
-        let graph = self.graph.clone();
-        let var = rhai::Dynamic::from(graph);
-        module.set_var("graph_dyn", var);
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
 
         module
     }
