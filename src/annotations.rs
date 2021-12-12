@@ -37,7 +37,7 @@ pub struct Label {
 }
 
 // #[derive(Debug, Default, Clone)]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct LabelSet {
     positions: Vec<LabelPos>,
     labels: Vec<Label>,
@@ -305,9 +305,9 @@ pub struct Labels {
     visible: HashMap<String, AtomicCell<bool>>,
 
     hover_handlers:
-        FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
+        FxHashMap<usize, Arc<dyn Fn(usize) + Send + Sync + 'static>>,
     click_handlers:
-        FxHashMap<usize, Box<dyn Fn(usize) + Send + Sync + 'static>>,
+        FxHashMap<usize, Arc<dyn Fn(usize) + Send + Sync + 'static>>,
 
     next_hover_id: usize,
     next_click_id: usize,
@@ -330,7 +330,7 @@ impl Labels {
         nodes: &[Node],
         name: &str,
         labels: &LabelSet,
-        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+        on_label_click: Option<Arc<dyn Fn(usize) + Send + Sync + 'static>>,
     ) {
         let name = name.to_string();
 
@@ -513,6 +513,12 @@ impl Annotations {
         self.annotation_default_ref_path.get(annot).copied()
     }
 
+    pub fn insert_gff3_arc(&mut self, name: &str, records: Arc<Gff3Records>) {
+        self.gff3_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Gff3));
+    }
+
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
         let records = Arc::new(records);
         self.gff3_annotations.insert(name.to_string(), records);
@@ -527,6 +533,12 @@ impl Annotations {
 
     pub fn get_gff3(&self, name: &str) -> Option<&Arc<Gff3Records>> {
         self.gff3_annotations.get(name)
+    }
+
+    pub fn insert_bed_arc(&mut self, name: &str, records: Arc<BedRecords>) {
+        self.bed_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Bed));
     }
 
     pub fn insert_bed(&mut self, name: &str, records: BedRecords) {

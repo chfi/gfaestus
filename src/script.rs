@@ -10,8 +10,11 @@ use handlegraph::{
 
 use rustc_hash::FxHashMap;
 
-use crate::overlays::{OverlayData, OverlayKind};
 use crate::{app::selection::NodeSelection, graph_query::GraphQuery};
+use crate::{
+    app::AppMsg,
+    overlays::{OverlayData, OverlayKind},
+};
 
 use rhai::plugin::*;
 
@@ -28,6 +31,10 @@ pub fn create_engine() -> Engine {
     engine.register_fn("to_string", |i: &mut NodeId| i.0.to_string());
     engine.register_fn("to_string", |i: &mut PathId| i.0.to_string());
     engine.register_fn("to_string", |i: &mut Handle| format!("{:?}", i));
+    engine.register_fn("to_string", |i: &mut Vec<u8>| {
+        use bstr::ByteSlice;
+        format!("{}", i.as_bstr())
+    });
 
     let handle = exported_module!(plugins::handle_plugin);
     let graph = exported_module!(plugins::graph_plugin);

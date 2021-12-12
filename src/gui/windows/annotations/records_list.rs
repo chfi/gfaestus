@@ -93,14 +93,14 @@ where
     pub fn add_scroll_console_setter(&mut self, console: &Console, name: &str) {
         let to_ix = self.scroll_to_index.clone();
 
-        console
-            .shared
-            .get_set
-            .add_setter(name, move |v: rhai::Dynamic| {
+        console.shared.get_set.add_setter(
+            name,
+            Box::new(move |v: rhai::Dynamic| {
                 if let Ok(v) = v.as_int() {
                     to_ix.store(Some(v as usize));
                 }
-            });
+            }),
+        );
     }
 
     pub fn set_default_columns(

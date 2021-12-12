@@ -102,6 +102,7 @@ pub enum Select {
 }
 
 // #[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AppMsg {
     Selection(Select),
 
@@ -127,16 +128,27 @@ pub enum AppMsg {
     Raw {
         type_id: TypeId,
         msg_name: String,
-        value: Box<dyn std::any::Any + Send + Sync>,
+        value: Arc<dyn std::any::Any + Send + Sync>,
     },
 }
 
 impl AppMsg {
+    pub fn register(engine: &mut rhai::Engine) {
+        engine.register_type_with_name::<AppMsg>("AppMsg");
+        // engine.register_fn("to_string", |msg| {
+        //     &mut AppMsg | {
+        //         match msg {
+        //         //
+        //     }
+        //     }
+        // });
+    }
+
     pub fn raw<T: std::any::Any + Send + Sync>(msg_name: &str, v: T) -> Self {
         AppMsg::Raw {
             type_id: TypeId::of::<T>(),
             msg_name: msg_name.to_string(),
-            value: Box::new(v) as _,
+            value: Arc::new(v) as _,
         }
     }
 
@@ -175,9 +187,9 @@ impl AppMsg {
     pub fn new_label_set(
         name: String,
         label_set: LabelSet,
-        on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+        // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) -> Self {
-        Self::raw("new_label_set", (name, label_set, on_label_click))
+        Self::raw("new_label_set", (name, label_set))
     }
 
     pub fn request_data_(
@@ -263,7 +275,7 @@ impl App {
     ) -> Result<()> {
         let type_id = TypeId::of::<T>();
         let msg_name = msg_name.to_string();
-        let value = Box::new(v) as _;
+        let value = Arc::new(v) as _;
 
         log::warn!("sending raw: {:?}, {}", type_id, msg_name);
 
@@ -402,22 +414,21 @@ impl App {
 
         new_handler(
             "add_gff3_records",
-            AppMsgHandler::from_fn_default(
-                |app, _nodes, records: Gff3Records| {
+            AppMsgHandler::from_fn(
+                |app, _nodes, records: &Arc<Gff3Records>| {
                     let file_name = records.file_name().to_string();
-                    app.annotations.insert_gff3(&file_name, records);
+                    app.annotations
+                        .insert_gff3_arc(&file_name, records.clone());
                 },
             ),
         );
 
         new_handler(
             "add_bed_records",
-            AppMsgHandler::from_fn_default(
-                |app, _nodes, records: BedRecords| {
-                    let file_name = records.file_name().to_string();
-                    app.annotations.insert_bed(&file_name, records);
-                },
-            ),
+            AppMsgHandler::from_fn(|app, _nodes, records: &Arc<BedRecords>| {
+                let file_name = records.file_name().to_string();
+                app.annotations.insert_bed_arc(&file_name, records.clone());
+            }),
         );
 
         new_handler(
@@ -429,20 +440,23 @@ impl App {
 
         new_handler(
             "new_label_set",
-            AppMsgHandler::from_fn_default(
+            AppMsgHandler::from_fn(
                 |app,
                  node_positions,
-                 (name, label_set, on_label_click): (
+                 val: &Arc<(
                     String,
                     LabelSet,
-                    Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
-                )| {
+                    // Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+                )>| {
+                    // let (name, label_set) = &val;
+
                     app.labels.add_label_set(
                         app.layout_boundary,
                         node_positions,
-                        &name,
-                        &label_set,
-                        on_label_click,
+                        &val.0,
+                        &val.1,
+                        None,
+                        // on_label_click,
                     );
                 },
             ),
@@ -700,7 +714,7 @@ impl App {
                 if let Some(handler) = self.msg_handlers.get(&msg_name) {
                     let handler: Arc<_> = handler.clone();
                     if type_id == handler.type_id {
-                        handler.call(self, node_positions, value);
+                        handler.call(self, node_positions, value.as_ref());
                     }
                 }
             }
@@ -743,22 +757,25 @@ impl App {
     }
 }
 
+type RefAny<'a> = &'a (dyn std::any::Any + Send + Sync);
+type ArcedAny = Arc<dyn std::any::Any + Send + Sync>;
 type BoxedAny = Box<dyn std::any::Any + Send + Sync>;
 
-trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync {}
+trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], RefAny<'a>) + Send + Sync {}
 
 impl<'a, T> HandlerFn<'a> for T where
-    T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
+    // T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
+    T: 'a + Fn(&'a mut App, &'a [Node], RefAny<'a>) + Send + Sync
 {
 }
 
 pub struct AppMsgHandler {
     type_id: TypeId,
-    handler: Box<dyn for<'a> HandlerFn<'a>>,
+    handler: Arc<dyn for<'a> HandlerFn<'a>>,
 }
 
 impl AppMsgHandler {
-    fn call(&self, app: &mut App, nodes: &[Node], input: BoxedAny) {
+    fn call(&self, app: &mut App, nodes: &[Node], input: RefAny<'_>) {
         (self.handler)(app, nodes, input);
     }
 
@@ -769,51 +786,13 @@ impl AppMsgHandler {
     {
         let type_id = TypeId::of::<T>();
 
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], input: BoxedAny| {
+        let handler = Arc::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], input: RefAny<'_>| {
                 if let Some(arg) = input.downcast_ref::<T>() {
                     f(app, nodes, arg);
                 }
             },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
-
-        AppMsgHandler { type_id, handler }
-    }
-
-    fn from_fn_mut<T, F>(f: F) -> Self
-    where
-        F: Fn(&mut App, &[Node], &mut T) + Send + Sync + 'static,
-        T: std::any::Any + 'static,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
-                if let Some(arg) = input.downcast_mut::<T>() {
-                    f(app, nodes, arg);
-                }
-            },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
-
-        AppMsgHandler { type_id, handler }
-    }
-
-    fn from_fn_default<T, F>(f: F) -> Self
-    where
-        F: Fn(&mut App, &[Node], T) + Send + Sync + 'static,
-        T: std::any::Any + std::default::Default + 'static,
-    {
-        let type_id = TypeId::of::<T>();
-
-        let handler = Box::new(
-            move |app: &'_ mut App, nodes: &'_ [Node], mut input: BoxedAny| {
-                if let Some(arg) = input.downcast_mut::<T>() {
-                    let mut tmp = T::default();
-                    std::mem::swap(arg, &mut tmp);
-                    f(app, nodes, tmp);
-                }
-            },
-        ) as Box<dyn for<'a> HandlerFn<'a>>;
+        ) as Arc<dyn for<'a> HandlerFn<'a>>;
 
         AppMsgHandler { type_id, handler }
     }

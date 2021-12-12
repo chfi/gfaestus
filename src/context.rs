@@ -86,7 +86,8 @@ impl ContextAction {
     pub fn new(
         // name: &str,
         req: &[TypeId],
-        action: impl Fn(Arc<Context>) + Send + Sync + 'static,
+        // action: impl Fn(Arc<Context>) + Send + Sync + 'static,
+        action: Box<dyn Fn(Arc<Context>) + Send + Sync + 'static>,
     ) -> Self {
         let req = Arc::new(req.iter().copied().collect());
         let action = Arc::new(action) as Arc<_>;
@@ -107,7 +108,13 @@ impl ContextAction {
             return None;
         }
 
-        (self.action)(ctx.clone());
+        let action = self.action.clone();
+        let ctx = ctx.clone();
+        app.reactor
+            .spawn_forget(async move {
+                action(ctx);
+            })
+            .ok()?;
 
         Some(())
     }
@@ -210,9 +217,12 @@ pub fn rhai_context_action(
         engine, ast, "action",
     );
 
-    let action = ContextAction::new(&reqs, move |ctx| {
-        action_fn(ctx).unwrap();
-    });
+    let action = ContextAction::new(
+        &reqs,
+        Box::new(move |ctx| {
+            action_fn(ctx).unwrap();
+        }),
+    );
 
     Ok((action_name, action))
 }
@@ -220,21 +230,24 @@ pub fn rhai_context_action(
 pub fn debug_context_action(ctx_mgr: &ContextMgr) -> ContextAction {
     let type_names = ctx_mgr.ctx_type_map.clone();
 
-    ContextAction::new(&[], move |ctx| {
-        log::warn!("Active Contexts");
+    ContextAction::new(
+        &[],
+        Box::new(move |ctx| {
+            log::warn!("Active Contexts");
 
-        let id_to_name = type_names.id_to_name.read();
+            let id_to_name = type_names.id_to_name.read();
 
-        for (type_id, _val) in ctx.values.iter() {
-            let name = if let Some(n) = id_to_name.get(type_id) {
-                n.to_string()
-            } else {
-                format!("{:?}", type_id)
-            };
+            for (type_id, _val) in ctx.values.iter() {
+                let name = if let Some(n) = id_to_name.get(type_id) {
+                    n.to_string()
+                } else {
+                    format!("{:?}", type_id)
+                };
 
-            log::warn!("{}", name);
-        }
-    })
+                log::warn!("{}", name);
+            }
+        }),
+    )
 }
 
 pub fn copy_node_id_action(app: &App) -> ContextAction {
@@ -242,13 +255,16 @@ pub fn copy_node_id_action(app: &App) -> ContextAction {
 
     let req = [TypeId::of::<NodeId>()];
 
-    ContextAction::new(&req, move |ctx| {
-        let node_id = ctx.read_lock::<NodeId>().unwrap();
-        let contents = node_id.0.to_string();
-        app_msg_tx
-            .send(AppMsg::set_clipboard_contents(&contents))
-            .unwrap();
-    })
+    ContextAction::new(
+        &req,
+        Box::new(move |ctx| {
+            let node_id = ctx.read_lock::<NodeId>().unwrap();
+            let contents = node_id.0.to_string();
+            app_msg_tx
+                .send(AppMsg::set_clipboard_contents(&contents))
+                .unwrap();
+        }),
+    )
 }
 
 pub fn pan_to_node_action(app: &App) -> ContextAction {
@@ -263,53 +279,58 @@ pub fn pan_to_node_action(app: &App) -> ContextAction {
 
     let futures_tx = app.reactor.future_tx.clone();
 
-    ContextAction::new(&req, move |ctx| {
-        let (result_tx, mut result_rx) =
-            futures::channel::mpsc::channel::<Option<String>>(1);
+    ContextAction::new(
+        &req,
+        Box::new(move |ctx| {
+            let (result_tx, mut result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
 
-        let first_run = AtomicCell::new(true);
+            let first_run = AtomicCell::new(true);
 
-        let callback = move |text: &mut String, ui: &mut egui::Ui| {
-            ui.label("Enter node ID");
-            let text_box = ui.text_edit_singleline(text);
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter node ID");
+                let text_box = ui.text_edit_singleline(text);
 
-            if first_run.fetch_and(false) {
-                text_box.request_focus();
-            }
-
-            if text_box.lost_focus() && ui.input().key_pressed(egui::Key::Enter)
-            {
-                return Ok(ModalSuccess::Success);
-            }
-
-            Err(ModalError::Continue)
-        };
-
-        let prepared = ModalHandler::prepare_callback(
-            &show_modal,
-            String::new(),
-            callback,
-            result_tx,
-        );
-
-        modal_tx.send(prepared).unwrap();
-
-        let graph = graph.clone();
-        let app_tx = app_tx.clone();
-
-        let fut = async move {
-            let value = result_rx.next().await.flatten();
-
-            if let Some(parsed) = value.and_then(|v| v.parse::<u64>().ok()) {
-                let node_id = NodeId::from(parsed);
-                if graph.has_node(node_id) {
-                    app_tx.send(AppMsg::goto_node(node_id)).unwrap();
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
                 }
-            }
-        };
 
-        futures_tx.send(Box::pin(fut) as _).unwrap();
-    })
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let graph = graph.clone();
+            let app_tx = app_tx.clone();
+
+            let fut = async move {
+                let value = result_rx.next().await.flatten();
+
+                if let Some(parsed) = value.and_then(|v| v.parse::<u64>().ok())
+                {
+                    let node_id = NodeId::from(parsed);
+                    if graph.has_node(node_id) {
+                        app_tx.send(AppMsg::goto_node(node_id)).unwrap();
+                    }
+                }
+            };
+
+            futures_tx.send(Box::pin(fut) as _).unwrap();
+        }),
+    )
 }
 
 impl std::default::Default for ContextMgr {
@@ -343,6 +364,14 @@ impl ContextMgr {
             let dir = entry?.path();
             if let Some(ext) = dir.extension().and_then(|os| os.to_str()) {
                 if ext == "rhai" {
+                    //             let mut engine = console.create_engine();
+                    // let result_tx = self.result_tx.clone();
+                    // engine.on_print(move |x| {
+                    //     result_tx
+                    //         .send(Ok(rhai::Dynamic::from(x.to_string())))
+                    //         .unwrap();
+                    // });
+
                     let (name, action) = rhai_context_action(
                         self,
                         dir.as_os_str().to_str().unwrap(),
@@ -499,6 +528,7 @@ impl ContextMgr {
                             if action.is_applicable(context) {
                                 if ui.button(name).clicked() {
                                     action.apply_action(app, &context);
+                                    self.close_context_menu();
                                 }
                             }
                         }
@@ -511,6 +541,7 @@ impl ContextMgr {
                 || popup_response.clicked()
                 || popup_response.clicked_elsewhere()
                 || should_close.load()
+                || !self.context_menu_open.load()
             {
                 self.close_context_menu();
                 egui_ctx.memory().close_popup();

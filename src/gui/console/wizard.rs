@@ -418,6 +418,7 @@ pub(super) fn bed_label_wizard_impl(
                             let records = records.clone();
                             // let graph = graph.clone();
 
+                            /*
                             let on_label_click = Box::new(move |label_id| {
                                 if let Some(record) = records.records.get(label_id) {
                                     let record: &BedRecord = record;
@@ -425,12 +426,13 @@ pub(super) fn bed_label_wizard_impl(
                                     log::warn!("clicked record on path {}, range {}-{}", chr.as_bstr(), record.start, record.end);
                                 }
                             }) as Box<dyn Fn(usize) + Send + Sync + 'static>;
+                            */
 
                             app_msg_tx
                                 .send(AppMsg::new_label_set(
                                     name,
                                     label_set,
-                                    Some(on_label_click),
+                                    // Some(on_label_click),
                                 ))
                                 .unwrap();
 

@@ -1,6 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
 
-use futures::{future::RemoteHandle, task::SpawnExt, Future, StreamExt};
+use futures::{
+    future::RemoteHandle,
+    task::{Spawn, SpawnExt},
+    Future, StreamExt,
+};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -1089,7 +1093,8 @@ impl GetSetTruth {
     pub fn add_setter(
         &self,
         key: &str,
-        setter: impl Fn(rhai::Dynamic) + Send + Sync + 'static,
+        // setter: impl Fn(rhai::Dynamic) + Send + Sync + 'static,
+        setter: Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>,
     ) {
         let mut get_setters = self.get_set.write();
 
@@ -1167,8 +1172,10 @@ impl ConsoleShared {
         let mut engine = crate::script::create_engine();
 
         engine.register_static_module("app", self.app_module());
+        engine.register_static_module("msg", self.app_msg_module());
         engine.register_static_module("db", self.db_module());
         engine.register_static_module("geo", self.geometry_module());
+        engine.register_static_module("modal", self.modal_module());
 
         // TODO this should be configurable in the app options
         engine.set_max_call_levels(16);
@@ -1632,6 +1639,179 @@ impl ConsoleShared {
         unimplemented!();
     }
 
+    fn modal_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing modal_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("modal");
+
+        fn futures_helper<T: Send + Sync + 'static>(
+            mut rx: futures::channel::mpsc::Receiver<Option<T>>,
+        ) -> Option<T> {
+            let result = std::thread::spawn(move || {
+                let val =
+                    futures::executor::block_on(async move { rx.next().await })
+                        .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(v) => v,
+                _ => None,
+            }
+        }
+
+        fn modal_helper<T: std::fmt::Debug + Clone + Send + Sync + 'static, F>(
+            show_modal: &Arc<AtomicCell<bool>>,
+            modal_tx: &crossbeam::channel::Sender<
+                Box<dyn Fn(&mut egui::Ui) + Send + Sync>,
+            >,
+            init: T,
+            callback: F,
+        ) -> std::result::Result<T, EvalAltResult>
+        where
+            F: Fn(
+                    &mut T,
+                    &mut egui::Ui,
+                )
+                    -> std::result::Result<ModalSuccess, ModalError>
+                + Send
+                + Sync
+                + 'static,
+        {
+            let (result_tx, mut result_rx) =
+                futures::channel::mpsc::channel::<Option<T>>(1);
+
+            let prepared = ModalHandler::prepare_callback(
+                show_modal, init, callback, result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = std::thread::spawn(move || {
+                let val = futures::executor::block_on(async move {
+                    result_rx.next().await
+                })
+                .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(Some(v)) => Ok(v),
+                _ => Err("modal oops!".into()),
+            }
+        }
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+
+        let pool = self.thread_pool.clone();
+
+        module.set_native_fn("get_string", move || {
+            let (result_tx, result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
+
+            // using an atomic bool we can easily check if it's the
+            // first time this specific modal is opened, and give
+            // focus to the text box
+            let first_run = AtomicCell::new(true);
+
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter string");
+                let text_box = ui.text_edit_singleline(text);
+
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
+                }
+
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = futures_helper(result_rx);
+
+            match result {
+                Some(r) => Ok(r),
+                None => Err("error!".into()),
+            }
+        });
+
+        let graph = self.graph.clone();
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+
+        module.set_native_fn("get_node_id", move || {
+            let first_run = AtomicCell::new(true);
+
+            let callback = move |text: &mut String, ui: &mut egui::Ui| {
+                ui.label("Enter node ID");
+                let text_box = ui.text_edit_singleline(text);
+
+                if first_run.fetch_and(false) {
+                    text_box.request_focus();
+                }
+
+                if text_box.lost_focus()
+                    && ui.input().key_pressed(egui::Key::Enter)
+                {
+                    return Ok(ModalSuccess::Success);
+                }
+
+                Err(ModalError::Continue)
+            };
+
+            let modal_result =
+                modal_helper(&show_modal, &modal_tx, String::new(), callback)?;
+
+            let raw = modal_result
+                .parse::<u64>()
+                .map_err::<Box<rhai::EvalAltResult>, _>(|_| {
+                    "Error parsing modal input".into()
+                })?;
+
+            let node_id = NodeId::from(raw);
+            if graph.graph.has_node(node_id) {
+                Ok(node_id)
+            } else {
+                Err("Node not found".into())
+            }
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
     fn geometry_module(&self) -> Arc<rhai::Module> {
         lazy_static! {
             static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
@@ -1727,6 +1907,46 @@ impl ConsoleShared {
         module
     }
 
+    fn app_msg_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing msg_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("msg");
+
+        module
+            .set_native_fn("goto_node", |id: NodeId| Ok(AppMsg::goto_node(id)));
+        module.set_native_fn("set_clipboard_contents", |text: &str| {
+            Ok(AppMsg::set_clipboard_contents(text))
+        });
+        module.set_native_fn("toggle_dark_mode", || {
+            Ok(AppMsg::toggle_dark_mode())
+        });
+        module.set_native_fn("set_data", |key, index, value| {
+            Ok(AppMsg::set_data(key, index, value))
+        });
+        module.set_native_fn("to_string", |msg: &mut AppMsg| {
+            Ok(format!("{:?}", msg))
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
     // contains things like appmsg, clipboard activity, etc.
     fn app_module(&self) -> Arc<rhai::Module> {
         lazy_static! {
@@ -1752,8 +1972,15 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
 
+        module.set_native_fn("send_msg", move |msg: AppMsg| {
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+
         module.set_native_fn(
-            "send_app_msg",
+            "send_msg",
             move |id: &str, val: rhai::Dynamic| {
                 app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
                 Ok(())
