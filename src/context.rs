@@ -364,14 +364,6 @@ impl ContextMgr {
             let dir = entry?.path();
             if let Some(ext) = dir.extension().and_then(|os| os.to_str()) {
                 if ext == "rhai" {
-                    //             let mut engine = console.create_engine();
-                    // let result_tx = self.result_tx.clone();
-                    // engine.on_print(move |x| {
-                    //     result_tx
-                    //         .send(Ok(rhai::Dynamic::from(x.to_string())))
-                    //         .unwrap();
-                    // });
-
                     let (name, action) = rhai_context_action(
                         self,
                         dir.as_os_str().to_str().unwrap(),

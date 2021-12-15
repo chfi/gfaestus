@@ -176,56 +176,6 @@ fn main() {
 
     let layout_1d = Arc::new(Path1DLayout::new(graph_query.graph()));
 
-    {
-        use bstr::ByteSlice;
-
-        for (path, ranges) in layout_1d.path_ranges.iter().take(1) {
-            let path_name =
-                graph_query.graph().get_path_name_vec(*path).unwrap();
-
-            println!("PathId {:2}\tName: {}", path.0, path_name.as_bstr());
-            print!(" > ");
-
-            // for ix in 0..20 {
-            for ix in [0, 4, 16, 32, 58, 59, 60, 61, 62, 63] {
-                if ix != 0 {
-                    print!(", ");
-                }
-
-                let sample = Path1DLayout::sample_path_dbg(&ranges, ix);
-
-                let s = if sample { "1" } else { "0" };
-
-                print!("{:2} - {}", ix, s);
-            }
-
-            println!();
-            print!(" > ");
-
-            for (ix, rng) in ranges.iter().take(20).enumerate() {
-                if ix != 0 {
-                    print!(", ");
-                }
-
-                print!("{:?}", rng);
-                // let sample = Path1DLayout::sample_path_dbg(&ranges, ix);
-
-                // let s = if sample { "1" } else { "0" };
-
-                // print!("{:2} - {}", ix, s);
-            }
-
-            println!();
-        }
-
-        // let first_range = ranges.first().unwrap();
-
-        /*
-         */
-    }
-
-    // println!("{:?}", layout_1d);
-
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
 
@@ -299,10 +249,6 @@ fn main() {
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let mut input_manager = InputManager::new(winit_rx, app.shared_state());
-
-    // input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
-    //     println!("i'm a bound command!");
-    // });
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
@@ -486,8 +432,6 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let open_context = AtomicCell::new(false);
-
     let mut context_mgr = ContextMgr::default();
 
     {
@@ -500,55 +444,15 @@ fn node_color(id) {
         set_type_name!(NodeId);
         set_type_name!(PathId);
         set_type_name!(FxHashSet<NodeId>);
-        // context_mgr.set_type_name::<FxHashSet<NodeId>>("FxHashSet<NodeId>");
     }
-
-    // context_mgr.set_type_name_ez::<NodeId>();
-    // context_mgr.set_type_name_ez::<PathId>();
-    // context_mgr.set_type_name_ez::<FxHashSet<NodeId>>();
-    // gfaestus::context::set_type_name::<NodeId>("NodeId");
-    // gfaestus::context::set_type_name::<PathId>("PathId");
-    // gfaestus::context::set_type_name::<FxHashSet<NodeId>>("FxHashSet<NodeId>");
-    // gfaestus::context::set_type_name::<Arc<FxHashSet<NodeId>>>(
-    //     "Arc<FxHashSet<NodeId>>",
-    // );
 
     let dbg_action = debug_context_action(&context_mgr);
 
-    // context_mgr.register_action("Copy node ID", copy_node_id_action(&app));
-    // context_mgr.register_action("Pan to node!!!!", pan_to_node_action(&app));
     context_mgr.register_action("Debug print", dbg_action);
 
     context_mgr
-        .load_rhai_modules(
-            PathBuf::from("./scripts/context_actions/"),
-            &gui.console,
-        )
+        .load_rhai_modules("./scripts/context_actions/".into(), &gui.console)
         .unwrap();
-
-    /*
-    let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
-        &mut context_mgr,
-        "src/action.rhai",
-        gui.console.create_engine(),
-    )
-    .unwrap();
-
-    context_mgr.register_action(&action_name, ctx_action);
-
-    let (action_name, ctx_action) = gfaestus::context::rhai_context_action(
-        &mut context_mgr,
-        "src/path_action.rhai",
-        gui.console.create_engine(),
-    )
-    .unwrap();
-    */
-
-    // context_mgr.register_action(&action_name, ctx_action);
-
-    // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
-    // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
-    //     FxHashMap::default();
 
     if let Some(script_file) = args.run_script.as_ref() {
         if script_file == "-" {
@@ -672,6 +576,7 @@ fn node_color(id) {
                         main_view.clear_node_selection().unwrap();
                     }
                 }
+
 
                 while let Ok(app_in) = app_rx.try_recv() {
                     app.apply_input(app_in, &gui_msg_tx);
