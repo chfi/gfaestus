@@ -189,7 +189,8 @@ impl AppMsg {
         label_set: LabelSet,
         // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
     ) -> Self {
-        Self::raw("new_label_set", (name, label_set))
+        let val = Arc::new((name, label_set));
+        Self::raw("new_label_set", val)
     }
 
     pub fn request_data_(
