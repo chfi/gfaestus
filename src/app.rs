@@ -716,7 +716,20 @@ impl App {
                     let handler: Arc<_> = handler.clone();
                     if type_id == handler.type_id {
                         handler.call(self, node_positions, value.as_ref());
+                    } else {
+                        log::warn!(
+                            "Type mismatch for AppMsg handler \"{}\"",
+                            msg_name
+                        );
                     }
+                } else {
+                    log::warn!("Received unknown AppMsg");
+                    log::warn!(
+                        "msg_name: {:?}\ntype_id: {:?}\nvalue: {:?}",
+                        msg_name,
+                        type_id,
+                        value
+                    );
                 }
             }
         }
