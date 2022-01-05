@@ -56,7 +56,7 @@ pub(super) fn tsv_wizard_impl(
         let path_future = crate::reactor::file_picker_modal(
             modal_tx.clone(),
             &show_modal,
-            &["bed"],
+            &[],
         );
 
         path_future.boxed()
