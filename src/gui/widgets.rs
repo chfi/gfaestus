@@ -157,6 +157,13 @@ impl MenuBar {
                             .send(AppMsg::ConsoleEval { script })
                             .unwrap();
                     }
+
+                    if ui.button("TSV Import").clicked() {
+                        let script = "tsv_wizard()".to_string();
+                        app_msg_tx
+                            .send(AppMsg::ConsoleEval { script })
+                            .unwrap();
+                    }
                 });
 
                 let mut selected =

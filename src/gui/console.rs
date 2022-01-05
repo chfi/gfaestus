@@ -1457,6 +1457,17 @@ impl ConsoleShared {
 
         let shared = self.clone();
 
+        engine
+            .register_fn("tsv_wizard", move || tsv_wizard_impl(&shared, None));
+
+        let shared = self.clone();
+
+        engine.register_fn("tsv_import", move |path: &str| {
+            tsv_wizard_impl(&shared, Some(path))
+        });
+
+        let shared = self.clone();
+
         engine.register_fn("bed_label_wizard", move || {
             bed_label_wizard_impl(&shared, None, None, None)
         });
