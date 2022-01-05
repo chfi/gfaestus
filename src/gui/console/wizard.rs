@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, io::BufReader, path::PathBuf, sync::Arc};
 
 use crossbeam::atomic::AtomicCell;
 
@@ -29,6 +29,189 @@ use crate::{
 };
 
 use super::ConsoleShared;
+
+pub(super) fn tsv_wizard_impl(
+    console: &ConsoleShared,
+    tsv_path: Option<&str>,
+) -> bool {
+    let graph = console.graph.clone();
+
+    let thread_pool = &console.thread_pool;
+    let rayon_pool = &console.rayon_pool;
+
+    let channels = &console.channels;
+    let shared_state = &console.shared_state;
+
+    let modal_tx = &channels.modal_tx;
+    let app_msg_tx = channels.app_tx.clone();
+    let overlay_tx = channels.new_overlay_tx.clone();
+
+    let show_modal = shared_state.show_modal.clone();
+
+    let path_future = if let Some(path) = tsv_path {
+        let path = PathBuf::from(path);
+        let path_future = async move { Some(path) };
+        path_future.boxed()
+    } else {
+        let path_future = crate::reactor::file_picker_modal(
+            modal_tx.clone(),
+            &show_modal,
+            &["bed"],
+        );
+
+        path_future.boxed()
+    };
+
+    enum Line {
+        Color { r: u8, g: u8, b: u8, a: u8 },
+        Label(String),
+    }
+
+    let table_future = async move {
+        if let Some(path) = path_future.await {
+            use std::io::prelude::*;
+
+            let table_path = path.clone();
+
+            let file = std::fs::File::open(path).ok()?;
+            let reader = BufReader::new(file);
+
+            let table = reader
+                .lines()
+                .filter_map(|line| {
+                    let line = line.ok()?;
+
+                    let mut fields = line.split("\t");
+                    let node_str = fields.next()?;
+
+                    let node_id = node_str.parse::<usize>().ok()?;
+                    let node_id = NodeId::from(node_id as u64);
+
+                    let next = fields.next()?;
+
+                    let line_val =
+                        if let Some(color_str) = next.strip_prefix("#") {
+                            let ri = 0..=1;
+                            let gi = 2..=3;
+                            let bi = 4..=5;
+                            let ai = 6..=7;
+
+                            let col = |s: &str| u8::from_str_radix(s, 16).ok();
+
+                            match color_str.len() {
+                                6 => {
+                                    let r = col(&color_str[ri])?;
+                                    let g = col(&color_str[gi])?;
+                                    let b = col(&color_str[bi])?;
+
+                                    Some(Line::Color { r, g, b, a: 255 })
+                                }
+                                8 => {
+                                    let r = col(&color_str[ri])?;
+                                    let g = col(&color_str[gi])?;
+                                    let b = col(&color_str[bi])?;
+                                    let a = col(&color_str[ai])?;
+
+                                    Some(Line::Color { r, g, b, a })
+                                }
+                                _ => None,
+                            }
+                        } else {
+                            // set label to rest of line
+                            Some(Line::Label(next.trim().to_string()))
+                        }?;
+
+                    Some((node_id, line_val))
+                })
+                .collect::<Vec<_>>();
+
+            Some((table, table_path))
+        } else {
+            None
+        }
+    };
+
+    let graph = console.graph.clone();
+    let rayon_pool = console.rayon_pool.clone();
+
+    let result = thread_pool.spawn(async move {
+        if let Some((table, table_path)) = table_future.await {
+            let mut node_color_map: FxHashMap<NodeId, rgb::RGBA<f32>> =
+                FxHashMap::default();
+
+            let mut label_set = LabelSet::default();
+
+            let mut label_id = 0;
+
+            for (node_id, line) in table.iter() {
+                match line {
+                    Line::Color { r, g, b, a } => {
+                        let r = (*r as f32) / 255.0;
+                        let g = (*g as f32) / 255.0;
+                        let b = (*b as f32) / 255.0;
+                        let a = (*a as f32) / 255.0;
+
+                        node_color_map
+                            .insert(*node_id, rgb::RGBA::new_alpha(r, g, b, a));
+                    }
+                    Line::Label(label_text) => {
+                        let handle = Handle::pack(*node_id, false);
+                        label_set.add_at_handle(handle, label_id, &label_text);
+                        label_id += 1;
+                    }
+                }
+            }
+
+            let name = table_path.as_os_str().to_str().unwrap();
+
+            if !node_color_map.is_empty() {
+                let data = {
+                    use rayon::prelude::*;
+
+                    let mut nodes = graph
+                        .graph
+                        .handles()
+                        .map(|h| h.id())
+                        .collect::<Vec<_>>();
+                    nodes.sort();
+
+                    // TODO gradient support (or rewrite gradient
+                    // logic entirely)
+
+                    let colors = rayon_pool.install(|| {
+                        nodes
+                            .par_iter()
+                            .map(|node| {
+                                node_color_map.get(&node).copied().unwrap_or(
+                                    rgb::RGBA::new(0.5, 0.5, 0.5, 0.4),
+                                )
+                            })
+                            .collect()
+                    });
+
+                    OverlayData::RGB(colors)
+                };
+
+                let msg = OverlayCreatorMsg::NewOverlay {
+                    name: name.to_string(),
+                    data,
+                };
+                overlay_tx.send(msg).unwrap();
+            }
+
+            if !label_set.is_empty() {
+                app_msg_tx
+                    .send(AppMsg::new_label_set(name.to_string(), label_set))
+                    .unwrap();
+            }
+        }
+    });
+
+    match result {
+        Ok(_) => true,
+        Err(_) => false,
+    }
+}
 
 pub(super) fn bed_label_wizard_impl(
     console: &ConsoleShared,
