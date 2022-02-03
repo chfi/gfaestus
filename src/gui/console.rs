@@ -1951,6 +1951,12 @@ impl ConsoleShared {
             Ok(format!("{:?}", msg))
         });
 
+        module.set_native_fn("save_selection", |file: &str| {
+            let path = std::path::PathBuf::from(file);
+            let msg = AppMsg::raw("save_selection", path);
+            Ok(msg)
+        });
+
         let module = Arc::new(module);
 
         *cache = Some(module.clone());
@@ -2007,12 +2013,13 @@ impl ConsoleShared {
             Ok(())
         });
 
-        // engine.register_fn(
-        //     "send_app_msg",
-        //     move |id: &str, val: rhai::Dynamic| {
-        //         app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
-        //     },
-        // );
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("save_selection", move |file: &str| {
+            let path = std::path::PathBuf::from(file);
+            let msg = AppMsg::raw("save_selection", path);
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
 
         let module = Arc::new(module);
 

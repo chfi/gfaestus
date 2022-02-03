@@ -21,6 +21,7 @@ use argh::FromArgs;
 
 use std::any::TypeId;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use self::mainview::MainViewMsg;
@@ -371,6 +372,17 @@ impl App {
         let mut new_handler = |name: &str, handler: AppMsgHandler| {
             handlers.insert(name.to_string(), Arc::new(handler))
         };
+
+        new_handler(
+            "save_selection",
+            AppMsgHandler::from_fn(|app, nodes, save_file: &PathBuf| {
+                use std::io::prelude::*;
+                let mut file = std::fs::File::create(save_file).unwrap();
+                for node in app.selected_nodes.iter() {
+                    writeln!(file, "{}", node.0).unwrap()
+                }
+            }),
+        );
 
         new_handler(
             "set_clipboard_contents",
