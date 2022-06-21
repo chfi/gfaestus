@@ -9,7 +9,11 @@ use handlegraph::{
 };
 use rustc_hash::FxHashMap;
 
-use crate::{app::AppMsg, overlays::OverlayKind};
+use crate::{
+    app::AppMsg,
+    overlays::OverlayKind,
+    window::{GuiId, GuiWindows},
+};
 use crate::{app::OverlayState, geometry::*};
 
 pub trait Widget {
@@ -63,6 +67,7 @@ impl MenuBar {
         ctx: &egui::CtxRef,
         open_windows: &'a mut super::OpenWindows,
         app_msg_tx: &Sender<AppMsg>,
+        windows: &GuiWindows,
     ) {
         let settings = &mut open_windows.settings;
 
@@ -72,6 +77,8 @@ impl MenuBar {
 
         let nodes = &mut open_windows.nodes;
         let paths = &mut open_windows.paths;
+
+        // let path_view = &mut open_windows.path_position_list;
 
         let _themes = &mut open_windows.themes;
         let overlays = &mut open_windows.overlays;
@@ -87,6 +94,19 @@ impl MenuBar {
 
                     if ui.selectable_label(*paths, "Paths").clicked() {
                         *paths = !*paths;
+                    }
+
+                    ui.separator();
+
+                    let path_view_id = egui::Id::new("path_view_window");
+                    let gui_id = GuiId::new(path_view_id);
+
+                    let path_view = windows.is_open(gui_id);
+
+                    if ui.selectable_label(path_view, "Path View").clicked() {
+                        windows.set_open(gui_id, !path_view);
+                        // windows.toggle_open(gui_id);
+                        // *path_view = !*path_view;
                     }
                 });
 
@@ -120,13 +140,29 @@ impl MenuBar {
 
                 menu::menu(ui, "View", |ui| {
                     if ui.button("Goto selection").clicked() {
-                        app_msg_tx.send(AppMsg::GotoSelection).unwrap();
+                        app_msg_tx.send(AppMsg::goto_selection()).unwrap();
                     }
                 });
 
                 menu::menu(ui, "Tools", |ui| {
                     if ui.selectable_label(*settings, "Settings").clicked() {
                         *settings = !*settings;
+                    }
+
+                    ui.separator();
+
+                    if ui.button("BED Label Wizard").clicked() {
+                        let script = "bed_label_wizard()".to_string();
+                        app_msg_tx
+                            .send(AppMsg::ConsoleEval { script })
+                            .unwrap();
+                    }
+
+                    if ui.button("TSV Import").clicked() {
+                        let script = "tsv_wizard()".to_string();
+                        app_msg_tx
+                            .send(AppMsg::ConsoleEval { script })
+                            .unwrap();
                     }
                 });
 

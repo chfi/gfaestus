@@ -26,9 +26,6 @@ pub struct AppChannels {
     pub gui_tx: Sender<GuiMsg>,
     pub gui_rx: Receiver<GuiMsg>,
 
-    pub binds_tx: Sender<BindMsg>,
-    pub binds_rx: Receiver<BindMsg>,
-
     pub new_overlay_tx: Sender<OverlayCreatorMsg>,
     pub new_overlay_rx: Receiver<OverlayCreatorMsg>,
 
@@ -56,9 +53,6 @@ impl AppChannels {
 
             gui_tx,
             gui_rx,
-
-            binds_tx,
-            binds_rx,
 
             new_overlay_tx,
             new_overlay_rx,

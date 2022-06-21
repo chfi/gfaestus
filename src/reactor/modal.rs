@@ -1,9 +1,9 @@
 use crossbeam::atomic::AtomicCell;
-use futures::{future::RemoteHandle, SinkExt};
+use futures::{future::RemoteHandle, Future, SinkExt, StreamExt};
 use parking_lot::{
     Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard, RwLockWriteGuard,
 };
-use std::sync::Arc;
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use crate::geometry::Point;
 
@@ -31,8 +31,7 @@ pub enum ModalError {
 
 #[derive(Default)]
 pub struct ModalHandler {
-    active_modal: Option<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
-
+    modal_stack: VecDeque<Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>>,
     pub show_modal: Arc<AtomicCell<bool>>,
 }
 
@@ -81,7 +80,7 @@ impl ModalHandler {
         res_tx: futures::channel::mpsc::Sender<Option<T>>,
     ) -> Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>
     where
-        F: Fn(&mut T, &mut egui::Ui) -> Result<ModalSuccess, ModalError>
+        F: Fn(&mut T, &mut egui::Ui, bool) -> Result<ModalSuccess, ModalError>
             + Send
             + Sync
             + 'static,
@@ -92,15 +91,6 @@ impl ModalHandler {
         let show_modal = show_modal.clone();
 
         let callback = move |val: &mut T, ui: &mut egui::Ui| {
-            let inner_result = callback(val, ui);
-
-            if matches!(
-                inner_result,
-                Ok(ModalSuccess::Success | ModalSuccess::Cancel)
-            ) {
-                return inner_result;
-            }
-
             let (accept, cancel) = ui
                 .horizontal(|ui| {
                     let accept = ui.button("Accept");
@@ -109,8 +99,13 @@ impl ModalHandler {
                 })
                 .inner;
 
-            if accept.clicked() {
-                return Ok(ModalSuccess::Success);
+            let inner_result = callback(val, ui, accept.clicked());
+
+            if matches!(
+                inner_result,
+                Ok(ModalSuccess::Success | ModalSuccess::Cancel)
+            ) {
+                return inner_result;
             }
 
             if cancel.clicked() {
@@ -167,11 +162,7 @@ impl ModalHandler {
         &mut self,
         callback: Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
     ) -> anyhow::Result<()> {
-        if self.active_modal.is_some() {
-            anyhow::bail!("Tried adding a modal when one was already active")
-        }
-
-        self.active_modal = Some(callback);
+        self.modal_stack.push_back(callback);
         self.show_modal.store(true);
         Ok(())
     }
@@ -188,11 +179,6 @@ impl ModalHandler {
             + 'static,
         T: std::fmt::Debug + Clone + Send + Sync + 'static,
     {
-        if self.active_modal.is_some() {
-            anyhow::bail!("Tried adding a modal when one was already active")
-        }
-        // let store = store.to_owned();
-
         let value: Arc<Mutex<T>> = {
             let lock = store.read();
             Arc::new(Mutex::new(lock.clone()))
@@ -247,7 +233,7 @@ impl ModalHandler {
         })
             as Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>;
 
-        self.active_modal = Some(wrapped);
+        self.modal_stack.push_back(wrapped);
 
         self.show_modal.store(true);
 
@@ -255,7 +241,7 @@ impl ModalHandler {
     }
 
     pub fn show(&mut self, ctx: &egui::CtxRef) {
-        if let Some(wrapped) = &self.active_modal {
+        if let Some(wrapped) = self.modal_stack.back() {
             if self.show_modal.load() {
                 egui::Window::new("Modal")
                     .id(egui::Id::new("modal_window"))
@@ -271,12 +257,55 @@ impl ModalHandler {
 
         // kinda hacky but this should make sure there only is an
         // active modal when it should be rendered
-        if !self.show_modal.load() && self.active_modal.is_some() {
-            self.active_modal.take();
+        if !self.show_modal.load() {
+            self.modal_stack.pop_back();
+            self.show_modal.store(self.modal_stack.is_empty());
         }
     }
 }
 
+pub fn file_picker_modal(
+    modal_tx: crossbeam::channel::Sender<
+        Box<dyn Fn(&mut egui::Ui) + Send + Sync + 'static>,
+    >,
+    show_modal: &Arc<AtomicCell<bool>>,
+    extensions: &[&str],
+) -> impl Future<Output = Option<PathBuf>> + Send + Sync + 'static {
+    use crate::gui::windows::file::FilePicker;
+
+    let pwd = std::fs::canonicalize("./").unwrap();
+    let mut file_picker =
+        FilePicker::new(egui::Id::new("_file_picker"), pwd).unwrap();
+    file_picker.set_visible_extensions(extensions).unwrap();
+
+    let closure =
+        move |state: &mut FilePicker, ui: &mut egui::Ui, force: bool| {
+            if let Ok(v) = state.ui_impl(ui, force) {
+                state.selected_path = state.highlighted_dir.clone();
+                return Ok(v);
+            }
+            Err(ModalError::Continue)
+        };
+
+    let (result_tx, mut result_rx) =
+        futures::channel::mpsc::channel::<Option<FilePicker>>(1);
+
+    let prepared = ModalHandler::prepare_callback(
+        show_modal,
+        file_picker,
+        closure,
+        result_tx,
+    );
+
+    modal_tx.send(prepared).unwrap();
+
+    async move {
+        let final_state = result_rx.next().await.flatten();
+        final_state.and_then(|state| state.selected_path)
+    }
+}
+
+/*
 pub type ModalCallback<T> = Box<dyn CallbackTrait<T>>;
 
 pub struct ModalValue<T>
@@ -335,3 +364,5 @@ where
         self.store.try_read()
     }
 }
+
+*/

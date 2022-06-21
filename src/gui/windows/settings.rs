@@ -33,7 +33,7 @@ impl SettingsWindow {
         let current_tab = SettingsTab::MainView;
 
         let main_view =
-            MainViewSettings::new(settings, shared_state.clone_edges_enabled());
+            MainViewSettings::new(settings, shared_state.edges_enabled.clone());
 
         Self {
             current_tab,

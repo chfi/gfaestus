@@ -10,8 +10,11 @@ use handlegraph::{
 
 use rustc_hash::FxHashMap;
 
-use crate::overlays::{OverlayData, OverlayKind};
 use crate::{app::selection::NodeSelection, graph_query::GraphQuery};
+use crate::{
+    app::AppMsg,
+    overlays::{OverlayData, OverlayKind},
+};
 
 use rhai::plugin::*;
 
@@ -25,43 +28,23 @@ pub fn create_engine() -> Engine {
     engine.register_type::<PathId>();
     engine.register_type::<NodeSelection>();
 
+    engine.register_fn("to_string", |i: &mut NodeId| i.0.to_string());
+    engine.register_fn("to_string", |i: &mut PathId| i.0.to_string());
+    engine.register_fn("to_string", |i: &mut Handle| format!("{:?}", i));
+    engine.register_fn("to_string", |i: &mut Vec<u8>| {
+        use bstr::ByteSlice;
+        format!("{}", i.as_bstr())
+    });
+
     let handle = exported_module!(plugins::handle_plugin);
     let graph = exported_module!(plugins::graph_plugin);
     let paths = exported_module!(plugins::paths_plugin);
     let graph_iters = exported_module!(plugins::graph_iters);
     let colors = exported_module!(plugins::colors);
-
     let selection = exported_module!(plugins::selection);
 
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
-
-    engine.register_fn("build_selection", |arr: Vec<rhai::Dynamic>| {
-        log::warn!("in Vec<rhai::Dynamic>");
-        let mut selection = NodeSelection::default();
-
-        for val in arr {
-            if let Some(node) = val.try_cast::<NodeId>() {
-                selection.add_one(false, node);
-            }
-        }
-
-        selection
-    });
-
-    engine.register_fn("create_hasher", || DefaultHasher::default());
-
-    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: PathId| {
-        val.hash(hasher);
-    });
-
-    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: u8| {
-        val.hash(hasher);
-    });
-
-    engine.register_fn("hash", |hasher: &mut DefaultHasher, val: NodeId| {
-        val.hash(hasher);
-    });
 
     engine.register_fn("finish", |hasher: &mut DefaultHasher| hasher.finish());
 

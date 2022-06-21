@@ -1,6 +1,7 @@
 use std::pin::Pin;
 use std::sync::Arc;
 
+use clipboard::{ClipboardContext, ClipboardProvider};
 use crossbeam::channel::{Receiver, Sender};
 use futures::{future::RemoteHandle, task::SpawnExt, Future};
 
@@ -11,19 +12,26 @@ pub use modal::*;
 pub use paired::{create_host_pair, Host, Inbox, Outbox, Processor};
 
 use paired::*;
+use parking_lot::lock_api::RawMutex;
+use parking_lot::Mutex;
 
 use crate::app::channels::OverlayCreatorMsg;
 use crate::app::AppChannels;
 use crate::graph_query::GraphQuery;
+use crate::vulkan::GpuTasks;
 
 pub struct Reactor {
-    thread_pool: futures::executor::ThreadPool,
+    pub thread_pool: futures::executor::ThreadPool,
     pub rayon_pool: Arc<rayon::ThreadPool>,
 
     pub graph_query: Arc<GraphQuery>,
 
     pub overlay_create_tx: Sender<OverlayCreatorMsg>,
     pub overlay_create_rx: Receiver<OverlayCreatorMsg>,
+
+    pub gpu_tasks: Arc<GpuTasks>,
+
+    pub clipboard_ctx: Arc<Mutex<ClipboardContext>>,
 
     pub future_tx:
         Sender<Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>>,
@@ -55,11 +63,18 @@ impl Reactor {
             }
         });
 
+        let clipboard_ctx =
+            Arc::new(Mutex::new(ClipboardProvider::new().unwrap()));
+
         Self {
             thread_pool,
             rayon_pool,
 
             graph_query,
+
+            gpu_tasks: Arc::new(GpuTasks::default()),
+
+            clipboard_ctx,
 
             overlay_create_tx: channels.new_overlay_tx.clone(),
             overlay_create_rx: channels.new_overlay_rx.clone(),
@@ -70,7 +85,27 @@ impl Reactor {
         }
     }
 
-    pub fn create_host<F, I, T>(&mut self, func: F) -> Host<I, T>
+    pub fn set_clipboard_contents(&self, contents: &str, block: bool) {
+        if block {
+            let mut ctx = self.clipboard_ctx.lock();
+            ctx.set_contents(contents.to_string()).unwrap();
+        } else if let Some(mut ctx) = self.clipboard_ctx.try_lock() {
+            ctx.set_contents(contents.to_string()).unwrap();
+        }
+    }
+
+    pub fn get_clipboard_contents(&self, block: bool) -> Option<String> {
+        if block {
+            let mut ctx = self.clipboard_ctx.lock();
+            ctx.get_contents().ok()
+        } else if let Some(mut ctx) = self.clipboard_ctx.try_lock() {
+            ctx.get_contents().ok()
+        } else {
+            None
+        }
+    }
+
+    pub fn create_host<F, I, T>(&self, func: F) -> Host<I, T>
     where
         T: Send + Sync + 'static,
         I: Send + Sync + 'static,
@@ -95,41 +130,8 @@ impl Reactor {
         host
     }
 
-    /*
     pub fn spawn_interval<F>(
-        &mut self,
-        func: F,
-        dur: std::time::Duration,
-    ) -> anyhow::Result<RemoteHandle<()>>
-    where
-        F: Fn(f64) + Send + Sync + 'static,
-    {
-        use futures_timer::Delay;
-        use std::time::{Duration, SystemTime};
-
-        let result = self.thread_pool.spawn_with_handle(async move {
-            let looper = || {
-                let delay = Delay::new(dur);
-                async {
-                    delay.await;
-                    let t = SystemTime::now()
-                        .duration_since(SystemTime::UNIX_EPOCH)
-                        .unwrap_or(Duration::from_secs_f64(0.0))
-                        .as_secs_f64();
-                    func(t);
-                }
-            };
-
-            loop {
-                looper().await;
-            }
-        })?;
-        Ok(result)
-    }
-    */
-
-    pub fn spawn_interval<F>(
-        &mut self,
+        &self,
         mut func: F,
         dur: std::time::Duration,
     ) -> anyhow::Result<RemoteHandle<()>>
@@ -158,7 +160,7 @@ impl Reactor {
         Ok(result)
     }
 
-    pub fn spawn<F, T>(&mut self, fut: F) -> anyhow::Result<RemoteHandle<T>>
+    pub fn spawn<F, T>(&self, fut: F) -> anyhow::Result<RemoteHandle<T>>
     where
         F: Future<Output = T> + Send + Sync + 'static,
         T: Send + Sync + 'static,

@@ -19,15 +19,20 @@ use anyhow::Result;
 
 use argh::FromArgs;
 
+use std::any::TypeId;
+use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use self::mainview::MainViewMsg;
 use crate::annotations::{
     AnnotationCollection, AnnotationLabelSet, Annotations, BedRecords,
-    Gff3Records, Labels,
+    Gff3Records, LabelSet, Labels,
 };
 use crate::app::selection::NodeSelection;
+use crate::graph_query::GraphQuery;
 use crate::gui::GuiMsg;
+use crate::reactor::Reactor;
 use crate::view::*;
 use crate::{geometry::*, input::binds::SystemInputBindings};
 use crate::{
@@ -36,18 +41,24 @@ use crate::{
 };
 
 pub struct App {
-    shared_state: SharedState,
-    channels: AppChannels,
+    pub shared_state: SharedState,
+    pub channels: AppChannels,
     pub settings: AppSettings,
+
+    layout_boundary: Rect,
+
+    pub reactor: Reactor,
 
     selected_nodes: FxHashSet<NodeId>,
     selection_changed: bool,
 
     pub selected_nodes_bounding_box: Option<(Point, Point)>,
 
-    annotations: Annotations,
+    pub annotations: Annotations,
 
-    labels: Labels,
+    pub labels: Labels,
+
+    msg_handlers: HashMap<String, Arc<AppMsgHandler>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -91,22 +102,14 @@ pub enum Select {
     },
 }
 
-#[derive(Debug)]
+// #[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AppMsg {
     Selection(Select),
-    GotoSelection,
-    GotoNode(NodeId),
 
     // TODO these two should not be here (see how they're handled in main)
     RectSelect(Rect),
     TranslateSelected(Point),
-
-    HoverNode(Option<NodeId>),
-
-    ToggleDarkMode,
-
-    AddGff3Records(Gff3Records),
-    AddBedRecords(BedRecords),
 
     NewNodeLabels {
         name: String,
@@ -115,26 +118,136 @@ pub enum AppMsg {
 
     RequestSelection(crossbeam::channel::Sender<(Rect, FxHashSet<NodeId>)>),
 
-    RequestData {
-        key: String,
-        index: String,
-        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
-    },
-
     SetData {
         key: String,
         index: String,
         value: rhai::Dynamic,
     },
+    ConsoleEval {
+        script: String,
+    },
+    Raw {
+        type_id: TypeId,
+        msg_name: String,
+        value: Arc<dyn std::any::Any + Send + Sync>,
+    },
+}
+
+impl AppMsg {
+    pub fn register(engine: &mut rhai::Engine) {
+        engine.register_type_with_name::<AppMsg>("AppMsg");
+        // engine.register_fn("to_string", |msg| {
+        //     &mut AppMsg | {
+        //         match msg {
+        //         //
+        //     }
+        //     }
+        // });
+    }
+
+    pub fn raw<T: std::any::Any + Send + Sync>(msg_name: &str, v: T) -> Self {
+        AppMsg::Raw {
+            type_id: TypeId::of::<T>(),
+            msg_name: msg_name.to_string(),
+            value: Arc::new(v) as _,
+        }
+    }
+
+    pub fn set_clipboard_contents(contents: &str) -> Self {
+        Self::raw("set_clipboard_contents", contents.to_string())
+    }
+
+    pub fn add_gff3_records(records: Gff3Records) -> Self {
+        Self::raw("add_gff3_records", records)
+    }
+
+    pub fn add_bed_records(records: BedRecords) -> Self {
+        Self::raw("add_bed_records", records)
+    }
+
+    pub fn goto_node(id: NodeId) -> Self {
+        Self::raw("goto_node", id)
+    }
+
+    pub fn goto_rect(rect: Rect) -> Self {
+        Self::raw("goto_rect", Some(rect))
+    }
+
+    pub fn goto_selection() -> Self {
+        Self::raw::<Option<Rect>>("goto_selection", None)
+    }
+
+    pub fn clear_selection() -> Self {
+        Self::raw("clear_selection", ())
+    }
+
+    pub fn toggle_dark_mode() -> Self {
+        Self::raw("toggle_dark_mode", ())
+    }
+
+    pub fn new_label_set(
+        name: String,
+        label_set: LabelSet,
+        // on_label_click: Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+    ) -> Self {
+        let val = Arc::new((name, label_set));
+        Self::raw("new_label_set", val)
+    }
+
+    pub fn request_data_(
+        key: String,
+        index: String,
+        sender: crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+    ) -> Self {
+        Self::raw("request_data", (key, index, sender))
+    }
+
+    pub fn request_data(
+        key: String,
+        index: String,
+    ) -> (Self, crossbeam::channel::Receiver<Result<rhai::Dynamic>>) {
+        let (tx, rx) = crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
+        let msg = Self::request_data_(key, index, tx);
+
+        (msg, rx)
+    }
+
+    // pub fn set_data(key: &str, index: &str, value: rhai::Dynamic) -> Self {
+    // Self::raw("set_data", (key.to_string(), index.to_string(), value))
+    pub fn set_data(key: String, index: String, value: rhai::Dynamic) -> Self {
+        Self::raw("set_data", (key, index, value))
+    }
 }
 
 impl App {
-    pub fn new<Dims: Into<ScreenDims>>(screen_dims: Dims) -> Result<Self> {
+    pub fn new<Dims: Into<ScreenDims>>(
+        screen_dims: Dims,
+        thread_pool: futures::executor::ThreadPool,
+        rayon_pool: rayon::ThreadPool,
+        graph_query: Arc<GraphQuery>,
+        layout_boundary: Rect,
+    ) -> Result<Self> {
         let shared_state = SharedState::new(screen_dims);
+
+        let channels = AppChannels::new();
+
+        let reactor = crate::reactor::Reactor::init(
+            thread_pool,
+            rayon_pool,
+            graph_query,
+            &channels,
+        );
+
+        let mut msg_handlers = HashMap::default();
+        Self::add_msg_handlers(&mut msg_handlers);
 
         Ok(Self {
             shared_state,
-            channels: AppChannels::new(),
+            channels,
+
+            reactor,
+
+            layout_boundary,
 
             selected_nodes: FxHashSet::default(),
             selection_changed: false,
@@ -146,7 +259,37 @@ impl App {
             annotations: Annotations::default(),
 
             labels: Labels::default(),
+
+            msg_handlers,
         })
+    }
+
+    pub fn send_msg(&self, msg: AppMsg) -> Result<()> {
+        self.channels.app_tx.send(msg)?;
+
+        Ok(())
+    }
+
+    pub fn send_raw<T: std::any::Any + Send + Sync>(
+        &self,
+        msg_name: &str,
+        v: T,
+    ) -> Result<()> {
+        let type_id = TypeId::of::<T>();
+        let msg_name = msg_name.to_string();
+        let value = Arc::new(v) as _;
+
+        log::warn!("sending raw: {:?}, {}", type_id, msg_name);
+
+        let msg = AppMsg::Raw {
+            type_id,
+            msg_name,
+            value,
+        };
+
+        self.channels.app_tx.send(msg)?;
+
+        Ok(())
     }
 
     pub fn shared_state(&self) -> &SharedState {
@@ -225,11 +368,199 @@ impl App {
         self.shared_state.screen_dims.store(screen_dims.into());
     }
 
+    fn add_msg_handlers(handlers: &mut HashMap<String, Arc<AppMsgHandler>>) {
+        let mut new_handler = |name: &str, handler: AppMsgHandler| {
+            handlers.insert(name.to_string(), Arc::new(handler))
+        };
+
+        new_handler(
+            "save_selection",
+            AppMsgHandler::from_fn(|app, nodes, save_file: &PathBuf| {
+                use std::io::prelude::*;
+                let mut file = std::fs::File::create(save_file).unwrap();
+                for node in app.selected_nodes.iter() {
+                    writeln!(file, "{}", node.0).unwrap()
+                }
+            }),
+        );
+
+        new_handler(
+            "set_clipboard_contents",
+            AppMsgHandler::from_fn(|app, nodes, contents: &String| {
+                app.reactor.set_clipboard_contents(contents, true);
+            }),
+        );
+
+        new_handler(
+            "goto_node",
+            AppMsgHandler::from_fn(|app, nodes, id: &NodeId| {
+                if let Some(node_pos) = nodes.get((id.0 - 1) as usize) {
+                    let mut view = app.shared_state.view();
+                    view.center = node_pos.center();
+                    app.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
+                }
+            }),
+        );
+
+        new_handler(
+            "goto_rect",
+            AppMsgHandler::from_fn(|app, _nodes, rect: &Option<Rect>| {
+                let bounds: Option<Rect> = rect
+                    .or_else(|| Some(app.selected_nodes_bounding_box?.into()));
+
+                if let Some(rect) = bounds {
+                    let view = View::from_dims_and_target(
+                        app.dims(),
+                        rect.min(),
+                        rect.max(),
+                    );
+                    app.channels
+                        .main_view_tx
+                        .send(MainViewMsg::GotoView(view))
+                        .unwrap();
+                }
+            }),
+        );
+
+        new_handler(
+            "add_gff3_records",
+            AppMsgHandler::from_fn(
+                |app, _nodes, records: &Arc<Gff3Records>| {
+                    let file_name = records.file_name().to_string();
+                    app.annotations
+                        .insert_gff3_arc(&file_name, records.clone());
+                },
+            ),
+        );
+
+        new_handler(
+            "add_bed_records",
+            AppMsgHandler::from_fn(|app, _nodes, records: &Arc<BedRecords>| {
+                let file_name = records.file_name().to_string();
+                app.annotations.insert_bed_arc(&file_name, records.clone());
+            }),
+        );
+
+        new_handler(
+            "toggle_dark_mode",
+            AppMsgHandler::from_fn(|app, _nodes, _: &()| {
+                app.toggle_dark_mode();
+            }),
+        );
+
+        new_handler(
+            "new_label_set",
+            AppMsgHandler::from_fn(
+                |app,
+                 node_positions,
+                 val: &Arc<(
+                    String,
+                    LabelSet,
+                    // Option<Box<dyn Fn(usize) + Send + Sync + 'static>>,
+                )>| {
+                    // let (name, label_set) = &val;
+
+                    app.labels.add_label_set(
+                        app.layout_boundary,
+                        node_positions,
+                        &val.0,
+                        &val.1,
+                        None,
+                        // on_label_click,
+                    );
+                },
+            ),
+        );
+
+        new_handler(
+            "request_data",
+            AppMsgHandler::from_fn(
+                |app,
+                 _nodes,
+                 (key, index, sender): &(
+                    String,
+                    String,
+                    crossbeam::channel::Sender<Result<rhai::Dynamic>>,
+                )| {
+                    type ReqResult = Result<rhai::Dynamic>;
+
+                    macro_rules! handle {
+                        ($expr:expr, $err:literal) => {
+                            if let Some(result) = $expr {
+                                Ok(rhai::Dynamic::from(result.clone()))
+                            } else {
+                                let err = anyhow::anyhow!($err);
+                                Err(err) as ReqResult
+                            }
+                        };
+                    }
+
+                    let boxed = match key.as_str() {
+                        "annotation_file" => {
+                            if let Some(records) =
+                                app.annotations.get_gff3(&index)
+                            {
+                                Ok(rhai::Dynamic::from(records.clone()))
+                            } else if let Some(records) =
+                                app.annotations.get_bed(&index)
+                            {
+                                Ok(rhai::Dynamic::from(records.clone()))
+                            } else {
+                                Err(anyhow::anyhow!(
+                                    "Annotation file not loaded: {}",
+                                    index
+                                ))
+                            }
+                        }
+                        "annotation_names" => {
+                            let names = app
+                                .annotations
+                                .annot_names()
+                                .iter()
+                                .map(|(name, _)| name.to_string())
+                                .collect::<Vec<_>>();
+
+                            Ok(rhai::Dynamic::from(names))
+                        }
+                        "annotation_ref_path" => {
+                            if let Some(path) =
+                                app.annotations.get_default_ref_path(&index)
+                            {
+                                Ok(rhai::Dynamic::from(path))
+                            } else {
+                                Ok(rhai::Dynamic::from(()))
+                            }
+                        }
+                        _ => {
+                            let err = anyhow::anyhow!(
+                                "Requested unknown key from App"
+                            );
+                            Err(err) as ReqResult
+                        }
+                    };
+
+                    sender.send(boxed).unwrap();
+                },
+            ),
+        );
+
+        new_handler(
+            "set_data",
+            AppMsgHandler::from_fn(|app, _nodes, (k, i, value): &(String, String, rhai::Dynamic)| {
+
+                match k.as_str() {
+                _ => (),
+
+                }
+            }));
+    }
+
     pub fn apply_app_msg(
         &mut self,
-        boundary: Rect,
-        main_view_msg_tx: &Sender<MainViewMsg>,
-        gui_msg: &Sender<GuiMsg>,
+        console_input_tx: &Sender<String>,
         node_positions: &[Node],
         msg: AppMsg,
     ) {
@@ -245,26 +576,6 @@ impl App {
                     self.selected_nodes_bounding_box = Some((min, max));
                 }
             }
-            AppMsg::GotoSelection => {
-                if let Some(bounds) = self.selected_nodes_bounding_box {
-                    let view = View::from_dims_and_target(
-                        self.dims(),
-                        bounds.0,
-                        bounds.1,
-                    );
-                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
-                }
-            }
-            AppMsg::GotoNode(id) => {
-                if let Some(node_pos) = node_positions.get((id.0 - 1) as usize)
-                {
-                    let mut view = self.shared_state.view();
-                    view.center = node_pos.center();
-                    main_view_msg_tx.send(MainViewMsg::GotoView(view)).unwrap();
-                }
-            }
-            AppMsg::HoverNode(id) => self.shared_state.hover_node.store(id),
-
             AppMsg::Selection(sel) => match sel {
                 Select::Clear => {
                     self.selection_changed = true;
@@ -381,26 +692,16 @@ impl App {
                         Some((top_left, bottom_right));
                 }
             },
-            AppMsg::AddGff3Records(records) => {
-                let file_name = records.file_name().to_string();
-                self.annotations.insert_gff3(&file_name, records);
-            }
-            AppMsg::AddBedRecords(records) => {
-                let file_name = records.file_name().to_string();
-                self.annotations.insert_bed(&file_name, records);
-            }
             AppMsg::NewNodeLabels { name, label_set } => {
                 let label_set_ = label_set.label_set();
                 self.labels.add_label_set(
-                    boundary,
+                    self.layout_boundary,
                     node_positions,
                     &name,
                     &label_set_,
+                    None,
                 );
                 self.annotations.insert_label_set(&name, label_set);
-            }
-            AppMsg::ToggleDarkMode => {
-                self.toggle_dark_mode(gui_msg);
             }
             AppMsg::RequestSelection(sender) => {
                 let selection = self.selected_nodes.to_owned();
@@ -412,82 +713,41 @@ impl App {
                 sender.send((rect, selection)).unwrap();
             }
 
-            AppMsg::RequestData { key, index, sender } => {
-                type ReqResult = Result<rhai::Dynamic>;
-
-                macro_rules! handle {
-                    ($expr:expr, $err:literal) => {
-                        if let Some(result) = $expr {
-                            Ok(rhai::Dynamic::from(result.clone()))
-                        } else {
-                            let err = anyhow::anyhow!($err);
-                            Err(err) as ReqResult
-                        }
-                    };
-                }
-
-                let boxed = match key.as_str() {
-                    "annotation_file" => {
-                        if let Some(records) = self.annotations.get_gff3(&index)
-                        {
-                            Ok(rhai::Dynamic::from(records.clone()))
-                        } else if let Some(records) =
-                            self.annotations.get_bed(&index)
-                        {
-                            Ok(rhai::Dynamic::from(records.clone()))
-                        } else {
-                            Err(anyhow::anyhow!(
-                                "Annotation file not loaded: {}",
-                                index
-                            ))
-                        }
-                    }
-                    "annotation_names" => {
-                        let names = self
-                            .annotations
-                            .annot_names()
-                            .iter()
-                            .map(|(name, _)| name.to_string())
-                            .collect::<Vec<_>>();
-
-                        Ok(rhai::Dynamic::from(names))
-                    }
-                    "annotation_ref_path" => {
-                        if let Some(path) =
-                            self.annotations.get_default_ref_path(&index)
-                        {
-                            Ok(rhai::Dynamic::from(path))
-                        } else {
-                            Ok(rhai::Dynamic::from(()))
-                        }
-                    }
-                    _ => {
-                        let err =
-                            anyhow::anyhow!("Requested unknown key from App");
-                        Err(err) as ReqResult
-                    }
-                };
-
-                sender.send(boxed).unwrap();
+            AppMsg::SetData { key, index, value } => {
+                self.send_msg(AppMsg::set_data(key, index, value)).unwrap();
             }
-            AppMsg::SetData { key, index, value } => match key.as_str() {
-                "annotation_ref_path" => {
-                    if value.as_unit().is_ok() {
-                        self.annotations.set_default_ref_path(&index, None);
-                    } else if value.type_id()
-                        == std::any::TypeId::of::<PathId>()
-                    {
-                        let path = value.cast::<PathId>();
-                        self.annotations
-                            .set_default_ref_path(&index, Some(path));
+            AppMsg::ConsoleEval { script } => {
+                console_input_tx.send(script).unwrap();
+            }
+            AppMsg::Raw {
+                type_id,
+                msg_name,
+                value,
+            } => {
+                if let Some(handler) = self.msg_handlers.get(&msg_name) {
+                    let handler: Arc<_> = handler.clone();
+                    if type_id == handler.type_id {
+                        handler.call(self, node_positions, value.as_ref());
+                    } else {
+                        log::warn!(
+                            "Type mismatch for AppMsg handler \"{}\"",
+                            msg_name
+                        );
                     }
+                } else {
+                    log::warn!("Received unknown AppMsg");
+                    log::warn!(
+                        "msg_name: {:?}\ntype_id: {:?}\nvalue: {:?}",
+                        msg_name,
+                        type_id,
+                        value
+                    );
                 }
-                _ => (),
-            },
+            }
         }
     }
 
-    fn toggle_dark_mode(&self, gui_msg: &Sender<GuiMsg>) {
+    fn toggle_dark_mode(&self) {
         let prev = self.shared_state.dark_mode.fetch_xor(true);
 
         let msg = if prev {
@@ -496,7 +756,7 @@ impl App {
             GuiMsg::SetDarkMode
         };
 
-        gui_msg.send(msg).unwrap();
+        self.channels.gui_tx.send(msg).unwrap();
     }
 
     pub fn apply_input(
@@ -515,11 +775,52 @@ impl App {
                 }
                 AppInput::KeyToggleTheme => {
                     if state.pressed() {
-                        self.toggle_dark_mode(gui_msg);
+                        self.toggle_dark_mode();
                     }
                 }
             }
         }
+    }
+}
+
+type RefAny<'a> = &'a (dyn std::any::Any + Send + Sync);
+type ArcedAny = Arc<dyn std::any::Any + Send + Sync>;
+type BoxedAny = Box<dyn std::any::Any + Send + Sync>;
+
+trait HandlerFn<'a>: Fn(&'a mut App, &'a [Node], RefAny<'a>) + Send + Sync {}
+
+impl<'a, T> HandlerFn<'a> for T where
+    // T: 'a + Fn(&'a mut App, &'a [Node], BoxedAny) + Send + Sync
+    T: 'a + Fn(&'a mut App, &'a [Node], RefAny<'a>) + Send + Sync
+{
+}
+
+pub struct AppMsgHandler {
+    type_id: TypeId,
+    handler: Arc<dyn for<'a> HandlerFn<'a>>,
+}
+
+impl AppMsgHandler {
+    fn call(&self, app: &mut App, nodes: &[Node], input: RefAny<'_>) {
+        (self.handler)(app, nodes, input);
+    }
+
+    fn from_fn<T, F>(f: F) -> Self
+    where
+        F: Fn(&mut App, &[Node], &T) + Send + Sync + 'static,
+        T: std::any::Any + 'static,
+    {
+        let type_id = TypeId::of::<T>();
+
+        let handler = Arc::new(
+            move |app: &'_ mut App, nodes: &'_ [Node], input: RefAny<'_>| {
+                if let Some(arg) = input.downcast_ref::<T>() {
+                    f(app, nodes, arg);
+                }
+            },
+        ) as Arc<dyn for<'a> HandlerFn<'a>>;
+
+        AppMsgHandler { type_id, handler }
     }
 }
 

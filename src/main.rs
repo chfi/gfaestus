@@ -1,18 +1,19 @@
 #[allow(unused_imports)]
 use compute::EdgePreprocess;
 use crossbeam::atomic::AtomicCell;
-use futures::SinkExt;
-use gfaestus::annotations::{BedRecords, ClusterCache, Gff3Records};
-use gfaestus::context::{ContextEntry, ContextMenu};
+use gfaestus::context::{debug_context_action, pan_to_node_action, ContextMgr};
 use gfaestus::quad_tree::QuadTree;
 use gfaestus::reactor::{ModalError, ModalHandler, ModalSuccess, Reactor};
+use gfaestus::script::plugins::colors::{hash_bytes, hash_color};
+use gfaestus::vulkan::compute::path_view::{Path1DLayout, PathViewRenderer};
 use gfaestus::vulkan::context::EdgeRendererType;
 use gfaestus::vulkan::draw_system::edges::EdgeRenderer;
-use gfaestus::vulkan::texture::{Gradients, Gradients_};
+use gfaestus::vulkan::texture::{Gradients, Gradients_, Texture};
 
 use parking_lot::RwLock;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 use winit::event::{ElementState, Event, MouseButton, WindowEvent};
 use winit::event_loop::ControlFlow;
@@ -20,7 +21,9 @@ use winit::event_loop::ControlFlow;
 #[allow(unused_imports)]
 use winit::window::{Window, WindowBuilder};
 
-use gfaestus::app::{mainview::*, Args, OverlayCreatorMsg, Select};
+use gfaestus::app::{
+    mainview::*, Args, OverlayCreatorMsg, OverlayState, Select,
+};
 use gfaestus::app::{App, AppMsg};
 use gfaestus::geometry::*;
 use gfaestus::graph_query::*;
@@ -171,14 +174,7 @@ fn main() {
 
     let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
 
-    let mut app = App::new((100.0, 100.0)).expect("error when creating App");
-
-    let mut reactor = gfaestus::reactor::Reactor::init(
-        thread_pool.clone(),
-        rayon_pool,
-        graph_query.clone(),
-        app.channels(),
-    );
+    let layout_1d = Arc::new(Path1DLayout::new(graph_query.graph()));
 
     let graph_query_worker =
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
@@ -187,6 +183,25 @@ fn main() {
         universe_from_gfa_layout(&graph_query, layout_file).unwrap();
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
+
+    let tree_bounding_box = {
+        let tl = top_left;
+        let br = bottom_right;
+
+        let p0 = tl - (br - tl) * 0.2;
+        let p1 = br + (br - tl) * 0.2;
+
+        Rect::new(p0, p1)
+    };
+
+    let mut app = App::new(
+        (100.0, 100.0),
+        thread_pool.clone(),
+        rayon_pool,
+        graph_query.clone(),
+        tree_bounding_box,
+    )
+    .expect("error when creating App");
 
     let _center = Point {
         x: top_left.x + (bottom_right.x - top_left.x) / 2.0,
@@ -227,14 +242,13 @@ fn main() {
     let mut select_fence_id: Option<usize> = None;
     let mut translate_fence_id: Option<usize> = None;
 
+    let mut prev_overlay: Option<usize> = None;
+    let mut prev_gradient = app.shared_state().overlay_state().gradient();
+
     let (winit_tx, winit_rx) =
         crossbeam::channel::unbounded::<WindowEvent<'static>>();
 
     let mut input_manager = InputManager::new(winit_rx, app.shared_state());
-
-    input_manager.add_binding(winit::event::VirtualKeyCode::A, move || {
-        println!("i'm a bound command!");
-    });
 
     let app_rx = input_manager.clone_app_rx();
     let main_view_rx = input_manager.clone_main_view_rx();
@@ -251,27 +265,25 @@ fn main() {
     )
     .unwrap();
 
-    let tree_bounding_box = {
-        let height = (bottom_right.x - top_left.x) / 4.0;
+    let path_view = Arc::new(
+        PathViewRenderer::new(
+            &gfaestus,
+            main_view
+                .node_draw_system
+                .pipelines
+                .pipeline_rgb
+                .descriptor_set_layout,
+            main_view
+                .node_draw_system
+                .pipelines
+                .pipeline_value
+                .descriptor_set_layout,
+            &graph_query,
+        )
+        .unwrap(),
+    );
 
-        let mut tl = top_left;
-        let mut br = bottom_right;
-
-        tl.y = -height;
-        br.y = height;
-
-        Rect::new(tl, br)
-    };
-
-    let mut gui = Gui::new(
-        &gfaestus,
-        &mut reactor,
-        app.shared_state().clone(),
-        app.channels(),
-        app.settings.clone(),
-        &graph_query,
-    )
-    .unwrap();
+    let mut gui = Gui::new(&app, &gfaestus, &path_view).unwrap();
 
     // create default overlays
     {
@@ -301,18 +313,20 @@ fn node_color(id) {
 ";
 
         create_overlay(
+            app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
-            &reactor,
+            &app.reactor,
             "Node Seq Hash",
             node_seq_script,
         )
         .expect("Error creating node seq hash overlay");
 
         create_overlay(
+            app.shared_state().overlay_state(),
             &gfaestus,
             &mut main_view,
-            &reactor,
+            &app.reactor,
             "Node Step Count",
             step_count_script,
         )
@@ -330,50 +344,6 @@ fn node_color(id) {
 
     let mut modal_handler =
         ModalHandler::new(app.shared_state().show_modal.to_owned());
-
-    /*
-    let mut receiver = {
-        let (res_tx, res_rx) =
-            futures::channel::mpsc::channel::<Option<String>>(2);
-
-        let callback = move |text: &mut String, ui: &mut egui::Ui| {
-            let _text_box = ui.text_edit_singleline(text);
-
-            let ok_btn = ui.button("OK");
-            let cancel_btn = ui.button("cancel");
-
-            if ok_btn.clicked() {
-                return Ok(ModalSuccess::Success);
-            }
-
-            if cancel_btn.clicked() {
-                return Ok(ModalSuccess::Cancel);
-            }
-
-            Err(ModalError::Continue)
-        };
-
-        let prepared = ModalHandler::prepare_callback(
-            &app.shared_state().show_modal,
-            String::new(),
-            callback,
-            res_tx,
-        );
-
-        app.channels().modal_tx.send(prepared).unwrap();
-
-        res_rx
-    };
-
-    {
-        let _ = reactor.spawn_forget(async move {
-            use futures::stream::StreamExt;
-            log::warn!("awaiting modal result");
-            let val = receiver.next().await;
-            log::warn!("result: {:?}", val);
-        });
-    }
-    */
 
     gui.app_view_state().graph_stats().send(GraphStatsMsg {
         node_count: Some(stats.node_count),
@@ -414,15 +384,25 @@ fn node_color(id) {
     let mut selection_blur =
         SelectionOutlineBlurPipeline::new(&gfaestus, 1).unwrap();
 
-    let gui_msg_tx = gui.clone_gui_msg_tx();
+    let gui_msg_tx = app.channels().gui_tx.clone();
 
-    // let gradients_ = Gradients_::initialize(
-    //     &gfaestus,
-    //     gfaestus.transient_command_pool,
-    //     gfaestus.graphics_queue,
-    //     1024,
-    // )
-    // .unwrap();
+    dbg!();
+    let gradients_ = Gradients_::initialize(
+        &gfaestus,
+        gfaestus.transient_command_pool,
+        gfaestus.graphics_queue,
+        1024,
+    )
+    .unwrap();
+
+    dbg!();
+    gui.draw_system
+        .add_texture(&gfaestus, gradients_.texture)
+        .unwrap();
+
+    dbg!();
+
+    let mut upload_path_view_texture = true;
 
     let gradients = Gradients::initialize(
         &gfaestus,
@@ -452,12 +432,27 @@ fn node_color(id) {
 
     gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
 
-    let mut context_menu = ContextMenu::new(&app);
-    let open_context = AtomicCell::new(false);
+    let mut context_mgr = ContextMgr::default();
 
-    // let mut cluster_caches: HashMap<String, ClusterCache> = HashMap::default();
-    // let mut step_caches: FxHashMap<PathId, Vec<(Handle, _, usize)>> =
-    //     FxHashMap::default();
+    {
+        macro_rules! set_type_name {
+            ($type:ty) => {
+                context_mgr.set_type_name::<$type>(stringify!($type));
+            };
+        }
+
+        set_type_name!(NodeId);
+        set_type_name!(PathId);
+        set_type_name!(FxHashSet<NodeId>);
+    }
+
+    let dbg_action = debug_context_action(&context_mgr);
+
+    context_mgr.register_action("Debug print", dbg_action);
+
+    context_mgr
+        .load_rhai_modules("./scripts/context_actions/".into(), &gui.console)
+        .unwrap();
 
     if let Some(script_file) = args.run_script.as_ref() {
         if script_file == "-" {
@@ -470,12 +465,12 @@ fn node_color(id) {
 
             if let Ok(script) = script_bytes[0..read].to_str() {
                 warn!("executing script {}", script_file);
-                gui.console.eval_line(&mut reactor, true, script).unwrap();
+                gui.console.eval(&mut app.reactor, true, script).unwrap();
             }
         } else {
             warn!("executing script file {}", script_file);
             gui.console
-                .eval_file(&mut reactor, true, script_file)
+                .eval_file(&mut app.reactor, true, script_file)
                 .unwrap();
         }
     }
@@ -486,11 +481,13 @@ fn node_color(id) {
                 if let Some(path_str) = annot_path.to_str() {
                     let script = format!("load_collection(\"{}\");", path_str);
                     log::warn!("executing script: {}", script);
-                    gui.console.eval_line(&mut reactor, true, &script).unwrap();
+                    gui.console.eval(&mut app.reactor, true, &script).unwrap();
                 }
             }
         }
     }
+
+    let timer = std::time::Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
 
@@ -511,17 +508,8 @@ fn node_color(id) {
             if let WindowEvent::MouseInput { state, button, .. } = event {
                 if *state == ElementState::Pressed &&
                     *button == MouseButton::Right {
-
-                        let focus = &app.shared_state().gui_focus_state;
-
-                        // this whole thing should be handled better
-                        if !focus.mouse_over_gui() {
-                            main_view.send_context(context_menu.tx());
-                        }
-
-                        open_context.store(true);
-                        // context_menu.open_context_menu(&gui.ctx);
-                        context_menu.set_position(app.shared_state().mouse_pos());
+                        context_mgr.open_context_menu(&gui.ctx);
+                        context_mgr.set_position(app.shared_state().mouse_pos());
                 }
             }
         }
@@ -546,7 +534,7 @@ fn node_color(id) {
 
                 // hacky -- this should take place after mouse pos is updated
                 // in egui but before input is sent to mainview
-                input_manager.handle_events(&mut reactor, &gui_msg_tx);
+                input_manager.handle_events(&mut app.reactor, &gui_msg_tx);
 
                 let mouse_pos = app.mouse_pos();
 
@@ -556,18 +544,19 @@ fn node_color(id) {
                     .read_node_id_at(mouse_pos)
                     .map(|nid| NodeId::from(nid as u64));
 
-                app.channels().app_tx.send(AppMsg::HoverNode(hover_node)).unwrap();
-
-                gui.set_hover_node(hover_node);
+                app.shared_state().hover_node.store(hover_node);
 
                 if app.selection_changed() {
                     if let Some(selected) = app.selected_nodes() {
 
                         log::warn!("sending selection");
+                        /*
                         context_menu
                             .tx()
                             .send(ContextEntry::Selection { nodes: selected.to_owned() })
+
                             .unwrap();
+                        */
 
                         let mut nodes = selected.iter().copied().collect::<Vec<_>>();
                         nodes.sort();
@@ -588,13 +577,6 @@ fn node_color(id) {
                     }
                 }
 
-                while let Ok((key_code, command)) = app.channels().binds_rx.try_recv() {
-                    if let Some(cmd) = command {
-                        input_manager.add_binding(key_code, cmd);
-                        // input_manager.add_binding(key_code, Box::new(cmd));
-                    } else {
-                    }
-                }
 
                 while let Ok(app_in) = app_rx.try_recv() {
                     app.apply_input(app_in, &gui_msg_tx);
@@ -642,15 +624,13 @@ fn node_color(id) {
                     }
 
                     app.apply_app_msg(
-                        tree_bounding_box,
-                        main_view.main_view_msg_tx(),
-                        &gui_msg_tx,
+                        &gui.console.input_tx(),
                         universe.layout().nodes(),
                         app_msg,
                     );
                 }
 
-                gui.apply_received_gui_msgs();
+                gui.apply_received_gui_msgs(&mut app.reactor);
 
                 while let Ok(main_view_msg) = main_view.main_view_msg_rx().try_recv() {
                     main_view.apply_msg(main_view_msg);
@@ -658,6 +638,7 @@ fn node_color(id) {
 
                 while let Ok(new_overlay) = new_overlay_rx.try_recv() {
                     if let Ok(_) = handle_new_overlay(
+                        app.shared_state().overlay_state(),
                         &gfaestus,
                         &mut main_view,
                         graph_query.node_count(),
@@ -683,8 +664,78 @@ fn node_color(id) {
                 for er in edge_renderer.iter_mut() {
                     er.write_ubo(&edge_ubo).unwrap();
                 }
+
+                let focus = &app.shared_state().gui_focus_state;
+                if !focus.mouse_over_gui() {
+                    main_view.produce_context(&context_mgr);
+                    // main_view.send_context(context_menu.tx());
+                }
             }
             Event::RedrawEventsCleared => {
+
+
+                if path_view.should_reload() {
+                    path_view.load_paths_1d(&mut app.reactor, &layout_1d).unwrap();
+                    // path_view.load_paths(&mut app.reactor).unwrap();
+                }
+
+                app.reactor
+                    .gpu_tasks
+                    .execute_all(&gfaestus,
+                                 gfaestus.transient_command_pool,
+                                 gfaestus.graphics_queue).unwrap();
+
+
+                // TODO this timer is just to make sure everything has
+                // been initialized; it should probably be replaced by
+                // checking the frame count
+                if timer.elapsed().as_millis() > 400 {
+                    let cur_overlay = app.shared_state().overlay_state().current_overlay();
+                    let cur_gradient = app.shared_state().overlay_state().gradient();
+
+                    if path_view.fence_id().is_none()
+                        && (cur_overlay != prev_overlay ||
+                            path_view.should_rerender() ||
+                            // rerender_path_view ||
+                            cur_gradient != prev_gradient)
+                    {
+                        // log::warn!("doing the paths");
+
+                        prev_overlay = cur_overlay;
+                        prev_gradient = cur_gradient;
+
+                        let overlay =
+                            app.shared_state().overlay_state().current_overlay().unwrap();
+
+                        let rgb_overlay_desc = main_view
+                            .node_draw_system
+                            .pipelines
+                            .pipeline_rgb
+                            .overlay_set;
+
+                        let val_overlay_desc = main_view
+                            .node_draw_system
+                            .pipelines
+                            .pipeline_value
+                            .overlay_set;
+
+                        let overlay_kind = main_view
+                            .node_draw_system
+                            .pipelines
+                            .overlay_kind(overlay).unwrap();
+
+
+                        path_view
+                            .dispatch_managed(&mut compute_manager,
+                                              &gfaestus,
+                                              rgb_overlay_desc,
+                                              val_overlay_desc,
+                                              overlay_kind,
+                            ).unwrap();
+
+                    }
+                }
+
 
                 log::trace!("Event::RedrawEventsCleared");
                 let edge_ubo = app.settings.edge_renderer().load();
@@ -701,6 +752,30 @@ fn node_color(id) {
                                                            &main_view.node_draw_system.vertices).unwrap();
 
                         translate_fence_id = None;
+                    }
+                }
+
+
+
+                if let Some(fid) = path_view.fence_id() {
+                    if compute_manager.is_fence_ready(fid).unwrap() {
+                        log::trace!("Path view fence ready");
+                        path_view.block_on_fence(&mut compute_manager);
+
+                        // app.shared_state().tmp.store(true);
+
+                        if upload_path_view_texture {
+                            upload_path_view_texture = false;
+
+                            let tex_id = gui
+                                .draw_system
+                                .add_texture(&gfaestus,
+                                             path_view.output_image
+                                ).unwrap();
+
+
+                            log::warn!("uploaded path view texture: {:?}", tex_id);
+                        }
                     }
                 }
 
@@ -788,193 +863,51 @@ fn node_color(id) {
                     }
                 }
 
+                let _ = gui.console.eval_next(&mut app.reactor, true);
+
+
                 gui.begin_frame(
-                    &mut reactor,
-                    Some(app.dims().into()),
-                    &graph_query,
-                    &graph_query_worker,
-                    app.annotations(),
-                    context_menu.tx(),
+                    &app,
+                    &context_mgr,
+                    universe.layout().nodes(),
                 );
+
 
                 modal_handler.show(&gui.ctx);
 
-                {
-                    let ctx = &gui.ctx;
-                    let clipboard = &mut gui.clipboard_ctx;
 
-                    if open_context.load() {
-                        context_menu.recv_contexts();
-                        context_menu.open_context_menu(&gui.ctx);
-                        open_context.store(false);
-                    }
+                // {
+                //     let ctx = &gui.ctx;
+                //     let clipboard = &mut gui.clipboard_ctx;
 
-                    context_menu.show(ctx, &reactor, clipboard);
-                }
+                    // if open_context.load() {
+                    //     context_menu.recv_contexts();
+                    //     context_menu.open_context_menu(&gui.ctx);
+                    //     open_context.store(false);
+                    // }
 
-
+                    // context_menu.show(ctx, &app.reactor, clipboard);
+                // }
 
                 {
                     let shared_state = app.shared_state();
                     let view = shared_state.view();
                     let labels = app.labels();
-                    // log::debug!("Clustering label sets");
                     let cluster_tree = labels.cluster(tree_bounding_box,
                                                       app.settings.label_radius().load(),
                                                       view);
-                    // log::debug!("Drawing label sets");
-                    cluster_tree.draw_labels(&gui.ctx, shared_state);
-                    // cluster_tree.draw_clusters(&gui.ctx, view);
+                    cluster_tree.draw_labels(labels, &gui.ctx, shared_state);
                 }
 
-
-                /*
-                let annotations = app.annotations();
-
-                log::trace!("Drawing label sets");
-                for label_set in annotations.visible_label_sets() {
-
-                    if !step_caches.contains_key(&label_set.path_id) {
-                        let steps = graph_query.path_pos_steps(label_set.path_id).unwrap();
-                        step_caches.insert(label_set.path_id, steps);
-                    }
-
-                    let steps = step_caches.get(&label_set.path_id).unwrap();
-
-                    let label_radius = app.settings.label_radius().load();
-
-                    use gfaestus::annotations::AnnotationColumn;
-
-                    let column = &label_set.column;
-
-                    let records: &dyn std::any::Any = match column {
-                        AnnotationColumn::Gff3(_) => {
-                            let records: &Gff3Records = app
-                                .annotations()
-                                .get_gff3(&label_set.annotation_name)
-                                .unwrap();
-
-                            let records_any: &dyn std::any::Any = records as _;
-                            records_any
-                        }
-                        AnnotationColumn::Bed(_) => {
-                            let records: &BedRecords = app
-                                .annotations()
-                                .get_bed(&label_set.annotation_name)
-                                .unwrap();
-
-                            let records_any: &dyn std::any::Any = records as _;
-                            records_any
-                        }
-                    };
+                // context_mgr.end_frame();
 
 
-                    if !cluster_caches.contains_key(label_set.name()) {
-                        let cluster_cache = ClusterCache::new_cluster(
-                            &steps,
-                            universe.layout().nodes(),
-                            label_set,
-                            app.shared_state().view(),
-                            label_radius
-                        );
+                context_mgr.begin_frame();
+                context_mgr.show(&gui.ctx, &app);
 
-                        cluster_caches.insert(label_set.name().to_string(),
-                                              cluster_cache);
-                    }
+                let meshes = gui.end_frame(&mut app.reactor);
 
-                    let cluster_cache = cluster_caches
-                        .get_mut(label_set.name())
-                        .unwrap();
-
-                    cluster_cache
-                        .rebuild_cluster(
-                            &steps,
-                            universe.layout().nodes(),
-                            app.shared_state().view(),
-                            label_radius
-                        );
-
-                    for (node, cluster_indices) in cluster_cache.node_labels.iter() {
-                        let mut y_offset = 20.0;
-                        let mut count = 0;
-
-                        let label_indices = &cluster_indices.label_indices;
-
-                        for &label_ix in label_indices.iter() {
-
-                            let label = &cluster_cache.label_set.label_strings()[label_ix];
-                            let offset = &cluster_cache
-                                .cluster_offsets[cluster_indices.offset_ix];
-
-                            let anchor_dir = Point::new(-offset.x, -offset.y);
-                            let offset = *offset * 20.0;
-
-                            let rect = gfaestus::gui::text::draw_text_at_node_anchor(
-                                &gui.ctx,
-                                universe.layout().nodes(),
-                                app.shared_state().view(),
-                                *node,
-                                offset + Point::new(0.0, y_offset),
-                                anchor_dir,
-                                label
-                            );
-
-                            if let Some(rect) = rect {
-                                let rect = rect.resize(0.98);
-                                if rect.contains(app.mouse_pos()) {
-                                    gfaestus::gui::text::draw_rect(&gui.ctx, rect);
-
-                                    // hacky way to check for a click
-                                    // for now, because i can't figure
-                                    // egui out
-                                    if gui.ctx.input().pointer.any_click() {
-                                        match column {
-                                            AnnotationColumn::Gff3(col) => {
-                                                if let Some(gff) = records.downcast_ref::<Gff3Records>() {
-                                                    gui.scroll_to_gff_record(gff, col, label.as_bytes());
-                                                }
-                                            }
-                                            AnnotationColumn::Bed(col) => {
-                                                if let Some(bed) = records.downcast_ref::<BedRecords>() {
-                                                    gui.scroll_to_bed_record(bed, col, label.as_bytes());
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            y_offset += 15.0;
-                            count += 1;
-
-                            if count > 10 {
-                                let count = count.min(label_indices.len());
-                                let rem = label_indices.len() - count;
-
-                                if rem > 0 {
-                                    let more_label = format!("and {} more", rem);
-
-                                    gfaestus::gui::text::draw_text_at_node_anchor(
-                                        &gui.ctx,
-                                        universe.layout().nodes(),
-                                        app.shared_state().view(),
-                                        *node,
-                                        offset + Point::new(0.0, y_offset),
-                                        anchor_dir,
-                                        &more_label
-                                    );
-                                }
-                                break;
-                            }
-                        }
-                    }
-                }
-                */
-
-
-                let meshes = gui.end_frame();
-
-                gui.upload_texture(&gfaestus).unwrap();
+                gui.upload_egui_texture(&gfaestus).unwrap();
 
                 if !meshes.is_empty() {
                     gui.upload_vertices(&gfaestus, &meshes).unwrap();
@@ -1222,7 +1155,6 @@ fn node_color(id) {
                             gui_pass,
                             framebuffers,
                             size.into(),
-                            &gradients,
                         )
                         .unwrap();
 
@@ -1302,6 +1234,7 @@ fn node_color(id) {
 }
 
 fn handle_new_overlay(
+    overlay_state: &OverlayState,
     app: &GfaestusVk,
     main_view: &mut MainView,
     node_count: usize,
@@ -1340,12 +1273,14 @@ fn handle_new_overlay(
         }
     };
 
-    main_view.node_draw_system.pipelines.create_overlay(overlay);
+    let id = main_view.node_draw_system.pipelines.create_overlay(overlay);
+    overlay_state.current_overlay.store(Some(id));
 
     Ok(())
 }
 
 fn create_overlay(
+    overlay_state: &OverlayState,
     app: &GfaestusVk,
     main_view: &mut MainView,
     reactor: &Reactor,
@@ -1369,7 +1304,7 @@ fn create_overlay(
             name: name.to_string(),
             data,
         };
-        handle_new_overlay(app, main_view, node_count, msg)?;
+        handle_new_overlay(overlay_state, app, main_view, node_count, msg)?;
     }
 
     Ok(())

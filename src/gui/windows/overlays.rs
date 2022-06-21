@@ -10,6 +10,7 @@ use anyhow::Result;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
+use crate::geometry::Rect;
 use crate::reactor::{Host, Outbox, Reactor};
 use crate::script::{ScriptConfig, ScriptTarget};
 use crate::{
@@ -44,6 +45,7 @@ impl OverlayList {
 
             gradient_picker,
 
+            // gradient_picker_open: AtomicCell::new(true),
             gradient_picker_open: AtomicCell::new(false),
         }
     }
@@ -181,7 +183,7 @@ pub struct OverlayCreator {
 impl OverlayCreator {
     pub const ID: &'static str = "overlay_creator_window";
 
-    pub fn new(reactor: &mut Reactor) -> Result<Self> {
+    pub fn new(reactor: &Reactor) -> Result<Self> {
         let pwd = std::fs::canonicalize("./").unwrap();
 
         let mut file_picker = FilePicker::new(
@@ -327,18 +329,18 @@ impl OverlayCreator {
                 });
 
                 ui.horizontal(|ui| {
-                    let file_btn =
-                        egui::Button::new("Choose file").enabled(!is_running);
+                    let file_btn = egui::Button::new("Choose file");
 
-                    if ui.add(file_btn).clicked() {
+                    if ui.add_enabled(!is_running, file_btn).clicked() {
                         file_picker.reset_selection();
                         *file_picker_open = true;
                     }
 
                     ui.separator();
 
-                    let run_script = ui.add(
-                        egui::Button::new("Run script").enabled(!is_running),
+                    let run_script = ui.add_enabled(
+                        !is_running,
+                        egui::Button::new("Run script"),
                     );
 
                     if run_script.clicked() && !is_running {
@@ -410,7 +412,8 @@ impl GradientPicker {
             .id(egui::Id::new(Self::ID))
             .open(open)
             .show(ctx, |ui| {
-                egui::ScrollArea::auto_sized().show(ui, |ui| {
+                egui::ScrollArea::both().show(ui, |ui| {
+                    // egui::ScrollArea::auto_sized().show(ui, |ui| {
                     egui::Grid::new("gradient_picker_list").show(ui, |ui| {
                         ui.label("Name");
                         ui.separator();
@@ -421,7 +424,10 @@ impl GradientPicker {
                         let mut current_gradient =
                             self.overlay_state.gradient();
 
-                        for (gradient_name, name) in self.gradient_names.iter()
+                        let dy = 1.0 / 64.0;
+
+                        for (ix, (gradient_name, name)) in
+                            self.gradient_names.iter().enumerate()
                         {
                             let gradient_select = ui.selectable_value(
                                 &mut current_gradient,
@@ -434,10 +440,21 @@ impl GradientPicker {
                                 self.overlay_state.set_gradient(*gradient_name);
                             }
 
-                            ui.image(
-                                gradient_name.texture_id(),
-                                Point { x: 130.0, y: 15.0 },
-                            );
+                            // let y = oy + (dy * ix as f32);
+
+                            let y = dy * ix as f32;
+
+                            let p0 = Point::new(0.0, y);
+                            let p1 = Point::new(1.0, y);
+
+                            let img = egui::Image::new(
+                                egui::TextureId::User(0),
+                                Point { x: 260.0, y: 25.0 },
+                            )
+                            .uv(Rect::new(p0, p1));
+
+                            ui.add(img);
+
                             ui.end_row();
                         }
                     });

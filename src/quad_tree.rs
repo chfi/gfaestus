@@ -17,7 +17,7 @@ pub struct QuadTree<T: Clone> {
 }
 
 impl<T: Clone> QuadTree<T> {
-    pub const NODE_CAPACITY: usize = 4;
+    pub const NODE_CAPACITY: usize = 128;
 
     pub fn new(boundary: Rect) -> Self {
         Self {

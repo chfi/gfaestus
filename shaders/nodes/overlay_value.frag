@@ -37,6 +37,7 @@ void main() {
     f_mask = vec4(0.0, 0.0, 0.0, 0.0);
   }
 
-  float node_val = node_value.value[node_id];
+
+  float node_val = node_value.value[node_id - 1];
   f_color = texture(overlay, node_val);
 }

@@ -5,20 +5,23 @@ use std::str::FromStr;
 
 use anyhow::Result;
 
+use crate::reactor::{ModalError, ModalSuccess};
+
+#[derive(Debug, Clone)]
 pub struct FilePicker {
     id: egui::Id,
 
-    pwd: PathBuf,
-    current_dir: PathBuf,
-    current_dir_text: String,
+    pub pwd: PathBuf,
+    pub current_dir: PathBuf,
+    pub current_dir_text: String,
 
-    highlighted_dir: Option<PathBuf>,
-    selected_path: Option<PathBuf>,
+    pub highlighted_dir: Option<PathBuf>,
+    pub selected_path: Option<PathBuf>,
 
-    dir_list: Vec<PathBuf>,
-    history: Vec<PathBuf>,
+    pub dir_list: Vec<PathBuf>,
+    pub history: Vec<PathBuf>,
 
-    extensions: HashSet<String>,
+    pub extensions: HashSet<String>,
 }
 
 impl FilePicker {
@@ -154,6 +157,105 @@ impl FilePicker {
         Ok(())
     }
 
+    pub fn ui_impl(
+        &mut self,
+        ui: &mut egui::Ui,
+        force_accept: bool,
+    ) -> std::result::Result<ModalSuccess, ModalError> {
+        let max_height = ui.input().screen_rect.height() - 100.0;
+        /*
+        ui.set_max_height(max_height);
+        */
+
+        ui.horizontal(|ui| {
+            let text_box = ui.text_edit_singleline(&mut self.current_dir_text);
+
+            if ui.button("Goto").clicked()
+                || (text_box.lost_focus()
+                        // || (text_box.has_focus()
+                            && ui.input().key_pressed(egui::Key::Enter))
+            {
+                self.goto_path_in_text_box().unwrap();
+            }
+        });
+
+        ui.horizontal(|ui| {
+            if ui.button("Prev").clicked() {
+                self.goto_prev().unwrap();
+            }
+
+            if ui.button("Up").clicked() {
+                self.go_up().unwrap();
+            }
+        });
+
+        let mut goto_dir: Option<PathBuf> = None;
+
+        let mut choose_path: Option<PathBuf> = None;
+
+        egui::ScrollArea::from_max_height(max_height - 100.0).show(
+            ui,
+            |mut ui| {
+                egui::Grid::new("file_list").striped(true).show(
+                    &mut ui,
+                    |ui| {
+                        for dir_path in self.dir_list.iter() {
+                            if let Some(name) =
+                                dir_path.file_name().and_then(|n| n.to_str())
+                            {
+                                let checked = if let Some(sel_name) =
+                                    &self.highlighted_dir
+                                {
+                                    sel_name == dir_path
+                                } else {
+                                    false
+                                };
+                                let row = ui.selectable_label(checked, name);
+
+                                if row.clicked() {
+                                    self.highlighted_dir =
+                                        Some(dir_path.clone());
+                                }
+
+                                if row.double_clicked() {
+                                    if dir_path.is_dir() {
+                                        goto_dir = Some(dir_path.to_owned());
+                                    } else if dir_path.is_file() {
+                                        choose_path = Some(dir_path.to_owned());
+                                    }
+                                }
+
+                                ui.end_row();
+                            }
+                        }
+                    },
+                );
+            },
+        );
+
+        if force_accept {
+            if let Some(dir_path) = self.highlighted_dir.as_ref() {
+                if dir_path.is_dir() {
+                    goto_dir = Some(dir_path.to_owned());
+                } else if dir_path.is_file() {
+                    choose_path = Some(dir_path.to_owned());
+                }
+            }
+        }
+
+        if let Some(dir) = goto_dir {
+            self.goto_dir(&dir, true).unwrap();
+            ui.scroll_to_cursor(egui::Align::TOP);
+        }
+
+        if let Some(path) = choose_path {
+            self.selected_path = Some(path);
+            return Ok(ModalSuccess::Success);
+        }
+
+        Err(ModalError::Continue)
+    }
+
     pub fn ui(
         &mut self,
         ctx: &egui::CtxRef,
@@ -168,94 +270,10 @@ impl FilePicker {
 
                 ui.set_max_height(max_height);
 
-                ui.horizontal(|ui| {
-                    let text_box =
-                        ui.text_edit_singleline(&mut self.current_dir_text);
-
-                    if ui.button("Goto").clicked()
-                        || (text_box.lost_focus()
-                        // || (text_box.has_focus()
-                            && ui.input().key_pressed(egui::Key::Enter))
-                    {
-                        self.goto_path_in_text_box().unwrap();
-                    }
-                });
-
-                ui.horizontal(|ui| {
-                    if ui.button("Prev").clicked() {
-                        self.goto_prev().unwrap();
-                    }
-
-                    if ui.button("Up").clicked() {
-                        self.go_up().unwrap();
-                    }
-                });
-
-                let mut goto_dir: Option<PathBuf> = None;
-
-                let mut choose_path: Option<PathBuf> = None;
-
-                egui::ScrollArea::from_max_height(max_height - 100.0).show(
-                    ui,
-                    |mut ui| {
-                        egui::Grid::new("file_list").striped(true).show(
-                            &mut ui,
-                            |ui| {
-                                for dir_path in self.dir_list.iter() {
-                                    if let Some(name) = dir_path
-                                        .file_name()
-                                        .and_then(|n| n.to_str())
-                                    {
-                                        let checked = if let Some(sel_name) =
-                                            &self.highlighted_dir
-                                        {
-                                            sel_name == dir_path
-                                        } else {
-                                            false
-                                        };
-                                        let row =
-                                            ui.selectable_label(checked, name);
-
-                                        if row.clicked() {
-                                            self.highlighted_dir =
-                                                Some(dir_path.clone());
-                                        }
-
-                                        if row.double_clicked() {
-                                            if dir_path.is_dir() {
-                                                goto_dir =
-                                                    Some(dir_path.to_owned());
-                                            } else if dir_path.is_file() {
-                                                choose_path =
-                                                    Some(dir_path.to_owned());
-                                            }
-                                        }
-
-                                        ui.end_row();
-                                    }
-                                }
-                            },
-                        );
-                    },
-                );
+                let _ = self.ui_impl(ui, false);
 
                 if ui.button("Ok").clicked() {
-                    if let Some(dir_path) = &self.highlighted_dir {
-                        if dir_path.is_dir() {
-                            goto_dir = Some(dir_path.to_owned());
-                        } else if dir_path.is_file() {
-                            choose_path = Some(dir_path.to_owned());
-                        }
-                    }
-                }
-
-                if let Some(dir) = goto_dir {
-                    self.goto_dir(&dir, true).unwrap();
-                    ui.scroll_to_cursor(egui::Align::TOP);
-                }
-
-                if let Some(path) = choose_path {
-                    self.selected_path = Some(path);
+                    self.selected_path = self.highlighted_dir.clone();
                 }
             })
     }

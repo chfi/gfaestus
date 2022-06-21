@@ -5,12 +5,13 @@ use std::{
 };
 
 use bstr::ByteSlice;
-use crossbeam::channel::Sender;
+use crossbeam::{atomic::AtomicCell, channel::Sender};
 
 pub mod filter;
 pub mod records_list;
 
 pub use filter::*;
+use parking_lot::{RwLock, RwLockReadGuard};
 pub use records_list::*;
 
 #[allow(unused_imports)]
@@ -32,12 +33,12 @@ use crate::{
     annotations::{
         record_column_hash_color, AnnotationCollection, AnnotationFileType,
         AnnotationLabelSet, AnnotationRecord, Annotations, BedRecords,
-        ColumnKey, Gff3Records,
+        ColumnKey, Gff3Records, Labels,
     },
     app::channels::OverlayCreatorMsg,
     app::AppMsg,
     geometry::Point,
-    graph_query::{GraphQuery, GraphQueryWorker},
+    graph_query::GraphQuery,
     gui::{util::grid_row_label, GuiMsg, Windows},
     overlays::OverlayData,
     reactor::{Host, Outbox, Reactor},
@@ -53,67 +54,61 @@ impl LabelSetList {
     pub fn ui(
         ctx: &egui::CtxRef,
         open: &mut bool,
-        annotations: &Annotations,
+        labels: &Labels,
     ) -> Option<egui::InnerResponse<Option<()>>> {
         egui::Window::new("Label sets")
             .id(egui::Id::new(Self::ID))
             .open(open)
-            .show(ctx, |mut ui| {
-                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+            .show(ctx, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| {
                     egui::Grid::new("label_set_list_grid").striped(true).show(
-                        &mut ui,
+                        ui,
                         |ui| {
                             ui.label("Name");
-                            ui.label("File");
-                            ui.label("Column");
-                            ui.label("Path");
                             ui.label("Visible");
                             ui.end_row();
 
-                            let mut label_sets = annotations
-                                .label_sets()
-                                .into_iter()
-                                .collect::<Vec<_>>();
+                            let mut label_sets =
+                                labels.label_sets().iter().collect::<Vec<_>>();
 
-                            label_sets.sort_by(|(n1, _), (n2, _)| n1.cmp(n2));
+                            label_sets.sort_by(|(x, _), (y, _)| x.cmp(y));
 
-                            for (name, label_set) in label_sets {
-                                let file_name =
-                                    if label_set.annotation_name.len() > 20 {
-                                        let file_name =
-                                            label_set.annotation_name.as_str();
-                                        let len = file_name.len();
+                            for (name, _label_set) in label_sets {
+                                let view_name = if name.len() > 20 {
+                                    let len = name.len();
 
-                                        let start = &file_name[0..8];
-                                        let end = &file_name[len - 8..];
+                                    let start = &name[0..8];
+                                    let end = &name[len - 8..];
 
-                                        format!("{}...{}", start, end)
-                                    } else {
-                                        label_set.annotation_name.to_string()
-                                    };
+                                    format!("{}...{}", start, end)
+                                } else {
+                                    name.to_string()
+                                };
 
-                                let is_visible =
-                                    format!("{}", label_set.is_visible());
+                                let is_visible = labels
+                                    .visible(name)
+                                    .map(|v| v.load())
+                                    .unwrap_or_default();
+                                let visible_str = format!("{}", is_visible);
 
-                                let fields: [&str; 5] = [
-                                    &name,
-                                    &file_name,
-                                    &label_set.column_str,
-                                    &label_set.path_name,
-                                    &is_visible,
-                                ];
+                                let fields: [&str; 2] =
+                                    [&view_name, &visible_str];
 
-                                let row = grid_row_label(
+                                let inner = grid_row_label(
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
                                     false,
+                                    None,
                                 );
+                                let row = inner.response;
 
                                 if row.clicked() {
-                                    label_set.set_visibility(
-                                        !label_set.is_visible(),
-                                    );
+                                    if let Some(visibility) =
+                                        labels.visible(name)
+                                    {
+                                        visibility.fetch_xor(true);
+                                    }
                                 }
                             }
                         },
@@ -148,7 +143,7 @@ pub type AnnotResult =
     std::result::Result<(AnnotationFileType, String), AnnotMsg>;
 
 pub struct AnnotationFileList {
-    current_annotation: Option<(AnnotationFileType, String)>,
+    pub current_annotation: Arc<RwLock<Option<(AnnotationFileType, String)>>>,
 
     file_picker: FilePicker,
     file_picker_open: bool,
@@ -162,7 +157,7 @@ impl AnnotationFileList {
     pub const ID: &'static str = "annotation_file_list";
 
     pub fn new(
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         app_msg_tx: Sender<AppMsg>,
         gui_msg_tx: Sender<GuiMsg>,
     ) -> Result<Self> {
@@ -201,7 +196,7 @@ impl AnnotationFileList {
                             let file_name = records.file_name().to_string();
 
                             app_msg_tx
-                                .send(AppMsg::AddGff3Records(records))
+                                .send(AppMsg::raw("add_gff3_records", records))
                                 .unwrap();
                             gui_msg_tx
                                 .send(GuiMsg::SetWindowOpen {
@@ -228,7 +223,7 @@ impl AnnotationFileList {
                             let file_name = records.file_name().to_string();
 
                             app_msg_tx
-                                .send(AppMsg::AddBedRecords(records))
+                                .send(AppMsg::raw("add_bed_records", records))
                                 .unwrap();
                             gui_msg_tx
                                 .send(GuiMsg::SetWindowOpen {
@@ -256,7 +251,7 @@ impl AnnotationFileList {
         );
 
         Ok(Self {
-            current_annotation: None,
+            current_annotation: Arc::new(RwLock::new(None)),
 
             file_picker,
             file_picker_open: false,
@@ -266,10 +261,146 @@ impl AnnotationFileList {
         })
     }
 
-    pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
-        self.current_annotation
-            .as_ref()
-            .map(|(t, n)| (*t, n.as_str()))
+    // pub fn current_annotation(&self) -> Option<(AnnotationFileType, &str)> {
+    pub fn current_annotation(
+        &self,
+    ) -> RwLockReadGuard<Option<(AnnotationFileType, String)>> {
+        self.current_annotation.read()
+    }
+
+    pub fn file_picker_(&mut self, ctx: &egui::CtxRef) {
+        self.file_picker.ui(ctx, &mut self.file_picker_open);
+    }
+
+    pub fn ui_(
+        &mut self,
+        gui_msg_tx: &crossbeam::channel::Sender<GuiMsg>,
+        annotations: &Annotations,
+        ui: &mut egui::Ui,
+    ) {
+        if let Some(result) = self.load_host.take() {
+            if let Ok((file_type, name)) = &result {
+                let mut write = self.current_annotation.write();
+                *write = Some((*file_type, name.to_owned()));
+            }
+
+            self.latest_result = Some(result);
+        }
+
+        let is_running =
+            matches!(self.latest_result, Some(Err(AnnotMsg::Running(_))));
+
+        if self.file_picker.selected_path().is_some() {
+            self.file_picker_open = false;
+        }
+
+        // self.file_picker.ui(ctx, &mut self.file_picker_open);
+
+        if ui
+            .add_enabled(
+                !is_running,
+                egui::Button::new("Choose annotation file"),
+            )
+            .clicked()
+        {
+            self.file_picker.reset_selection();
+            self.file_picker_open = true;
+        }
+
+        let _label = if let Some(path) =
+            self.file_picker.selected_path().and_then(|p| p.to_str())
+        {
+            ui.label(path)
+        } else {
+            ui.label("No file selected")
+        };
+
+        let selected_path = self.file_picker.selected_path();
+
+        if ui
+            .add_enabled(
+                !is_running && selected_path.is_some(),
+                egui::Button::new("Load"),
+            )
+            .clicked()
+        {
+            if let Some(path) = selected_path {
+                self.load_host.call(path.to_owned()).unwrap();
+            }
+        }
+
+        if is_running {
+            ui.label("Loading file");
+        }
+
+        ui.separator();
+
+        egui::ScrollArea::vertical().show(ui, |mut ui| {
+            egui::Grid::new("annotations_file_list_grid")
+                .spacing(Point::new(10.0, 5.0))
+                .striped(true)
+                .show(&mut ui, |ui| {
+                    ui.label("File name");
+
+                    ui.separator();
+                    ui.label("# Records");
+
+                    // ui.separator();
+                    // ui.label("Ref. path");
+
+                    ui.separator();
+                    ui.label("Type");
+
+                    ui.end_row();
+
+                    for (name, annot_type) in annotations.annot_names() {
+                        let record_len = match annot_type {
+                            AnnotationFileType::Gff3 => {
+                                let records =
+                                    annotations.get_gff3(name).unwrap();
+                                format!("{}", records.len())
+                            }
+                            AnnotationFileType::Bed => {
+                                let records =
+                                    annotations.get_bed(name).unwrap();
+                                format!("{}", records.len())
+                            }
+                        };
+
+                        let type_str = format!("{:?}", annot_type);
+
+                        let fields = [
+                            name.as_str(),
+                            record_len.as_str(),
+                            type_str.as_str(),
+                        ];
+
+                        let inner = grid_row_label(
+                            ui,
+                            egui::Id::new(ui.id().with(name)),
+                            &fields,
+                            true,
+                            None,
+                        );
+
+                        let row = inner.response;
+
+                        if row.clicked() {
+                            {
+                                let mut write = self.current_annotation.write();
+                                *write = Some((*annot_type, name.to_string()));
+                            }
+
+                            gui_msg_tx
+                                .send(GuiMsg::SetWindowOpen {
+                                    window: Windows::AnnotationRecords,
+                                    open: Some(true),
+                                })
+                                .unwrap();
+                        }
+                    }
+                })
+        });
     }
 
     pub fn ui(
@@ -281,7 +412,8 @@ impl AnnotationFileList {
     ) -> Option<egui::InnerResponse<Option<()>>> {
         if let Some(result) = self.load_host.take() {
             if let Ok((file_type, name)) = &result {
-                self.current_annotation = Some((*file_type, name.to_owned()));
+                let mut write = self.current_annotation.write();
+                *write = Some((*file_type, name.to_owned()));
             }
 
             self.latest_result = Some(result);
@@ -301,9 +433,9 @@ impl AnnotationFileList {
             .open(open)
             .show(ctx, |mut ui| {
                 if ui
-                    .add(
-                        egui::Button::new("Choose annotation file")
-                            .enabled(!is_running),
+                    .add_enabled(
+                        !is_running,
+                        egui::Button::new("Choose annotation file"),
                     )
                     .clicked()
                 {
@@ -322,9 +454,9 @@ impl AnnotationFileList {
                 let selected_path = self.file_picker.selected_path();
 
                 if ui
-                    .add(
-                        egui::Button::new("Load")
-                            .enabled(!is_running && selected_path.is_some()),
+                    .add_enabled(
+                        !is_running && selected_path.is_some(),
+                        egui::Button::new("Load"),
                     )
                     .clicked()
                 {
@@ -339,7 +471,7 @@ impl AnnotationFileList {
 
                 ui.separator();
 
-                egui::ScrollArea::auto_sized().show(&mut ui, |mut ui| {
+                egui::ScrollArea::vertical().show(&mut ui, |mut ui| {
                     egui::Grid::new("annotations_file_list_grid")
                         .spacing(Point::new(10.0, 5.0))
                         .striped(true)
@@ -380,16 +512,25 @@ impl AnnotationFileList {
                                     type_str.as_str(),
                                 ];
 
-                                let row = grid_row_label(
+                                let inner = grid_row_label(
                                     ui,
                                     egui::Id::new(ui.id().with(name)),
                                     &fields,
                                     true,
+                                    None,
                                 );
 
+                                let row = inner.response;
+
                                 if row.clicked() {
-                                    self.current_annotation =
-                                        Some((*annot_type, name.to_string()));
+                                    {
+                                        let mut write =
+                                            self.current_annotation.write();
+                                        *write = Some((
+                                            *annot_type,
+                                            name.to_string(),
+                                        ));
+                                    }
 
                                     gui_msg_tx
                                         .send(GuiMsg::SetWindowOpen {
@@ -445,26 +586,25 @@ impl<T: ColumnKey> ColumnPickerOne<T> {
         egui::Window::new(window_name).id(self.id).open(open).show(
             ctx,
             |mut ui| {
-                egui::ScrollArea::from_max_height(
-                    ui.input().screen_rect.height() - 250.0,
-                )
-                .show(&mut ui, |ui| {
-                    let chosen_column = self.chosen_column;
+                egui::ScrollArea::vertical()
+                    .max_height(ui.input().screen_rect.height() - 250.0)
+                    .show(&mut ui, |ui| {
+                        let chosen_column = self.chosen_column;
 
-                    for (ix, col) in self.columns.iter().enumerate() {
-                        let active = chosen_column == Some(ix);
-                        if ui
-                            .selectable_label(active, col.to_string())
-                            .clicked()
-                        {
-                            if active {
-                                self.chosen_column = None;
-                            } else {
-                                self.chosen_column = Some(ix);
+                        for (ix, col) in self.columns.iter().enumerate() {
+                            let active = chosen_column == Some(ix);
+                            if ui
+                                .selectable_label(active, col.to_string())
+                                .clicked()
+                            {
+                                if active {
+                                    self.chosen_column = None;
+                                } else {
+                                    self.chosen_column = Some(ix);
+                                }
                             }
                         }
-                    }
-                });
+                    });
             },
         )
     }
@@ -587,7 +727,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
             let scroll_height = max_height - 50.0;
 
             ui.collapsing("Mandatory fields", |mut ui| {
-                egui::ScrollArea::from_max_height(scroll_height).show(
+                egui::ScrollArea::vertical().max_height(scroll_height).show(
                     &mut ui,
                     |ui| {
                         for (key, enabled) in mandatory.into_iter() {
@@ -603,7 +743,7 @@ impl<T: ColumnKey> ColumnPickerMany<T> {
             });
 
             ui.collapsing("Optional fields", |mut ui| {
-                egui::ScrollArea::from_max_height(scroll_height).show(
+                egui::ScrollArea::vertical().max_height(scroll_height).show(
                     &mut ui,
                     |ui| {
                         for (key, enabled) in optional.into_iter() {
@@ -661,7 +801,7 @@ impl<C> OverlayLabelSetCreator<C>
 where
     C: AnnotationCollection + Send + Sync + 'static,
 {
-    pub fn new(reactor: &mut Reactor, id: egui::Id) -> Self {
+    pub fn new(reactor: &Reactor, id: egui::Id) -> Self {
         let graph = reactor.graph_query.clone();
         let overlay_tx = reactor.overlay_create_tx.clone();
 
@@ -781,7 +921,8 @@ where
         &mut self,
         ctx: &egui::CtxRef,
         app_msg_tx: &Sender<AppMsg>,
-        graph: &GraphQueryWorker,
+        // graph: &GraphQueryWorker,
+        graph: &GraphQuery,
         open: &mut bool,
         file_name: &str,
         path_id: PathId,
@@ -796,8 +937,7 @@ where
         }
 
         if Some(path_id) != self.path_id {
-            let path_name =
-                graph.graph().graph().get_path_name_vec(path_id).unwrap();
+            let path_name = graph.graph().get_path_name_vec(path_id).unwrap();
             let path_name = path_name.to_str().unwrap().to_string();
             self.path_id = Some(path_id);
             self.path_name = path_name;
@@ -869,9 +1009,9 @@ where
                 let column_picker = &self.column_picker;
                 let column = column_picker.chosen_column();
 
-                let create_overlay_btn = ui.add(
-                    egui::Button::new("Create overlay")
-                        .enabled(column.is_some() && !is_running),
+                let create_overlay_btn = ui.add_enabled(
+                    column.is_some() && !is_running,
+                    egui::Button::new("Create overlay"),
                 );
 
                 match &self.latest_result {
@@ -935,16 +1075,16 @@ where
                 let column_picker = &self.column_picker;
                 let column = column_picker.chosen_column();
 
-                let create_label_set_btn = ui.add(
-                    egui::Button::new("Create label set")
-                        .enabled(column.is_some()),
+                let create_label_set_btn = ui.add_enabled(
+                    column.is_some(),
+                    egui::Button::new("Create label set"),
                 );
 
                 create_label_set |= create_label_set_btn.clicked();
 
                 if create_label_set {
                     if let Some(label_set) = calculate_annotation_set(
-                        graph.graph(),
+                        graph,
                         records.as_ref(),
                         filtered_records,
                         path_id,

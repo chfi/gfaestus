@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crossbeam::atomic::AtomicCell;
 use handlegraph::handle::NodeId;
+use handlegraph::pathhandlegraph::PathId;
 
 use crate::{geometry::*, gui::GuiFocusState};
 use crate::{view::*, vulkan::texture::GradientName};
@@ -77,30 +78,6 @@ impl SharedState {
     pub fn dark_mode(&self) -> &Arc<AtomicCell<bool>> {
         &self.dark_mode
     }
-
-    pub fn clone_edges_enabled(&self) -> Arc<AtomicCell<bool>> {
-        self.edges_enabled.clone()
-    }
-
-    pub fn clone_mouse_pos(&self) -> Arc<AtomicCell<Point>> {
-        self.mouse_pos.clone()
-    }
-
-    pub fn clone_view(&self) -> Arc<AtomicCell<View>> {
-        self.view.clone()
-    }
-
-    pub fn set_view(&self, view: View) {
-        self.view.store(view)
-    }
-
-    pub fn set_edges_enabled(&self, to: bool) {
-        self.edges_enabled.store(to);
-    }
-
-    // pub fn clone_mouse_rect(&self) -> MouseRect {
-    //     self.mouse_rect.clone()
-    // }
 
     pub fn start_mouse_rect(&self) {
         let view = self.view();

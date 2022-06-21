@@ -31,48 +31,69 @@ pub use bed::*;
 pub use gff::*;
 
 #[derive(Debug, Default, Clone)]
+pub struct Label {
+    id: usize,
+    text: String,
+}
+
+// #[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 pub struct LabelSet {
     positions: Vec<LabelPos>,
-    // positions: Vec<(LabelPos, Vec<usize>)>,
-    label_strings: Vec<String>,
+    labels: Vec<Label>,
 }
 
 impl LabelSet {
     pub fn add_at_world_point(
         &mut self,
         point: Point,
+        label_id: usize,
         text: &str,
         offset: Option<Point>,
     ) {
         let pos = LabelPos::World { point, offset };
 
         self.positions.push(pos);
-        self.label_strings.push(text.to_string());
+        self.labels.push(Label {
+            id: label_id,
+            text: text.to_string(),
+        });
     }
 
-    pub fn add_at_handle(&mut self, handle: Handle, text: &str) {
+    pub fn add_at_handle(
+        &mut self,
+        handle: Handle,
+        label_id: usize,
+        text: &str,
+    ) {
         let pos = LabelPos::Handle {
             handle,
             offset: None,
         };
 
         self.positions.push(pos);
-        self.label_strings.push(text.to_string());
+        self.labels.push(Label {
+            id: label_id,
+            text: text.to_string(),
+        });
     }
 
-    pub fn add_at_node(&mut self, node: NodeId, text: &str) {
+    pub fn add_at_node(&mut self, node: NodeId, label_id: usize, text: &str) {
         let handle = Handle::pack(node, false);
-        self.add_at_handle(handle, text);
+        self.add_at_handle(handle, label_id, text);
     }
 
     pub fn add_many_at<'a, 'b>(
         &'a mut self,
         pos: LabelPos,
-        strings: impl Iterator<Item = &'b str>,
+        labels: impl Iterator<Item = (usize, &'b str)>,
     ) {
-        for text in strings {
+        for (label_id, text) in labels {
             self.positions.push(pos);
-            self.label_strings.push(text.to_string());
+            self.labels.push(Label {
+                id: label_id,
+                text: text.to_string(),
+            });
         }
     }
 
@@ -85,13 +106,20 @@ impl LabelSet {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct LabelHandlers {
+    hover_handler: Option<usize>,
+    click_handler: Option<usize>,
+}
+
 #[derive(Debug, Default, Clone)]
 struct Cluster {
     offset: Option<Point>,
-    lines: Vec<String>,
+    labels: Vec<(Label, LabelHandlers)>,
+    // labels: Vec<(Label, Option<usize>)>,
 }
 
-#[derive(Debug, Clone)]
+// #[derive(Clone)]
 pub struct ClusterTree {
     clusters: QuadTree<Cluster>,
 }
@@ -103,54 +131,60 @@ impl ClusterTree {
         }
     }
 
-    pub fn from_label_tree<L>(
-        tree: &QuadTree<(Option<Point>, L)>,
+    pub fn from_label_tree(
+        tree: &QuadTree<(Option<Point>, Label, LabelHandlers)>,
         label_radius: f32,
         scale: f32,
-    ) -> Self
-    where
-        L: Clone + ToString,
-    {
+    ) -> Self {
         let mut result = Self::from_boundary(tree.boundary());
         result.insert_label_tree(tree, label_radius, scale);
         result
     }
 
-    pub fn insert_label_tree<L>(
+    pub fn insert_label_tree(
         &mut self,
-        tree: &QuadTree<(Option<Point>, L)>,
+        tree: &QuadTree<(Option<Point>, Label, LabelHandlers)>,
         label_radius: f32,
         scale: f32,
-    ) where
-        L: Clone + ToString,
-    {
+    ) {
         let radius = label_radius * scale;
 
         let clusters = &mut self.clusters;
 
         for leaf in tree.leaves() {
-            for (point, (offset, text)) in leaf.elems() {
+            for (point, (offset, label, handlers)) in leaf.elems() {
                 // use the closest cluster if it exists and is within the radius
                 if let Some(mut cluster) = clusters
                     .nearest_mut(point)
                     .filter(|c| c.point().dist(point) <= radius)
                 {
                     let cmut = cluster.data_mut();
-                    cmut.lines.push(text.to_string());
+                    cmut.labels.push((label.to_owned(), *handlers))
                 } else {
                     let new_cluster = Cluster {
                         offset: *offset,
-                        lines: vec![text.to_string()],
+                        labels: vec![(label.to_owned(), *handlers)],
                     };
-                    let result = clusters.insert(point, new_cluster);
+                    let _result = clusters.insert(point, new_cluster);
                 }
             }
         }
     }
 
-    pub fn draw_labels(&self, ctx: &egui::CtxRef, shared_state: &SharedState) {
+    pub fn draw_labels(
+        &self,
+        label_sets: &Labels,
+        ctx: &egui::CtxRef,
+        shared_state: &SharedState,
+    ) {
         let view = shared_state.view();
         let mouse_pos = shared_state.mouse_pos();
+
+        let mut interacted: Option<(usize, LabelHandlers)> = None;
+        let mut label_rect: Option<Rect> = None;
+
+        let mut hovered = false;
+        let mut clicked = false;
 
         for leaf in self.clusters.leaves() {
             for (origin, cluster) in leaf.elems() {
@@ -162,40 +196,33 @@ impl ClusterTree {
                 let anchor_dir = Point::new(-offset.x, -offset.y);
                 let offset = offset * 20.0;
 
-                let lines = &cluster.lines;
+                let labels = &cluster.labels;
 
-                for text in cluster.lines.iter() {
+                for (label, handlers) in cluster.labels.iter() {
+                    // for some reason, the returned rectangle is too tall
                     let rect =
                         crate::gui::text::draw_text_at_world_point_offset(
                             ctx,
                             view,
                             origin,
                             offset + Point::new(0.0, y_offset),
-                            text,
-                        );
+                            &label.text,
+                        )
+                        .map(|r| r.resize(1.01));
 
                     if let Some(rect) = rect {
                         let rect = rect.resize(0.98);
                         if rect.contains(mouse_pos) {
-                            crate::gui::text::draw_rect(ctx, rect);
+                            label_rect = Some(rect);
 
-                            // TODO need some form of configurable callback here
-                            /*
-                            if gui.ctx.input().pointer.any_click() {
-                                match column {
-                                    AnnotationColumn::Gff3(col) => {
-                                        if let Some(gff) = records.downcast_ref::<Gff3Records>() {
-                                            gui.scroll_to_gff_record(gff, col, label.as_bytes());
-                                        }
-                                    }
-                                    AnnotationColumn::Bed(col) => {
-                                        if let Some(bed) = records.downcast_ref::<BedRecords>() {
-                                            gui.scroll_to_bed_record(bed, col, label.as_bytes());
-                                        }
-                                    }
-                                }
+                            interacted = Some((label.id, *handlers));
+                            hovered = true;
+
+                            // this still needs to be fixed to only
+                            // use left clicks
+                            if ctx.input().pointer.any_click() {
+                                clicked = true;
                             }
-                            */
                         }
                     }
 
@@ -203,8 +230,8 @@ impl ClusterTree {
                     count += 1;
 
                     if count > 10 {
-                        let count = count.min(lines.len());
-                        let rem = lines.len() - count;
+                        let count = count.min(labels.len());
+                        let rem = labels.len() - count;
 
                         if rem > 0 {
                             let more_label = format!("and {} more", rem);
@@ -218,6 +245,32 @@ impl ClusterTree {
                             );
                         }
                         break;
+                    }
+                }
+            }
+        }
+
+        if hovered || clicked {
+            if let Some((label_id, handlers)) = interacted {
+                if clicked {
+                    if let Some(on_click) = handlers
+                        .click_handler
+                        .and_then(|id| label_sets.click_handlers.get(&id))
+                    {
+                        on_click(label_id);
+                    }
+                }
+
+                if hovered {
+                    if let Some(rect) = label_rect {
+                        crate::gui::text::draw_rect(ctx, rect);
+                    }
+
+                    if let Some(on_hover) = handlers
+                        .hover_handler
+                        .and_then(|id| label_sets.hover_handlers.get(&id))
+                    {
+                        on_hover(label_id);
                     }
                 }
             }
@@ -244,35 +297,76 @@ impl ClusterTree {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct Labels {
-    // label_trees: HashMap<String, Arc<Mutex<QuadTree<String>>>>,
-    label_trees: HashMap<String, QuadTree<(Option<Point>, String)>>,
+    label_trees:
+        HashMap<String, QuadTree<(Option<Point>, Label, LabelHandlers)>>,
+
+    visible: HashMap<String, AtomicCell<bool>>,
+
+    hover_handlers:
+        FxHashMap<usize, Arc<dyn Fn(usize) + Send + Sync + 'static>>,
+    click_handlers:
+        FxHashMap<usize, Arc<dyn Fn(usize) + Send + Sync + 'static>>,
+
+    next_hover_id: usize,
+    next_click_id: usize,
 }
 
 impl Labels {
+    pub fn label_sets(
+        &self,
+    ) -> &HashMap<String, QuadTree<(Option<Point>, Label, LabelHandlers)>> {
+        &self.label_trees
+    }
+
+    pub fn visible(&self, name: &str) -> Option<&AtomicCell<bool>> {
+        self.visible.get(name)
+    }
+
     pub fn add_label_set(
         &mut self,
         boundary: Rect,
         nodes: &[Node],
         name: &str,
         labels: &LabelSet,
+        on_label_click: Option<Arc<dyn Fn(usize) + Send + Sync + 'static>>,
     ) {
         let name = name.to_string();
 
-        let mut label_tree: QuadTree<(Option<Point>, String)> =
+        let mut label_tree: QuadTree<(Option<Point>, Label, LabelHandlers)> =
             QuadTree::new(boundary);
 
-        for (&label_pos, text) in
-            labels.positions.iter().zip(labels.label_strings.iter())
+        let click_handler = if let Some(on_click) = on_label_click {
+            let id = self.next_click_id;
+            self.next_click_id += 1;
+            self.click_handlers.insert(id, on_click);
+
+            Some(id)
+        } else {
+            None
+        };
+
+        let handlers = LabelHandlers {
+            hover_handler: None,
+            click_handler,
+        };
+
+        for (&label_pos, label) in
+            labels.positions.iter().zip(labels.labels.iter())
         {
             let world = label_pos.world(nodes);
             let offset = label_pos.offset(nodes);
-            let _result = label_tree.insert(world, (offset, text.to_string()));
+            let result =
+                label_tree.insert(world, (offset, label.to_owned(), handlers));
+
+            if result.is_err() {
+                log::warn!("label could not be inserted into quadtree");
+            }
         }
 
-        self.label_trees.insert(name, label_tree);
-        // .insert(name, Arc::new(Mutex::new(label_tree)));
+        self.label_trees.insert(name.clone(), label_tree);
+        self.visible.insert(name, true.into());
     }
 
     pub fn cluster(
@@ -283,9 +377,11 @@ impl Labels {
     ) -> ClusterTree {
         let mut clusters = ClusterTree::from_boundary(boundary);
 
-        for (_name, tree) in self.label_trees.iter() {
-            let _result =
-                clusters.insert_label_tree(&tree, label_radius, view.scale);
+        for (name, tree) in self.label_trees.iter() {
+            if self.visible(name).map(|v| v.load()).unwrap_or_default() {
+                let _result =
+                    clusters.insert_label_tree(&tree, label_radius, view.scale);
+            }
         }
 
         clusters
@@ -311,10 +407,12 @@ impl AnnotationLabelSet {
     pub fn label_set(&self) -> LabelSet {
         let mut labels = LabelSet::default();
 
+        let mut label_id = 0;
         for (node, label_indices) in self.labels.iter() {
             for &ix in label_indices.iter() {
                 let text = &self.label_strings[ix];
-                labels.add_at_node(*node, text);
+                labels.add_at_node(*node, label_id, text);
+                label_id += 1;
             }
         }
 
@@ -415,13 +513,10 @@ impl Annotations {
         self.annotation_default_ref_path.get(annot).copied()
     }
 
-    pub fn set_default_ref_path(&mut self, annot: &str, path: Option<PathId>) {
-        if let Some(path) = path {
-            self.annotation_default_ref_path
-                .insert(annot.to_string(), path);
-        } else {
-            self.annotation_default_ref_path.remove(annot);
-        }
+    pub fn insert_gff3_arc(&mut self, name: &str, records: Arc<Gff3Records>) {
+        self.gff3_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Gff3));
     }
 
     pub fn insert_gff3(&mut self, name: &str, records: Gff3Records) {
@@ -438,6 +533,12 @@ impl Annotations {
 
     pub fn get_gff3(&self, name: &str) -> Option<&Arc<Gff3Records>> {
         self.gff3_annotations.get(name)
+    }
+
+    pub fn insert_bed_arc(&mut self, name: &str, records: Arc<BedRecords>) {
+        self.bed_annotations.insert(name.to_string(), records);
+        self.annot_names
+            .push((name.to_string(), AnnotationFileType::Bed));
     }
 
     pub fn insert_bed(&mut self, name: &str, records: BedRecords) {
@@ -593,9 +694,9 @@ pub fn path_name_chr_range(path_name: &[u8]) -> Option<(&[u8], usize, usize)> {
     Some((chr, start, end))
 }
 
-pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
+pub fn path_name_range(path_name: &[u8]) -> Option<(&[u8], usize, usize)> {
     let mut range_split = path_name.split_str(":");
-    let _name = range_split.next()?;
+    let name = range_split.next()?;
     let range = range_split.next()?;
 
     let mut start_end = range.split_str("-");
@@ -608,11 +709,11 @@ pub fn path_name_range(path_name: &[u8]) -> Option<(usize, usize)> {
     let end_str = end.to_str().ok()?;
     let end = end_str.parse().ok()?;
 
-    Some((start, end))
+    Some((name, start, end))
 }
 
 pub fn path_name_offset(path_name: &[u8]) -> Option<usize> {
-    path_name_range(path_name).map(|(s, _)| s)
+    path_name_range(path_name).map(|(_, s, _)| s)
     /*
     let mut range_split = path_name.split_str(":");
     let _name = range_split.next()?;

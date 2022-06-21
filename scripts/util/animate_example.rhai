@@ -5,7 +5,7 @@ fn animate(delay_ms, paths) {
     let steps = path_steps(path);
     let selection = build_selection(steps);
     set_selection(selection);
-    pan_to_active_selection();
+    goto_selection();
 
     thread_sleep(delay_ms);
   }
@@ -36,13 +36,9 @@ fn anim_follow_path(delay_ms, speed, path) {
     }
 
     set_selection(selection);
-    pan_to_active_selection();
+    goto_selection();
 
     thread_sleep(delay_ms);
 
   }
-}
-
-fn fuck() {
-  log("ASS");
 }

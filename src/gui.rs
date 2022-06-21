@@ -20,13 +20,17 @@ use crossbeam::atomic::AtomicCell;
 use crate::{
     annotations::{
         AnnotationFileType, Annotations, BedColumn, BedRecords, Gff3Column,
-        Gff3Records,
+        Gff3Records, Labels,
     },
-    app::{AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState},
-    context::ContextEntry,
-    graph_query::GraphQueryWorker,
+    app::{
+        App, AppChannels, AppMsg, AppSettings, OverlayCreatorMsg, SharedState,
+    },
+    context::ContextMgr,
     reactor::Reactor,
+    universe::Node,
+    vulkan::compute::path_view::PathViewRenderer,
     vulkan::{render_pass::Framebuffers, texture::Gradients},
+    window::{GuiChannels, GuiId, GuiWindows},
 };
 use crate::{app::OverlayState, geometry::*};
 
@@ -67,27 +71,18 @@ pub struct Gui {
     frame_input: FrameInput,
 
     shared_state: SharedState,
+    channels: AppChannels,
     #[allow(dead_code)]
     settings: AppSettings,
 
     pub draw_system: GuiPipeline,
 
-    hover_node_id: Option<NodeId>,
-
     open_windows: OpenWindows,
-
     view_state: AppViewState,
-
-    gui_msg_rx: crossbeam::channel::Receiver<GuiMsg>,
-    gui_msg_tx: crossbeam::channel::Sender<GuiMsg>,
-
-    app_msg_tx: crossbeam::channel::Sender<AppMsg>,
 
     menu_bar: MenuBar,
 
     dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
-
-    pub clipboard_ctx: ClipboardContext,
 
     gff3_list: RecordList<Gff3Records>,
     bed_list: RecordList<BedRecords>,
@@ -96,6 +91,9 @@ pub struct Gui {
 
     pub console: Console<'static>,
     console_down: bool,
+
+    windows: GuiWindows,
+    gui_channels: GuiChannels,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -176,7 +174,7 @@ pub struct AppViewState {
     node_list: ViewStateChannel<NodeList, NodeListMsg>,
     node_details: ViewStateChannel<NodeDetails, NodeDetailsMsg>,
 
-    path_list: ViewStateChannel<PathList, PathListMsg>,
+    path_list: ViewStateChannel<PathList, ()>,
     path_details: ViewStateChannel<PathDetails, ()>,
 
     // theme_editor: ThemeEditor,
@@ -187,13 +185,13 @@ pub struct AppViewState {
 
 impl AppViewState {
     pub fn new(
-        reactor: &mut Reactor,
-        graph_query: &Arc<GraphQuery>,
+        reactor: &Reactor,
         settings: &AppSettings,
         shared_state: &SharedState,
         overlay_state: OverlayState,
         _dropped_file: Arc<std::sync::Mutex<Option<PathBuf>>>,
     ) -> Self {
+        let graph_query = reactor.graph_query.clone();
         let graph = graph_query.graph();
 
         let stats = GraphStats {
@@ -211,8 +209,7 @@ impl AppViewState {
             node_details_state,
         );
 
-        let node_list_state =
-            NodeList::new(graph_query, 15, node_id_cell.clone());
+        let node_list_state = NodeList::new(&graph_query, node_id_cell.clone());
         let node_list =
             ViewStateChannel::<NodeList, NodeListMsg>::new(node_list_state);
 
@@ -222,9 +219,8 @@ impl AppViewState {
         let path_details =
             ViewStateChannel::<PathDetails, ()>::new(path_details_state);
 
-        let path_list_state = PathList::new(graph_query, 15, path_id_cell);
-        let path_list =
-            ViewStateChannel::<PathList, PathListMsg>::new(path_list_state);
+        let path_list_state = PathList::new(&graph_query, path_id_cell);
+        let path_list = ViewStateChannel::<PathList, ()>::new(path_list_state);
 
         let overlay_list_state = OverlayList::new(overlay_state);
         let overlay_list = ViewStateChannel::<OverlayList, OverlayListMsg>::new(
@@ -286,10 +282,6 @@ impl AppViewState {
         });
 
         self.node_details.apply_received(|state, msg| {
-            state.apply_msg(msg);
-        });
-
-        self.path_list.apply_received(|state, msg| {
             state.apply_msg(msg);
         });
     }
@@ -377,16 +369,20 @@ impl GuiFocusState {
 
 impl Gui {
     pub fn new(
-        app: &GfaestusVk,
-        reactor: &mut Reactor,
-        shared_state: SharedState,
-        channels: &AppChannels,
-        settings: AppSettings,
-        graph_query: &Arc<GraphQuery>,
+        app: &App,
+        gfaestus: &GfaestusVk,
+        path_view_renderer: &Arc<PathViewRenderer>,
     ) -> Result<Self> {
-        let render_pass = app.render_passes.gui;
+        let reactor = &app.reactor;
+        let channels = app.channels();
+        let shared_state = app.shared_state().clone();
+        let settings = app.settings.clone();
 
-        let draw_system = GuiPipeline::new(app, render_pass)?;
+        let graph_query = reactor.graph_query.clone();
+
+        let render_pass = gfaestus.render_passes.gui;
+
+        let draw_system = GuiPipeline::new(gfaestus, render_pass)?;
 
         let ctx = egui::CtxRef::default();
 
@@ -407,21 +403,14 @@ impl Gui {
         };
         ctx.set_fonts(font_defs);
 
-        let hover_node_id: Option<NodeId> = None;
-
         let open_windows = OpenWindows::default();
 
         let frame_input = FrameInput::default();
-
-        let app_msg_tx = channels.app_tx.clone();
-        let gui_msg_tx = channels.gui_tx.clone();
-        let gui_msg_rx = channels.gui_rx.clone();
 
         let dropped_file = Arc::new(std::sync::Mutex::new(None));
 
         let view_state = AppViewState::new(
             reactor,
-            graph_query,
             &settings,
             &shared_state,
             shared_state.overlay_state().clone(),
@@ -430,15 +419,22 @@ impl Gui {
 
         let menu_bar = MenuBar::new(shared_state.overlay_state().clone());
 
-        let clipboard_ctx = ClipboardProvider::new().unwrap();
+        // let clipboard_ctx = ClipboardProvider::new().unwrap();
 
-        let mut path_picker_source = PathPickerSource::new(graph_query)?;
+        let mut path_picker_source = PathPickerSource::new(&graph_query)?;
 
         let annotation_file_list = AnnotationFileList::new(
             reactor,
-            app_msg_tx.clone(),
-            gui_msg_tx.clone(),
+            channels.app_tx.clone(),
+            channels.gui_tx.clone(),
         )?;
+
+        let console = Console::new(
+            reactor,
+            channels.clone(),
+            settings.to_owned(),
+            shared_state.to_owned(),
+        );
 
         let gff3_list = {
             let mut list = RecordList::new(
@@ -446,6 +442,8 @@ impl Gui {
                 egui::Id::new("gff3_records_list"),
                 path_picker_source.create_picker(),
             );
+
+            list.add_scroll_console_setter(&console, "gff3_records_scroll_ix");
 
             use Gff3Column as Gff;
 
@@ -464,6 +462,8 @@ impl Gui {
                 path_picker_source.create_picker(),
             );
 
+            list.add_scroll_console_setter(&console, "bed_records_scroll_ix");
+
             use BedColumn as Bed;
 
             list.set_default_columns([], [Bed::Chr, Bed::Start, Bed::End]);
@@ -471,40 +471,124 @@ impl Gui {
             list
         };
 
-        let console = Console::new(
-            reactor,
-            graph_query,
-            channels.clone(),
-            settings.to_owned(),
-            shared_state.to_owned(),
-        );
+        let mut windows = GuiWindows::default();
+
+        {
+            let path_view_id = egui::Id::new("path_view_window");
+            let gui_id = GuiId::new(path_view_id);
+
+            let mut path_view_state =
+                PathPositionList::new(path_view_renderer.clone());
+
+            windows.add_window(
+                gui_id,
+                "Path View",
+                move |app: &App, ui: &mut egui::Ui, nodes: &[Node]| {
+                    let App {
+                        reactor,
+                        channels,
+                        shared_state,
+                        ..
+                    } = app;
+
+                    path_view_state.ui_impl(
+                        ui,
+                        reactor,
+                        channels,
+                        shared_state,
+                        nodes,
+                    );
+                },
+            );
+        }
+
+        {
+            /*
+            let annotation_file_list = AnnotationFileList::new(
+                reactor,
+                channels.app_tx.clone(),
+                channels.gui_tx.clone(),
+            )?;
+
+            let afl_id = GuiId::new("_annotation_file_list");
+
+            windows.add_window(afl_id, "Annotation Files", |ui| {
+                todo!();
+            });
+
+            let cur_annot = annotation_file_list.current_annotation.clone();
+            */
+
+            /*
+            let gff3_list = {
+                let mut list = RecordList::new(
+                    reactor,
+                    egui::Id::new("gff3_records_list"),
+                    path_picker_source.create_picker(),
+                );
+
+                use Gff3Column as Gff;
+
+                list.set_default_columns(
+                    [Gff::Source, Gff::Type, Gff::Frame],
+                    [Gff::SeqId, Gff::Start, Gff::End, Gff::Strand],
+                );
+
+                list
+            };
+
+            let bed_list = {
+                let mut list = RecordList::new(
+                    reactor,
+                    egui::Id::new("bed_records_list"),
+                    path_picker_source.create_picker(),
+                );
+
+                use BedColumn as Bed;
+
+                list.set_default_columns([], [Bed::Chr, Bed::Start, Bed::End]);
+
+                list
+            };
+
+
+            let gff3_window = || {
+                egui::Window::new("GFF3")
+                    .default_pos(egui::Pos2::new(600.0, 200.0))
+                    .collapsible(true)
+            };
+
+            let bed_window = || {
+                egui::Window::new("BED")
+                    .default_pos(egui::Pos2::new(600.0, 200.0))
+                    .collapsible(true)
+            };
+            */
+
+            // let show_
+        }
+
+        // windows.
 
         let gui = Self {
             ctx,
             frame_input,
 
             shared_state: shared_state.clone(),
+            channels: channels.clone(),
             settings: settings.clone(),
 
             draw_system,
-
-            hover_node_id,
 
             open_windows,
 
             view_state,
 
-            gui_msg_tx,
-            gui_msg_rx,
-
-            app_msg_tx,
-
             menu_bar,
 
             dropped_file,
 
-            clipboard_ctx,
-
+            // clipboard_ctx,
             gff3_list,
             bed_list,
 
@@ -512,17 +596,12 @@ impl Gui {
 
             console_down: false,
             console,
+
+            windows,
+            gui_channels: GuiChannels::new(),
         };
 
         Ok(gui)
-    }
-
-    pub fn clone_gui_msg_tx(&self) -> crossbeam::channel::Sender<GuiMsg> {
-        self.gui_msg_tx.clone()
-    }
-
-    pub fn set_hover_node(&mut self, node: Option<NodeId>) {
-        self.hover_node_id = node;
     }
 
     pub fn app_view_state(&self) -> &AppViewState {
@@ -570,16 +649,25 @@ impl Gui {
 
     pub fn begin_frame(
         &mut self,
-        reactor: &mut Reactor,
-        screen_rect: Option<Point>,
-        graph_query: &Arc<GraphQuery>,
-        graph_query_worker: &GraphQueryWorker,
-        annotations: &Annotations,
-        ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
+        app: &App,
+        // ctx_tx: &crossbeam::channel::Sender<ContextEntry>,
+        ctx_mgr: &ContextMgr,
+        nodes: &[Node],
     ) {
+        let App {
+            reactor,
+            annotations,
+            labels,
+            ..
+        } = app;
+
+        let graph_query = reactor.graph_query.as_ref();
+
+        let new_screen_rect: Option<Point> = Some(app.dims().into());
+
         let mut raw_input = self.frame_input.into_raw_input();
 
-        let screen_rect = screen_rect.map(|p| egui::Rect {
+        let screen_rect = new_screen_rect.map(|p| egui::Rect {
             min: Point::ZERO.into(),
             max: p.into(),
         });
@@ -608,8 +696,12 @@ impl Gui {
             .wants_pointer_input
             .store(self.ctx.wants_pointer_input());
 
-        self.menu_bar
-            .ui(&self.ctx, &mut self.open_windows, &self.app_msg_tx);
+        self.menu_bar.ui(
+            &self.ctx,
+            &mut self.open_windows,
+            &self.channels.app_tx,
+            &self.windows,
+        );
 
         self.console.ui(&self.ctx, self.console_down, reactor);
 
@@ -659,67 +751,90 @@ impl Gui {
         self.annotation_file_list.ui(
             &self.ctx,
             &mut self.open_windows.annotation_files,
-            &self.gui_msg_tx,
+            &self.channels.gui_tx,
             annotations,
         );
 
-        if let Some((annot_type, annot_name)) =
-            self.annotation_file_list.current_annotation()
         {
-            match annot_type {
-                AnnotationFileType::Gff3 => {
-                    if let Some(records) = annotations.get_gff3(annot_name) {
-                        let ctx = &self.ctx;
-                        let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.app_msg_tx;
+            let path_view_id = egui::Id::new("path_view_window");
+            let gui_id = GuiId::new(path_view_id);
 
-                        let gff3_list = &mut self.gff3_list;
+            let open = self.windows.get_open_arc(gui_id).unwrap();
+            let mut is_open = open.load();
 
-                        let _resp = egui::Window::new("GFF3")
-                            .default_pos(egui::Pos2::new(600.0, 200.0))
-                            .collapsible(true)
-                            .open(open)
-                            .show(ctx, |ui| {
-                                gff3_list.ui(
-                                    ui,
-                                    graph_query_worker,
-                                    app_msg_tx,
-                                    annot_name,
-                                    records,
-                                )
-                            });
+            let window = egui::Window::new("Path View")
+                .id(path_view_id)
+                .open(&mut is_open);
+
+            self.windows
+                .show_in_window(&app, &self.ctx, nodes, gui_id, window);
+
+            open.store(is_open);
+        }
+
+        {
+            let read = self.annotation_file_list.current_annotation();
+            if let Some((annot_type, annot_name)) = read.as_ref() {
+                match annot_type {
+                    AnnotationFileType::Gff3 => {
+                        if let Some(records) = annotations.get_gff3(annot_name)
+                        {
+                            let ctx = &self.ctx;
+                            let open =
+                                &mut self.open_windows.annotation_records;
+                            let app_msg_tx = &self.channels.app_tx;
+
+                            let gff3_list = &mut self.gff3_list;
+
+                            let _resp = egui::Window::new("GFF3")
+                                .default_pos(egui::Pos2::new(600.0, 200.0))
+                                .collapsible(true)
+                                .open(open)
+                                .show(ctx, |ui| {
+                                    gff3_list.ui(
+                                        ui,
+                                        graph_query,
+                                        app_msg_tx,
+                                        annot_name,
+                                        records,
+                                    )
+                                });
+                        }
                     }
-                }
-                AnnotationFileType::Bed => {
-                    if let Some(records) = annotations.get_bed(annot_name) {
-                        let ctx = &self.ctx;
-                        let open = &mut self.open_windows.annotation_records;
-                        let app_msg_tx = &self.app_msg_tx;
+                    AnnotationFileType::Bed => {
+                        if let Some(records) = annotations.get_bed(annot_name) {
+                            let ctx = &self.ctx;
+                            let open =
+                                &mut self.open_windows.annotation_records;
+                            let app_msg_tx = &self.channels.app_tx;
 
-                        let bed_list = &mut self.bed_list;
+                            let bed_list = &mut self.bed_list;
 
-                        let _resp = egui::Window::new("BED")
-                            .default_pos(egui::Pos2::new(600.0, 200.0))
-                            .collapsible(true)
-                            .open(open)
-                            .show(ctx, |ui| {
-                                bed_list.ui(
-                                    ui,
-                                    graph_query_worker,
-                                    app_msg_tx,
-                                    annot_name,
-                                    records,
-                                )
-                            });
+                            let _resp = egui::Window::new("BED")
+                                .default_pos(egui::Pos2::new(600.0, 200.0))
+                                .collapsible(true)
+                                .open(open)
+                                .show(ctx, |ui| {
+                                    bed_list.ui(
+                                        ui,
+                                        graph_query,
+                                        app_msg_tx,
+                                        annot_name,
+                                        records,
+                                    )
+                                });
+                        }
                     }
                 }
             }
         }
 
         LabelSetList::ui(
+            // &self.channels,
+            // &self.shared_state,
             &self.ctx,
             &mut self.open_windows.label_set_list,
-            annotations,
+            labels,
         );
 
         view_state
@@ -759,10 +874,10 @@ impl Gui {
             if *node_list {
                 view_state.node_list.state.ui(
                     &self.ctx,
-                    &self.app_msg_tx,
+                    &self.channels.app_tx,
                     node_details,
                     graph_query,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
 
@@ -773,7 +888,7 @@ impl Gui {
                     &self.ctx,
                     path_details_id_cell,
                     path_details,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
         }
@@ -789,10 +904,10 @@ impl Gui {
             if *path_list {
                 view_state.path_list.state.ui(
                     &self.ctx,
-                    &self.app_msg_tx,
+                    &self.channels.app_tx,
                     path_details,
                     graph_query,
-                    ctx_tx,
+                    ctx_mgr,
                 );
             }
 
@@ -803,8 +918,8 @@ impl Gui {
                     &self.ctx,
                     node_details_id_cell,
                     node_details,
-                    &self.app_msg_tx,
-                    ctx_tx,
+                    &self.channels.app_tx,
+                    ctx_mgr,
                 );
             }
         }
@@ -844,11 +959,14 @@ impl Gui {
         }
     }
 
-    pub fn end_frame(&mut self) -> Vec<egui::ClippedMesh> {
+    pub fn end_frame(
+        &mut self,
+        reactor: &mut Reactor,
+    ) -> Vec<egui::ClippedMesh> {
         let (output, shapes) = self.ctx.end_frame();
 
         if !output.copied_text.is_empty() {
-            self.clipboard_ctx.set_contents(output.copied_text).unwrap();
+            reactor.set_clipboard_contents(&output.copied_text, true);
         }
 
         self.ctx.tessellate(shapes)
@@ -858,15 +976,15 @@ impl Gui {
         self.ctx.is_pointer_over_area()
     }
 
-    pub fn upload_texture(&mut self, app: &GfaestusVk) -> Result<()> {
+    pub fn upload_egui_texture(&mut self, app: &GfaestusVk) -> Result<()> {
         log::trace!("Gui::upload_texture");
 
         let egui_tex = self.ctx.texture();
-        if egui_tex.version != self.draw_system.texture_version() {
+        if egui_tex.version != self.draw_system.egui_texture_version() {
             log::trace!(
                 "Texture version difference, uploading new GUI texture"
             );
-            self.draw_system.upload_texture(
+            self.draw_system.upload_egui_texture(
                 app,
                 app.transient_command_pool,
                 app.graphics_queue,
@@ -893,23 +1011,17 @@ impl Gui {
         render_pass: vk::RenderPass,
         framebuffers: &Framebuffers,
         screen_dims: [f32; 2],
-        gradients: &Gradients,
     ) -> Result<()> {
-        self.draw_system.draw(
-            cmd_buf,
-            render_pass,
-            framebuffers,
-            screen_dims,
-            gradients,
-        )
+        self.draw_system
+            .draw(cmd_buf, render_pass, framebuffers, screen_dims)
     }
 
     pub fn push_event(&mut self, event: egui::Event) {
         self.frame_input.events.push(event);
     }
 
-    pub fn apply_received_gui_msgs(&mut self) {
-        while let Ok(msg) = self.gui_msg_rx.try_recv() {
+    pub fn apply_received_gui_msgs(&mut self, reactor: &mut Reactor) {
+        while let Ok(msg) = self.channels.gui_rx.try_recv() {
             match msg {
                 GuiMsg::SetWindowOpen { window, open } => {
                     let open_windows = &mut self.open_windows;
@@ -964,10 +1076,8 @@ impl Gui {
                     self.frame_input.events.push(egui::Event::Copy);
                 }
                 GuiMsg::Paste => {
-                    if let Ok(text) = &self.clipboard_ctx.get_contents() {
-                        self.frame_input
-                            .events
-                            .push(egui::Event::Text(text.clone()));
+                    if let Some(text) = reactor.get_clipboard_contents(true) {
+                        self.frame_input.events.push(egui::Event::Text(text));
                     }
                 }
                 GuiMsg::SetModifiers(mods) => {
@@ -998,7 +1108,8 @@ impl Gui {
                 if state.pressed() {
                     match payload {
                         GuiInput::KeyEguiInspectionUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiInspection,
                                     open: None,
@@ -1006,7 +1117,8 @@ impl Gui {
                                 .unwrap();
                         }
                         GuiInput::KeyEguiSettingsUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiSettings,
                                     open: None,
@@ -1014,7 +1126,8 @@ impl Gui {
                                 .unwrap();
                         }
                         GuiInput::KeyEguiMemoryUi => {
-                            self.gui_msg_tx
+                            self.channels
+                                .gui_tx
                                 .send(GuiMsg::SetWindowOpen {
                                     window: Windows::EguiMemory,
                                     open: None,

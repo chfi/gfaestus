@@ -11,8 +11,8 @@ use crate::{overlays::OverlayKind, vulkan::GfaestusVk};
 use super::NodePipelineConfig;
 
 pub struct OverlayPipelines {
-    pipeline_rgb: OverlayPipelineRGB,
-    pipeline_value: OverlayPipelineValue,
+    pub pipeline_rgb: OverlayPipelineRGB,
+    pub pipeline_value: OverlayPipelineValue,
 
     pub(super) overlay_set_id: Option<usize>,
 
@@ -58,6 +58,11 @@ impl OverlayPipelines {
             allocator.destroy_buffer(overlay.buffer, &overlay.alloc)?;
         }
         Ok(())
+    }
+
+    pub fn overlay_kind(&self, id: usize) -> Option<OverlayKind> {
+        let o = self.overlays.get(&id)?;
+        Some(o.kind)
     }
 
     pub(super) fn bind_pipeline(
@@ -187,9 +192,9 @@ impl OverlayPipelines {
 
 pub struct OverlayPipelineRGB {
     pub(super) descriptor_pool: vk::DescriptorPool,
-    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
 
-    pub(super) overlay_set: vk::DescriptorSet,
+    pub overlay_set: vk::DescriptorSet,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
@@ -199,11 +204,11 @@ pub struct OverlayPipelineRGB {
 
 pub struct OverlayPipelineValue {
     pub(super) descriptor_pool: vk::DescriptorPool,
-    pub(super) descriptor_set_layout: vk::DescriptorSetLayout,
+    pub descriptor_set_layout: vk::DescriptorSetLayout,
 
     sampler: vk::Sampler,
 
-    pub(super) overlay_set: vk::DescriptorSet,
+    pub overlay_set: vk::DescriptorSet,
 
     pub(super) pipeline_layout: vk::PipelineLayout,
     pub(super) pipeline: vk::Pipeline,
@@ -234,14 +239,14 @@ impl OverlayPipelineValue {
             .binding(0)
             .descriptor_type(vk::DescriptorType::COMBINED_IMAGE_SAMPLER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build();
 
         let values = vk::DescriptorSetLayoutBinding::builder()
             .binding(1)
             .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build();
 
         [sampler, values]
@@ -391,7 +396,7 @@ impl OverlayPipelineRGB {
             .binding(0)
             .descriptor_type(vk::DescriptorType::UNIFORM_TEXEL_BUFFER)
             .descriptor_count(1)
-            .stage_flags(Stages::FRAGMENT)
+            .stage_flags(Stages::FRAGMENT | Stages::COMPUTE)
             .build()
     }
 

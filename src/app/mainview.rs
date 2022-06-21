@@ -11,13 +11,11 @@ use handlegraph::handle::NodeId;
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
+use crate::view::{ScreenDims, View};
 use crate::{
     app::{selection::SelectionBuffer, NodeWidth},
+    context::ContextMgr,
     vulkan::texture::GradientTexture,
-};
-use crate::{
-    context::ContextEntry,
-    view::{ScreenDims, View},
 };
 use crate::{geometry::*, vulkan::render_pass::Framebuffers};
 
@@ -95,7 +93,7 @@ impl MainView {
         )?;
 
         let anim_handler = AnimHandler::new(
-            shared_state.clone_view(),
+            shared_state.view.clone(),
             Point::ZERO,
             screen_dims,
         );
@@ -160,11 +158,12 @@ impl MainView {
 
     pub fn reset_view(&self) {
         self.shared_state
-            .set_view(self.anim_handler.initial_view.load());
+            .view
+            .store(self.anim_handler.initial_view.load());
     }
 
     pub fn set_view(&self, view: View) {
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn node_id_buffer(&self) -> vk::Buffer {
@@ -288,13 +287,13 @@ impl MainView {
     pub fn set_view_center(&self, center: Point) {
         let mut view = self.shared_state.view();
         view.center = center;
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn set_view_scale(&self, scale: f32) {
         let mut view = self.shared_state.view();
         view.scale = scale;
-        self.shared_state.set_view(view);
+        self.shared_state.view.store(view);
     }
 
     pub fn update_view_animation<D: Into<ScreenDims>>(
@@ -318,7 +317,7 @@ impl MainView {
         }
     }
 
-    pub fn send_context(&self, tx: &Sender<ContextEntry>) {
+    pub fn produce_context(&self, ctx: &ContextMgr) {
         let mouse_pos = self.shared_state.mouse_pos();
 
         let hover_node = self
@@ -326,13 +325,18 @@ impl MainView {
             .map(|nid| NodeId::from(nid as u64));
 
         if let Some(node) = hover_node {
-            tx.send(ContextEntry::Node(node)).unwrap();
+            ctx.produce_context(|| node);
         }
 
-        let nodes = self.selection_buffer.selection_set().to_owned();
+        // TODO use Arc and Arc::make_mut on the selection_set field
+        // to handle this in a much nicer way
+        let nodes = self.selection_buffer.selection_set();
 
         if !nodes.is_empty() {
-            tx.send(ContextEntry::Selection { nodes }).unwrap();
+            ctx.produce_context(|| {
+                let nodes: FxHashSet<_> = nodes.to_owned();
+                nodes
+            });
         }
     }
 

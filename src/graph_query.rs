@@ -47,7 +47,7 @@ impl GraphQueryWorker {
         result
     }
 
-    pub fn graph(&self) -> &GraphQuery {
+    pub fn graph(&self) -> &Arc<GraphQuery> {
         &self.graph_query
     }
 }
@@ -123,6 +123,14 @@ impl GraphQuery {
         }
 
         result
+    }
+
+    pub fn handle_positions_iter<'a>(
+        &'a self,
+        handle: Handle,
+    ) -> Option<impl Iterator<Item = (PathId, StepPtr, usize)> + 'a> {
+        self.path_positions
+            .handle_positions_iter(&self.graph, handle)
     }
 
     pub fn handle_positions(

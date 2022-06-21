@@ -1,6 +1,10 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc};
 
-use futures::{future::RemoteHandle, Future, StreamExt};
+use futures::{
+    future::RemoteHandle,
+    task::{Spawn, SpawnExt},
+    Future, StreamExt,
+};
 #[allow(unused_imports)]
 use handlegraph::{
     handle::{Direction, Handle, NodeId},
@@ -17,17 +21,19 @@ use log::debug;
 use crossbeam::atomic::AtomicCell;
 
 use rhai::plugin::*;
-use rustc_hash::FxHashSet;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use bstr::ByteSlice;
 
 use crate::{
     annotations::{
-        AnnotationCollection, AnnotationRecord, Annotations, BedColumn,
-        BedRecord, BedRecords, ColumnKey, Gff3Column, Gff3Record, Gff3Records,
+        path_name_chr_range, path_name_range, AnnotationCollection,
+        AnnotationRecord, Annotations, BedColumn, BedRecord, BedRecords,
+        ColumnKey, Gff3Column, Gff3Record, Gff3Records, LabelSet,
     },
-    overlays::OverlayKind,
+    overlays::{OverlayData, OverlayKind},
     reactor::{ModalError, ModalHandler, ModalSuccess},
+    script::plugins::colors::hash_color,
 };
 use crate::{
     app::{
@@ -45,7 +51,13 @@ use crate::{
     graph_query::GraphQuery,
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
+
+use lazy_static::lazy_static;
+
+pub mod wizard;
+
+use wizard::*;
 
 pub type ScriptEvalResult =
     std::result::Result<rhai::Dynamic, Box<rhai::EvalAltResult>>;
@@ -67,32 +79,30 @@ pub struct Console<'a> {
 
     request_focus: bool,
 
-    settings: AppSettings,
-    shared_state: SharedState,
-    channels: AppChannels,
+    pub shared: ConsoleShared,
 
-    get_set: Arc<GetSetTruth>,
+    // settings: AppSettings,
+    // shared_state: SharedState,
+    // channels: AppChannels,
 
+    // pub get_set: Arc<GetSetTruth>,
     remote_handles: HashMap<String, RemoteHandle<()>>,
+
+    input_rx: crossbeam::channel::Receiver<String>,
+    input_tx: crossbeam::channel::Sender<String>,
 
     result_rx: crossbeam::channel::Receiver<ScriptEvalResult>,
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
+    // graph: Arc<GraphQuery>,
 
-    graph: Arc<GraphQuery>,
-    modules: Arc<Mutex<Vec<Arc<rhai::Module>>>>,
+    // overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
 
-    key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
-    overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
+    // thread_pool: futures::executor::ThreadPool,
+    // rayon_pool: Arc<rayon::ThreadPool>,
 
-    rayon_pool: Arc<rayon::ThreadPool>,
-
-    // TODO this shouldn't be a Vec, and it should probably use an
-    // RwLock or something inside
-    window_defs: Arc<Mutex<Vec<ConsoleGuiDsl>>>,
-
-    future_tx: crossbeam::channel::Sender<
-        Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>,
-    >,
+    // future_tx: crossbeam::channel::Sender<
+    //     Pin<Box<dyn Future<Output = ()> + Send + Sync + 'static>>,
+    // >,
 }
 
 /// A "subconsole", spawned from one of the console commands (such as
@@ -100,19 +110,17 @@ pub struct Console<'a> {
 ///
 /// It's more limited than the main console, in that it cannot create
 /// new modules (and thus functions), yet.
-#[allow(dead_code)]
+#[derive(Clone)]
 pub struct ConsoleShared {
     settings: AppSettings,
     shared_state: SharedState,
     channels: AppChannels,
-    get_set: Arc<GetSetTruth>,
-    key_code_map: Arc<HashMap<String, winit::event::VirtualKeyCode>>,
-
     graph: Arc<GraphQuery>,
+    pub get_set: Arc<GetSetTruth>,
 
     overlay_list: Arc<Mutex<Vec<(usize, OverlayKind, String)>>>,
 
-    // is this a bad idea? i should probably just use a global pool
+    thread_pool: futures::executor::ThreadPool,
     rayon_pool: Arc<rayon::ThreadPool>,
 
     result_tx: crossbeam::channel::Sender<ScriptEvalResult>,
@@ -128,29 +136,46 @@ impl Console<'static> {
 
     pub fn new(
         reactor: &Reactor,
-        graph: &Arc<GraphQuery>,
         channels: AppChannels,
         settings: AppSettings,
         shared_state: SharedState,
     ) -> Self {
+        let graph = reactor.graph_query.clone();
+
         let (result_tx, result_rx) =
             crossbeam::channel::unbounded::<ScriptEvalResult>();
 
+        let (input_tx, input_rx) = crossbeam::channel::unbounded::<String>();
+
         let future_tx = reactor.future_tx.clone();
 
+        let thread_pool = reactor.thread_pool.clone();
         let rayon_pool = reactor.rayon_pool.clone();
 
         // These macros add to the keys available with the `get` and `set` console functions
         let mut get_set = GetSetTruth::default();
 
+        // get_set.add_get_set($name, get_set)
+
         macro_rules! add_t {
             ($type:ty, $name:literal, $arc:expr) => {
-                get_set.add_arc_atomic_cell_get_set(
+                let arc = $arc.clone();
+
+                get_set.add_get_set(
                     $name,
-                    $arc,
-                    |x| rhai::Dynamic::from(x),
-                    |x: rhai::Dynamic| x.try_cast::<$type>(),
-                );
+                    // $arc,
+                    move |x: Option<rhai::Dynamic>| {
+                        let v = arc.load();
+
+                        if let Some(x) = x {
+                            if let Some(v) = x.try_cast::<$type>() {
+                                arc.store(v);
+                            }
+                        }
+
+                        rhai::Dynamic::from(v)
+                    },
+                )
             };
         }
 
@@ -165,19 +190,20 @@ impl Console<'static> {
         macro_rules! add_nested_cast {
             ($ubo:expr, $field:tt, $type:ty) => {{
                 let name = stringify!($field);
+                let ubo = $ubo.clone();
 
-                get_set.add_arc_atomic_cell_get_set(
-                    name,
-                    $ubo,
-                    move |cont| rhai::Dynamic::from(cont.$field),
-                    {
-                        let ubo = $ubo.clone();
-                        move |val: rhai::Dynamic| {
-                            let x = val.try_cast::<$type>()?;
-                            let mut ubo = ubo.load();
-                            ubo.$field = x;
-                            Some(ubo)
+                get_set.add_get_set(
+                    &name,
+                    move |val: Option<rhai::Dynamic>| {
+                        let res = ubo.load();
+                        if let Some(new) =
+                            val.and_then(|v| v.try_cast::<$type>())
+                        {
+                            let mut v = ubo.load();
+                            v.$field = new;
+                            ubo.store(v);
                         }
+                        rhai::Dynamic::from(res)
                     },
                 );
             }};
@@ -188,18 +214,21 @@ impl Console<'static> {
                 let nw = $obj.clone();
                 let nw_ = $obj.clone();
 
-                get_set.add_dynamic(
+                get_set.add_get_set(
                     stringify!($get),
-                    move || nw.$get(),
-                    move |v| {
-                        nw_.$set(v);
+                    move |val: Option<rhai::Dynamic>| {
+                        let r = rhai::Dynamic::from(nw.$get());
+                        if let Some(v) = val {
+                            nw_.$set(v.cast());
+                        }
+                        r
                     },
-                )
+                );
             };
         }
 
-        add_t!(f32, "label_radius", settings.label_radius().clone());
-        add_t!(Point, "mouse_pos", shared_state.mouse_pos.clone());
+        add_t!(f32, "label_radius", settings.label_radius());
+        add_t!(Point, "mouse_pos", &shared_state.mouse_pos);
 
         add_t!(
             rgb::RGB<f32>,
@@ -220,28 +249,6 @@ impl Console<'static> {
 
         let e1 = edge.clone();
         let e2 = edge.clone();
-
-        get_set.add_dynamic(
-            "tess_levels",
-            move || {
-                let tl = e1.load().tess_levels;
-                let get = |ix| rhai::Dynamic::from(tl[ix]);
-                vec![get(0), get(1), get(2), get(3), get(4)]
-            },
-            move |tess_vec: Vec<rhai::Dynamic>| {
-                let get = |ix| {
-                    tess_vec
-                        .get(ix)
-                        .cloned()
-                        .and_then(|v: rhai::Dynamic| v.try_cast())
-                        .unwrap_or(0.0f32)
-                };
-                let arr = [get(0), get(1), get(2), get(3), get(4)];
-                let mut ubo = e2.load();
-                ubo.tess_levels = arr;
-                e2.store(ubo);
-            },
-        );
 
         add_nested_cell!(
             settings.node_width().clone(),
@@ -270,7 +277,7 @@ impl Console<'static> {
         let output_history =
             vec![" < close this console with Esc >".to_string()];
 
-        let key_code_map = Arc::new(virtual_key_code_map());
+        // let key_code_map = Arc::new(virtual_key_code_map());
 
         let overlay_list = Arc::new(Mutex::new(Vec::new()));
 
@@ -295,9 +302,28 @@ impl Console<'static> {
         let window_defs = Arc::new(Mutex::new(vec![window_test]));
         */
 
-        let window_defs = Arc::new(Mutex::new(vec![]));
+        let shared = ConsoleShared {
+            channels,
+            settings,
+            shared_state,
+
+            get_set: Arc::new(get_set),
+
+            graph,
+
+            overlay_list,
+
+            thread_pool,
+            rayon_pool,
+
+            result_tx: result_tx.clone(),
+
+            future_tx,
+        };
 
         Self {
+            shared,
+
             input_line: String::new(),
 
             input_history_ix: None,
@@ -310,56 +336,28 @@ impl Console<'static> {
 
             request_focus: false,
 
-            channels,
-            settings,
-            shared_state,
-
-            get_set: Arc::new(get_set),
-
             remote_handles: Default::default(),
+
+            input_tx,
+            input_rx,
 
             result_tx,
             result_rx,
-
-            graph: graph.clone(),
-            // graph: graph.graph.clone(),
-            // path_positions: graph.path_positions.clone(),
-            modules: Arc::new(Mutex::new(Vec::new())),
-
-            key_code_map,
-
-            overlay_list,
-            rayon_pool,
-
-            window_defs,
-
-            future_tx,
         }
     }
 
     /// Create a subconsole that shares state with the main console
     /// where applicable
     pub fn shared(&self) -> ConsoleShared {
-        ConsoleShared {
-            settings: self.settings.clone(),
-            shared_state: self.shared_state.clone(),
-            channels: self.channels.clone(),
-            get_set: self.get_set.clone(),
-            key_code_map: self.key_code_map.clone(),
-
-            graph: self.graph.clone(),
-            // path_positions: self.path_positions.clone(),
-            result_tx: self.result_tx.clone(),
-
-            overlay_list: self.overlay_list.clone(),
-            rayon_pool: self.rayon_pool.clone(),
-
-            future_tx: self.future_tx.clone(),
-        }
+        self.shared.clone()
     }
 
     pub fn append_output(&mut self, output: &str) {
         self.output_history.extend(output.lines().map(String::from));
+    }
+
+    pub fn input_tx(&self) -> &crossbeam::channel::Sender<String> {
+        &self.input_tx
     }
 
     // NB: this shouldn't be handled this way (it shouldn't be a
@@ -368,7 +366,7 @@ impl Console<'static> {
         &mut self,
         names: &[(usize, OverlayKind, &str)],
     ) {
-        let mut overlays = self.overlay_list.lock();
+        let mut overlays = self.shared.overlay_list.lock();
         overlays.clear();
         overlays.extend(names.iter().map(|&(a, b, s)| (a, b, s.to_string())));
     }
@@ -387,12 +385,11 @@ impl Console<'static> {
     pub fn create_engine(&self) -> rhai::Engine {
         let shared = self.shared();
 
-        let modules = self.modules.clone();
-
-        let key_code_map = self.key_code_map.clone();
-        let binds_tx = self.channels.binds_tx.clone();
+        // let key_code_map = self.key_code_map.clone();
 
         let mut engine = shared.create_engine();
+
+        let scope = self.scope.clone();
 
         // Bind a Rhai function to execute when the given key is
         // pressed. See the virtual_key_code_map() function below for
@@ -404,6 +401,7 @@ impl Console<'static> {
         //
         // the same applies to the other functions here that take a
         // function name as parameter
+        /*
         engine.register_fn(
             "bind_key",
             move |key: &str, fn_name: rhai::Dynamic| {
@@ -416,21 +414,15 @@ impl Console<'static> {
                 };
 
                 if let Some(fn_name) = fn_name.try_cast::<String>() {
-                    let scope = Self::create_scope();
+                    let scope_ = scope.lock();
 
                     let mut engine = shared.create_engine();
-                    {
-                        let modules = modules.lock();
-                        for module in modules.iter() {
-                            engine.register_global_module(module.clone());
-                        }
-                    }
 
                     log::debug!("compiling to AST");
                     let script =
                         format!("fn a_function() {{\n{}();\n}}", fn_name);
 
-                    let ast = engine.compile_with_scope(&scope, &script);
+                    let ast = engine.compile_with_scope(&scope_, &script);
 
                     match ast {
                         Ok(ast) => {
@@ -461,88 +453,14 @@ impl Console<'static> {
                 }
             },
         );
+        */
 
-        let rayon_pool = self.rayon_pool.clone();
-        let graph = self.graph.clone();
-        let config = ScriptConfig {
-            default_color: rgb::RGBA::new(0.3, 0.3, 0.3, 0.3),
-            target: ScriptTarget::Nodes,
-        };
-
-        let overlay_tx = self.channels.new_overlay_tx.clone();
-        let shared = self.shared();
-        let modules = self.modules.clone();
-        engine.register_fn(
-            "create_overlay_from_fn",
-            move |name: &str, fn_name: rhai::Dynamic| {
-                if let Some(fn_name) = fn_name.try_cast::<String>() {
-                    let mut scope = Self::create_scope();
-
-                    scope
-                        .push("graph", graph.graph.clone())
-                        .push("path_pos", graph.path_positions.clone());
-
-                    let mut engine = shared.create_engine();
-                    {
-                        let modules = modules.lock();
-                        for module in modules.iter() {
-                            engine.register_global_module(module.clone());
-                        }
-                    }
-
-                    let script =
-                        format!("\nfn node_color(i) {{\n{}(i);\n}}", fn_name);
-                    log::debug!("script: {}", script);
-
-                    let node_color_ast =
-                        engine.compile_into_self_contained(&scope, &script);
-
-                    match node_color_ast {
-                        Ok(node_color_ast) => {
-                            let result = overlay_colors_tgt_ast(
-                                &rayon_pool,
-                                &config,
-                                &graph,
-                                &engine,
-                                scope,
-                                node_color_ast,
-                            );
-
-                            match result {
-                                Ok(data) => {
-                                    let msg = OverlayCreatorMsg::NewOverlay {
-                                        name: name.to_string(),
-                                        data,
-                                    };
-                                    overlay_tx.send(msg).unwrap();
-                                    log::info!("overlay data success");
-                                }
-                                Err(_err) => {
-                                    log::warn!("overlay failure");
-                                }
-                            }
-                        }
-                        Err(_err) => {
-                            log::warn!("ast failure");
-                        }
-                    }
-                }
-            },
-        );
-
-        self.add_gui_dsl_fns(&mut engine);
-
-        {
-            let modules = self.modules.lock();
-
-            for module in modules.iter() {
-                engine.register_global_module(module.clone());
-            }
-        }
+        // self.add_gui_dsl_fns(&mut engine);
 
         engine
     }
 
+    /*
     fn add_gui_dsl_fns(&self, engine: &mut rhai::Engine) {
         // create a new window with the provided title, and return the index of the window
         //
@@ -622,21 +540,15 @@ impl Console<'static> {
         // `fn_name` here has the same limitations as seen in create_engine above
         let window_defs = self.window_defs.clone();
         let shared = self.shared();
-        let modules = self.modules.clone();
+        let scope = self.scope.clone();
         engine.register_fn(
             "add_callback",
             move |ix: i64, callback_id: &str, fn_name: &str| {
                 let mut win_defs = window_defs.lock();
 
                 if let Some(window) = win_defs.get_mut(ix as usize) {
-                    let scope = Self::create_scope();
+                    let scope = scope.lock();
                     let mut engine = shared.create_engine();
-                    {
-                        let modules = modules.lock();
-                        for module in modules.iter() {
-                            engine.register_global_module(module.clone());
-                        }
-                    }
 
                     let script =
                         format!("fn a_function() {{\n{}();\n}}", fn_name);
@@ -671,12 +583,9 @@ impl Console<'static> {
             },
         );
     }
+    */
 
-    pub fn eval_input(
-        &mut self,
-        reactor: &mut Reactor,
-        print: bool,
-    ) -> Result<()> {
+    pub fn eval_input(&mut self, reactor: &Reactor, print: bool) -> Result<()> {
         debug!("evaluating: {}", &self.input_line);
 
         let input = self.input_line.to_owned();
@@ -685,14 +594,14 @@ impl Console<'static> {
             self.input_line.clear();
             return Ok(());
         }
-        self.eval(reactor, print)?;
+        self.eval(reactor, print, &input)?;
 
         Ok(())
     }
 
     pub fn eval_file(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         print: bool,
         path: &str,
     ) -> Result<()> {
@@ -706,9 +615,10 @@ impl Console<'static> {
                 .push(format!(">>> Evaluating file '{}'", path));
         }
 
-        self.eval_line(reactor, print, &script)
+        self.eval(reactor, print, &script)
     }
 
+    /*
     pub fn eval_line(
         &mut self,
         reactor: &mut Reactor,
@@ -723,10 +633,11 @@ impl Console<'static> {
 
         Ok(())
     }
+    */
 
     fn eval_file_interval(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         handle_name: &str,
         path: &str,
     ) -> Result<()> {
@@ -770,7 +681,7 @@ impl Console<'static> {
     // NB: edit this to add new console commands that do *not* use the Rhai engine
     fn exec_console_command(
         &mut self,
-        reactor: &mut Reactor,
+        reactor: &Reactor,
         input: &str,
     ) -> Result<bool> {
         if input.starts_with(":clear") {
@@ -786,10 +697,6 @@ impl Console<'static> {
 
             self.input_history.clear();
             self.output_history.clear();
-            {
-                let mut modules = self.modules.lock();
-                modules.clear();
-            }
 
             return Ok(true);
         } else if input.starts_with(":exec ") {
@@ -906,42 +813,55 @@ impl Console<'static> {
             " >>> imported {} variables, {} functions, and {} iterators from '{}'", vars, funcs, iters, file);
         self.append_output(&msg);
 
-        {
-            let mut modules = self.modules.lock();
-            modules.push(Arc::new(module));
+        Ok(())
+    }
+
+    pub fn eval(
+        &mut self,
+        reactor: &Reactor,
+        _print: bool,
+        input_line: &str,
+    ) -> Result<()> {
+        let engine = self.create_engine();
+
+        let result_tx = self.result_tx.clone();
+
+        let input = input_line.to_string();
+
+        let scope = self.scope.clone();
+
+        reactor.spawn_forget(async move {
+            let mut scope = scope.lock();
+
+            let result =
+                engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
+
+            let _ = result_tx.send(result);
+        })?;
+
+        Ok(())
+    }
+
+    pub fn eval_next(
+        &mut self,
+        reactor: &Reactor,
+        eval_all: bool,
+    ) -> Result<()> {
+        if eval_all {
+            while let Ok(input) = self.input_rx.try_recv() {
+                self.eval(reactor, false, &input)?;
+            }
+        } else {
+            if let Ok(input) = self.input_rx.try_recv() {
+                self.eval(reactor, false, &input)?;
+            }
         }
 
         Ok(())
     }
 
-    pub fn eval(&mut self, reactor: &mut Reactor, _print: bool) -> Result<()> {
-        let engine = self.create_engine();
-
-        let result_tx = self.result_tx.clone();
-
-        let input = self.input_line.to_string();
-
-        let scope = self.scope.clone();
-
-        let handle = reactor.spawn(async move {
-            let mut scope = scope.lock();
-
-            let result =
-                engine.eval_with_scope::<rhai::Dynamic>(&mut scope, &input);
-            let _ = result_tx.send(result);
-        })?;
-
-        handle.forget();
-
-        Ok(())
-    }
-
-    pub fn ui(
-        &mut self,
-        ctx: &egui::CtxRef,
-        is_down: bool,
-        reactor: &mut Reactor,
-    ) {
+    pub fn ui(&mut self, ctx: &egui::CtxRef, is_down: bool, reactor: &Reactor) {
+        /*
         {
             let mut win_defs = self.window_defs.lock();
 
@@ -949,6 +869,7 @@ impl Console<'static> {
                 win_def.show(ctx);
             }
         }
+        */
 
         while let Ok(result) = self.result_rx.try_recv() {
             self.handle_eval_result(true, result).unwrap();
@@ -1036,23 +957,23 @@ impl Console<'static> {
 
                     if scope_locked {
                         let mut empty = "> Executing...".to_string();
-                        ui.add(
+                        ui.add_enabled(
+                            false,
                             egui::TextEdit::multiline(&mut empty)
                                 .id(egui::Id::new(Self::ID_TEXT))
                                 .desired_rows(line_count)
                                 .code_editor()
                                 .lock_focus(true)
-                                .enabled(false)
                                 .desired_width(ui.available_width()),
                         )
                     } else {
-                        ui.add(
+                        ui.add_enabled(
+                            true,
                             egui::TextEdit::multiline(&mut self.input_line)
                                 .id(egui::Id::new(Self::ID_TEXT))
                                 .desired_rows(line_count)
                                 .code_editor()
                                 .lock_focus(true)
-                                .enabled(true)
                                 .desired_width(ui.available_width()),
                         )
                     }
@@ -1155,70 +1076,90 @@ impl Console<'static> {
     }
 }
 
+type GetSetDyn =
+    Box<dyn Fn(Option<rhai::Dynamic>) -> rhai::Dynamic + Send + Sync + 'static>;
+
 /// Holds both the closures used with the `get` and `set` commands
 /// (defined in [`ConsoleShared::create_engine`]), and the generic
 /// console variable map, accessible via (`get_var` and `set_var`).
 #[derive(Default)]
 pub struct GetSetTruth {
-    getters:
-        HashMap<String, Box<dyn Fn() -> rhai::Dynamic + Send + Sync + 'static>>,
-    setters:
-        HashMap<String, Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>>,
+    get_set: RwLock<HashMap<String, GetSetDyn>>,
 
-    console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
+    pub console_vars: Mutex<HashMap<String, rhai::Dynamic>>,
 }
 
 impl GetSetTruth {
+    pub fn add_setter(
+        &self,
+        key: &str,
+        // setter: impl Fn(rhai::Dynamic) + Send + Sync + 'static,
+        setter: Box<dyn Fn(rhai::Dynamic) + Send + Sync + 'static>,
+    ) {
+        let mut get_setters = self.get_set.write();
+
+        let val = Box::new(move |val: Option<rhai::Dynamic>| {
+            if let Some(val) = val {
+                setter(val);
+                rhai::Dynamic::from(false)
+            } else {
+                rhai::Dynamic::from(true)
+            }
+        }) as GetSetDyn;
+
+        get_setters.insert(key.to_string(), val);
+    }
+
+    pub fn add_get_set(
+        &self,
+        key: &str,
+        get_set: impl Fn(Option<rhai::Dynamic>) -> rhai::Dynamic
+            + Send
+            + Sync
+            + 'static,
+    ) {
+        let mut get_setters = self.get_set.write();
+        get_setters.insert(key.to_string(), Box::new(get_set));
+    }
+
+    pub fn get(&self, key: &str) -> Option<rhai::Dynamic> {
+        let get_setters = self.get_set.read();
+        let gs = get_setters.get(key)?;
+        let v = gs(None);
+        Some(v)
+    }
+
+    pub fn set(&self, key: &str, val: rhai::Dynamic) -> Option<rhai::Dynamic> {
+        let get_setters = self.get_set.read();
+        let gs = get_setters.get(key)?;
+        let v = gs(Some(val));
+        Some(v)
+    }
+
+    pub fn get_var(&self, key: &str) -> Option<rhai::Dynamic> {
+        let lock = self.console_vars.lock();
+        let val = lock.get(key)?.to_owned();
+        Some(val)
+    }
+
+    pub fn set_vars<'a>(
+        &self,
+        pairs: impl IntoIterator<Item = (&'a str, rhai::Dynamic)>,
+    ) {
+        let mut lock = self.console_vars.lock();
+        for (key, val) in pairs {
+            lock.insert(key.to_string(), val);
+        }
+    }
+
+    pub fn set_var(&self, key: &str, val: rhai::Dynamic) {
+        let mut lock = self.console_vars.lock();
+        lock.insert(key.to_string(), val);
+    }
+
     pub fn add_var(&mut self, name: &str, val: rhai::Dynamic) {
         let mut lock = self.console_vars.lock();
         lock.insert(name.to_string(), val);
-    }
-
-    pub fn add_arc_atomic_cell_get_set<T>(
-        &mut self,
-        name: &str,
-        arc: Arc<AtomicCell<T>>,
-        to_dyn: impl Fn(T) -> rhai::Dynamic + Send + Sync + 'static,
-        from_dyn: impl Fn(rhai::Dynamic) -> Option<T> + Send + Sync + 'static,
-    ) where
-        T: Copy + Send + Sync + 'static,
-    {
-        let arc_ = arc.clone();
-        let getter = move || {
-            let t = arc_.load();
-            to_dyn(t)
-        };
-
-        let setter = move |v: rhai::Dynamic| {
-            if let Some(v) = from_dyn(v) {
-                arc.store(v);
-            }
-        };
-
-        self.getters.insert(name.to_string(), Box::new(getter) as _);
-        self.setters.insert(name.to_string(), Box::new(setter) as _);
-    }
-
-    pub fn add_dynamic<T>(
-        &mut self,
-        name: &str,
-        get: impl Fn() -> T + Send + Sync + 'static,
-        set: impl Fn(T) + Send + Sync + 'static,
-    ) where
-        T: Clone + Send + Sync + 'static,
-    {
-        let getter = move || {
-            let v = get();
-            rhai::Dynamic::from(v)
-        };
-
-        let setter = move |val: rhai::Dynamic| {
-            let val: T = val.cast();
-            set(val);
-        };
-
-        self.getters.insert(name.to_string(), Box::new(getter) as _);
-        self.setters.insert(name.to_string(), Box::new(setter) as _);
     }
 }
 
@@ -1229,6 +1170,12 @@ impl ConsoleShared {
         use rhai::plugin::*;
 
         let mut engine = crate::script::create_engine();
+
+        engine.register_static_module("app", self.app_module());
+        engine.register_static_module("msg", self.app_msg_module());
+        engine.register_static_module("db", self.db_module());
+        engine.register_static_module("geo", self.geometry_module());
+        engine.register_static_module("modal", self.modal_module());
 
         // TODO this should be configurable in the app options
         engine.set_max_call_levels(16);
@@ -1245,43 +1192,32 @@ impl ConsoleShared {
 
         self.add_annotation_fns(&mut engine);
 
-        // Constructor and getters & setters for the Point struct
-        engine.register_fn("Point", |x: f32, y: f32| Point::new(x, y));
-        engine.register_get_set(
-            "x",
-            |p: &mut Point| p.x,
-            |p: &mut Point, x| p.x = x,
-        );
-        engine.register_get_set(
-            "y",
-            |p: &mut Point| p.y,
-            |p: &mut Point, y| p.y = y,
-        );
-
-        // Not really necessary, as you can use the built-in `print`
-        // function, but this one does a bit more logic with how the
-        // input is printed (see handle_eval_result())
-        let result_tx = self.result_tx.clone();
-        engine.register_fn("log", move |v: rhai::Dynamic| {
-            result_tx.send(Ok(v)).unwrap();
-        });
-
         // the cloned Arc containing the graph is moved into the
         // closure, which is registered as a regular function in Rhai
-        let graph = self.graph.clone();
-        engine.register_fn("get_graph", move || graph.graph.clone());
 
-        let graph = self.graph.clone();
-        engine.register_fn("get_path_positions", move || {
-            graph.path_positions.clone()
-        });
-
-        self.add_view_fns(&mut engine);
-
-        self.add_overlay_fns(&mut engine);
+        // NB: replaced with app module
 
         self.add_modal_fns(&mut engine);
 
+        /*
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn(
+            "send_app_msg",
+            move |id: &str, val: rhai::Dynamic| {
+                app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_clipboard_contents", move |text: &str| {
+            log::warn!("setting clipboard contents to {}", text);
+            app_msg_tx
+                .send(AppMsg::set_clipboard_contents(text))
+                .unwrap();
+        });
+        */
+
+        /*
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("get_selection", move || {
             use crossbeam::channel;
@@ -1308,10 +1244,7 @@ impl ConsoleShared {
 
             app_msg_tx.send(msg).unwrap();
 
-            let (rect, _result) =
-                std::thread::spawn(move || rx.recv().unwrap())
-                    .join()
-                    .unwrap();
+            let (rect, _) = rx.recv().unwrap();
 
             rect.center()
         });
@@ -1336,9 +1269,13 @@ impl ConsoleShared {
         });
 
         let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_fn("pan_to_active_selection", move || {
-            let msg = AppMsg::GotoSelection;
-            app_msg_tx.send(msg).unwrap();
+        engine.register_fn("goto_selection", move || {
+            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_rect", move |p0: Point, p1: Point| {
+            app_msg_tx.send(AppMsg::goto_rect((p0, p1).into())).unwrap();
         });
 
         let graph = self.graph.graph.clone();
@@ -1372,59 +1309,17 @@ impl ConsoleShared {
                 Err("The provided path does not exist".into())
             }
         });
+        */
 
         let arc = self.shared_state.hover_node.clone();
         engine.register_fn("get_hover_node", move || arc.load());
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("toggle_dark_mode", move || {
-            app_msg_tx.send(crate::app::AppMsg::ToggleDarkMode).unwrap();
-        });
-
-        // Actually add the `get` and `set` functions, see Console::new as well
-        let get_set = self.get_set.clone();
-        engine.register_result_fn("get", move |name: &str| {
-            get_set
-                .getters
-                .get(name)
-                .map(|get| get())
-                .ok_or(format!("Setting `{}` not found", name).into())
-        });
-
-        let get_set = self.get_set.clone();
-
-        engine.register_result_fn(
-            "set",
-            move |name: &str, val: rhai::Dynamic| {
-                get_set
-                    .setters
-                    .get(name)
-                    .map(|set| set(val))
-                    .ok_or(format!("Setting `{}` not found", name).into())
-            },
-        );
-
-        let get_set = self.get_set.clone();
-        engine.register_result_fn("get_var", move |name: &str| {
-            let lock = get_set.console_vars.try_lock();
-            let val = lock.and_then(|l| l.get(name).cloned());
-            val.ok_or(format!("Global variable `{}` not found", name).into())
-        });
-
-        let get_set = self.get_set.clone();
-        engine.register_fn("set_var", move |name: &str, val: rhai::Dynamic| {
-            let mut lock = get_set.console_vars.lock();
-            lock.insert(name.to_string(), val);
+            app_msg_tx.send(AppMsg::toggle_dark_mode()).unwrap();
         });
 
         let handle = exported_module!(crate::script::plugins::handle_plugin);
-
-        // TODO it's probably a bad idea to have this without a way to
-        // cancel/abort running scripts
-        engine.register_fn("sleep", |ms: i64| {
-            let dur = std::time::Duration::from_millis(ms as u64);
-            std::thread::sleep(dur);
-        });
 
         engine.register_global_module(handle.into());
 
@@ -1460,22 +1355,24 @@ impl ConsoleShared {
             // focus to the text box
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter string");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter string");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,
@@ -1499,22 +1396,24 @@ impl ConsoleShared {
 
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter node ID");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,
@@ -1539,6 +1438,81 @@ impl ConsoleShared {
                 _ => Err("Could not parse node ID".into()),
             }
         });
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+        let thread_pool = self.thread_pool.clone();
+        engine.register_result_fn("file_picker_modal", move || {
+            let future = crate::reactor::file_picker_modal(
+                modal_tx.clone(),
+                &show_modal,
+                &[],
+            );
+
+            let result =
+                std::thread::spawn(move || futures::executor::block_on(future))
+                    .join();
+
+            match result {
+                Ok(Some(path)) => Ok(path),
+                _ => Err("Path not found".into()),
+            }
+        });
+
+        let shared = self.clone();
+
+        engine
+            .register_fn("tsv_wizard", move || tsv_wizard_impl(&shared, None));
+
+        let shared = self.clone();
+
+        engine.register_fn("tsv_import", move |path: &str| {
+            tsv_wizard_impl(&shared, Some(path))
+        });
+
+        let shared = self.clone();
+
+        engine.register_fn("bed_label_wizard", move || {
+            bed_label_wizard_impl(&shared, None, None, None)
+        });
+
+        let shared = self.clone();
+
+        engine.register_fn("bed_label_wizard", move |path_prefix: &str| {
+            let path_prefix = Some(path_prefix);
+            bed_label_wizard_impl(&shared, None, path_prefix, None)
+        });
+
+        let shared = self.clone();
+
+        engine.register_fn("bed_label_wizard", move |column_ix: i64| {
+            let column_ix = Some(column_ix as usize);
+            bed_label_wizard_impl(&shared, None, None, column_ix)
+        });
+
+        let shared = self.clone();
+
+        engine.register_fn(
+            "bed_label_wizard",
+            move |path_prefix: &str, column_ix: i64| {
+                let path_prefix = Some(path_prefix);
+                let column_ix = Some(column_ix as usize);
+                bed_label_wizard_impl(&shared, None, path_prefix, column_ix)
+            },
+        );
+
+        let shared = self.clone();
+
+        engine.register_fn(
+            "bed_label_wizard",
+            move |bed_path: &str, path_prefix: &str, column_ix: i64| {
+                let bed_path = (bed_path != "").then(|| bed_path);
+                let path_prefix = (path_prefix != "").then(|| path_prefix);
+                let column_ix = (column_ix >= 0).then(|| column_ix as usize);
+
+                bed_label_wizard_impl(&shared, bed_path, path_prefix, column_ix)
+            },
+        );
     }
 
     fn add_overlay_fns(&self, engine: &mut rhai::Engine) {
@@ -1586,6 +1560,557 @@ impl ConsoleShared {
         );
     }
 
+    fn selection_module(&self) -> Arc<rhai::Module> {
+        // lazy_static! {
+        //     static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+        //         Mutex::new(None);
+        // }
+
+        // let mut cache = CACHE.lock();
+
+        // if let Some(module) = cache.as_ref() {
+        //     return module.clone();
+        // }
+
+        // TODO better versions of all of these:
+
+        /*
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection", move || {
+            NodeSelection { nodes: result }
+        });
+
+        // TODO probably... don't do it like this
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("get_selection_center", move || {
+            use crossbeam::channel;
+            let (rect, _) = rx.recv().unwrap();
+
+            rect.center()
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |selection: NodeSelection| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: selection.nodes,
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        // this version is used if the input is a single node
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("set_selection", move |node: NodeId| {
+            let msg = AppMsg::Selection(Select::Many {
+                nodes: Some(node).into_iter().collect(),
+                clear: true,
+            });
+            app_msg_tx.send(msg).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_selection", move || {
+            app_msg_tx.send(AppMsg::goto_selection()).unwrap();
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        engine.register_fn("goto_rect", move |p0: Point, p1: Point| {
+            app_msg_tx.send(AppMsg::goto_rect((p0, p1).into())).unwrap();
+        });
+
+        let graph = self.graph.graph.clone();
+        engine.register_fn(
+            "path_selection",
+            move |path: PathId| -> NodeSelection {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                selection
+            },
+        );
+
+        // variant of the above that takes a path name instead of ID, for convenience
+        let graph = self.graph.graph.clone();
+        engine.register_result_fn("path_selection", move |path_name: &str| {
+            if let Some(path) = graph.get_path_id(path_name.as_bytes()) {
+                let mut selection = NodeSelection::default();
+                if let Some(steps) = graph.path_steps(path) {
+                    for step in steps {
+                        let id = step.handle().id();
+                        selection.add_one(false, id);
+                    }
+                }
+                Ok(selection)
+            } else {
+                Err("The provided path does not exist".into())
+            }
+        });
+        */
+
+        unimplemented!();
+    }
+
+    fn modal_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing modal_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("modal");
+
+        fn futures_helper<T: Send + Sync + 'static>(
+            mut rx: futures::channel::mpsc::Receiver<Option<T>>,
+        ) -> Option<T> {
+            let result = std::thread::spawn(move || {
+                let val =
+                    futures::executor::block_on(async move { rx.next().await })
+                        .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(v) => v,
+                _ => None,
+            }
+        }
+
+        fn modal_helper<T: std::fmt::Debug + Clone + Send + Sync + 'static, F>(
+            show_modal: &Arc<AtomicCell<bool>>,
+            modal_tx: &crossbeam::channel::Sender<
+                Box<dyn Fn(&mut egui::Ui) + Send + Sync>,
+            >,
+            init: T,
+            callback: F,
+        ) -> std::result::Result<T, EvalAltResult>
+        where
+            F: Fn(
+                    &mut T,
+                    &mut egui::Ui,
+                    bool,
+                )
+                    -> std::result::Result<ModalSuccess, ModalError>
+                + Send
+                + Sync
+                + 'static,
+        {
+            let (result_tx, mut result_rx) =
+                futures::channel::mpsc::channel::<Option<T>>(1);
+
+            let prepared = ModalHandler::prepare_callback(
+                show_modal, init, callback, result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = std::thread::spawn(move || {
+                let val = futures::executor::block_on(async move {
+                    result_rx.next().await
+                })
+                .flatten();
+                val
+            })
+            .join();
+
+            match result {
+                Ok(Some(v)) => Ok(v),
+                _ => Err("modal oops!".into()),
+            }
+        }
+
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+
+        let pool = self.thread_pool.clone();
+
+        module.set_native_fn("get_string", move || {
+            let (result_tx, result_rx) =
+                futures::channel::mpsc::channel::<Option<String>>(1);
+
+            // using an atomic bool we can easily check if it's the
+            // first time this specific modal is opened, and give
+            // focus to the text box
+            let first_run = AtomicCell::new(true);
+
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter string");
+                    let text_box = ui.text_edit_singleline(text);
+
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
+
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
+
+                    Err(ModalError::Continue)
+                };
+
+            let prepared = ModalHandler::prepare_callback(
+                &show_modal,
+                String::new(),
+                callback,
+                result_tx,
+            );
+
+            modal_tx.send(prepared).unwrap();
+
+            let result = futures_helper(result_rx);
+
+            match result {
+                Some(r) => Ok(r),
+                None => Err("error!".into()),
+            }
+        });
+
+        let graph = self.graph.clone();
+        let modal_tx = self.channels.modal_tx.clone();
+        let show_modal = self.shared_state.show_modal.clone();
+
+        module.set_native_fn("get_node_id", move || {
+            let first_run = AtomicCell::new(true);
+
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
+
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
+
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
+
+                    Err(ModalError::Continue)
+                };
+
+            let modal_result =
+                modal_helper(&show_modal, &modal_tx, String::new(), callback)?;
+
+            let raw = modal_result
+                .parse::<u64>()
+                .map_err::<Box<rhai::EvalAltResult>, _>(|_| {
+                    "Error parsing modal input".into()
+                })?;
+
+            let node_id = NodeId::from(raw);
+            if graph.graph.has_node(node_id) {
+                Ok(node_id)
+            } else {
+                Err("Node not found".into())
+            }
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
+    fn geometry_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing geo_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("geo");
+
+        module.set_native_fn("Point", |x: f32, y: f32| Ok(Point::new(x, y)));
+        module.set_getter_fn("x", |p: &mut Point| Ok(p.x));
+        module.set_getter_fn("y", |p: &mut Point| Ok(p.y));
+        module.set_setter_fn("x", |p: &mut Point, v| {
+            p.x = v;
+            Ok(())
+        });
+        module.set_setter_fn("y", |p: &mut Point, v| {
+            p.y = v;
+            Ok(())
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
+    fn db_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing db_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("db");
+
+        // Actually add the `get` and `set` functions, see Console::new as well
+        let get_set = self.get_set.clone();
+        module.set_native_fn("get", move |name: &str| {
+            get_set
+                .get(name)
+                .ok_or(format!("Setting `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn("set", move |name: &str, val: rhai::Dynamic| {
+            if get_set.set(name, val).is_none() {
+                return Err(format!("Setting `{}` not found", name).into());
+            }
+            Ok(())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn("get_var", move |name: &str| {
+            let lock = get_set.console_vars.try_lock();
+            let val = lock.and_then(|l| l.get(name).cloned());
+            val.ok_or(format!("Global variable `{}` not found", name).into())
+        });
+
+        let get_set = self.get_set.clone();
+        module.set_native_fn(
+            "set_var",
+            move |name: &str, val: rhai::Dynamic| {
+                let mut lock = get_set.console_vars.lock();
+                lock.insert(name.to_string(), val);
+                Ok(())
+            },
+        );
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
+    fn app_msg_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing msg_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("msg");
+
+        module
+            .set_native_fn("goto_node", |id: NodeId| Ok(AppMsg::goto_node(id)));
+        module.set_native_fn("set_clipboard_contents", |text: &str| {
+            Ok(AppMsg::set_clipboard_contents(text))
+        });
+        module.set_native_fn("toggle_dark_mode", || {
+            Ok(AppMsg::toggle_dark_mode())
+        });
+        module.set_native_fn("set_data", |key, index, value| {
+            Ok(AppMsg::set_data(key, index, value))
+        });
+        module.set_native_fn("to_string", |msg: &mut AppMsg| {
+            Ok(format!("{:?}", msg))
+        });
+
+        module.set_native_fn("save_selection", |file: &str| {
+            let path = std::path::PathBuf::from(file);
+            let msg = AppMsg::raw("save_selection", path);
+            Ok(msg)
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
+    // contains things like appmsg, clipboard activity, etc.
+    fn app_module(&self) -> Arc<rhai::Module> {
+        lazy_static! {
+            static ref CACHE: Mutex<Option<Arc<rhai::Module>>> =
+                Mutex::new(None);
+        }
+
+        let mut cache = CACHE.lock();
+
+        if let Some(module) = cache.as_ref() {
+            return module.clone();
+        }
+
+        log::warn!("initializing app_module");
+
+        let mut module = rhai::Module::new();
+
+        module.set_id("app");
+
+        let graph = self.graph.clone();
+        module.set_var("graph", graph.graph.clone());
+        module.set_var("path_pos_index", graph.path_positions.clone());
+
+        let app_msg_tx = self.channels.app_tx.clone();
+
+        module.set_native_fn("send_msg", move |msg: AppMsg| {
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+
+        module.set_native_fn(
+            "send_msg",
+            move |id: &str, val: rhai::Dynamic| {
+                app_msg_tx.send(AppMsg::raw(id, val)).unwrap();
+                Ok(())
+            },
+        );
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("set_clipboard_contents", move |text: &str| {
+            // log::warn!("setting clipboard contents to {}", text);
+            app_msg_tx
+                .send(AppMsg::set_clipboard_contents(text))
+                .unwrap();
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("save_selection", move |file: &str| {
+            let path = std::path::PathBuf::from(file);
+            let msg = AppMsg::raw("save_selection", path);
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let module = Arc::new(module);
+
+        *cache = Some(module.clone());
+
+        module
+    }
+
+    fn view_module(&self) -> rhai::Module {
+        let mut module = rhai::Module::new();
+
+        module.set_id("view");
+
+        module.set_getter_fn("scale", |v: &mut View| Ok(v.scale));
+        module.set_setter_fn("scale", |v: &mut View, s| {
+            v.scale = s;
+            Ok(())
+        });
+
+        module.set_getter_fn("center", |v: &mut View| Ok(v.center));
+        module.set_setter_fn("center", |v: &mut View, s| {
+            v.center = s;
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("get_view", move || Ok(view.load()));
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_view", move |v: View| {
+            view.store(v);
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("goto_node", move |node: NodeId| {
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let app_msg_tx = self.channels.app_tx.clone();
+        module.set_native_fn("goto_node", move |node: i64| {
+            let node = NodeId::from(node as u64);
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
+
+            let msg = AppMsg::Selection(Select::One { node, clear: true });
+            app_msg_tx.send(msg).unwrap();
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_view_origin", move |p: Point| {
+            let mut v = view.load();
+            v.center = p;
+            view.store(v);
+            Ok(())
+        });
+
+        let view = self.shared_state.view.clone();
+        module.set_native_fn("set_scale", move |s: f32| {
+            let mut v = view.load();
+            v.scale = s;
+            view.store(v);
+            Ok(())
+        });
+
+        let mouse = self.shared_state.mouse_pos.clone();
+        let view = self.shared_state.view.clone();
+        let screen_dims = self.shared_state.screen_dims.clone();
+
+        module.set_native_fn("get_cursor_world", move || {
+            let screen = mouse.load();
+            let view = view.load();
+            let dims = screen_dims.load();
+            Ok(view.screen_point_to_world(dims, screen))
+        });
+
+        module
+    }
+
     fn add_view_fns(&self, engine: &mut Engine) {
         engine.register_type::<View>();
 
@@ -1612,7 +2137,7 @@ impl ConsoleShared {
 
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("goto_node", move |node: NodeId| {
-            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
 
             let msg = AppMsg::Selection(Select::One { node, clear: true });
             app_msg_tx.send(msg).unwrap();
@@ -1621,7 +2146,7 @@ impl ConsoleShared {
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("goto_node", move |node: i64| {
             let node = NodeId::from(node as u64);
-            app_msg_tx.send(AppMsg::GotoNode(node)).unwrap();
+            app_msg_tx.send(AppMsg::goto_node(node)).unwrap();
 
             let msg = AppMsg::Selection(Select::One { node, clear: true });
             app_msg_tx.send(msg).unwrap();
@@ -1651,34 +2176,6 @@ impl ConsoleShared {
             let dims = screen_dims.load();
             view.screen_point_to_world(dims, screen)
         });
-    }
-
-    fn error_helper<T: Clone + 'static>(
-        result: &std::result::Result<
-            Result<rhai::Dynamic>,
-            Box<dyn std::any::Any + Send>,
-        >,
-    ) -> std::result::Result<T, Box<EvalAltResult>> {
-        let out = match result {
-            Ok(Ok(success)) => {
-                if success.type_id() == TypeId::of::<T>() {
-                    let success = success.clone();
-                    let result = success.cast::<T>();
-                    Ok(result)
-                } else {
-                    Err("Received incorrect type from App; this shouldn't happen!!!".into())
-                }
-            }
-            Ok(Err(_req_err)) => {
-                Err("Error when retrieving results from app request thread"
-                    .into())
-            }
-            Err(_spawn_err) => {
-                Err("Error when spawning app request thread".into())
-            }
-        };
-
-        out
     }
 
     fn add_annotation_fns(&self, engine: &mut rhai::Engine) {
@@ -1792,80 +2289,18 @@ impl ConsoleShared {
         );
 
         let app_msg_tx = self.channels.app_tx.clone();
-        let graph = self.graph.graph.clone();
-        engine.register_fn(
-            "set_collection_ref_path",
-            move |name: &str, path_name: &str| {
-                let key = "annotation_ref_path".to_string();
-                let index = name.to_string();
-
-                let path_id =
-                    if let Some(id) = graph.get_path_id(path_name.as_bytes()) {
-                        id
-                    } else {
-                        return ();
-                    };
-
-                let msg: AppMsg = AppMsg::SetData {
-                    key,
-                    index,
-                    value: rhai::Dynamic::from(path_id),
-                };
-
-                app_msg_tx.send(msg).unwrap();
-            },
-        );
-
-        let app_msg_tx = self.channels.app_tx.clone();
-        engine.register_result_fn(
-            "get_collection_ref_path",
-            move |name: &str| {
-                let key = "annotation_ref_path".to_string();
-                let index = name.to_string();
-
-                let (tx, rx) =
-                    crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
-
-                let msg: AppMsg = AppMsg::RequestData {
-                    key,
-                    index,
-                    sender: tx,
-                };
-
-                app_msg_tx.send(msg).unwrap();
-
-                let result =
-                    std::thread::spawn(move || rx.recv().unwrap()).join();
-
-                if let Ok(_) = Self::error_helper::<()>(&result) {
-                    return Ok(rhai::Dynamic::from(false));
-                }
-                let result = Self::error_helper::<PathId>(&result)?;
-
-                Ok(rhai::Dynamic::from(result))
-            },
-        );
-
-        let app_msg_tx = self.channels.app_tx.clone();
         engine.register_fn("list_collections", move || {
             let key = "annotation_names".to_string();
             let index = "".to_string();
 
-            let (tx, rx) =
-                crossbeam::channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                key,
-                index,
-                sender: tx,
-            };
+            let (msg, rx) = AppMsg::request_data(key, index);
 
             app_msg_tx.send(msg).unwrap();
 
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
-            let result = Self::error_helper::<Vec<String>>(&result).unwrap();
+            let result = rx.recv().unwrap().unwrap();
+            let strings: Vec<String> = result.cast();
 
-            let result = result
+            let result = strings
                 .into_iter()
                 .map(rhai::Dynamic::from)
                 .collect::<Vec<_>>();
@@ -1889,7 +2324,7 @@ impl ConsoleShared {
                 match records {
                     Ok(records) => {
                         app_msg_tx
-                            .send(AppMsg::AddGff3Records(records))
+                            .send(AppMsg::add_gff3_records(records))
                             .unwrap();
 
                         result_tx
@@ -1907,7 +2342,7 @@ impl ConsoleShared {
                 match records {
                     Ok(records) => {
                         app_msg_tx
-                            .send(AppMsg::AddBedRecords(records))
+                            .send(AppMsg::add_bed_records(records))
                             .unwrap();
 
                         result_tx
@@ -1929,27 +2364,20 @@ impl ConsoleShared {
         // for requesting data like this
         let app_msg_tx = self.channels.app_tx.clone();
         engine.register_result_fn("get_collection", move |c_name: &str| {
-            use crossbeam::channel;
             let key = "annotation_file".to_string();
             let index = c_name.to_string();
 
-            let (tx, rx) = channel::bounded::<Result<rhai::Dynamic>>(1);
-
-            let msg: AppMsg = AppMsg::RequestData {
-                key,
-                index,
-                sender: tx,
-            };
+            let (msg, rx) = AppMsg::request_data(key, index);
 
             app_msg_tx.send(msg).unwrap();
 
-            let result = std::thread::spawn(move || rx.recv().unwrap()).join();
+            let result = rx.recv().unwrap();
 
             if let Err(_) = &result {
                 return Err("Error spawning console request thread".into());
             }
 
-            let result = result.unwrap().unwrap();
+            let result = result.unwrap();
 
             if result.type_id() == TypeId::of::<Arc<Gff3Records>>()
                 || result.type_id() == TypeId::of::<Arc<BedRecords>>()
@@ -2052,181 +2480,6 @@ impl ConsoleShared {
             },
         );
     }
-}
-
-fn virtual_key_code_map() -> HashMap<String, winit::event::VirtualKeyCode> {
-    use winit::event::VirtualKeyCode as Key;
-
-    let keys = [
-        ("Key1", Key::Key1),
-        ("Key2", Key::Key2),
-        ("Key3", Key::Key3),
-        ("Key4", Key::Key4),
-        ("Key5", Key::Key5),
-        ("Key6", Key::Key6),
-        ("Key7", Key::Key7),
-        ("Key8", Key::Key8),
-        ("Key9", Key::Key9),
-        ("Key0", Key::Key0),
-        ("A", Key::A),
-        ("B", Key::B),
-        ("C", Key::C),
-        ("D", Key::D),
-        ("E", Key::E),
-        ("F", Key::F),
-        ("G", Key::G),
-        ("H", Key::H),
-        ("I", Key::I),
-        ("J", Key::J),
-        ("K", Key::K),
-        ("L", Key::L),
-        ("M", Key::M),
-        ("N", Key::N),
-        ("O", Key::O),
-        ("P", Key::P),
-        ("Q", Key::Q),
-        ("R", Key::R),
-        ("S", Key::S),
-        ("T", Key::T),
-        ("U", Key::U),
-        ("V", Key::V),
-        ("W", Key::W),
-        ("X", Key::X),
-        ("Y", Key::Y),
-        ("Z", Key::Z),
-        ("Escape", Key::Escape),
-        ("F1", Key::F1),
-        ("F2", Key::F2),
-        ("F3", Key::F3),
-        ("F4", Key::F4),
-        ("F5", Key::F5),
-        ("F6", Key::F6),
-        ("F7", Key::F7),
-        ("F8", Key::F8),
-        ("F9", Key::F9),
-        ("F10", Key::F10),
-        ("F11", Key::F11),
-        ("F12", Key::F12),
-        ("F13", Key::F13),
-        ("F14", Key::F14),
-        ("F15", Key::F15),
-        ("F16", Key::F16),
-        ("F17", Key::F17),
-        ("F18", Key::F18),
-        ("F19", Key::F19),
-        ("F20", Key::F20),
-        ("F21", Key::F21),
-        ("F22", Key::F22),
-        ("F23", Key::F23),
-        ("F24", Key::F24),
-        ("Snapshot", Key::Snapshot),
-        ("Scroll", Key::Scroll),
-        ("Pause", Key::Pause),
-        ("Insert", Key::Insert),
-        ("Home", Key::Home),
-        ("Delete", Key::Delete),
-        ("End", Key::End),
-        ("PageDown", Key::PageDown),
-        ("PageUp", Key::PageUp),
-        ("Left", Key::Left),
-        ("Up", Key::Up),
-        ("Right", Key::Right),
-        ("Down", Key::Down),
-        ("Back", Key::Back),
-        ("Return", Key::Return),
-        ("Space", Key::Space),
-        ("Compose", Key::Compose),
-        ("Caret", Key::Caret),
-        ("Numlock", Key::Numlock),
-        ("Numpad0", Key::Numpad0),
-        ("Numpad1", Key::Numpad1),
-        ("Numpad2", Key::Numpad2),
-        ("Numpad3", Key::Numpad3),
-        ("Numpad4", Key::Numpad4),
-        ("Numpad5", Key::Numpad5),
-        ("Numpad6", Key::Numpad6),
-        ("Numpad7", Key::Numpad7),
-        ("Numpad8", Key::Numpad8),
-        ("Numpad9", Key::Numpad9),
-        ("NumpadAdd", Key::NumpadAdd),
-        ("NumpadDivide", Key::NumpadDivide),
-        ("NumpadDecimal", Key::NumpadDecimal),
-        ("NumpadComma", Key::NumpadComma),
-        ("NumpadEnter", Key::NumpadEnter),
-        ("NumpadEquals", Key::NumpadEquals),
-        ("NumpadMultiply", Key::NumpadMultiply),
-        ("NumpadSubtract", Key::NumpadSubtract),
-        ("AbntC1", Key::AbntC1),
-        ("AbntC2", Key::AbntC2),
-        ("Apostrophe", Key::Apostrophe),
-        ("Apps", Key::Apps),
-        ("Asterisk", Key::Asterisk),
-        ("At", Key::At),
-        ("Ax", Key::Ax),
-        ("Backslash", Key::Backslash),
-        ("Calculator", Key::Calculator),
-        ("Capital", Key::Capital),
-        ("Colon", Key::Colon),
-        ("Comma", Key::Comma),
-        ("Convert", Key::Convert),
-        ("Equals", Key::Equals),
-        ("Grave", Key::Grave),
-        ("Kana", Key::Kana),
-        ("Kanji", Key::Kanji),
-        ("LAlt", Key::LAlt),
-        ("LBracket", Key::LBracket),
-        ("LControl", Key::LControl),
-        ("LShift", Key::LShift),
-        ("LWin", Key::LWin),
-        ("Mail", Key::Mail),
-        ("MediaSelect", Key::MediaSelect),
-        ("MediaStop", Key::MediaStop),
-        ("Minus", Key::Minus),
-        ("Mute", Key::Mute),
-        ("MyComputer", Key::MyComputer),
-        ("NavigateForward", Key::NavigateForward),
-        ("NavigateBackward", Key::NavigateBackward),
-        ("NextTrack", Key::NextTrack),
-        ("NoConvert", Key::NoConvert),
-        ("OEM102", Key::OEM102),
-        ("Period", Key::Period),
-        ("PlayPause", Key::PlayPause),
-        ("Plus", Key::Plus),
-        ("Power", Key::Power),
-        ("PrevTrack", Key::PrevTrack),
-        ("RAlt", Key::RAlt),
-        ("RBracket", Key::RBracket),
-        ("RControl", Key::RControl),
-        ("RShift", Key::RShift),
-        ("RWin", Key::RWin),
-        ("Semicolon", Key::Semicolon),
-        ("Slash", Key::Slash),
-        ("Sleep", Key::Sleep),
-        ("Stop", Key::Stop),
-        ("Sysrq", Key::Sysrq),
-        ("Tab", Key::Tab),
-        ("Underline", Key::Underline),
-        ("Unlabeled", Key::Unlabeled),
-        ("VolumeDown", Key::VolumeDown),
-        ("VolumeUp", Key::VolumeUp),
-        ("Wake", Key::Wake),
-        ("WebBack", Key::WebBack),
-        ("WebFavorites", Key::WebFavorites),
-        ("WebForward", Key::WebForward),
-        ("WebHome", Key::WebHome),
-        ("WebRefresh", Key::WebRefresh),
-        ("WebSearch", Key::WebSearch),
-        ("WebStop", Key::WebStop),
-        ("Yen", Key::Yen),
-        ("Copy", Key::Copy),
-        ("Paste", Key::Paste),
-        ("Cut", Key::Cut),
-    ]
-    .iter()
-    .map(|(n, c)| (n.to_string(), *c))
-    .collect();
-
-    keys
 }
 
 pub enum ConsoleGuiElem {
