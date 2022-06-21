@@ -287,22 +287,24 @@ pub fn pan_to_node_action(app: &App) -> ContextAction {
 
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter node ID");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,

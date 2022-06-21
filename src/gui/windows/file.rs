@@ -160,6 +160,7 @@ impl FilePicker {
     pub fn ui_impl(
         &mut self,
         ui: &mut egui::Ui,
+        force_accept: bool,
     ) -> std::result::Result<ModalSuccess, ModalError> {
         let max_height = ui.input().screen_rect.height() - 100.0;
         /*
@@ -232,6 +233,16 @@ impl FilePicker {
             },
         );
 
+        if force_accept {
+            if let Some(dir_path) = self.highlighted_dir.as_ref() {
+                if dir_path.is_dir() {
+                    goto_dir = Some(dir_path.to_owned());
+                } else if dir_path.is_file() {
+                    choose_path = Some(dir_path.to_owned());
+                }
+            }
+        }
+
         if let Some(dir) = goto_dir {
             self.goto_dir(&dir, true).unwrap();
             ui.scroll_to_cursor(egui::Align::TOP);
@@ -259,7 +270,7 @@ impl FilePicker {
 
                 ui.set_max_height(max_height);
 
-                let _ = self.ui_impl(ui);
+                let _ = self.ui_impl(ui, false);
 
                 if ui.button("Ok").clicked() {
                     self.selected_path = self.highlighted_dir.clone();

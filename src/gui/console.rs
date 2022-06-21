@@ -1355,22 +1355,24 @@ impl ConsoleShared {
             // focus to the text box
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter string");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter string");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,
@@ -1394,22 +1396,24 @@ impl ConsoleShared {
 
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter node ID");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,
@@ -1697,6 +1701,7 @@ impl ConsoleShared {
             F: Fn(
                     &mut T,
                     &mut egui::Ui,
+                    bool,
                 )
                     -> std::result::Result<ModalSuccess, ModalError>
                 + Send
@@ -1741,22 +1746,24 @@ impl ConsoleShared {
             // focus to the text box
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter string");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter string");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                        || force
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let prepared = ModalHandler::prepare_callback(
                 &show_modal,
@@ -1782,22 +1789,23 @@ impl ConsoleShared {
         module.set_native_fn("get_node_id", move || {
             let first_run = AtomicCell::new(true);
 
-            let callback = move |text: &mut String, ui: &mut egui::Ui| {
-                ui.label("Enter node ID");
-                let text_box = ui.text_edit_singleline(text);
+            let callback =
+                move |text: &mut String, ui: &mut egui::Ui, force: bool| {
+                    ui.label("Enter node ID");
+                    let text_box = ui.text_edit_singleline(text);
 
-                if first_run.fetch_and(false) {
-                    text_box.request_focus();
-                }
+                    if first_run.fetch_and(false) {
+                        text_box.request_focus();
+                    }
 
-                if text_box.lost_focus()
-                    && ui.input().key_pressed(egui::Key::Enter)
-                {
-                    return Ok(ModalSuccess::Success);
-                }
+                    if text_box.lost_focus()
+                        && ui.input().key_pressed(egui::Key::Enter)
+                    {
+                        return Ok(ModalSuccess::Success);
+                    }
 
-                Err(ModalError::Continue)
-            };
+                    Err(ModalError::Continue)
+                };
 
             let modal_result =
                 modal_helper(&show_modal, &modal_tx, String::new(), callback)?;

@@ -41,7 +41,9 @@ rustc-hash = "1.1"
 
 bstr = "0.2"
 
-rhai = { version = "1.0.1", features = ["sync", "f32_float", "metadata", "internals"] }
+rhai = { version = "1.7", features = ["sync", "f32_float", "metadata", "internals"] }
+
+version_check = { version = "0.9.4" }
 
 bytemuck = { version = "1.7", features = ["derive"] }
 

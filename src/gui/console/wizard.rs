@@ -298,7 +298,9 @@ pub(super) fn bed_label_wizard_impl(
         let column_ix = AtomicCell::new(arg_column_ix);
 
         async move {
-            let callback = move |cfg: &mut WizardCfg, ui: &mut egui::Ui| {
+            let callback = move |cfg: &mut WizardCfg,
+                                 ui: &mut egui::Ui,
+                                 force: bool| {
                 let columns = records.optional_columns();
 
                 let limit = columns.len() - 1;
@@ -355,6 +357,7 @@ pub(super) fn bed_label_wizard_impl(
                         }
                         if column.lost_focus()
                             && ui.input().key_pressed(egui::Key::Enter)
+                            || force
                         {
                             success = true;
                         }
