@@ -520,10 +520,10 @@ impl BindableInput for MainViewInput {
                     ),
                 ],
             ),
-            (
-                event::MouseButton::Right,
-                vec![MouseButtonBind::new(Input::ButtonSelect)],
-            ),
+            // (
+            //     event::MouseButton::Right,
+            //     vec![MouseButtonBind::new(Input::ButtonSelect)],
+            // ),
         ]
         .iter()
         .cloned()

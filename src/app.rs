@@ -174,7 +174,7 @@ impl AppMsg {
     }
 
     pub fn goto_selection() -> Self {
-        Self::raw::<Option<Rect>>("goto_selection", None)
+        Self::raw::<Option<Rect>>("goto_rect", None)
     }
 
     pub fn clear_selection() -> Self {
