@@ -1,12 +1,12 @@
 use std::{
     collections::VecDeque,
     ffi::OsStr,
-    io::Result,
+    io::{Result, Write},
     path::{Path, PathBuf},
     process::{Command, Output},
 };
 
-fn main() {
+fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     if Command::new("glslc").output().is_err() {
         eprintln!("Error compiling shaders: 'glslc' not found, do you have the Vulkan SDK installed?");
         eprintln!("Get it at https://vulkan.lunarg.com/");
@@ -19,7 +19,51 @@ fn main() {
         println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
     }
 
-    compile_shaders(&shader_files)
+    compile_shaders(&shader_files);
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let profile = std::env::var("PROFILE").unwrap();
+
+        let script_name = format!("gfaestus-{}", profile);
+
+        let script = mk_run_script();
+
+        let mut file = std::fs::File::create(&script_name)?;
+
+        file.write_all(script.as_bytes())?;
+
+        let metadata = file.metadata()?;
+        let mut perm = metadata.permissions();
+
+        perm.set_mode(0o777);
+        file.set_permissions(perm)?;
+    }
+
+    Ok(())
+}
+
+fn mk_run_script() -> String {
+    let working_dir = env!("CARGO_MANIFEST_DIR");
+    let profile = std::env::var("PROFILE").unwrap();
+
+    let script = format!(
+        r#"
+#!/usr/bin/env
+
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <GFA> <layout TSV>"
+else
+    f=$(readlink -f $1)
+    l=$(readlink -f $2)
+    cd {working_dir} && {working_dir}/target/{profile}/gfaestus --debug $f $l ; cd -
+fi
+"#,
+    );
+
+    script
 }
 
 fn find_shader_files() -> Vec<PathBuf> {

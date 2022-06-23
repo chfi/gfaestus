@@ -33,3 +33,27 @@ Vulkan. If you're on Windows or Linux, and have an AMD, Nvidia, or
 integrated Intel GPU, you should be good to go.
 
 If you're on Mac, you'll need to install [MoltenVK](https://github.com/KhronosGroup/MoltenVK).
+
+
+## Usage
+
+With a working Vulkan SDK environment (make sure you have `glslc` on
+your path), you can build `gfaestus` using `cargo`.
+
+
+```sh
+cargo build --release
+```
+
+Due to technical reasons, `gfaestus` must be run from the repo
+directory for shaders and scripts to be found. An easy way to
+do this is to use the generated shell script, which can be
+copied to your PATH:
+
+```sh
+./gfaestus-release <GFA> <layout TSV>
+
+# use whichever directory on your path you like
+cp gfaestus-release ~/.local/bin/gfaestus
+gfaestus <GFA> <layout TSV>
+```
