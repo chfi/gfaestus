@@ -106,7 +106,7 @@ fn set_up_logger(args: &Args) -> Result<LoggerHandle> {
     };
 
     let logger = Logger::try_with_env_or_str(spec)?
-        .log_to_file(FileSpec::default())
+        .log_to_file(FileSpec::default().suppress_timestamp())
         .duplicate_to_stderr(Duplicate::Debug)
         .start()?;
 
