@@ -57,3 +57,36 @@ copied to your PATH:
 cp gfaestus-release ~/.local/bin/gfaestus
 gfaestus <GFA> <layout TSV>
 ```
+
+
+### Instructions
+
+The easiest way to display annotations is via the `BED Label Wizard`
+under `Tools` in the top menubar.
+
+You can also load a custom TSV format, which makes it easy to assign
+colors and labels to nodes.
+
+Each line assigns either a color, in CSS-style hexadecimal format, or
+a text string, to a node. For example, for node 1223:
+
+```
+1223 #44BBCC
+1223 this line is a label
+```
+
+#### Keyboard
+
+* `Space`: Reset view
+* `Arrow keys`: Pan view
+* `Escape`: Clear selection
+* `F9` - Toggle light/dark mode
+
+#### Mouse
+
+* `Left Mouse`: Select node
+* `Left Mouse (click and drag)`: Pan view
+* `Shift + Left Mouse (click and drag)`: Rectangle select
+* `Scroll wheel`: Zoom view
+
+* `Right Mouse`: Context menu
