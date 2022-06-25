@@ -100,11 +100,11 @@ impl BedRecords {
             if line[0] == b'#' {
                 if line_num == 1 && line.len() > 1 {
                     let fields = (&line[1..]).fields();
-                    headers.extend(fields.map(|field| field.to_owned()));
+                    headers.extend(fields.map(|field| field.trim().to_owned()));
                 }
                 continue;
             }
-            let fields = line.split_str("\t");
+            let fields = line.split_str("\t").map(ByteSlice::trim);
 
             if let Some(record) = BedRecord::parse_row(fields) {
                 column_count = record.rest.len().max(column_count);
