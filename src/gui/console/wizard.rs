@@ -390,118 +390,134 @@ pub(super) fn bed_label_wizard_impl(
 
     let rayon_pool = rayon_pool.clone();
 
-    let result = thread_pool.spawn(async move {
-                if let Some(path) = path_future.await {
+    let result =
+        thread_pool.spawn(async move {
+            if let Some(path) = path_future.await {
 
-                    let records = BedRecords::parse_bed_file(&path);
+                let records = BedRecords::parse_bed_file(&path);
 
-                    match records {
-                        Ok(records) => {
+                match records {
+                    Ok(records) => {
 
-                            let records = Arc::new(records);
+                        let records = Arc::new(records);
 
-                            let config = if let Some(mut config) = pre_config {
+                        let config = if let Some(mut config) = pre_config {
 
-                                if let Some(row) = records.records().first() {
-                                    let val = row.get_all(&config.column);
+                            if let Some(row) = records.records().first() {
+                                let val = row.get_all(&config.column);
 
-                                    if let &[v] = val.as_slice() {
-                                        if let Some(_parsed) =
-                                            v.to_str().ok().and_then(|v| v.parse::<f32>().ok())
-                                        {
-                                            config.numeric = true;
-                                        } else {
-                                            config.numeric = false;
-                                        }
+                                if let &[v] = val.as_slice() {
+                                    if let Some(_parsed) =
+                                        v.to_str().ok().and_then(|v| v.parse::<f32>().ok())
+                                    {
+                                        config.numeric = true;
+                                    } else {
+                                        config.numeric = false;
                                     }
                                 }
-
-                                config
-                            } else {
-                                config_future(records.clone()).await.unwrap()
-                            };
-
-                            let mut path_map: HashMap<
-                                Vec<u8>,
-                                (PathId, Option<(usize, usize)>),
-                            > = HashMap::default();
-
-                            let mut step_caches: FxHashMap<
-                                PathId,
-                                Vec<(Handle, _, usize)>,
-                            > = FxHashMap::default();
-
-                            let prefix = config.path_prefix.as_bytes();
-
-                            let column = &config.column;
-
-                            for path_id in graph.graph.path_ids() {
-                                let path_name = graph
-                                    .graph
-                                    .get_path_name_vec(path_id)
-                                    .unwrap();
-
-                                if let Some((name, start, end)) =
-                                    path_name_range(&path_name)
-                                {
-                                    if let Some(stripped) =
-                                        name.strip_prefix(prefix)
-                                    {
-                                        path_map.insert(
-                                            stripped.to_owned(),
-                                            (path_id, Some((start, end))),
-                                        );
-                                    }
-                                } else {
-                                    if let Some(stripped) =
-                                        path_name.strip_prefix(prefix)
-                                    {
-                                        path_map.insert(
-                                            stripped.to_owned(),
-                                            (path_id, None),
-                                        );
-                                    }
-                                };
                             }
 
-                            let mut label_set = LabelSet::default();
+                            config
+                        } else {
+                            config_future(records.clone()).await.unwrap()
+                        };
 
-                            let mut node_color_map: FxHashMap<
-                                NodeId,
-                                rgb::RGBA<f32>,
+                        let mut path_map: HashMap<
+                                Vec<u8>,
+                            (PathId, Option<(usize, usize)>),
+                            > = HashMap::default();
+
+                        let mut step_caches: FxHashMap<
+                                PathId,
+                            Vec<(Handle, _, usize)>,
                             > = FxHashMap::default();
 
-                            for (label_id, record) in records.records().iter().enumerate() {
+                        let prefix = config.path_prefix.as_bytes();
 
-                                if let Some((path_id, range)) =
-                                    path_map.get(record.chr.as_slice())
+                        let column = &config.column;
+
+                        for path_id in graph.graph.path_ids() {
+                            let path_name = graph
+                                .graph
+                                .get_path_name_vec(path_id)
+                                .unwrap();
+
+                            if let Some((name, start, end)) =
+                                path_name_range(&path_name)
+                            {
+                                if let Some(stripped) =
+                                    name.strip_prefix(prefix)
                                 {
-                                    //
-                                    let (path_id, range) = (*path_id, *range);
+                                    path_map.insert(
+                                        stripped.to_owned(),
+                                        (path_id, Some((start, end))),
+                                    );
+                                }
+                            } else {
+                                if let Some(stripped) =
+                                    path_name.strip_prefix(prefix)
+                                {
+                                    path_map.insert(
+                                        stripped.to_owned(),
+                                        (path_id, None),
+                                    );
+                                }
+                            };
+                        }
 
-                                    let steps = step_caches
-                                        .entry(path_id)
-                                        .or_insert_with(|| {
-                                            graph
-                                                .path_pos_steps(path_id)
-                                                .unwrap()
-                                        });
+                        let mut label_set = LabelSet::default();
 
-                                    let offset = range.map(|(s, _)| s);
+                        let mut node_color_map: FxHashMap<
+                                NodeId,
+                            rgb::RGBA<f32>,
+                            > = FxHashMap::default();
 
-                                    if let Some(step_range) =
-                                        crate::annotations::path_step_range(
-                                            steps,
-                                            offset,
-                                            record.start(),
-                                            record.end(),
-                                        )
+                        for (label_id, record) in records.records().iter().enumerate() {
+
+                            if let Some((path_id, range)) =
+                                path_map.get(record.chr.as_slice())
+                            {
+                                //
+                                let (path_id, range) = (*path_id, *range);
+
+                                let steps = step_caches
+                                    .entry(path_id)
+                                    .or_insert_with(|| {
+                                        graph
+                                            .path_pos_steps(path_id)
+                                            .unwrap()
+                                    });
+
+                                let offset = range.map(|(s, _)| s);
+
+                                if let Some(step_range) =
+                                    crate::annotations::path_step_range(
+                                        steps,
+                                        offset,
+                                        record.start(),
+                                        record.end(),
+                                    )
+                                {
+                                    if let Some(value) =
+                                        record.get_first(&column)
                                     {
-                                        if let Some(value) =
-                                            record.get_first(&column)
-                                        {
-                                            if !step_range.is_empty() {
+                                        if !step_range.is_empty() {
 
+                                            let value_str = value.to_str().unwrap();
+                                            if let Some((label_text, color)) = split_colored_label(value_str) {
+
+                                                    let (mid, _, _) = step_range[step_range.len() / 2];
+
+                                                    label_set.add_at_handle(
+                                                        mid, label_id, label_text,
+                                                    );
+
+                                                    for &(handle, _, _) in step_range.iter() {
+                                                        let node = handle.id();
+                                                        node_color_map.insert(node, color);
+                                                    }
+
+                                            } else {
                                                 let color = if config.numeric {
 
                                                     let val = value.to_str().ok().and_then(|v| v.parse::<f32>().ok());
@@ -544,94 +560,145 @@ pub(super) fn bed_label_wizard_impl(
                                                     }
                                                 }
                                             }
-                                        }
-                                    } else {
-                                        // log::warn!(
-                                        //     "out of step range: {}, {}",
-                                        //     record.start(),
-                                        //     record.end()
-                                        // );
-                                    }
-                                }
 
+                                        }
+                                    }
+                                } else {
+                                    // log::warn!(
+                                    //     "out of step range: {}, {}",
+                                    //     record.start(),
+                                    //     record.end()
+                                    // );
+                                }
                             }
 
-                            let data = {
-                                use rayon::prelude::*;
+                        }
 
-                                let mut nodes = graph.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
-                                nodes.sort();
+                        let data = {
+                            use rayon::prelude::*;
+
+                            let mut nodes = graph.graph.handles().map(|h| h.id()).collect::<Vec<_>>();
+                            nodes.sort();
 
 
-                                if config.numeric {
-                                    let values = rayon_pool.install(|| {
-                                        nodes.par_iter().map(|node| {
+                            if config.numeric {
+                                let values = rayon_pool.install(|| {
+                                    nodes.par_iter().map(|node| {
 
-                                            let rgb = node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.0, 0.0, 0.0, 0.0));
-                                            rgb.r
-                                        }).collect()
-                                    });
+                                        let rgb = node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.0, 0.0, 0.0, 0.0));
+                                        rgb.r
+                                    }).collect()
+                                });
 
-                                    OverlayData::Value(values)
-                                } else {
-
-                                    let colors = rayon_pool.install(|| {
-                                        nodes.par_iter().map(|node| {
-
-                                            node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4))
-                                        }).collect()
-                                    });
-
-                                    OverlayData::RGB(colors)
-                                }
-
-                            };
-
-                            let name = path.file_name().and_then(|s| s.to_str()).unwrap();
-
-                            let name = if matches!(column, BedColumn::Index(_)) {
-                                format!("{}:col# {}", name, config.column_ix + 3)
+                                OverlayData::Value(values)
                             } else {
-                                format!("{}:{}", name, column)
-                            };
 
-                            let msg = OverlayCreatorMsg::NewOverlay {
-                                name: name.to_string(),
-                                data,
-                            };
-                            overlay_tx.send(msg).unwrap();
+                                let colors = rayon_pool.install(|| {
+                                    nodes.par_iter().map(|node| {
 
-                            let records = records.clone();
-                            // let graph = graph.clone();
+                                        node_color_map.get(&node).copied().unwrap_or(rgb::RGBA::new(0.5, 0.5, 0.5, 0.4))
+                                    }).collect()
+                                });
 
-                            /*
-                            let on_label_click = Box::new(move |label_id| {
-                                if let Some(record) = records.records.get(label_id) {
-                                    let record: &BedRecord = record;
-                                    let chr: &[u8] = &record.chr;
-                                    log::warn!("clicked record on path {}, range {}-{}", chr.as_bstr(), record.start, record.end);
-                                }
-                            }) as Box<dyn Fn(usize) + Send + Sync + 'static>;
-                            */
+                                OverlayData::RGB(colors)
+                            }
 
-                            app_msg_tx
-                                .send(AppMsg::new_label_set(
-                                    name,
-                                    label_set,
-                                    // Some(on_label_click),
-                                ))
-                                .unwrap();
+                        };
 
-                        }
-                        Err(err) => {
-                            log::warn!("parse error: {:+}", err);
-                        }
+                        let name = path.file_name().and_then(|s| s.to_str()).unwrap();
+
+                        let name = if matches!(column, BedColumn::Index(_)) {
+                            format!("{}:col# {}", name, config.column_ix + 3)
+                        } else {
+                            format!("{}:{}", name, column)
+                        };
+
+                        let msg = OverlayCreatorMsg::NewOverlay {
+                            name: name.to_string(),
+                            data,
+                        };
+                        overlay_tx.send(msg).unwrap();
+
+                        let records = records.clone();
+                        // let graph = graph.clone();
+
+                        /*
+                        let on_label_click = Box::new(move |label_id| {
+                        if let Some(record) = records.records.get(label_id) {
+                        let record: &BedRecord = record;
+                        let chr: &[u8] = &record.chr;
+                        log::warn!("clicked record on path {}, range {}-{}", chr.as_bstr(), record.start, record.end);
+                    }
+                    }) as Box<dyn Fn(usize) + Send + Sync + 'static>;
+                         */
+
+                        app_msg_tx
+                            .send(AppMsg::new_label_set(
+                                name,
+                                label_set,
+                                // Some(on_label_click),
+                            ))
+                            .unwrap();
+
+                    }
+                    Err(err) => {
+                        log::warn!("parse error: {:+}", err);
                     }
                 }
-            });
+            }
+        });
 
     match result {
         Ok(_) => true,
         Err(_) => false,
+    }
+}
+
+fn split_colored_label(raw: &str) -> Option<(&str, rgb::RGBA<f32>)> {
+    let (label, color) = raw.rsplit_once('#')?;
+
+    let ri = 0..=1;
+    let gi = 2..=3;
+    let bi = 4..=5;
+    let ai = 6..=7;
+
+    let col = |s: &str| u8::from_str_radix(s, 16).ok();
+
+    let (r, g, b) = match color.len() {
+        6 | 8 => {
+            let r = col(&color[ri])?;
+            let g = col(&color[gi])?;
+            let b = col(&color[bi])?;
+            Some((r, g, b))
+        }
+        _ => None,
+    }?;
+
+    let a = if color.len() == 8 {
+        col(&color[ai])?
+    } else {
+        255
+    };
+
+    let r = (r as f32) / 255.0;
+    let g = (g as f32) / 255.0;
+    let b = (b as f32) / 255.0;
+    let a = (a as f32) / 255.0;
+
+    Some((label, rgb::RGBA::new(r, g, b, a)))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn test_color_split() {
+        let l0 = "hello there#112233";
+        let l1 = "hello there#11223344";
+        let l2 = "hello there#11223344";
+        super::split_colored_label(l0);
+        super::split_colored_label(l1);
+        super::split_colored_label(l2);
+
+        assert!(false);
     }
 }
