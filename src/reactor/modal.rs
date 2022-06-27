@@ -270,10 +270,12 @@ pub fn file_picker_modal(
     >,
     show_modal: &Arc<AtomicCell<bool>>,
     extensions: &[&str],
+    dir: Option<PathBuf>,
 ) -> impl Future<Output = Option<PathBuf>> + Send + Sync + 'static {
     use crate::gui::windows::file::FilePicker;
 
-    let pwd = std::fs::canonicalize("./").unwrap();
+    let pwd = dir.unwrap_or_else(|| std::fs::canonicalize("./").unwrap());
+
     let mut file_picker =
         FilePicker::new(egui::Id::new("_file_picker"), pwd).unwrap();
     file_picker.set_visible_extensions(extensions).unwrap();
