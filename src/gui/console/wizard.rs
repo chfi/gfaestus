@@ -57,6 +57,7 @@ pub(super) fn tsv_wizard_impl(
             modal_tx.clone(),
             &show_modal,
             &[],
+            None,
         );
 
         path_future.boxed()
@@ -219,6 +220,10 @@ pub(super) fn bed_label_wizard_impl(
     arg_path_prefix: Option<&str>,
     arg_column_ix: Option<usize>,
 ) -> bool {
+    lazy_static::lazy_static! {
+        static ref PREV_DIR: AtomicCell<Option<PathBuf>> = None.into();
+    }
+
     let graph = console.graph.clone();
 
     let thread_pool = &console.thread_pool;
@@ -240,10 +245,14 @@ pub(super) fn bed_label_wizard_impl(
         let path_future = async move { Some(path) };
         path_future.boxed()
     } else {
+        let path = PREV_DIR.take();
+        // PREV_DIR.store(path.clone());
+
         let path_future = crate::reactor::file_picker_modal(
             modal_tx.clone(),
             &show_modal,
             &["bed"],
+            path,
         );
 
         path_future.boxed()
@@ -644,6 +653,14 @@ pub(super) fn bed_label_wizard_impl(
                     Err(err) => {
                         log::warn!("parse error: {:+}", err);
                     }
+                }
+
+                let mut path = path;
+                path.pop();
+                if path.is_dir() {
+                    PREV_DIR.store(Some(path));
+                } else {
+                    PREV_DIR.store(None);
                 }
             }
         });

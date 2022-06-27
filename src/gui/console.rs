@@ -1447,6 +1447,7 @@ impl ConsoleShared {
                 modal_tx.clone(),
                 &show_modal,
                 &[],
+                None,
             );
 
             let result =
