@@ -113,10 +113,10 @@ fn set_up_logger(args: &Args) -> Result<LoggerHandle> {
     Ok(logger)
 }
 
-fn main() {
+fn main() -> Result<()> {
     let args: Args = argh::from_env();
 
-    let _logger = set_up_logger(&args).unwrap();
+    let _logger = set_up_logger(&args)?;
 
     log::debug!("Logger initalized");
 
@@ -159,20 +159,17 @@ fn main() {
     log::debug!("rayon   thread pool: {}", rayon_cpus);
 
     // TODO make sure to set thread pool size to less than number of CPUs
-    let thread_pool = ThreadPoolBuilder::new()
-        .pool_size(futures_cpus)
-        .create()
-        .unwrap();
+    let thread_pool =
+        ThreadPoolBuilder::new().pool_size(futures_cpus).create()?;
 
     let rayon_pool = rayon::ThreadPoolBuilder::new()
         .num_threads(rayon_cpus)
-        .build()
-        .unwrap();
+        .build()?;
 
     info!("Loading GFA");
     let t = std::time::Instant::now();
 
-    let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file).unwrap());
+    let graph_query = Arc::new(GraphQuery::load_gfa(gfa_file)?);
 
     let layout_1d = Arc::new(Path1DLayout::new(graph_query.graph()));
 
@@ -180,7 +177,7 @@ fn main() {
         GraphQueryWorker::new(graph_query.clone(), thread_pool.clone());
 
     let (mut universe, stats) =
-        universe_from_gfa_layout(&graph_query, layout_file).unwrap();
+        universe_from_gfa_layout(&graph_query, layout_file)?;
 
     let (top_left, bottom_right) = universe.layout().bounding_box();
 
@@ -230,14 +227,12 @@ fn main() {
         gfaestus.vk_context().device().clone(),
         gfaestus.graphics_family_index,
         gfaestus.graphics_queue,
-    )
-    .unwrap();
+    )?;
 
-    let gpu_selection =
-        GpuSelection::new(&gfaestus, graph_query.node_count()).unwrap();
+    let gpu_selection = GpuSelection::new(&gfaestus, graph_query.node_count())?;
 
     let node_translation =
-        NodeTranslation::new(&gfaestus, graph_query.node_count()).unwrap();
+        NodeTranslation::new(&gfaestus, graph_query.node_count())?;
 
     let mut select_fence_id: Option<usize> = None;
     let mut translate_fence_id: Option<usize> = None;
@@ -283,7 +278,7 @@ fn main() {
         .unwrap(),
     );
 
-    let mut gui = Gui::new(&app, &gfaestus, &path_view).unwrap();
+    let mut gui = Gui::new(&app, &gfaestus, &path_view)?;
 
     // create default overlays
     {
@@ -355,8 +350,7 @@ fn node_color(id) {
     main_view
         .node_draw_system
         .vertices
-        .upload_vertices(&gfaestus, &node_vertices)
-        .unwrap();
+        .upload_vertices(&gfaestus, &node_vertices)?;
 
     let mut edge_renderer = if gfaestus.vk_context().renderer_config.edges
         == EdgeRendererType::Disabled
@@ -370,19 +364,16 @@ fn node_color(id) {
             &gfaestus,
             &graph_query.graph_arc(),
             universe.layout(),
-        )
-        .unwrap();
+        )?;
 
         Some(edge_renderer)
     };
 
     let mut dirty_swapchain = false;
 
-    let mut selection_edge =
-        SelectionOutlineEdgePipeline::new(&gfaestus, 1).unwrap();
+    let mut selection_edge = SelectionOutlineEdgePipeline::new(&gfaestus, 1)?;
 
-    let mut selection_blur =
-        SelectionOutlineBlurPipeline::new(&gfaestus, 1).unwrap();
+    let mut selection_blur = SelectionOutlineBlurPipeline::new(&gfaestus, 1)?;
 
     let gui_msg_tx = app.channels().gui_tx.clone();
 
@@ -392,13 +383,10 @@ fn node_color(id) {
         gfaestus.transient_command_pool,
         gfaestus.graphics_queue,
         1024,
-    )
-    .unwrap();
+    )?;
 
     dbg!();
-    gui.draw_system
-        .add_texture(&gfaestus, gradients_.texture)
-        .unwrap();
+    gui.draw_system.add_texture(&gfaestus, gradients_.texture)?;
 
     dbg!();
 
@@ -409,8 +397,7 @@ fn node_color(id) {
         gfaestus.transient_command_pool,
         gfaestus.graphics_queue,
         1024,
-    )
-    .unwrap();
+    )?;
 
     gui.populate_overlay_list(
         main_view
@@ -430,7 +417,7 @@ fn node_color(id) {
     // whenever the window resizes, so we use a timeout instead
     let initial_resize_timer = std::time::Instant::now();
 
-    gui_msg_tx.send(GuiMsg::SetLightMode).unwrap();
+    gui_msg_tx.send(GuiMsg::SetLightMode)?;
 
     let mut context_mgr = ContextMgr::default();
 
@@ -450,9 +437,11 @@ fn node_color(id) {
 
     context_mgr.register_action("Debug print", dbg_action);
 
-    context_mgr
+    if let Err(e) = context_mgr
         .load_rhai_modules("./scripts/context_actions/".into(), &gui.console)
-        .unwrap();
+    {
+        log::error!("Error loading context actions: {:?}", e);
+    }
 
     if let Some(script_file) = args.run_script.as_ref() {
         if script_file == "-" {
@@ -461,17 +450,23 @@ fn node_color(id) {
 
             let mut stdin = std::io::stdin();
             let mut script_bytes = Vec::new();
-            let read = stdin.read_to_end(&mut script_bytes).unwrap();
+            let read = stdin.read_to_end(&mut script_bytes)?;
 
             if let Ok(script) = script_bytes[0..read].to_str() {
-                warn!("executing script {}", script_file);
-                gui.console.eval(&mut app.reactor, true, script).unwrap();
+                // warn!("executing script {}", script_file);
+
+                if let Err(e) = gui.console.eval(&mut app.reactor, true, script)
+                {
+                    log::error!("Error executing stdin script:\n{:?}", e);
+                }
             }
         } else {
             warn!("executing script file {}", script_file);
-            gui.console
-                .eval_file(&mut app.reactor, true, script_file)
-                .unwrap();
+            if let Err(e) =
+                gui.console.eval_file(&mut app.reactor, true, script_file)
+            {
+                log::error!("Error executing script {}:\n{:?}", script_file, e);
+            }
         }
     }
 
@@ -481,7 +476,16 @@ fn node_color(id) {
                 if let Some(path_str) = annot_path.to_str() {
                     let script = format!("load_collection(\"{}\");", path_str);
                     log::warn!("executing script: {}", script);
-                    gui.console.eval(&mut app.reactor, true, &script).unwrap();
+
+                    if let Err(e) =
+                        gui.console.eval(&mut app.reactor, true, &script)
+                    {
+                        log::error!(
+                            "Error loading annotation file {}:\n{:?}",
+                            path_str,
+                            e
+                        );
+                    }
                 }
             }
         }
@@ -1231,6 +1235,8 @@ fn node_color(id) {
             _ => (),
         }
     });
+
+    Ok(())
 }
 
 fn handle_new_overlay(
