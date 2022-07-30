@@ -505,6 +505,7 @@ impl BindableInput for MainViewInput {
         .collect::<FxHashMap<_, _>>();
 
         let shift_mod = winit::event::ModifiersState::SHIFT;
+        let ctrl_mod = winit::event::ModifiersState::CTRL;
 
         let mouse_binds: FxHashMap<
             event::MouseButton,
@@ -518,6 +519,10 @@ impl BindableInput for MainViewInput {
                         Input::ButtonRectangleSelect,
                         shift_mod,
                     ),
+                    MouseButtonBind::with_modifiers(
+                        Input::ButtonSelect,
+                        ctrl_mod,
+                    )
                 ],
             ),
             // (
